@@ -128,7 +128,7 @@ export function CallView({ room }: { room: Room }) {
       iframeElement.style.visibility = 'visible';
       iframeElement.style.pointerEvents = 'auto';
     }
-  }, [activeIframeDisplayRef, room]);
+  }, [activeIframeDisplayRef, room, isActiveCallRoom, isCallViewOpen]);
 
   const debouncedApplyFixedPositioning = useDebounce(applyFixedPositioningToIframe, {
     wait: 50,
@@ -180,7 +180,7 @@ export function CallView({ room }: { room: Room }) {
     }
     if (!callIsCurrentAndReady) {
       hangUp();
-      setActiveCallRoomId(room.roomId, room.isCallRoom());
+      setActiveCallRoomId(room.roomId, true);
     }
   };
 
