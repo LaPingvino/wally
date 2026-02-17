@@ -21,7 +21,6 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "CreateRoomVoiceSelector.tsx::https://raw.githubusercontent.com/hazre/cinny/feat/element-call/src/app/components/create-room/CreateRoomVoiceSelector.tsx"
         "SearchFilters.tsx::https://raw.githubusercontent.com/hazre/cinny/feat/element-call/src/app/features/message-search/SearchFilters.tsx"
         "RoomNavUser.tsx::https://raw.githubusercontent.com/hazre/cinny/feat/element-call/src/app/features/room-nav/RoomNavUser.tsx"
-        "RoomCallNavStatus.tsx::https://raw.githubusercontent.com/hazre/cinny/feat/element-call/src/app/features/room-nav/RoomCallNavStatus.tsx"
         "RoomCallNavStatus.css.ts::https://raw.githubusercontent.com/hazre/cinny/feat/element-call/src/app/features/room-nav/RoomCallNavStatus.css.ts"
         # Local replacement files (final versions of heavily-customized files)
         "CallProvider.tsx"
@@ -33,6 +32,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "IncomingCallNotification.tsx"
         "RoomNavItem.tsx"
         "SmallWidgetDriver.ts"
+        "RoomCallNavStatus.tsx"
         # Patches on upstream cinny files (allows security fixes to flow through)
         "01-emoji-font.patch"
         "02-element-call.patch"
@@ -50,7 +50,6 @@ sha256sums=('SKIP'
             '13fa63e17d0b85b5ab656754f5bd6357f98b67952a8590d94dfcd2524b71dde7'
             '20efc89e180fdf5c562031cd6cacf71d28e52ded166f54302fb852be49bf6daf'
             '20fa38415ab96e564ea863654603d2533f30f97f3d742d52036219e54d742d14'
-            '4bdf0ae6d4f4cc24e2eee69d8009e1f98101dc8455cb699112a58f895808f237'
             '66657dc7aa7cce0aaa84d0f61b3ac2ac6475980f3b89b811f8f9c899e7712a6c'
             # Heavily-customized local replacements
             '1e4e4f07d01867cf704a5f7433bbcf41e92a87e9bca264d6c4e9ee31c4011824'
@@ -62,6 +61,7 @@ sha256sums=('SKIP'
             '7eb8f708a026b0657fbe9b14d040c62c22614f517fcf402db420f50d37b10960'
             '21e5e84639362b154da6753d9347ac32d564c83954e3cc78b2daf83e7d4766db'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
+            'b097d37f8eb21c5aae155847f6ca95ed5d1482217087ff7a82c814e8833b3897'
             # Patches
             'd7496a8ebf4b4756bf0eb058b1a59a242ab8a4aa19d7d2e5eb51f8bcee92874a'
             'b3f4936f382eca08c8cb80ad381ac871ed77901066527496900654369d1903ea'
