@@ -63,7 +63,7 @@ sha256sums=('SKIP'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
             # Patches
             'd7496a8ebf4b4756bf0eb058b1a59a242ab8a4aa19d7d2e5eb51f8bcee92874a'
-            '097ec67cecccb4aa826d03bcdfe9732a2710a1a54ebff11f4d12d13626360f9b')
+            'b3f4936f382eca08c8cb80ad381ac871ed77901066527496900654369d1903ea')
 
 prepare() {
   cd "$_pkgname"

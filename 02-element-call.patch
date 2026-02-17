@@ -327,6 +327,26 @@ index 04d14a07..2955f5ef 100644
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
                        <CreateRoomModalRenderer />
+diff --git a/src/app/pages/auth/AuthFooter.tsx b/src/app/pages/auth/AuthFooter.tsx
+index 124b0384..7de8ff98 100644
+--- a/src/app/pages/auth/AuthFooter.tsx
++++ b/src/app/pages/auth/AuthFooter.tsx
+@@ -23,6 +23,15 @@ export function AuthFooter() {
+       <Text as="a" size="T300" href="https://matrix.org" target="_blank" rel="noreferrer">
+         Powered by Matrix
+       </Text>
++      <Text
++        as="a"
++        size="T300"
++        href="https://codeberg.org/lapingvino/cinny"
++        target="_blank"
++        rel="noreferrer"
++      >
++        Source Code
++      </Text>
+     </Box>
+   );
+ }
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
 index 04edf109..4ffd3dc8 100644
 --- a/src/app/pages/client/direct/Direct.tsx
