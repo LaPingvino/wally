@@ -157,7 +157,7 @@ index 23f3998d..1ee72d4a 100644
 +  <Icon src={getRoomIconSrc(Icons, roomType, joinRule, locked)} {...props} ref={ref} />
  ));
 diff --git a/src/app/features/create-room/CreateRoom.tsx b/src/app/features/create-room/CreateRoom.tsx
-index 05c5c2e3..9cc8bee8 100644
+index 05c5c2e3..b1f1fdf7 100644
 --- a/src/app/features/create-room/CreateRoom.tsx
 +++ b/src/app/features/create-room/CreateRoom.tsx
 @@ -1,5 +1,5 @@
@@ -248,25 +248,23 @@ index 05c5c2e3..9cc8bee8 100644
      }).then((roomId) => {
        if (alive()) {
          onCreate?.(roomId);
-@@ -136,6 +168,17 @@ export function CreateRoomForm({ defaultKind, space, onCreate }: CreateRoomFormP
+@@ -136,6 +168,15 @@ export function CreateRoomForm({ defaultKind, space, onCreate }: CreateRoomFormP
  
    return (
      <Box as="form" onSubmit={handleSubmit} grow="Yes" direction="Column" gap="500">
-+      {!space && (
-+        <Box direction="Column" gap="100">
-+          <Text size="L400">Type</Text>
-+          <CreateRoomVoiceSelector
-+            value={voice}
-+            onSelect={setVoice}
-+            disabled={disabled}
-+            getIcon={getCreateRoomVoiceToIcon}
-+          />
-+        </Box>
-+      )}
++      <Box direction="Column" gap="100">
++        <Text size="L400">Type</Text>
++        <CreateRoomVoiceSelector
++          value={voice}
++          onSelect={setVoice}
++          disabled={disabled}
++          getIcon={getCreateRoomVoiceToIcon}
++        />
++      </Box>
        <Box direction="Column" gap="100">
          <Text size="L400">Access</Text>
          <CreateRoomKindSelector
-@@ -143,14 +186,14 @@ export function CreateRoomForm({ defaultKind, space, onCreate }: CreateRoomFormP
+@@ -143,14 +184,14 @@ export function CreateRoomForm({ defaultKind, space, onCreate }: CreateRoomFormP
            onSelect={setKind}
            canRestrict={allowRestricted}
            disabled={disabled}
