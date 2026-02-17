@@ -1,5 +1,5 @@
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df..de7956e9 100644
+index e0df06df..afb9f61f 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
@@ -26,9 +26,9 @@ index e0df06df..de7956e9 100644
 +type CallRingScope = 'dm' | 'nonVoice' | 'all';
 +
 +const CALL_RING_SCOPE_LABELS: Record<CallRingScope, string> = {
-+  dm: 'Direct Messages',
-+  nonVoice: 'All Chats',
-+  all: 'All Rooms',
++  dm: 'DMs only',
++  nonVoice: 'All except voice rooms',
++  all: 'All rooms',
 +};
 +
 +type CallRingScopeMenuProps = {
@@ -129,7 +129,7 @@ index e0df06df..de7956e9 100644
 +      >
 +        <SettingTile
 +          title="Incoming Call Ringtone"
-+          description="Ring for incoming calls in these rooms. Voice channels are always excluded."
++          description="Choose which rooms trigger an incoming call ring."
 +          after={<SelectCallRingScope />}
 +        />
 +      </SequenceCard>
