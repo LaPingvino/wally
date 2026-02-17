@@ -94,6 +94,13 @@ export function CallView({ room }: { room: Room }) {
 
   const activeIframeDisplayRef = callIframeRef;
 
+  // When no call is active, reset iframe to about:blank to release microphone/camera
+  useEffect(() => {
+    if (!activeCallRoomId && activeIframeDisplayRef?.current) {
+      activeIframeDisplayRef.current.src = 'about:blank';
+    }
+  }, [activeCallRoomId, activeIframeDisplayRef]);
+
   const applyFixedPositioningToIframe = useCallback(() => {
     const iframeElement = activeIframeDisplayRef?.current;
     const hostElement = iframeHostRef?.current;

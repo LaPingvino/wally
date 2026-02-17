@@ -378,7 +378,18 @@ export function CallNavStatus() {
           }
         >
           {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} onClick={hangUp}>
+            <IconButton
+              fill="None"
+              size="300"
+              ref={triggerRef}
+              onClick={() => {
+                if (activeCallRoomId) {
+                  timedOutCalls.add(activeCallRoomId);
+                  dismissedRef.current.add(activeCallRoomId);
+                }
+                hangUp();
+              }}
+            >
               <Icon src={Icons.Phone} />
             </IconButton>
           )}
