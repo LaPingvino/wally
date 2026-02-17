@@ -93,36 +93,40 @@ export function CallNavStatus() {
             )}
           </TooltipProvider>
         )}
-        <TooltipProvider
-          position="Top"
-          offset={4}
-          tooltip={
-            <Tooltip>
-              <Text>{!isAudioEnabled ? 'Unmute' : 'Mute'}</Text>
-            </Tooltip>
-          }
-        >
-          {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} onClick={toggleAudio}>
-              <Icon src={!isAudioEnabled ? Icons.MicMute : Icons.Mic} />
-            </IconButton>
-          )}
-        </TooltipProvider>
-        <TooltipProvider
-          position="Top"
-          offset={4}
-          tooltip={
-            <Tooltip>
-              <Text>{!isVideoEnabled ? 'Video On' : 'Video Off'}</Text>
-            </Tooltip>
-          }
-        >
-          {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} onClick={toggleVideo}>
-              <Icon src={!isVideoEnabled ? Icons.VideoCameraMute : Icons.VideoCamera} />
-            </IconButton>
-          )}
-        </TooltipProvider>
+        {hasActiveCall && (
+          <TooltipProvider
+            position="Top"
+            offset={4}
+            tooltip={
+              <Tooltip>
+                <Text>{!isAudioEnabled ? 'Unmute' : 'Mute'}</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton fill="None" size="300" ref={triggerRef} onClick={toggleAudio}>
+                <Icon src={!isAudioEnabled ? Icons.MicMute : Icons.Mic} />
+              </IconButton>
+            )}
+          </TooltipProvider>
+        )}
+        {hasActiveCall && (
+          <TooltipProvider
+            position="Top"
+            offset={4}
+            tooltip={
+              <Tooltip>
+                <Text>{!isVideoEnabled ? 'Video On' : 'Video Off'}</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton fill="None" size="300" ref={triggerRef} onClick={toggleVideo}>
+                <Icon src={!isVideoEnabled ? Icons.VideoCameraMute : Icons.VideoCamera} />
+              </IconButton>
+            )}
+          </TooltipProvider>
+        )}
       </Box>
     </Box>
   );
