@@ -35,7 +35,8 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "SmallWidgetDriver.ts"
         # Patches on upstream cinny files (allows security fixes to flow through)
         "01-emoji-font.patch"
-        "02-element-call.patch")
+        "02-element-call.patch"
+        "03-pronouns.patch")
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
             # hazre/cinny unchanged components
@@ -63,7 +64,8 @@ sha256sums=('SKIP'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
             # Patches
             'd7496a8ebf4b4756bf0eb058b1a59a242ab8a4aa19d7d2e5eb51f8bcee92874a'
-            'b3f4936f382eca08c8cb80ad381ac871ed77901066527496900654369d1903ea')
+            'b3f4936f382eca08c8cb80ad381ac871ed77901066527496900654369d1903ea'
+            '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046')
 
 prepare() {
   cd "$_pkgname"
@@ -107,6 +109,9 @@ prepare() {
 
   echo "Applying Element Call integration patch..."
   patch -p1 -i "$srcdir/02-element-call.patch"
+
+  echo "Applying pronoun/timezone/extended profile patch..."
+  patch -p1 -i "$srcdir/03-pronouns.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
