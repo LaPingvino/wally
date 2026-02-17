@@ -1,115 +1,3 @@
-# NOTE: Emoji font support: adds NotoColorEmoji Bahá'í as a third option alongside System and Twemoji.
-# Adds @font-face in index.css, EmojiFont enum in settings, updates ClientNonUIFeatures and settings UI.
-diff --git a/src/index.css b/src/index.css
-index ca28536d..699e20fc 100644
---- a/src/index.css
-+++ b/src/index.css
-@@ -5,6 +5,12 @@
-   font-display: swap;
- }
- 
-+@font-face {
-+  font-family: NotoColorEmojiBahai;
-+  src: url('../public/font/NotoColorEmoji.Bahai.v0.0.1.ttf');
-+  font-display: swap;
-+}
-+
- :root {
-   --tc-link: hsl(213deg 100% 45%);
- 
-diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb..b31490f9 100644
---- a/src/app/state/settings.ts
-+++ b/src/app/state/settings.ts
-@@ -8,6 +8,11 @@ export enum MessageLayout {
-   Compact = 1,
-   Bubble = 2,
- }
-+export enum EmojiFont {
-+  System = 'system',
-+  Twemoji = 'twemoji',
-+  NotoColorEmojiBahai = 'noto-bahai',
-+}
- 
- export interface Settings {
-   themeId?: string;
-@@ -17,7 +22,8 @@ export interface Settings {
-   monochromeMode?: boolean;
-   isMarkdown: boolean;
-   editorToolbar: boolean;
--  twitterEmoji: boolean;
-+  emojiFont: EmojiFont;
-+  twitterEmoji?: boolean; // deprecated, kept for migration
-   pageZoom: number;
-   hideActivity: boolean;
- 
-@@ -51,7 +57,7 @@ const defaultSettings: Settings = {
-   monochromeMode: false,
-   isMarkdown: true,
-   editorToolbar: false,
--  twitterEmoji: false,
-+  emojiFont: EmojiFont.System,
-   pageZoom: 100,
-   hideActivity: false,
- 
-@@ -80,9 +86,17 @@ const defaultSettings: Settings = {
- export const getSettings = () => {
-   const settings = localStorage.getItem(STORAGE_KEY);
-   if (settings === null) return defaultSettings;
-+  const parsed = JSON.parse(settings) as Settings;
-+
-+  // Migrate old twitterEmoji boolean to new emojiFont enum
-+  if (parsed.twitterEmoji !== undefined && parsed.emojiFont === undefined) {
-+    parsed.emojiFont = parsed.twitterEmoji ? EmojiFont.Twemoji : EmojiFont.System;
-+    delete parsed.twitterEmoji;
-+  }
-+
-   return {
-     ...defaultSettings,
--    ...(JSON.parse(settings) as Settings),
-+    ...parsed,
-   };
- };
- 
-diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc..e0977d97 100644
---- a/src/app/pages/client/ClientNonUIFeatures.tsx
-+++ b/src/app/pages/client/ClientNonUIFeatures.tsx
-@@ -10,7 +10,7 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
- import InviteSound from '../../../../public/sound/invite.ogg';
- import { notificationPermission, setFavicon } from '../../utils/dom';
- import { useSetting } from '../../state/hooks/settings';
--import { settingsAtom } from '../../state/settings';
-+import { EmojiFont, settingsAtom } from '../../state/settings';
- import { allInvitesAtom } from '../../state/room-list/inviteList';
- import { usePreviousValue } from '../../hooks/usePreviousValue';
- import { useMatrixClient } from '../../hooks/useMatrixClient';
-@@ -28,12 +28,19 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
- import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
- 
- function SystemEmojiFeature() {
--  const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
--
--  if (twitterEmoji) {
--    document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
--  } else {
--    document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
-+  const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-+
-+  switch (emojiFont) {
-+    case EmojiFont.Twemoji:
-+      document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
-+      break;
-+    case EmojiFont.NotoColorEmojiBahai:
-+      document.documentElement.style.setProperty('--font-emoji', 'NotoColorEmojiBahai');
-+      break;
-+    case EmojiFont.System:
-+    default:
-+      document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
-+      break;
-   }
- 
-   return null;
 diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
 index b861a060..be2f204e 100644
 --- a/src/app/features/settings/general/General.tsx
@@ -238,4 +126,130 @@ index b861a060..be2f204e 100644
 +          after={<SelectEmojiFont />}
          />
        </SequenceCard>
+ 
+diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
+index ce952bfc..e0977d97 100644
+--- a/src/app/pages/client/ClientNonUIFeatures.tsx
++++ b/src/app/pages/client/ClientNonUIFeatures.tsx
+@@ -10,7 +10,7 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
+ import InviteSound from '../../../../public/sound/invite.ogg';
+ import { notificationPermission, setFavicon } from '../../utils/dom';
+ import { useSetting } from '../../state/hooks/settings';
+-import { settingsAtom } from '../../state/settings';
++import { EmojiFont, settingsAtom } from '../../state/settings';
+ import { allInvitesAtom } from '../../state/room-list/inviteList';
+ import { usePreviousValue } from '../../hooks/usePreviousValue';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+@@ -28,12 +28,19 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+ 
+ function SystemEmojiFeature() {
+-  const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
+-
+-  if (twitterEmoji) {
+-    document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
+-  } else {
+-    document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
++  const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
++
++  switch (emojiFont) {
++    case EmojiFont.Twemoji:
++      document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
++      break;
++    case EmojiFont.NotoColorEmojiBahai:
++      document.documentElement.style.setProperty('--font-emoji', 'NotoColorEmojiBahai');
++      break;
++    case EmojiFont.System:
++    default:
++      document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
++      break;
+   }
+ 
+   return null;
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 31ee6ccb..b5fcf376 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -8,6 +8,11 @@ export enum MessageLayout {
+   Compact = 1,
+   Bubble = 2,
+ }
++export enum EmojiFont {
++  System = 'system',
++  Twemoji = 'twemoji',
++  NotoColorEmojiBahai = 'noto-bahai',
++}
+ 
+ export interface Settings {
+   themeId?: string;
+@@ -17,7 +22,8 @@ export interface Settings {
+   monochromeMode?: boolean;
+   isMarkdown: boolean;
+   editorToolbar: boolean;
+-  twitterEmoji: boolean;
++  emojiFont: EmojiFont;
++  twitterEmoji?: boolean; // deprecated, kept for migration
+   pageZoom: number;
+   hideActivity: boolean;
+ 
+@@ -36,6 +42,7 @@ export interface Settings {
+ 
+   showNotifications: boolean;
+   isNotificationSounds: boolean;
++  callRingScope: 'dm' | 'nonVoice' | 'all';
+ 
+   hour24Clock: boolean;
+   dateFormatString: string;
+@@ -51,7 +58,7 @@ const defaultSettings: Settings = {
+   monochromeMode: false,
+   isMarkdown: true,
+   editorToolbar: false,
+-  twitterEmoji: false,
++  emojiFont: EmojiFont.System,
+   pageZoom: 100,
+   hideActivity: false,
+ 
+@@ -70,6 +77,7 @@ const defaultSettings: Settings = {
+ 
+   showNotifications: true,
+   isNotificationSounds: true,
++  callRingScope: 'nonVoice',
+ 
+   hour24Clock: false,
+   dateFormatString: 'D MMM YYYY',
+@@ -80,9 +88,17 @@ const defaultSettings: Settings = {
+ export const getSettings = () => {
+   const settings = localStorage.getItem(STORAGE_KEY);
+   if (settings === null) return defaultSettings;
++  const parsed = JSON.parse(settings) as Settings;
++
++  // Migrate old twitterEmoji boolean to new emojiFont enum
++  if (parsed.twitterEmoji !== undefined && parsed.emojiFont === undefined) {
++    parsed.emojiFont = parsed.twitterEmoji ? EmojiFont.Twemoji : EmojiFont.System;
++    delete parsed.twitterEmoji;
++  }
++
+   return {
+     ...defaultSettings,
+-    ...(JSON.parse(settings) as Settings),
++    ...parsed,
+   };
+ };
+ 
+diff --git a/src/index.css b/src/index.css
+index ca28536d..699e20fc 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -5,6 +5,12 @@
+   font-display: swap;
+ }
+ 
++@font-face {
++  font-family: NotoColorEmojiBahai;
++  src: url('../public/font/NotoColorEmoji.Bahai.v0.0.1.ttf');
++  font-display: swap;
++}
++
+ :root {
+   --tc-link: hsl(213deg 100% 45%);
  

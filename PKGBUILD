@@ -36,7 +36,8 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         # Patches on upstream cinny files (allows security fixes to flow through)
         "01-emoji-font.patch"
         "02-element-call.patch"
-        "03-pronouns.patch")
+        "03-pronouns.patch"
+        "04-call-settings.patch")
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
             # hazre/cinny unchanged components
@@ -61,11 +62,12 @@ sha256sums=('SKIP'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
             '21e5e84639362b154da6753d9347ac32d564c83954e3cc78b2daf83e7d4766db'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
-            'b463bda0fd0927a70c257ba011dd3582c8a5e569c5d03dcc711508a11760e4c5'
+            '1cfe5acfd2094f271a5ed0c413a185e479721f0f60eb8fe8cce6ddfb292eb08d'
             # Patches
-            'd7496a8ebf4b4756bf0eb058b1a59a242ab8a4aa19d7d2e5eb51f8bcee92874a'
+            'd9302081d8866c7a6c6a70594d0f2e45de6aa084bcfdea8d4ecf564ce088198d'
             '47234efa7822f2bdf597672e93f3bb07b9c11e3e9933a2c16ac55b66cce84737'
-            '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046')
+            '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
+            '95674aeb184122236581a245668095f74af0e651bf95778dc97c6051f2a9135f')
 
 prepare() {
   cd "$_pkgname"
@@ -112,6 +114,9 @@ prepare() {
 
   echo "Applying pronoun/timezone/extended profile patch..."
   patch -p1 -i "$srcdir/03-pronouns.patch"
+
+  echo "Applying call ringtone settings patch..."
+  patch -p1 -i "$srcdir/04-call-settings.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."

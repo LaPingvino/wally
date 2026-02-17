@@ -12,6 +12,8 @@ import {
   color,
 } from 'folds';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useAtomValue } from 'jotai';
+import { EventType } from 'matrix-js-sdk';
 import { MatrixRTCSessionManagerEvents } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager';
 import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { useCallState } from '../../pages/client/call/CallProvider';
@@ -22,6 +24,7 @@ import {
   RoomNotificationMode,
   useRoomsNotificationPreferences,
 } from '../../hooks/useRoomsNotificationPreferences';
+import { settingsAtom } from '../../state/settings';
 import * as css from './RoomCallNavStatus.css';
 
 // Module-level: persists across tab switches (Direct/Home/Space each mount their own CallNavStatus).
@@ -112,6 +115,7 @@ export function CallNavStatus() {
   }, [scheduleNextCycle]);
 
   const notificationPreferences = useRoomsNotificationPreferences();
+  const callRingScope = useAtomValue(settingsAtom).callRingScope ?? 'nonVoice';
 
   const hasActiveCall = Boolean(activeCallRoomId);
   const isConnected = hasActiveCall && isActiveCallReady;
@@ -141,8 +145,14 @@ export function CallNavStatus() {
       if (roomId === activeCallRoomId) return;
       if (dismissedRef.current.has(roomId)) return;
       if (timedOutCalls.has(roomId)) return;
-      // Voice rooms are persistent channels — no "incoming call" concept
-      if (mx.getRoom(roomId)?.isCallRoom()) return;
+      // Voice rooms are persistent channels — skip unless user opted into 'all'
+      if (callRingScope !== 'all' && mx.getRoom(roomId)?.isCallRoom()) return;
+      // For DM-only scope, skip non-DM rooms
+      if (callRingScope === 'dm') {
+        const dmContent = mx.getAccountData(EventType.Direct)?.getContent<Record<string, string[]>>();
+        const dmRoomIds = new Set(Object.values(dmContent ?? {}).flat());
+        if (!dmRoomIds.has(roomId)) return;
+      }
       // Respect notification settings — muted rooms get no ring or bar
       if (getRoomNotificationMode(notificationPreferences, roomId) === RoomNotificationMode.Mute) return;
       const otherMembers = session.memberships.filter((m) => m.sender !== myUserId);
@@ -195,7 +205,7 @@ export function CallNavStatus() {
       mx.matrixRTC.removeListener(MatrixRTCSessionManagerEvents.SessionStarted, handleSessionStarted);
       mx.matrixRTC.removeListener(MatrixRTCSessionManagerEvents.SessionEnded, handleSessionEnded);
     };
-  }, [mx, activeCallRoomId, clearCallTimeout, notificationPreferences]);
+  }, [mx, activeCallRoomId, clearCallTimeout, notificationPreferences, callRingScope]);
 
   const handleJoin = useCallback(
     (roomId: string) => {

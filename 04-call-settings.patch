@@ -1,0 +1,138 @@
+diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
+index e0df06df..de7956e9 100644
+--- a/src/app/features/settings/notifications/SystemNotification.tsx
++++ b/src/app/features/settings/notifications/SystemNotification.tsx
+@@ -1,5 +1,6 @@
+-import React, { useCallback } from 'react';
+-import { Box, Text, Switch, Button, color, Spinner } from 'folds';
++import React, { MouseEventHandler, useCallback, useState } from 'react';
++import { Box, Text, Switch, Button, color, Spinner, Icon, Icons, Menu, MenuItem, PopOut, RectCords, as, config } from 'folds';
++import FocusTrap from 'focus-trap-react';
+ import { IPusherRequest } from 'matrix-js-sdk';
+ import { SequenceCard } from '../../../components/sequence-card';
+ import { SequenceCardStyle } from '../styles.css';
+@@ -10,6 +11,7 @@ import { getNotificationState, usePermissionState } from '../../../hooks/usePerm
+ import { useEmailNotifications } from '../../../hooks/useEmailNotifications';
+ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { stopPropagation } from '../../../utils/keyboard';
+ 
+ function EmailNotification() {
+   const mx = useMatrixClient();
+@@ -84,6 +86,97 @@ function EmailNotification() {
+   );
+ }
+ 
++type CallRingScope = 'dm' | 'nonVoice' | 'all';
++
++const CALL_RING_SCOPE_LABELS: Record<CallRingScope, string> = {
++  dm: 'Direct Messages',
++  nonVoice: 'All Chats',
++  all: 'All Rooms',
++};
++
++type CallRingScopeMenuProps = {
++  scopes: CallRingScope[];
++  selected: CallRingScope;
++  onSelect: (scope: CallRingScope) => void;
++};
++const CallRingScopeMenu = as<'div', CallRingScopeMenuProps>(
++  ({ scopes, selected, onSelect, ...props }, ref) => (
++    <Menu {...props} ref={ref}>
++      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++        {scopes.map((scope) => (
++          <MenuItem
++            key={scope}
++            size="300"
++            variant={scope === selected ? 'Primary' : 'Surface'}
++            radii="300"
++            onClick={() => onSelect(scope)}
++          >
++            <Text size="T300">{CALL_RING_SCOPE_LABELS[scope]}</Text>
++          </MenuItem>
++        ))}
++      </Box>
++    </Menu>
++  )
++);
++
++function SelectCallRingScope() {
++  const [callRingScope, setCallRingScope] = useSetting(settingsAtom, 'callRingScope');
++  const [menuCords, setMenuCords] = useState<RectCords>();
++
++  const scopes: CallRingScope[] = ['dm', 'nonVoice', 'all'];
++
++  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++
++  const handleSelect = (scope: CallRingScope) => {
++    setCallRingScope(scope);
++    setMenuCords(undefined);
++  };
++
++  return (
++    <>
++      <Button
++        size="300"
++        variant="Primary"
++        outlined
++        fill="Soft"
++        radii="300"
++        after={<Icon size="300" src={Icons.ChevronBottom} />}
++        onClick={handleMenu}
++      >
++        <Text size="T300">{CALL_RING_SCOPE_LABELS[callRingScope ?? 'nonVoice']}</Text>
++      </Button>
++      <PopOut
++        anchor={menuCords}
++        offset={5}
++        position="Bottom"
++        align="End"
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: () => setMenuCords(undefined),
++              clickOutsideDeactivates: true,
++              isKeyForward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
++              isKeyBackward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
++              escapeDeactivates: stopPropagation,
++            }}
++          >
++            <CallRingScopeMenu
++              scopes={scopes}
++              selected={callRingScope ?? 'nonVoice'}
++              onSelect={handleSelect}
++            />
++          </FocusTrap>
++        }
++      />
++    </>
++  );
++}
++
+ export function SystemNotification() {
+   const notifPermission = usePermissionState('notifications', getNotificationState());
+   const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
+@@ -145,6 +238,18 @@ export function SystemNotification() {
+           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
+         />
+       </SequenceCard>
++      <SequenceCard
++        className={SequenceCardStyle}
++        variant="SurfaceVariant"
++        direction="Column"
++        gap="400"
++      >
++        <SettingTile
++          title="Incoming Call Ringtone"
++          description="Ring for incoming calls in these rooms. Voice channels are always excluded."
++          after={<SelectCallRingScope />}
++        />
++      </SequenceCard>
+       <SequenceCard
+         className={SequenceCardStyle}
+         variant="SurfaceVariant"
