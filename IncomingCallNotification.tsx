@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Text, IconButton, Icon, Icons, config, toRem } from 'folds';
 import { MatrixRTCSessionManagerEvents } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager';
 import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
@@ -15,11 +15,16 @@ export function IncomingCallNotification() {
   const { activeCallRoomId, setActiveCallRoomId } = useCallState();
   const { navigateRoom } = useRoomNavigate();
   const [incomingCalls, setIncomingCalls] = useState<IncomingCall[]>([]);
+  // Track dismissed rooms so we don't re-notify for calls that were already dismissed
+  const dismissedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    const handleSessionStarted = (roomId: string, session: MatrixRTCSession) => {
+    const myUserId = mx.getUserId();
+
+    const addCall = (roomId: string, session: MatrixRTCSession) => {
       if (roomId === activeCallRoomId) return;
-      const otherMembers = session.memberships.filter((m) => m.sender !== mx.getUserId());
+      if (dismissedRef.current.has(roomId)) return;
+      const otherMembers = session.memberships.filter((m) => m.sender !== myUserId);
       if (otherMembers.length === 0) return;
       setIncomingCalls((prev) => {
         if (prev.some((c) => c.roomId === roomId)) return prev;
@@ -27,7 +32,23 @@ export function IncomingCallNotification() {
       });
     };
 
+    // Scan already-active sessions on mount / when activeCallRoomId changes
+    for (const room of mx.getRooms()) {
+      const memberships = MatrixRTCSession.callMembershipsForRoom(room);
+      if (memberships.filter((m) => m.sender !== myUserId).length > 0) {
+        const session = mx.matrixRTC.getRoomSession(room);
+        addCall(room.roomId, session);
+      }
+    }
+
+    const handleSessionStarted = (roomId: string, session: MatrixRTCSession) => {
+      // New call started — clear any previous dismiss so we re-notify
+      dismissedRef.current.delete(roomId);
+      addCall(roomId, session);
+    };
+
     const handleSessionEnded = (roomId: string) => {
+      dismissedRef.current.delete(roomId);
       setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
     };
 
@@ -42,15 +63,16 @@ export function IncomingCallNotification() {
 
   const handleJoin = useCallback(
     (roomId: string) => {
-      const joinRoom = mx.getRoom(roomId);
-      setActiveCallRoomId(roomId, joinRoom?.isCallRoom() ?? false);
+      // Always open the call panel (true) so the join interface is visible
+      setActiveCallRoomId(roomId, true);
       navigateRoom(roomId);
       setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
     },
-    [mx, setActiveCallRoomId, navigateRoom]
+    [setActiveCallRoomId, navigateRoom]
   );
 
   const handleDismiss = useCallback((roomId: string) => {
+    dismissedRef.current.add(roomId);
     setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
   }, []);
 
