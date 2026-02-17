@@ -26,6 +26,7 @@ declare -A FILE_PATHS=(
   ["IncomingCallNotification.tsx"]="src/app/features/call/IncomingCallNotification.tsx"
   ["RoomNavItem.tsx"]="src/app/features/room-nav/RoomNavItem.tsx"
   ["SmallWidgetDriver.ts"]="src/app/features/call/SmallWidgetDriver.ts"
+  ["RoomCallNavStatus.tsx"]="src/app/features/room-nav/RoomCallNavStatus.tsx"
 )
 
 # Patches in order (applied on top of each other on element-call branch)
