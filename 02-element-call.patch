@@ -28,7 +28,7 @@ index ffd9cb3d..a9c603b2 100644
  export * from './AdditionalCreatorInput';
 +export * from './types';
 diff --git a/src/app/components/create-room/utils.ts b/src/app/components/create-room/utils.ts
-index a0ca7488..3d702f2a 100644
+index a0ca7488..217d177d 100644
 --- a/src/app/components/create-room/utils.ts
 +++ b/src/app/components/create-room/utils.ts
 @@ -7,10 +7,11 @@ import {
@@ -108,17 +108,27 @@ index a0ca7488..3d702f2a 100644
    initialState.push(createRoomJoinRulesState(data.kind, data.parent, data.knock));
  
    const options: ICreateRoomOpts = {
-@@ -136,5 +180,15 @@ export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promis
+@@ -136,5 +180,25 @@ export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promis
      );
    }
  
-+  if (data.powerLevelContentOverrides) {
-+    const roomPowers = await mx.getStateEvent(result.room_id, StateEvent.RoomPowerLevels, '');
-+    const updatedPowers = createPowerLevelContentOverrides(
-+      roomPowers,
-+      data.powerLevelContentOverrides
-+    );
++  // Call rooms require specific event power levels for MSC3401
++  let powerLevelOverrides = data.powerLevelContentOverrides;
++  if (data.type === RoomType.Call) {
++    const callEventLevels: IPowerLevels = {
++      events: {
++        'org.matrix.msc3401.call': 200,
++        'org.matrix.msc3401.call.member': 0,
++      },
++    };
++    powerLevelOverrides = powerLevelOverrides
++      ? createPowerLevelContentOverrides(powerLevelOverrides, callEventLevels)
++      : callEventLevels;
++  }
 +
++  if (powerLevelOverrides) {
++    const roomPowers = await mx.getStateEvent(result.room_id, StateEvent.RoomPowerLevels, '');
++    const updatedPowers = createPowerLevelContentOverrides(roomPowers, powerLevelOverrides);
 +    await mx.sendStateEvent(result.room_id, StateEvent.RoomPowerLevels as any, updatedPowers, '');
 +  }
 +
