@@ -1,5 +1,5 @@
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df..afb9f61f 100644
+index e0df06df..fab96b66 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
@@ -19,7 +19,7 @@ index e0df06df..afb9f61f 100644
  
  function EmailNotification() {
    const mx = useMatrixClient();
-@@ -84,6 +86,97 @@ function EmailNotification() {
+@@ -84,6 +86,98 @@ function EmailNotification() {
    );
  }
  
@@ -100,6 +100,7 @@ index e0df06df..afb9f61f 100644
 +              isKeyBackward: (evt: KeyboardEvent) =>
 +                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
 +              escapeDeactivates: stopPropagation,
++              tabbableOptions: { iFrameSelector: '' },
 +            }}
 +          >
 +            <CallRingScopeMenu
@@ -117,7 +118,7 @@ index e0df06df..afb9f61f 100644
  export function SystemNotification() {
    const notifPermission = usePermissionState('notifications', getNotificationState());
    const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
-@@ -145,6 +238,18 @@ export function SystemNotification() {
+@@ -145,6 +239,18 @@ export function SystemNotification() {
            after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
          />
        </SequenceCard>
