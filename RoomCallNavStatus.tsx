@@ -438,7 +438,7 @@ export function CallNavStatus() {
                 hangUp();
               }}
             >
-              <Icon src={Icons.Phone} />
+              <Icon src={Icons.PhoneDown} />
             </IconButton>
           )}
         </TooltipProvider>
