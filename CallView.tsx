@@ -94,11 +94,29 @@ export function CallView({ room }: { room: Room }) {
 
   const activeIframeDisplayRef = callIframeRef;
 
-  // When no call is active, reset iframe to about:blank to release microphone/camera
+  // When no call is active, signal Element Call to stop its tracks, then navigate away.
+  // Sending the Widget API terminate action first gives EC a chance to call track.stop()
+  // on its own MediaStreamTracks — needed on Firefox which doesn't release them on src change.
   useEffect(() => {
     if (!activeCallRoomId && activeIframeDisplayRef?.current) {
-      activeIframeDisplayRef.current.src = 'about:blank';
+      const iframe = activeIframeDisplayRef.current;
+      try {
+        iframe.contentWindow?.postMessage(
+          JSON.stringify({ api: 'toWidget', action: 'terminate', requestId: `hangup-${Date.now()}`, widgetId: 'element-call' }),
+          '*'
+        );
+      } catch {
+        // ignore — contentWindow access itself is safe cross-origin for postMessage
+      }
+      // Give EC ~300ms to stop its own tracks before we navigate the iframe away
+      const timer = setTimeout(() => {
+        if (activeIframeDisplayRef.current) {
+          activeIframeDisplayRef.current.src = 'about:blank';
+        }
+      }, 300);
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [activeCallRoomId, activeIframeDisplayRef]);
 
   const applyFixedPositioningToIframe = useCallback(() => {

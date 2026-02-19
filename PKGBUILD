@@ -54,7 +54,7 @@ sha256sums=('SKIP'
             '66657dc7aa7cce0aaa84d0f61b3ac2ac6475980f3b89b811f8f9c899e7712a6c'
             # Heavily-customized local replacements
             '1e4e4f07d01867cf704a5f7433bbcf41e92a87e9bca264d6c4e9ee31c4011824'
-            '56cb359d259ccfe05eb5c4930270b9f1827ab809b74d2e5db9f5133f630f1df7'
+            'aeb3404add2c68bc952b543d77ef155e60fe7776aaf62e29bc68291b98c016f4'
             '1f8649e1ff1eedc4d7415e4800bade9d5014fbdf80aef80a22909f0abb7e67c1'
             '227ea0a79c61b2058cac1d6a367915a901254b71cc08ff278ee4e5123ea13d5f'
             'e548b8a5b19b2567cc94c4cbfca1c66c73f60a27c5e3550f894b415fb18cf9e1'
