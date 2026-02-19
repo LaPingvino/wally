@@ -1,5 +1,5 @@
 diff --git a/src/app/components/message/content/AudioContent.tsx b/src/app/components/message/content/AudioContent.tsx
-index 478486a4..57c14c4b 100644
+index 478486a4..26eb645d 100644
 --- a/src/app/components/message/content/AudioContent.tsx
 +++ b/src/app/components/message/content/AudioContent.tsx
 @@ -1,6 +1,8 @@
@@ -43,7 +43,7 @@ index 478486a4..57c14c4b 100644
 +                  setTimeout(() => setRingtoneSet(false), 2000);
 +                }}
 +              >
-+                <Icon src={ringtoneSet ? Icons.CheckCircle : Icons.Bell} size="50" />
++                <Icon src={Icons.VolumeHigh} size="50" />
 +              </IconButton>
 +            )}
 +          </TooltipProvider>
