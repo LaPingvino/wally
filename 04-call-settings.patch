@@ -1,12 +1,65 @@
+diff --git a/src/app/components/message/content/AudioContent.tsx b/src/app/components/message/content/AudioContent.tsx
+index 478486a4..57c14c4b 100644
+--- a/src/app/components/message/content/AudioContent.tsx
++++ b/src/app/components/message/content/AudioContent.tsx
+@@ -1,6 +1,8 @@
+ /* eslint-disable jsx-a11y/media-has-caption */
+ import React, { ReactNode, useCallback, useRef, useState } from 'react';
+-import { Badge, Chip, Icon, IconButton, Icons, ProgressBar, Spinner, Text, toRem } from 'folds';
++import { Badge, Chip, Icon, IconButton, Icons, ProgressBar, Spinner, Text, Tooltip, TooltipProvider, toRem } from 'folds';
++import { useSetting } from '../../../state/hooks/settings';
++import { settingsAtom } from '../../../state/settings';
+ import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+ import { Range } from 'react-range';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+@@ -51,6 +53,8 @@ export function AudioContent({
+ }: AudioContentProps) {
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
++  const [, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
++  const [ringtoneSet, setRingtoneSet] = useState(false);
+ 
+   const [srcState, loadSrc] = useAsyncCallback(
+     useCallback(async () => {
+@@ -155,6 +159,29 @@ export function AudioContent({
+     ),
+     rightControl: (
+       <>
++        {!encInfo && (
++          <TooltipProvider
++            position="Top"
++            offset={4}
++            tooltip={<Tooltip><Text>{ringtoneSet ? 'Ringtone set!' : 'Set as ringtone'}</Text></Tooltip>}
++          >
++            {(triggerRef) => (
++              <IconButton
++                ref={triggerRef}
++                variant="SurfaceVariant"
++                size="300"
++                radii="Pill"
++                onClick={() => {
++                  setCallRingtoneUrl(url);
++                  setRingtoneSet(true);
++                  setTimeout(() => setRingtoneSet(false), 2000);
++                }}
++              >
++                <Icon src={ringtoneSet ? Icons.CheckCircle : Icons.Bell} size="50" />
++              </IconButton>
++            )}
++          </TooltipProvider>
++        )}
+         <IconButton
+           variant="SurfaceVariant"
+           size="300"
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df..fab96b66 100644
+index e0df06df..bed0fd41 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
 -import React, { useCallback } from 'react';
 -import { Box, Text, Switch, Button, color, Spinner } from 'folds';
-+import React, { MouseEventHandler, useCallback, useState } from 'react';
-+import { Box, Text, Switch, Button, color, Spinner, Icon, Icons, Menu, MenuItem, PopOut, RectCords, as, config } from 'folds';
++import React, { MouseEventHandler, useCallback, useEffect, useState } from 'react';
++import { Box, Text, Switch, Button, color, Spinner, Icon, IconButton, Icons, Menu, MenuItem, PopOut, RectCords, as, config } from 'folds';
 +import FocusTrap from 'focus-trap-react';
  import { IPusherRequest } from 'matrix-js-sdk';
  import { SequenceCard } from '../../../components/sequence-card';
@@ -19,7 +72,7 @@ index e0df06df..fab96b66 100644
  
  function EmailNotification() {
    const mx = useMatrixClient();
-@@ -84,6 +86,98 @@ function EmailNotification() {
+@@ -84,6 +86,150 @@ function EmailNotification() {
    );
  }
  
@@ -55,6 +108,58 @@ index e0df06df..fab96b66 100644
 +    </Menu>
 +  )
 +);
++
++function RingtoneUrlInput() {
++  const [callRingtoneUrl, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
++  const [draft, setDraft] = useState(callRingtoneUrl ?? '');
++
++  // Sync when set externally (e.g., "Set as ringtone" from a chat audio message)
++  useEffect(() => {
++    setDraft(callRingtoneUrl ?? '');
++  }, [callRingtoneUrl]);
++
++  const commit = () => {
++    const trimmed = draft.trim();
++    setCallRingtoneUrl(trimmed || null);
++  };
++
++  return (
++    <Box direction="Row" gap="200" alignItems="Center" grow="Yes">
++      <input
++        type="url"
++        value={draft}
++        onChange={(e) => setDraft(e.target.value)}
++        onBlur={commit}
++        onKeyDown={(e) => {
++          if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur(); }
++        }}
++        placeholder="https://... or mxc://..."
++        style={{
++          flexGrow: 1,
++          minWidth: 0,
++          background: 'transparent',
++          border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
++          borderRadius: config.radii.R300,
++          padding: `${config.space.S100} ${config.space.S200}`,
++          color: 'inherit',
++          font: 'inherit',
++          outline: 'none',
++        }}
++      />
++      {callRingtoneUrl && (
++        <IconButton
++          size="300"
++          radii="Pill"
++          variant="SurfaceVariant"
++          onClick={() => { setDraft(''); setCallRingtoneUrl(null); }}
++          title="Reset to built-in ringtone"
++        >
++          <Icon src={Icons.Cross} size="50" />
++        </IconButton>
++      )}
++    </Box>
++  );
++}
 +
 +function SelectCallRingScope() {
 +  const [callRingScope, setCallRingScope] = useSetting(settingsAtom, 'callRingScope');
@@ -118,10 +223,22 @@ index e0df06df..fab96b66 100644
  export function SystemNotification() {
    const notifPermission = usePermissionState('notifications', getNotificationState());
    const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
-@@ -145,6 +239,18 @@ export function SystemNotification() {
+@@ -145,6 +291,30 @@ export function SystemNotification() {
            after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
          />
        </SequenceCard>
++      <SequenceCard
++        className={SequenceCardStyle}
++        variant="SurfaceVariant"
++        direction="Column"
++        gap="400"
++      >
++        <SettingTile
++          title="Custom Ringtone"
++          description="Paste an audio URL (https:// or mxc://), or click 'Set as ringtone' on any audio message in chat. Leave empty to use the built-in ring."
++          after={<RingtoneUrlInput />}
++        />
++      </SequenceCard>
 +      <SequenceCard
 +        className={SequenceCardStyle}
 +        variant="SurfaceVariant"
@@ -137,3 +254,25 @@ index e0df06df..fab96b66 100644
        <SequenceCard
          className={SequenceCardStyle}
          variant="SurfaceVariant"
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index upstream..modified 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -43,6 +43,8 @@ export interface Settings {
+ 
+   showNotifications: boolean;
+   isNotificationSounds: boolean;
++  callRingScope: 'dm' | 'nonVoice' | 'all';
++  callRingtoneUrl: string | null;
+ 
+   hour24Clock: boolean;
+   dateFormatString: string;
+@@ -78,6 +80,8 @@ const defaultSettings: Settings = {
+ 
+   showNotifications: true,
+   isNotificationSounds: true,
++  callRingScope: 'nonVoice',
++  callRingtoneUrl: null,
+ 
+   hour24Clock: false,
+   dateFormatString: 'D MMM YYYY',

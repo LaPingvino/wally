@@ -19,6 +19,8 @@ import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { mxcUrlToHttp } from '../../utils/matrix';
 import {
   getRoomNotificationMode,
   RoomNotificationMode,
@@ -84,6 +86,10 @@ export function CallNavStatus() {
   // Ringtone
   const audioCtxRef = useRef<AudioContext | null>(null);
   const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+
+  const callRingtoneUrl = useAtomValue(settingsAtom).callRingtoneUrl ?? null;
+  const useAuthentication = useMediaAuthentication();
 
   const stopRingtone = useCallback(() => {
     if (ringTimerRef.current) {
@@ -93,6 +99,11 @@ export function CallNavStatus() {
     if (audioCtxRef.current) {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
+    }
+    if (audioElRef.current) {
+      audioElRef.current.pause();
+      audioElRef.current.src = '';
+      audioElRef.current = null;
     }
   }, []);
 
@@ -104,7 +115,34 @@ export function CallNavStatus() {
   }, []);
 
   const startRingtone = useCallback(() => {
-    if (audioCtxRef.current) return;
+    if (audioCtxRef.current || audioElRef.current) return;
+
+    // Resolve custom ringtone URL (supports mxc:// and https://)
+    const resolvedUrl = callRingtoneUrl
+      ? callRingtoneUrl.startsWith('mxc://')
+        ? mxcUrlToHttp(mx, callRingtoneUrl, useAuthentication)
+        : callRingtoneUrl
+      : null;
+
+    if (resolvedUrl) {
+      const audio = new Audio(resolvedUrl);
+      audio.loop = true;
+      audioElRef.current = audio;
+      audio.play().catch(() => {
+        // Playback failed — fall through to synthesized fallback
+        audioElRef.current = null;
+        try {
+          const ctx = new AudioContext();
+          audioCtxRef.current = ctx;
+          scheduleNextCycle(ctx);
+        } catch {
+          // Audio blocked or not supported
+        }
+      });
+      return;
+    }
+
+    // Fallback: synthesized POTS ring
     try {
       const ctx = new AudioContext();
       audioCtxRef.current = ctx;
@@ -112,7 +150,7 @@ export function CallNavStatus() {
     } catch {
       // Audio blocked or not supported
     }
-  }, [scheduleNextCycle]);
+  }, [callRingtoneUrl, mx, useAuthentication, scheduleNextCycle]);
 
   const notificationPreferences = useRoomsNotificationPreferences();
   const callRingScope = useAtomValue(settingsAtom).callRingScope ?? 'nonVoice';

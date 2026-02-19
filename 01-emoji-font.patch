@@ -167,7 +167,7 @@ index ce952bfc..e0977d97 100644
  
    return null;
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb..b5fcf376 100644
+index 31ee6ccb..b31490f9 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -8,6 +8,11 @@ export enum MessageLayout {
@@ -192,15 +192,7 @@ index 31ee6ccb..b5fcf376 100644
    pageZoom: number;
    hideActivity: boolean;
  
-@@ -36,6 +42,7 @@ export interface Settings {
- 
-   showNotifications: boolean;
-   isNotificationSounds: boolean;
-+  callRingScope: 'dm' | 'nonVoice' | 'all';
- 
-   hour24Clock: boolean;
-   dateFormatString: string;
-@@ -51,7 +58,7 @@ const defaultSettings: Settings = {
+@@ -51,7 +57,7 @@ const defaultSettings: Settings = {
    monochromeMode: false,
    isMarkdown: true,
    editorToolbar: false,
@@ -209,15 +201,7 @@ index 31ee6ccb..b5fcf376 100644
    pageZoom: 100,
    hideActivity: false,
  
-@@ -70,6 +77,7 @@ const defaultSettings: Settings = {
- 
-   showNotifications: true,
-   isNotificationSounds: true,
-+  callRingScope: 'nonVoice',
- 
-   hour24Clock: false,
-   dateFormatString: 'D MMM YYYY',
-@@ -80,9 +88,17 @@ const defaultSettings: Settings = {
+@@ -80,9 +86,17 @@ const defaultSettings: Settings = {
  export const getSettings = () => {
    const settings = localStorage.getItem(STORAGE_KEY);
    if (settings === null) return defaultSettings;
