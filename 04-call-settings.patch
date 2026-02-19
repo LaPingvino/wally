@@ -1,5 +1,5 @@
 diff --git a/src/app/components/message/content/AudioContent.tsx b/src/app/components/message/content/AudioContent.tsx
-index 478486a4..26eb645d 100644
+index 478486a4..bd3052a0 100644
 --- a/src/app/components/message/content/AudioContent.tsx
 +++ b/src/app/components/message/content/AudioContent.tsx
 @@ -1,6 +1,8 @@
@@ -34,7 +34,7 @@ index 478486a4..26eb645d 100644
 +            {(triggerRef) => (
 +              <IconButton
 +                ref={triggerRef}
-+                variant="SurfaceVariant"
++                variant={ringtoneSet ? "Success" : "SurfaceVariant"}
 +                size="300"
 +                radii="Pill"
 +                onClick={() => {
@@ -43,7 +43,7 @@ index 478486a4..26eb645d 100644
 +                  setTimeout(() => setRingtoneSet(false), 2000);
 +                }}
 +              >
-+                <Icon src={Icons.VolumeHigh} size="50" />
++                <Icon src={ringtoneSet ? Icons.Check : Icons.Bell} size="50" />
 +              </IconButton>
 +            )}
 +          </TooltipProvider>
