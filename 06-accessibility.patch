@@ -1,0 +1,682 @@
+diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
+new file mode 100644
+index 00000000..e589fc94
+--- /dev/null
++++ b/src/app/components/GlobalKeyboardShortcuts.tsx
+@@ -0,0 +1,9 @@
++import React from 'react';
++import { useGlobalKeyboardShortcuts } from '../hooks/useGlobalKeyboardShortcuts';
++import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help/KeyboardShortcutsHelp';
++
++export function GlobalKeyboardShortcuts() {
++  const { shortcuts } = useGlobalKeyboardShortcuts();
++
++  return <KeyboardShortcutsHelp shortcuts={shortcuts} />;
++}
+diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
+new file mode 100644
+index 00000000..c0f95570
+--- /dev/null
++++ b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
+@@ -0,0 +1,71 @@
++import React from 'react';
++import { Box, Text, config, Dialog, Header, Scroll, IconButton, Icon, Icons } from 'folds';
++import { useAtom } from 'jotai';
++import FocusTrap from 'focus-trap-react';
++import { keyboardShortcutsHelpAtom } from '../../state/keyboardShortcutsHelp';
++import { KeyboardShortcut } from '../../hooks/useGlobalKeyboardShortcuts';
++import { stopPropagation } from '../../utils/keyboard';
++
++interface KeyboardShortcutsHelpProps {
++  shortcuts: KeyboardShortcut[];
++}
++
++function formatShortcut(key: string): string {
++  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
++  return key
++    .replace('mod', isMac ? 'Cmd' : 'Ctrl')
++    .split('+')
++    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
++    .join('+');
++}
++
++export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps) {
++  const [open, setOpen] = useAtom(keyboardShortcutsHelpAtom);
++
++  if (!open) return null;
++
++  const groupedShortcuts = shortcuts.reduce((acc, shortcut) => {
++    if (!acc[shortcut.category]) acc[shortcut.category] = [];
++    acc[shortcut.category].push(shortcut);
++    return acc;
++  }, {} as Record<string, KeyboardShortcut[]>);
++
++  return (
++    <Dialog open={open} onOpenChange={setOpen}>
++      <FocusTrap
++        focusTrapOptions={{
++          initialFocus: false,
++          onDeactivate: () => setOpen(false),
++          clickOutsideDeactivates: true,
++          escapeDeactivates: stopPropagation,
++        }}
++      >
++        <Box direction="Column" gap="400" style={{ padding: config.space.S400, minWidth: '400px' }}>
++          <Box direction="Row" justifyContent="SpaceBetween" alignItems="Center">
++            <Header size="400">Keyboard Shortcuts</Header>
++            <IconButton size="300" onClick={() => setOpen(false)}>
++              <Icon src={Icons.Cross} size="200" />
++            </IconButton>
++          </Box>
++          <Scroll style={{ maxHeight: '60vh' }}>
++            <Box direction="Column" gap="300">
++              {Object.entries(groupedShortcuts).map(([category, items]) => (
++                <Box key={category} direction="Column" gap="200">
++                  <Text size="L400">{category}</Text>
++                  {items.map((shortcut) => (
++                    <Box key={shortcut.key} direction="Row" justifyContent="SpaceBetween" gap="400">
++                      <Text size="T300">{shortcut.description}</Text>
++                      <Text size="T300" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
++                        {formatShortcut(shortcut.key)}
++                      </Text>
++                    </Box>
++                  ))}
++                </Box>
++              ))}
++            </Box>
++          </Scroll>
++        </Box>
++      </FocusTrap>
++    </Dialog>
++  );
++}
+diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
+new file mode 100644
+index 00000000..9324c513
+--- /dev/null
++++ b/src/app/components/room-listbox/RoomListbox.tsx
+@@ -0,0 +1,37 @@
++import React, { ReactNode } from 'react';
++
++interface RoomListboxProps {
++  'aria-label': string;
++  items: string[];
++  focusedIndex: number;
++  onKeyDown: React.KeyboardEventHandler<HTMLDivElement>;
++  onFocus?: React.FocusEventHandler<HTMLDivElement>;
++  children: ReactNode;
++}
++
++export function RoomListbox({
++  'aria-label': ariaLabel,
++  items,
++  focusedIndex,
++  onKeyDown,
++  onFocus,
++  children,
++}: RoomListboxProps) {
++  const activedescendant = focusedIndex >= 0 && items[focusedIndex]
++    ? `room-option-${items[focusedIndex]}`
++    : undefined;
++
++  return (
++    <div
++      role="listbox"
++      aria-label={ariaLabel}
++      aria-activedescendant={activedescendant}
++      aria-orientation="vertical"
++      tabIndex={0}
++      onKeyDown={onKeyDown}
++      onFocus={onFocus}
++    >
++      {children}
++    </div>
++  );
++}
+diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
+new file mode 100644
+index 00000000..650c11cb
+--- /dev/null
++++ b/src/app/hooks/useGlobalKeyboardShortcuts.ts
+@@ -0,0 +1,46 @@
++import { useCallback, useMemo } from 'react';
++import { useSetAtom } from 'jotai';
++import { isKeyHotkey } from 'is-hotkey';
++import { useKeyDown } from './useKeyDown';
++import { stopPropagation } from '../utils/keyboard';
++import { keyboardShortcutsHelpAtom } from '../state/keyboardShortcutsHelp';
++
++export interface KeyboardShortcut {
++  key: string;
++  description: string;
++  category: 'Navigation' | 'Search' | 'Actions' | 'Help';
++  action: () => void;
++}
++
++export const useGlobalKeyboardShortcuts = () => {
++  const setShortcutsHelp = useSetAtom(keyboardShortcutsHelpAtom);
++
++  const shortcuts = useMemo<KeyboardShortcut[]>(
++    () => [
++      {
++        key: 'mod+/',
++        description: 'Show keyboard shortcuts',
++        category: 'Help',
++        action: () => setShortcutsHelp(true),
++      },
++    ],
++    [setShortcutsHelp]
++  );
++
++  const handleKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (!stopPropagation(evt)) return;
++
++      const shortcut = shortcuts.find((s) => isKeyHotkey(s.key, evt));
++      if (shortcut) {
++        evt.preventDefault();
++        shortcut.action();
++      }
++    },
++    [shortcuts]
++  );
++
++  useKeyDown(window, handleKeyDown);
++
++  return { shortcuts };
++};
+diff --git a/src/app/hooks/useRoomListKeyboard.ts b/src/app/hooks/useRoomListKeyboard.ts
+new file mode 100644
+index 00000000..54ea6bb5
+--- /dev/null
++++ b/src/app/hooks/useRoomListKeyboard.ts
+@@ -0,0 +1,95 @@
++import { useCallback, useEffect, useState } from 'react';
++import { Virtualizer } from '@tanstack/react-virtual';
++import { isKeyHotkey } from 'is-hotkey';
++
++interface UseRoomListKeyboardOptions {
++  items: string[];
++  selectedRoomId: string | undefined;
++  virtualizer: Virtualizer<HTMLDivElement, Element>;
++  onNavigate: (roomId: string) => void;
++  enabled?: boolean;
++}
++
++export const useRoomListKeyboard = ({
++  items,
++  selectedRoomId,
++  virtualizer,
++  onNavigate,
++  enabled = true,
++}: UseRoomListKeyboardOptions) => {
++  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
++
++  useEffect(() => {
++    if (focusedIndex >= items.length) {
++      setFocusedIndex(items.length - 1);
++    }
++  }, [items.length, focusedIndex]);
++
++  // Called when the listbox div receives focus (e.g. via Tab)
++  const handleFocus = useCallback(() => {
++    if (focusedIndex < 0) {
++      const selectedIndex = selectedRoomId ? items.indexOf(selectedRoomId) : 0;
++      const idx = selectedIndex >= 0 ? selectedIndex : 0;
++      setFocusedIndex(idx);
++      virtualizer.scrollToIndex(idx, { align: 'auto' });
++    }
++  }, [focusedIndex, items, selectedRoomId, virtualizer]);
++
++  const handleKeyDown = useCallback(
++    (evt: React.KeyboardEvent<HTMLDivElement>) => {
++      if (!enabled) return;
++
++      if (isKeyHotkey('arrowdown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? 0 : Math.min(prev + 1, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('arrowup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? items.length - 1 : Math.max(prev - 1, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('home', evt)) {
++        evt.preventDefault();
++        setFocusedIndex(0);
++        virtualizer.scrollToIndex(0, { align: 'start' });
++        return;
++      }
++
++      if (isKeyHotkey('end', evt)) {
++        evt.preventDefault();
++        const lastIndex = items.length - 1;
++        setFocusedIndex(lastIndex);
++        virtualizer.scrollToIndex(lastIndex, { align: 'end' });
++        return;
++      }
++
++      if ((isKeyHotkey('enter', evt) || isKeyHotkey('space', evt)) && focusedIndex >= 0) {
++        evt.preventDefault();
++        const roomId = items[focusedIndex];
++        if (roomId) {
++          onNavigate(roomId);
++        }
++        return;
++      }
++    },
++    [enabled, items, focusedIndex, virtualizer, onNavigate]
++  );
++
++  return {
++    focusedIndex,
++    handleKeyDown,
++    handleFocus,
++    setFocusedIndex,
++  };
++};
+diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
+index 2955f5ef..4817e219 100644
+--- a/src/app/pages/Router.tsx
++++ b/src/app/pages/Router.tsx
+@@ -70,6 +70,7 @@ import { SearchModalRenderer } from '../features/search';
+ import { CallProvider } from './client/call/CallProvider';
+ import { PersistentCallContainer } from './client/call/PersistentCallContainer';
+ import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
++import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
+ import { getFallbackSession } from '../state/sessions';
+ import { pushSessionToSW } from '../../sw-session';
+ 
+@@ -142,6 +143,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
+                           </PersistentCallContainer>
+                         </ClientLayout>
+                         <IncomingCallNotification />
++                        <GlobalKeyboardShortcuts />
+                       </CallProvider>
+                       <SearchModalRenderer />
+                       <UserRoomProfileRenderer />
+diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
+index 4ffd3dc8..7748cd6c 100644
+--- a/src/app/pages/client/direct/Direct.tsx
++++ b/src/app/pages/client/direct/Direct.tsx
+@@ -52,6 +52,8 @@ import {
+ } from '../../../hooks/useRoomsNotificationPreferences';
+ import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
+ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
+ 
+ type DirectMenuProps = {
+   requestClose: () => void;
+@@ -200,6 +202,13 @@ export function Direct() {
+     getItemKey: (index) => sortedDirects[index],
+   });
+ 
++  const keyboardNav = useRoomListKeyboard({
++    items: sortedDirects,
++    selectedRoomId,
++    virtualizer,
++    onNavigate: (roomId) => navigate(getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
++  });
++
+   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
+     closedCategories.has(categoryId)
+   );
+@@ -240,39 +249,51 @@ export function Direct() {
+                   Chats
+                 </RoomNavCategoryButton>
+               </NavCategoryHeader>
+-              <div
+-                style={{
+-                  position: 'relative',
+-                  height: virtualizer.getTotalSize(),
+-                }}
++              <RoomListbox
++                aria-label="Direct messages list"
++                items={sortedDirects}
++                focusedIndex={keyboardNav.focusedIndex}
++                onKeyDown={keyboardNav.handleKeyDown}
++                onFocus={keyboardNav.handleFocus}
+               >
+-                {virtualizer.getVirtualItems().map((vItem) => {
+-                  const roomId = sortedDirects[vItem.index];
+-                  const room = mx.getRoom(roomId);
+-                  if (!room) return null;
+-                  const selected = selectedRoomId === roomId;
++                <div
++                  style={{
++                    position: 'relative',
++                    height: virtualizer.getTotalSize(),
++                  }}
++                >
++                  {virtualizer.getVirtualItems().map((vItem) => {
++                    const roomId = sortedDirects[vItem.index];
++                    const room = mx.getRoom(roomId);
++                    if (!room) return null;
++                    const selected = selectedRoomId === roomId;
++                    const focused = keyboardNav.focusedIndex === vItem.index;
+ 
+-                  return (
+-                    <VirtualTile
+-                      virtualItem={vItem}
+-                      key={vItem.key}
+-                      ref={virtualizer.measureElement}
+-                    >
+-                      <RoomNavItem
+-                        room={room}
+-                        selected={selected}
+-                        showAvatar
+-                        direct
+-                        linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+-                        notificationMode={getRoomNotificationMode(
+-                          notificationPreferences,
+-                          room.roomId
+-                        )}
+-                      />
+-                    </VirtualTile>
+-                  );
+-                })}
+-              </div>
++                    return (
++                      <VirtualTile
++                        virtualItem={vItem}
++                        key={vItem.key}
++                        ref={virtualizer.measureElement}
++                      >
++                        <RoomNavItem
++                          room={room}
++                          selected={selected}
++                          focused={focused}
++                          optionId={`room-option-${roomId}`}
++                          tabIndex={-1}
++                          showAvatar
++                          direct
++                          linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
++                          notificationMode={getRoomNotificationMode(
++                            notificationPreferences,
++                            room.roomId
++                          )}
++                        />
++                      </VirtualTile>
++                    );
++                  })}
++                </div>
++              </RoomListbox>
+             </NavCategory>
+           </Box>
+         </PageNavContent>
+diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
+index 721e5518..c237ddfe 100644
+--- a/src/app/pages/client/home/Home.tsx
++++ b/src/app/pages/client/home/Home.tsx
+@@ -66,6 +66,8 @@ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
+ import { UseStateProvider } from '../../../components/UseStateProvider';
+ import { JoinAddressPrompt } from '../../../components/join-address-prompt';
+ import { _RoomSearchParams } from '../../paths';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
+ 
+ type HomeMenuProps = {
+   requestClose: () => void;
+@@ -230,6 +232,13 @@ export function Home() {
+     getItemKey: (index) => sortedRooms[index],
+   });
+ 
++  const keyboardNav = useRoomListKeyboard({
++    items: sortedRooms,
++    selectedRoomId,
++    virtualizer,
++    onNavigate: (roomId) => navigate(getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
++  });
++
+   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
+     closedCategories.has(categoryId)
+   );
+@@ -324,37 +333,49 @@ export function Home() {
+                   Rooms
+                 </RoomNavCategoryButton>
+               </NavCategoryHeader>
+-              <div
+-                style={{
+-                  position: 'relative',
+-                  height: virtualizer.getTotalSize(),
+-                }}
++              <RoomListbox
++                aria-label="Room list"
++                items={sortedRooms}
++                focusedIndex={keyboardNav.focusedIndex}
++                onKeyDown={keyboardNav.handleKeyDown}
++                onFocus={keyboardNav.handleFocus}
+               >
+-                {virtualizer.getVirtualItems().map((vItem) => {
+-                  const roomId = sortedRooms[vItem.index];
+-                  const room = mx.getRoom(roomId);
+-                  if (!room) return null;
+-                  const selected = selectedRoomId === roomId;
++                <div
++                  style={{
++                    position: 'relative',
++                    height: virtualizer.getTotalSize(),
++                  }}
++                >
++                  {virtualizer.getVirtualItems().map((vItem) => {
++                    const roomId = sortedRooms[vItem.index];
++                    const room = mx.getRoom(roomId);
++                    if (!room) return null;
++                    const selected = selectedRoomId === roomId;
++                    const focused = keyboardNav.focusedIndex === vItem.index;
+ 
+-                  return (
+-                    <VirtualTile
+-                      virtualItem={vItem}
+-                      key={vItem.key}
+-                      ref={virtualizer.measureElement}
+-                    >
+-                      <RoomNavItem
+-                        room={room}
+-                        selected={selected}
+-                        linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+-                        notificationMode={getRoomNotificationMode(
+-                          notificationPreferences,
+-                          room.roomId
+-                        )}
+-                      />
+-                    </VirtualTile>
+-                  );
+-                })}
+-              </div>
++                    return (
++                      <VirtualTile
++                        virtualItem={vItem}
++                        key={vItem.key}
++                        ref={virtualizer.measureElement}
++                      >
++                        <RoomNavItem
++                          room={room}
++                          selected={selected}
++                          focused={focused}
++                          optionId={`room-option-${roomId}`}
++                          tabIndex={-1}
++                          linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
++                          notificationMode={getRoomNotificationMode(
++                            notificationPreferences,
++                            room.roomId
++                          )}
++                        />
++                      </VirtualTile>
++                    );
++                  })}
++                </div>
++              </RoomListbox>
+             </NavCategory>
+           </Box>
+         </PageNavContent>
+diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
+index 616b6fc0..44a1cf44 100644
+--- a/src/app/pages/client/space/Space.tsx
++++ b/src/app/pages/client/space/Space.tsx
+@@ -77,6 +77,8 @@ import {
+   useRoomsNotificationPreferencesContext,
+ } from '../../../hooks/useRoomsNotificationPreferences';
+ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
+ import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
+ import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
+ import { useRoomCreators } from '../../../hooks/useRoomCreators';
+@@ -433,13 +435,34 @@ export function Space() {
+     getItemKey: (index) => hierarchy[index]?.roomId ?? index,
+   });
+ 
++  const getToLink = (roomId: string) =>
++    getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId));
++
++  // Only non-space rooms are keyboard-navigable options in the listbox
++  const roomsOnly = useMemo(
++    () =>
++      hierarchy
++        .filter(({ roomId }) => {
++          const r = mx.getRoom(roomId);
++          return r && !r.isSpaceRoom();
++        })
++        .map(({ roomId }) => roomId),
++    [hierarchy, mx]
++  );
++
++  const { navigateRoom } = useRoomNavigate();
++
++  const keyboardNav = useRoomListKeyboard({
++    items: roomsOnly,
++    selectedRoomId,
++    virtualizer,
++    onNavigate: (roomId) => navigateRoom(roomId),
++  });
++
+   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
+     closedCategories.has(categoryId)
+   );
+ 
+-  const getToLink = (roomId: string) =>
+-    getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId));
+-
+   return (
+     <PageNav>
+       <SpaceHeader />
+@@ -491,48 +514,60 @@ export function Space() {
+               position: 'relative',
+             }}
+           >
+-            {virtualizer.getVirtualItems().map((vItem) => {
+-              const { roomId } = hierarchy[vItem.index] ?? {};
+-              const room = mx.getRoom(roomId);
+-              if (!room) return null;
++            <RoomListbox
++              aria-label="Space room list"
++              items={roomsOnly}
++              focusedIndex={keyboardNav.focusedIndex}
++              onKeyDown={keyboardNav.handleKeyDown}
++              onFocus={keyboardNav.handleFocus}
++            >
++              {virtualizer.getVirtualItems().map((vItem) => {
++                const { roomId } = hierarchy[vItem.index] ?? {};
++                const room = mx.getRoom(roomId);
++                if (!room) return null;
++
++                if (room.isSpaceRoom()) {
++                  const categoryId = makeNavCategoryId(space.roomId, roomId);
+ 
+-              if (room.isSpaceRoom()) {
+-                const categoryId = makeNavCategoryId(space.roomId, roomId);
++                  return (
++                    <VirtualTile
++                      virtualItem={vItem}
++                      key={vItem.key}
++                      ref={virtualizer.measureElement}
++                    >
++                      <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
++                        <NavCategoryHeader>
++                          <RoomNavCategoryButton
++                            data-category-id={categoryId}
++                            onClick={handleCategoryClick}
++                            closed={closedCategories.has(categoryId)}
++                          >
++                            {roomId === space.roomId ? 'Rooms' : room?.name}
++                          </RoomNavCategoryButton>
++                        </NavCategoryHeader>
++                      </div>
++                    </VirtualTile>
++                  );
++                }
+ 
++                const focused = roomsOnly.indexOf(roomId) === keyboardNav.focusedIndex;
+                 return (
+-                  <VirtualTile
+-                    virtualItem={vItem}
+-                    key={vItem.key}
+-                    ref={virtualizer.measureElement}
+-                  >
+-                    <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
+-                      <NavCategoryHeader>
+-                        <RoomNavCategoryButton
+-                          data-category-id={categoryId}
+-                          onClick={handleCategoryClick}
+-                          closed={closedCategories.has(categoryId)}
+-                        >
+-                          {roomId === space.roomId ? 'Rooms' : room?.name}
+-                        </RoomNavCategoryButton>
+-                      </NavCategoryHeader>
+-                    </div>
++                  <VirtualTile virtualItem={vItem} key={vItem.key} ref={virtualizer.measureElement}>
++                    <RoomNavItem
++                      room={room}
++                      selected={selectedRoomId === roomId}
++                      focused={focused}
++                      optionId={`room-option-${roomId}`}
++                      tabIndex={-1}
++                      showAvatar={mDirects.has(roomId)}
++                      direct={mDirects.has(roomId)}
++                      linkPath={getToLink(roomId)}
++                      notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
++                    />
+                   </VirtualTile>
+                 );
+-              }
+-
+-              return (
+-                <VirtualTile virtualItem={vItem} key={vItem.key} ref={virtualizer.measureElement}>
+-                  <RoomNavItem
+-                    room={room}
+-                    selected={selectedRoomId === roomId}
+-                    showAvatar={mDirects.has(roomId)}
+-                    direct={mDirects.has(roomId)}
+-                    linkPath={getToLink(roomId)}
+-                    notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
+-                  />
+-                </VirtualTile>
+-              );
+-            })}
++              })}
++            </RoomListbox>
+           </NavCategory>
+         </Box>
+       </PageNavContent>
+diff --git a/src/app/state/keyboardShortcutsHelp.ts b/src/app/state/keyboardShortcutsHelp.ts
+new file mode 100644
+index 00000000..f978ab4d
+--- /dev/null
++++ b/src/app/state/keyboardShortcutsHelp.ts
+@@ -0,0 +1,3 @@
++import { atom } from 'jotai';
++
++export const keyboardShortcutsHelpAtom = atom<boolean>(false);
