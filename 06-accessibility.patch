@@ -173,16 +173,17 @@ index d1678b65..d06f165c 100644
            justifyContent="End"
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
-index 00000000..97706948
+index 00000000..4e48284e
 --- /dev/null
 +++ b/src/app/hooks/useGlobalKeyboardShortcuts.ts
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,95 @@
 +import { useCallback, useMemo } from 'react';
 +import { useSetAtom } from 'jotai';
 +import { isKeyHotkey } from 'is-hotkey';
 +import { useKeyDown } from './useKeyDown';
 +import { stopPropagation } from '../utils/keyboard';
 +import { keyboardShortcutsHelpAtom } from '../state/keyboardShortcutsHelp';
++import { searchModalAtom } from '../state/searchModal';
 +
 +export interface KeyboardShortcut {
 +  key: string;
@@ -198,9 +199,16 @@ index 00000000..97706948
 +
 +export const useGlobalKeyboardShortcuts = () => {
 +  const setShortcutsHelp = useSetAtom(keyboardShortcutsHelpAtom);
++  const setSearchModal = useSetAtom(searchModalAtom);
 +
 +  const shortcuts = useMemo<KeyboardShortcut[]>(
 +    () => [
++      {
++        key: 'mod+k',
++        description: 'Search',
++        category: 'Search',
++        action: () => setSearchModal(true),
++      },
 +      {
 +        key: 'alt+1',
 +        description: 'Focus room list',
@@ -226,7 +234,7 @@ index 00000000..97706948
 +        action: () => setShortcutsHelp(true),
 +      },
 +    ],
-+    [setShortcutsHelp]
++    [setShortcutsHelp, setSearchModal]
 +  );
 +
 +  const handleKeyDown = useCallback(
@@ -601,6 +609,109 @@ index 721e5518..c237ddfe 100644
              </NavCategory>
            </Box>
          </PageNavContent>
+diff --git a/src/app/pages/client/sidebar/CreateTab.tsx b/src/app/pages/client/sidebar/CreateTab.tsx
+index e6575cb4..2c4907b0 100644
+--- a/src/app/pages/client/sidebar/CreateTab.tsx
++++ b/src/app/pages/client/sidebar/CreateTab.tsx
+@@ -106,6 +106,7 @@ export function CreateTab() {
+               as="button"
+               ref={triggerRef}
+               outlined
++              aria-label="Add Space"
+               onClick={handleMenu}
+             >
+               <Icon src={Icons.Plus} />
+diff --git a/src/app/pages/client/sidebar/DirectTab.tsx b/src/app/pages/client/sidebar/DirectTab.tsx
+index dcd44e2f..e74f908d 100644
+--- a/src/app/pages/client/sidebar/DirectTab.tsx
++++ b/src/app/pages/client/sidebar/DirectTab.tsx
+@@ -99,6 +99,7 @@ export function DirectTab() {
+             as="button"
+             ref={triggerRef}
+             outlined
++            aria-label="Direct Messages"
+             onClick={handleDirectClick}
+             onContextMenu={handleContextMenu}
+           >
+diff --git a/src/app/pages/client/sidebar/ExploreTab.tsx b/src/app/pages/client/sidebar/ExploreTab.tsx
+index a45b5830..63879f82 100644
+--- a/src/app/pages/client/sidebar/ExploreTab.tsx
++++ b/src/app/pages/client/sidebar/ExploreTab.tsx
+@@ -54,7 +54,7 @@ export function ExploreTab() {
+     <SidebarItem active={exploreSelected}>
+       <SidebarItemTooltip tooltip="Explore Community">
+         {(triggerRef) => (
+-          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={handleExploreClick}>
++          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Explore Community" onClick={handleExploreClick}>
+             <Icon src={Icons.Explore} filled={exploreSelected} />
+           </SidebarAvatar>
+         )}
+diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
+index 778b729e..c5318ee7 100644
+--- a/src/app/pages/client/sidebar/HomeTab.tsx
++++ b/src/app/pages/client/sidebar/HomeTab.tsx
+@@ -101,6 +101,7 @@ export function HomeTab() {
+             as="button"
+             ref={triggerRef}
+             outlined
++            aria-label="Home"
+             onClick={handleHomeClick}
+             onContextMenu={handleContextMenu}
+           >
+diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
+index 5d13a9ab..4aa300cf 100644
+--- a/src/app/pages/client/sidebar/InboxTab.tsx
++++ b/src/app/pages/client/sidebar/InboxTab.tsx
+@@ -47,7 +47,7 @@ export function InboxTab() {
+     <SidebarItem active={inboxSelected}>
+       <SidebarItemTooltip tooltip="Inbox">
+         {(triggerRef) => (
+-          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={handleInboxClick}>
++          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Inbox" onClick={handleInboxClick}>
+             <Icon src={Icons.Inbox} filled={inboxSelected} />
+           </SidebarAvatar>
+         )}
+diff --git a/src/app/pages/client/sidebar/SearchTab.tsx b/src/app/pages/client/sidebar/SearchTab.tsx
+index 7ceb5c49..69fc9d30 100644
+--- a/src/app/pages/client/sidebar/SearchTab.tsx
++++ b/src/app/pages/client/sidebar/SearchTab.tsx
+@@ -11,9 +11,9 @@ export function SearchTab() {
+ 
+   return (
+     <SidebarItem active={opened}>
+-      <SidebarItemTooltip tooltip="Search">
++      <SidebarItemTooltip tooltip="Search (Ctrl+K)">
+         {(triggerRef) => (
+-          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={open}>
++          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Search" onClick={open}>
+             <Icon src={Icons.Search} filled={opened} />
+           </SidebarAvatar>
+         )}
+diff --git a/src/app/pages/client/sidebar/SettingsTab.tsx b/src/app/pages/client/sidebar/SettingsTab.tsx
+index df0515a2..9864ad3b 100644
+--- a/src/app/pages/client/sidebar/SettingsTab.tsx
++++ b/src/app/pages/client/sidebar/SettingsTab.tsx
+@@ -28,7 +28,7 @@ export function SettingsTab() {
+     <SidebarItem active={settings}>
+       <SidebarItemTooltip tooltip="User Settings">
+         {(triggerRef) => (
+-          <SidebarAvatar as="button" ref={triggerRef} onClick={openSettings}>
++          <SidebarAvatar as="button" ref={triggerRef} aria-label="User Settings" onClick={openSettings}>
+             <UserAvatar
+               userId={userId}
+               src={avatarUrl}
+diff --git a/src/app/pages/client/sidebar/UnverifiedTab.tsx b/src/app/pages/client/sidebar/UnverifiedTab.tsx
+index 0a2f117b..fa5bd669 100644
+--- a/src/app/pages/client/sidebar/UnverifiedTab.tsx
++++ b/src/app/pages/client/sidebar/UnverifiedTab.tsx
+@@ -56,6 +56,7 @@ function UnverifiedIndicator() {
+                 as="button"
+                 ref={triggerRef}
+                 outlined
++                aria-label={unverified ? 'Unverified Device' : 'Unverified Devices'}
+                 onClick={() => setSettings(true)}
+               >
+                 <Icon
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
 index 616b6fc0..44a1cf44 100644
 --- a/src/app/pages/client/space/Space.tsx
