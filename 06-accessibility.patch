@@ -1,24 +1,60 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..e589fc94
+index 00000000..f0efb126
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,9 @@
-+import React from 'react';
-+import { useGlobalKeyboardShortcuts } from '../hooks/useGlobalKeyboardShortcuts';
+@@ -0,0 +1,45 @@
++import React, { useCallback } from 'react';
++import { isKeyHotkey } from 'is-hotkey';
++import { useGlobalKeyboardShortcuts, KeyboardShortcut } from '../hooks/useGlobalKeyboardShortcuts';
 +import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help/KeyboardShortcutsHelp';
++import { useCallState } from '../pages/client/call/CallProvider';
++import { useKeyDown } from '../hooks/useKeyDown';
++import { stopPropagation } from '../utils/keyboard';
++
++const CALL_SHORTCUTS: Omit<KeyboardShortcut, 'action'>[] = [
++  { key: 'mod+shift+m', description: 'Toggle mute (in call)', category: 'Actions' },
++  { key: 'mod+shift+v', description: 'Toggle video (in call)', category: 'Actions' },
++  { key: 'mod+shift+e', description: 'End call', category: 'Actions' },
++];
 +
 +export function GlobalKeyboardShortcuts() {
 +  const { shortcuts } = useGlobalKeyboardShortcuts();
++  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId } = useCallState();
 +
-+  return <KeyboardShortcutsHelp shortcuts={shortcuts} />;
++  const handleCallKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (!activeCallRoomId) return;
++      if (!stopPropagation(evt)) return;
++      if (isKeyHotkey('mod+shift+m', evt)) {
++        evt.preventDefault();
++        toggleAudio();
++      } else if (isKeyHotkey('mod+shift+v', evt)) {
++        evt.preventDefault();
++        toggleVideo();
++      } else if (isKeyHotkey('mod+shift+e', evt)) {
++        evt.preventDefault();
++        hangUp();
++      }
++    },
++    [activeCallRoomId, hangUp, toggleAudio, toggleVideo]
++  );
++
++  useKeyDown(window, handleCallKeyDown);
++
++  const allShortcuts: KeyboardShortcut[] = [
++    ...shortcuts,
++    ...CALL_SHORTCUTS.map((s) => ({ ...s, action: () => {} })),
++  ];
++
++  return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
 +}
 diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
 new file mode 100644
-index 00000000..4ae4f133
+index 00000000..bfe764eb
 --- /dev/null
 +++ b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,96 @@
 +import React from 'react';
 +import {
 +  Box,
@@ -58,11 +94,14 @@ index 00000000..4ae4f133
 +
 +  if (!open) return null;
 +
-+  const groupedShortcuts = shortcuts.reduce((acc, shortcut) => {
-+    if (!acc[shortcut.category]) acc[shortcut.category] = [];
-+    acc[shortcut.category].push(shortcut);
-+    return acc;
-+  }, {} as Record<string, KeyboardShortcut[]>);
++  const groupedShortcuts = shortcuts.reduce(
++    (acc, shortcut) => {
++      if (!acc[shortcut.category]) acc[shortcut.category] = [];
++      acc[shortcut.category].push(shortcut);
++      return acc;
++    },
++    {} as Record<string, KeyboardShortcut[]>
++  );
 +
 +  return (
 +    <Overlay open={open} backdrop={<OverlayBackdrop />}>
@@ -89,7 +128,12 @@ index 00000000..4ae4f133
 +                    <Box key={category} direction="Column" gap="200">
 +                      <Text size="L400">{category}</Text>
 +                      {items.map((shortcut) => (
-+                        <Box key={shortcut.key} direction="Row" justifyContent="SpaceBetween" gap="400">
++                        <Box
++                          key={shortcut.key}
++                          direction="Row"
++                          justifyContent="SpaceBetween"
++                          gap="400"
++                        >
 +                          <Text size="T300">{shortcut.description}</Text>
 +                          <Text size="T300" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
 +                            {formatShortcut(shortcut.key)}
@@ -109,13 +153,14 @@ index 00000000..4ae4f133
 +}
 diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
 new file mode 100644
-index 00000000..9324c513
+index 00000000..4c768317
 --- /dev/null
 +++ b/src/app/components/room-listbox/RoomListbox.tsx
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,41 @@
 +import React, { ReactNode } from 'react';
 +
 +interface RoomListboxProps {
++  id?: string;
 +  'aria-label': string;
 +  items: string[];
 +  focusedIndex: number;
@@ -125,6 +170,7 @@ index 00000000..9324c513
 +}
 +
 +export function RoomListbox({
++  id,
 +  'aria-label': ariaLabel,
 +  items,
 +  focusedIndex,
@@ -132,12 +178,14 @@ index 00000000..9324c513
 +  onFocus,
 +  children,
 +}: RoomListboxProps) {
-+  const activedescendant = focusedIndex >= 0 && items[focusedIndex]
-+    ? `room-option-${items[focusedIndex]}`
-+    : undefined;
++  const activedescendant =
++    focusedIndex >= 0 && items[focusedIndex]
++      ? `room-option-${items[focusedIndex]}`
++      : undefined;
 +
 +  return (
 +    <div
++      id={id}
 +      role="listbox"
 +      aria-label={ariaLabel}
 +      aria-activedescendant={activedescendant}
@@ -150,6 +198,19 @@ index 00000000..9324c513
 +    </div>
 +  );
 +}
+diff --git a/src/app/features/common-settings/developer-tools/DevelopTools.tsx b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
+index 4125f6d2..fc57ef91 100644
+--- a/src/app/features/common-settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
+@@ -93,7 +93,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
 index d1678b65..d06f165c 100644
 --- a/src/app/features/room/RoomTimeline.tsx
@@ -171,19 +232,137 @@ index d1678b65..d06f165c 100644
          <Box
            direction="Column"
            justifyContent="End"
+diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
+index 9324e1c2..d76a3958 100644
+--- a/src/app/features/room/message/Message.tsx
++++ b/src/app/features/room/message/Message.tsx
+@@ -925,6 +925,7 @@ export const Message = as<'div', MessageProps>(
+                       variant="SurfaceVariant"
+                       size="300"
+                       radii="300"
++                      aria-label="Add reaction"
+                       aria-pressed={!!emojiBoardAnchor}
+                     >
+                       <Icon src={Icons.SmilePlus} size="100" />
+@@ -937,6 +938,7 @@ export const Message = as<'div', MessageProps>(
+                   variant="SurfaceVariant"
+                   size="300"
+                   radii="300"
++                  aria-label="Reply"
+                 >
+                   <Icon src={Icons.ReplyArrow} size="100" />
+                 </IconButton>
+@@ -947,6 +949,7 @@ export const Message = as<'div', MessageProps>(
+                     variant="SurfaceVariant"
+                     size="300"
+                     radii="300"
++                    aria-label="Reply in thread"
+                   >
+                     <Icon src={Icons.ThreadPlus} size="100" />
+                   </IconButton>
+@@ -957,6 +960,7 @@ export const Message = as<'div', MessageProps>(
+                     variant="SurfaceVariant"
+                     size="300"
+                     radii="300"
++                    aria-label="Edit message"
+                   >
+                     <Icon src={Icons.Pencil} size="100" />
+                   </IconButton>
+@@ -1122,6 +1126,7 @@ export const Message = as<'div', MessageProps>(
+                     size="300"
+                     radii="300"
+                     onClick={handleOpenMenu}
++                    aria-label="More message actions"
+                     aria-pressed={!!menuAnchor}
+                   >
+                     <Icon src={Icons.VerticalDots} size="100" />
+@@ -1288,6 +1293,7 @@ export const Event = as<'div', EventProps>(
+                     size="300"
+                     radii="300"
+                     onClick={handleOpenMenu}
++                    aria-label="More message actions"
+                     aria-pressed={!!menuAnchor}
+                   >
+                     <Icon src={Icons.VerticalDots} size="100" />
+diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
+index 7cf121d5..9146525e 100644
+--- a/src/app/features/settings/about/About.tsx
++++ b/src/app/features/settings/about/About.tsx
+@@ -24,7 +24,7 @@ export function About({ requestClose }: AboutProps) {
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/settings/account/Account.tsx b/src/app/features/settings/account/Account.tsx
+index c4b56e47..bf3e6032 100644
+--- a/src/app/features/settings/account/Account.tsx
++++ b/src/app/features/settings/account/Account.tsx
+@@ -20,7 +20,7 @@ export function Account({ requestClose }: AccountProps) {
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/settings/account/fields/ProfileTextField.tsx b/src/app/features/settings/account/fields/ProfileTextField.tsx
+index fc96cb69..6bed51fa 100644
+--- a/src/app/features/settings/account/fields/ProfileTextField.tsx
++++ b/src/app/features/settings/account/fields/ProfileTextField.tsx
+@@ -51,6 +51,7 @@ export function ProfileTextField<K extends keyof FilterByValues<ExtendedProfile,
+                     size="300"
+                     radii="300"
+                     variant="Secondary"
++                    aria-label={`Clear ${label}`}
+                   >
+                     <Icon src={Icons.Cross} size="100" />
+                   </IconButton>
+diff --git a/src/app/features/settings/devices/DeviceTile.tsx b/src/app/features/settings/devices/DeviceTile.tsx
+index 71b684f5..dfe7b2aa 100644
+--- a/src/app/features/settings/devices/DeviceTile.tsx
++++ b/src/app/features/settings/devices/DeviceTile.tsx
+@@ -292,6 +292,8 @@ export function DeviceTile({
+             outlined={deleted}
+             radii="300"
+             onClick={() => setDetails(!details)}
++            aria-label={details ? 'Hide device details' : 'Show device details'}
++            aria-expanded={details}
+           >
+             <Icon size="50" src={details ? Icons.ChevronBottom : Icons.ChevronRight} />
+           </IconButton>
+diff --git a/src/app/features/settings/devices/Devices.tsx b/src/app/features/settings/devices/Devices.tsx
+index c957ab31..22a46f39 100644
+--- a/src/app/features/settings/devices/Devices.tsx
++++ b/src/app/features/settings/devices/Devices.tsx
+@@ -74,7 +74,7 @@ export function Devices({ requestClose }: DevicesProps) {
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
-index 00000000..4e48284e
+index 00000000..b6950bdb
 --- /dev/null
 +++ b/src/app/hooks/useGlobalKeyboardShortcuts.ts
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,133 @@
 +import { useCallback, useMemo } from 'react';
++import { useNavigate } from 'react-router-dom';
 +import { useSetAtom } from 'jotai';
 +import { isKeyHotkey } from 'is-hotkey';
 +import { useKeyDown } from './useKeyDown';
 +import { stopPropagation } from '../utils/keyboard';
 +import { keyboardShortcutsHelpAtom } from '../state/keyboardShortcutsHelp';
 +import { searchModalAtom } from '../state/searchModal';
++import { getHomePath, getDirectPath, getInboxNotificationsPath } from '../pages/pathUtils';
 +
 +export interface KeyboardShortcut {
 +  key: string;
@@ -198,6 +377,7 @@ index 00000000..4e48284e
 +};
 +
 +export const useGlobalKeyboardShortcuts = () => {
++  const navigate = useNavigate();
 +  const setShortcutsHelp = useSetAtom(keyboardShortcutsHelpAtom);
 +  const setSearchModal = useSetAtom(searchModalAtom);
 +
@@ -213,7 +393,7 @@ index 00000000..4e48284e
 +        key: 'alt+1',
 +        description: 'Focus room list',
 +        category: 'Navigation',
-+        action: () => focusSection('[role="listbox"]'),
++        action: () => focusSection('#cinny-room-listbox'),
 +      },
 +      {
 +        key: 'alt+2',
@@ -228,21 +408,39 @@ index 00000000..4e48284e
 +        action: () => focusSection('[data-slate-editor="true"]'),
 +      },
 +      {
++        key: 'alt+4',
++        description: 'Go to Home',
++        category: 'Navigation',
++        action: () => navigate(getHomePath()),
++      },
++      {
++        key: 'alt+5',
++        description: 'Go to Direct Messages',
++        category: 'Navigation',
++        action: () => navigate(getDirectPath()),
++      },
++      {
++        key: 'alt+6',
++        description: 'Go to Inbox',
++        category: 'Navigation',
++        action: () => navigate(getInboxNotificationsPath()),
++      },
++      {
 +        key: 'mod+/',
 +        description: 'Show keyboard shortcuts',
 +        category: 'Help',
 +        action: () => setShortcutsHelp(true),
 +      },
 +    ],
-+    [setShortcutsHelp, setSearchModal]
++    [navigate, setShortcutsHelp, setSearchModal]
 +  );
 +
 +  const handleKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
-+      // Section focus shortcuts (alt+1/2/3) work even inside editable elements
++      // Section focus shortcuts work even inside editable elements
 +      if (isKeyHotkey('alt+1', evt)) {
 +        evt.preventDefault();
-+        focusSection('[role="listbox"]');
++        focusSection('#cinny-room-listbox');
 +        return;
 +      }
 +      if (isKeyHotkey('alt+2', evt)) {
@@ -256,6 +454,23 @@ index 00000000..4e48284e
 +        return;
 +      }
 +
++      // Navigation shortcuts that bypass editable-element guard
++      if (isKeyHotkey('alt+4', evt)) {
++        evt.preventDefault();
++        navigate(getHomePath());
++        return;
++      }
++      if (isKeyHotkey('alt+5', evt)) {
++        evt.preventDefault();
++        navigate(getDirectPath());
++        return;
++      }
++      if (isKeyHotkey('alt+6', evt)) {
++        evt.preventDefault();
++        navigate(getInboxNotificationsPath());
++        return;
++      }
++
 +      // Other shortcuts only when not typing in an editable element
 +      if (!stopPropagation(evt)) return;
 +
@@ -265,7 +480,7 @@ index 00000000..4e48284e
 +        shortcut.action();
 +      }
 +    },
-+    [shortcuts]
++    [navigate, shortcuts]
 +  );
 +
 +  useKeyDown(window, handleKeyDown);
@@ -393,8 +608,27 @@ index 2955f5ef..4817e219 100644
                        </CallProvider>
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
+diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
+index a2e1b682..eecf67b4 100644
+--- a/src/app/pages/client/SidebarNav.tsx
++++ b/src/app/pages/client/SidebarNav.tsx
+@@ -23,6 +23,7 @@ export function SidebarNav() {
+   const scrollRef = useRef<HTMLDivElement>(null);
+ 
+   return (
++    <nav aria-label="Main navigation">
+     <Sidebar>
+       <SidebarContent
+         scrollable={
+@@ -52,5 +53,6 @@ export function SidebarNav() {
+         }
+       />
+     </Sidebar>
++    </nav>
+   );
+ }
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 4ffd3dc8..7748cd6c 100644
+index 4ffd3dc8..56c827b3 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -52,6 +52,8 @@ import {
@@ -420,7 +654,7 @@ index 4ffd3dc8..7748cd6c 100644
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -240,39 +249,51 @@ export function Direct() {
+@@ -240,39 +249,52 @@ export function Direct() {
                    Chats
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -430,6 +664,7 @@ index 4ffd3dc8..7748cd6c 100644
 -                  height: virtualizer.getTotalSize(),
 -                }}
 +              <RoomListbox
++                id="cinny-room-listbox"
 +                aria-label="Direct messages list"
 +                items={sortedDirects}
 +                focusedIndex={keyboardNav.focusedIndex}
@@ -504,7 +739,7 @@ index 4ffd3dc8..7748cd6c 100644
            </Box>
          </PageNavContent>
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index 721e5518..c237ddfe 100644
+index 721e5518..1e6a26ed 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -66,6 +66,8 @@ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
@@ -530,7 +765,7 @@ index 721e5518..c237ddfe 100644
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -324,37 +333,49 @@ export function Home() {
+@@ -324,37 +333,50 @@ export function Home() {
                    Rooms
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -540,6 +775,7 @@ index 721e5518..c237ddfe 100644
 -                  height: virtualizer.getTotalSize(),
 -                }}
 +              <RoomListbox
++                id="cinny-room-listbox"
 +                aria-label="Room list"
 +                items={sortedRooms}
 +                focusedIndex={keyboardNav.focusedIndex}
@@ -622,10 +858,17 @@ index e6575cb4..2c4907b0 100644
              >
                <Icon src={Icons.Plus} />
 diff --git a/src/app/pages/client/sidebar/DirectTab.tsx b/src/app/pages/client/sidebar/DirectTab.tsx
-index dcd44e2f..e74f908d 100644
+index dcd44e2f..e1771f38 100644
 --- a/src/app/pages/client/sidebar/DirectTab.tsx
 +++ b/src/app/pages/client/sidebar/DirectTab.tsx
-@@ -99,6 +99,7 @@ export function DirectTab() {
+@@ -93,12 +93,13 @@ export function DirectTab() {
+   };
+   return (
+     <SidebarItem active={directSelected}>
+-      <SidebarItemTooltip tooltip="Direct Messages">
++      <SidebarItemTooltip tooltip="Direct Messages (Alt+5)">
+         {(triggerRef) => (
+           <SidebarAvatar
              as="button"
              ref={triggerRef}
              outlined
@@ -647,10 +890,17 @@ index a45b5830..63879f82 100644
            </SidebarAvatar>
          )}
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index 778b729e..c5318ee7 100644
+index 778b729e..2a6b7053 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
 +++ b/src/app/pages/client/sidebar/HomeTab.tsx
-@@ -101,6 +101,7 @@ export function HomeTab() {
+@@ -95,12 +95,13 @@ export function HomeTab() {
+ 
+   return (
+     <SidebarItem active={homeSelected}>
+-      <SidebarItemTooltip tooltip="Home">
++      <SidebarItemTooltip tooltip="Home (Alt+4)">
+         {(triggerRef) => (
+           <SidebarAvatar
              as="button"
              ref={triggerRef}
              outlined
@@ -659,12 +909,15 @@ index 778b729e..c5318ee7 100644
              onContextMenu={handleContextMenu}
            >
 diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
-index 5d13a9ab..4aa300cf 100644
+index 5d13a9ab..ffd4dd0c 100644
 --- a/src/app/pages/client/sidebar/InboxTab.tsx
 +++ b/src/app/pages/client/sidebar/InboxTab.tsx
-@@ -47,7 +47,7 @@ export function InboxTab() {
+@@ -45,9 +45,9 @@ export function InboxTab() {
+ 
+   return (
      <SidebarItem active={inboxSelected}>
-       <SidebarItemTooltip tooltip="Inbox">
+-      <SidebarItemTooltip tooltip="Inbox">
++      <SidebarItemTooltip tooltip="Inbox (Alt+6)">
          {(triggerRef) => (
 -          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={handleInboxClick}>
 +          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Inbox" onClick={handleInboxClick}>
@@ -700,6 +953,25 @@ index df0515a2..9864ad3b 100644
              <UserAvatar
                userId={userId}
                src={avatarUrl}
+diff --git a/src/app/pages/client/sidebar/SpaceTabs.tsx b/src/app/pages/client/sidebar/SpaceTabs.tsx
+index 6fc528a1..c63ac3df 100644
+--- a/src/app/pages/client/sidebar/SpaceTabs.tsx
++++ b/src/app/pages/client/sidebar/SpaceTabs.tsx
+@@ -522,7 +522,13 @@ function OpenedSpaceFolder({ folder, onClose, children }: OpenedSpaceFolderProps
+     >
+       <SidebarFolderDropTarget ref={aboveTargetRef} position="Top" />
+       <SidebarAvatar size="300">
+-        <IconButton data-id={folder.id} size="300" variant="Background" onClick={onClose}>
++        <IconButton
++          data-id={folder.id}
++          size="300"
++          variant="Background"
++          onClick={onClose}
++          aria-label={`Collapse ${folder.name || 'folder'}`}
++        >
+           <Icon size="400" src={Icons.ChevronTop} filled />
+         </IconButton>
+       </SidebarAvatar>
 diff --git a/src/app/pages/client/sidebar/UnverifiedTab.tsx b/src/app/pages/client/sidebar/UnverifiedTab.tsx
 index 0a2f117b..fa5bd669 100644
 --- a/src/app/pages/client/sidebar/UnverifiedTab.tsx
@@ -713,7 +985,7 @@ index 0a2f117b..fa5bd669 100644
                >
                  <Icon
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 616b6fc0..44a1cf44 100644
+index 616b6fc0..1713ae90 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -77,6 +77,8 @@ import {
@@ -763,7 +1035,7 @@ index 616b6fc0..44a1cf44 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -491,48 +514,60 @@ export function Space() {
+@@ -491,48 +514,61 @@ export function Space() {
                position: 'relative',
              }}
            >
@@ -772,6 +1044,7 @@ index 616b6fc0..44a1cf44 100644
 -              const room = mx.getRoom(roomId);
 -              if (!room) return null;
 +            <RoomListbox
++              id="cinny-room-listbox"
 +              aria-label="Space room list"
 +              items={roomsOnly}
 +              focusedIndex={keyboardNav.focusedIndex}

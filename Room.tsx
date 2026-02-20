@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Line } from 'folds';
 import { useParams } from 'react-router-dom';
 import { isKeyHotkey } from 'is-hotkey';
@@ -30,6 +30,14 @@ export function Room() {
 
   const { activeCallRoomId, isCallViewOpen, isChatOpen } = useCallState();
   const isActiveCall = activeCallRoomId === room?.roomId;
+
+  useEffect(() => {
+    const name = room.name || room.roomId;
+    document.title = `${name} – Cinny`;
+    return () => {
+      document.title = 'Cinny';
+    };
+  }, [room.name, room.roomId]);
   const isVoiceRoom = room.isCallRoom();
   const isCallLayout = isVoiceRoom || isActiveCall;
   const showCallPanel = isCallLayout && isCallViewOpen;

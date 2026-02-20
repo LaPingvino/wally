@@ -58,7 +58,7 @@ sha256sums=('SKIP'
             '1e4e4f07d01867cf704a5f7433bbcf41e92a87e9bca264d6c4e9ee31c4011824'
             'aeb3404add2c68bc952b543d77ef155e60fe7776aaf62e29bc68291b98c016f4'
             '1f8649e1ff1eedc4d7415e4800bade9d5014fbdf80aef80a22909f0abb7e67c1'
-            '5cf67f923035f69efee0c905f4dcd47abda75a70154efcc88ee2cbbbdb4c6f44'
+            'aac3d97b225d2a3b4ec911f4f3ca9480d2bb8a6c4ec360b7b0fe9762273ebd42'
             'd49748ffeca4ab129433a509997871eb9bd17b2a4d00acf58e8ba7059dc6e7f8'
             'b3f3b8ee23d06000136ff3e074b9c84ebf81cd0e9731ae7634a3e64ee09610f8'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
@@ -71,7 +71,7 @@ sha256sums=('SKIP'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            'd70b0ceacfe4f1141730c4b39c54232ec5361fe31216762cdff80b8875d903c9')
+            'c87b542f141dadebca4b27ba6cc85dbac67d272e4e4fd4537337fbfc841e6bc7')
 
 prepare() {
   cd "$_pkgname"
