@@ -71,7 +71,7 @@ sha256sums=('SKIP'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            'c87b542f141dadebca4b27ba6cc85dbac67d272e4e4fd4537337fbfc841e6bc7')
+            '229aa68504715791a380db38a0e5129c229a3c064704f786ef276dc213c74281')
 
 prepare() {
   cd "$_pkgname"

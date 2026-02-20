@@ -284,6 +284,46 @@ index 9324e1c2..d76a3958 100644
                      aria-pressed={!!menuAnchor}
                    >
                      <Icon src={Icons.VerticalDots} size="100" />
+diff --git a/src/app/features/search/Search.tsx b/src/app/features/search/Search.tsx
+index fcd6233a..34f618ff 100644
+--- a/src/app/features/search/Search.tsx
++++ b/src/app/features/search/Search.tsx
+@@ -265,6 +265,11 @@ export function Search({ requestClose }: SearchProps) {
+             >
+               <Input
+                 ref={inputRef}
++                role="combobox"
++                aria-label="Search rooms and spaces"
++                aria-autocomplete="list"
++                aria-expanded={roomsToRender.length > 0}
++                aria-controls="search-results-list"
+                 size="500"
+                 variant="Background"
+                 radii="400"
+@@ -297,7 +302,7 @@ export function Search({ requestClose }: SearchProps) {
+               )}
+               {roomsToRender.length > 0 && (
+                 <Scroll ref={scrollRef} size="300" hideTrack>
+-                  <div style={{ padding: config.space.S400, paddingRight: config.space.S200 }}>
++                  <div id="search-results-list" role="listbox" aria-label="Search results" style={{ padding: config.space.S400, paddingRight: config.space.S200 }}>
+                     {roomsToRender.map((roomId, index) => {
+                       const room = getRoom(roomId);
+                       if (!room) return null;
+@@ -323,12 +328,13 @@ export function Search({ requestClose }: SearchProps) {
+                         <MenuItem
+                           key={roomId}
+                           as="button"
++                          role="option"
+                           data-focus-index={index}
+                           data-room-id={roomId}
+                           data-space={room.isSpaceRoom()}
+                           onClick={handleRoomClick}
+                           variant={listFocus.index === index ? 'Primary' : 'Surface'}
+-                          aria-pressed={listFocus.index === index}
++                          aria-selected={listFocus.index === index}
+                           radii="400"
+                           after={
+                             <Box gap="100">
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
 index 7cf121d5..9146525e 100644
 --- a/src/app/features/settings/about/About.tsx
@@ -310,6 +350,18 @@ index c4b56e47..bf3e6032 100644
                <Icon src={Icons.Cross} />
              </IconButton>
            </Box>
+diff --git a/src/app/features/settings/account/IgnoredUserList.tsx b/src/app/features/settings/account/IgnoredUserList.tsx
+index 98db9459..850ef8ef 100644
+--- a/src/app/features/settings/account/IgnoredUserList.tsx
++++ b/src/app/features/settings/account/IgnoredUserList.tsx
+@@ -72,6 +72,7 @@ function IgnoreUserInput({ userList }: { userList: string[] }) {
+                 size="300"
+                 radii="300"
+                 variant="Secondary"
++                aria-label="Clear user ID"
+               >
+                 <Icon src={Icons.Cross} size="100" />
+               </IconButton>
 diff --git a/src/app/features/settings/account/fields/ProfileTextField.tsx b/src/app/features/settings/account/fields/ProfileTextField.tsx
 index fc96cb69..6bed51fa 100644
 --- a/src/app/features/settings/account/fields/ProfileTextField.tsx
@@ -322,6 +374,19 @@ index fc96cb69..6bed51fa 100644
                    >
                      <Icon src={Icons.Cross} size="100" />
                    </IconButton>
+diff --git a/src/app/features/settings/account/fields/ProfileTimezone.tsx b/src/app/features/settings/account/fields/ProfileTimezone.tsx
+index 6ebea2ac..a8cfd45d 100644
+--- a/src/app/features/settings/account/fields/ProfileTimezone.tsx
++++ b/src/app/features/settings/account/fields/ProfileTimezone.tsx
+@@ -75,7 +75,7 @@ export function ProfileTimezone({
+                 <Box grow="Yes">
+                   <Text size="H4">Choose a Timezone</Text>
+                 </Box>
+-                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300">
++                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300" aria-label="Close timezone picker">
+                   <Icon src={Icons.Cross} />
+                 </IconButton>
+               </Header>
 diff --git a/src/app/features/settings/devices/DeviceTile.tsx b/src/app/features/settings/devices/DeviceTile.tsx
 index 71b684f5..dfe7b2aa 100644
 --- a/src/app/features/settings/devices/DeviceTile.tsx
@@ -348,6 +413,18 @@ index c957ab31..22a46f39 100644
                <Icon src={Icons.Cross} />
              </IconButton>
            </Box>
+diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
+index be2f204e..a0f3bf39 100644
+--- a/src/app/features/settings/general/General.tsx
++++ b/src/app/features/settings/general/General.tsx
+@@ -601,6 +601,7 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
+           variant="Secondary"
+           size="300"
+           radii="300"
++          aria-label="Date format information"
+           aria-pressed={!!anchor}
+         >
+           <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
 index 00000000..b6950bdb
