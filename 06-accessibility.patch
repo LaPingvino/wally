@@ -1,6 +1,6 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..1f4c998a
+index 00000000..84046da7
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
 @@ -0,0 +1,162 @@
@@ -49,7 +49,7 @@ index 00000000..1f4c998a
 +};
 +
 +const START_CALL_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
-+  key: 'alt+c',
++  key: 'alt+j',
 +  description: 'Start or join call in current room',
 +  category: 'Actions',
 +};
@@ -133,7 +133,7 @@ index 00000000..1f4c998a
 +
 +  const handleStartCallKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
-+      if (!isKeyHotkey('alt+c', evt)) return;
++      if (!isKeyHotkey('alt+j', evt)) return;
 +      if (!currentRoomId) return;
 +      evt.preventDefault();
 +      setActiveCallRoomId(currentRoomId, true);
