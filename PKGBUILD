@@ -39,7 +39,8 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "03-pronouns.patch"
         "04-call-settings.patch"
         "05-login-accessibility.patch"
-        "06-accessibility.patch")
+        "06-accessibility.patch"
+        )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
             # hazre/cinny unchanged components
@@ -71,7 +72,8 @@ sha256sums=('SKIP'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            '229aa68504715791a380db38a0e5129c229a3c064704f786ef276dc213c74281')
+            '82300c18ce89651ba5072856ccccab86df84d00db1ea1dd7a23a44c8434d7fcb'
+            )
 
 prepare() {
   cd "$_pkgname"

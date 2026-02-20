@@ -1,16 +1,27 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..f0efb126
+index 00000000..fd6c0be6
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,116 @@
 +import React, { useCallback } from 'react';
++import { useNavigate } from 'react-router-dom';
++import { useAtomValue } from 'jotai';
 +import { isKeyHotkey } from 'is-hotkey';
 +import { useGlobalKeyboardShortcuts, KeyboardShortcut } from '../hooks/useGlobalKeyboardShortcuts';
 +import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help/KeyboardShortcutsHelp';
 +import { useCallState } from '../pages/client/call/CallProvider';
 +import { useKeyDown } from '../hooks/useKeyDown';
 +import { stopPropagation } from '../utils/keyboard';
++import { useOrphanSpaces } from '../state/hooks/roomList';
++import { useMatrixClient } from '../hooks/useMatrixClient';
++import { roomToParentsAtom } from '../state/room/roomToParents';
++import { allRoomsAtom } from '../state/room-list/roomList';
++import { useSidebarItems } from '../hooks/useSidebarItems';
++import { getSpaceLobbyPath, getDirectRoomPath, getHomeRoomPath } from '../pages/pathUtils';
++import { getCanonicalAliasOrRoomId } from '../utils/matrix';
++import { mDirectAtom } from '../state/mDirectList';
++import { roomToUnreadAtom } from '../state/room/roomToUnread';
 +
 +const CALL_SHORTCUTS: Omit<KeyboardShortcut, 'action'>[] = [
 +  { key: 'mod+shift+m', description: 'Toggle mute (in call)', category: 'Actions' },
@@ -18,9 +29,29 @@ index 00000000..f0efb126
 +  { key: 'mod+shift+e', description: 'End call', category: 'Actions' },
 +];
 +
++const SPACE_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+1–9',
++  description: 'Go to 1st–9th space',
++  category: 'Navigation',
++};
++
++const NEXT_UNREAD_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+n',
++  description: 'Go to next unread room',
++  category: 'Navigation',
++};
++
 +export function GlobalKeyboardShortcuts() {
++  const navigate = useNavigate();
 +  const { shortcuts } = useGlobalKeyboardShortcuts();
 +  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId } = useCallState();
++  const mx = useMatrixClient();
++  const roomToParents = useAtomValue(roomToParentsAtom);
++  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
++  const [sidebarItems] = useSidebarItems(orphanSpaces);
++  const spaceIds = sidebarItems.filter((item): item is string => typeof item === 'string');
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToUnread = useAtomValue(roomToUnreadAtom);
 +
 +  const handleCallKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
@@ -40,11 +71,51 @@ index 00000000..f0efb126
 +    [activeCallRoomId, hangUp, toggleAudio, toggleVideo]
 +  );
 +
++  const handleSpaceKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      for (let n = 1; n <= 9; n++) {
++        if (isKeyHotkey(`alt+${n}`, evt)) {
++          const spaceId = spaceIds[n - 1];
++          if (spaceId) {
++            evt.preventDefault();
++            navigate(getSpaceLobbyPath(getCanonicalAliasOrRoomId(mx, spaceId)));
++          }
++          return;
++        }
++      }
++    },
++    [mx, navigate, spaceIds]
++  );
++
++  const handleNextUnreadKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (!isKeyHotkey('alt+n', evt)) return;
++      // Collect unread rooms sorted: highlight > 0 first, then by total
++      const unreadEntries = Array.from(roomToUnread.entries())
++        .filter(([, u]) => u.total > 0)
++        .sort((a, b) => (b[1].highlight - a[1].highlight) || (b[1].total - a[1].total));
++      if (unreadEntries.length === 0) return;
++      evt.preventDefault();
++      const [roomId] = unreadEntries[0];
++      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++      if (mDirects.has(roomId)) {
++        navigate(getDirectRoomPath(roomIdOrAlias));
++      } else {
++        navigate(getHomeRoomPath(roomIdOrAlias));
++      }
++    },
++    [roomToUnread, mDirects, mx, navigate]
++  );
++
 +  useKeyDown(window, handleCallKeyDown);
++  useKeyDown(window, handleSpaceKeyDown);
++  useKeyDown(window, handleNextUnreadKeyDown);
 +
 +  const allShortcuts: KeyboardShortcut[] = [
 +    ...shortcuts,
 +    ...CALL_SHORTCUTS.map((s) => ({ ...s, action: () => {} })),
++    { ...SPACE_SHORTCUT, action: () => {} },
++    { ...NEXT_UNREAD_SHORTCUT, action: () => {} },
 +  ];
 +
 +  return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
@@ -156,7 +227,7 @@ new file mode 100644
 index 00000000..4c768317
 --- /dev/null
 +++ b/src/app/components/room-listbox/RoomListbox.tsx
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,46 @@
 +import React, { ReactNode } from 'react';
 +
 +interface RoomListboxProps {
@@ -192,25 +263,17 @@ index 00000000..4c768317
 +      aria-orientation="vertical"
 +      tabIndex={0}
 +      onKeyDown={onKeyDown}
-+      onFocus={onFocus}
++      onFocus={(evt) => {
++        if (evt.target === evt.currentTarget) onFocus?.(evt);
++      }}
++      onMouseDown={(evt) => {
++        if (evt.target === evt.currentTarget) evt.preventDefault();
++      }}
 +    >
 +      {children}
 +    </div>
 +  );
 +}
-diff --git a/src/app/features/common-settings/developer-tools/DevelopTools.tsx b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
-index 4125f6d2..fc57ef91 100644
---- a/src/app/features/common-settings/developer-tools/DevelopTools.tsx
-+++ b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
-@@ -93,7 +93,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
-             </Text>
-           </Box>
-           <Box shrink="No">
--            <IconButton onClick={requestClose} variant="Surface">
-+            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
-               <Icon src={Icons.Cross} />
-             </IconButton>
-           </Box>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
 index d1678b65..d06f165c 100644
 --- a/src/app/features/room/RoomTimeline.tsx
@@ -233,10 +296,38 @@ index d1678b65..d06f165c 100644
            direction="Column"
            justifyContent="End"
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c2..d76a3958 100644
+index 9324e1c2..0a8c4692 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
-@@ -925,6 +925,7 @@ export const Message = as<'div', MessageProps>(
+@@ -837,6 +837,19 @@ export const Message = as<'div', MessageProps>(
+       </Box>
+     );
+ 
++    const handleKeyDown = useCallback(
++      (evt: React.KeyboardEvent<HTMLDivElement>) => {
++        if (edit) return;
++        if (evt.key === 'r' && !evt.ctrlKey && !evt.altKey && !evt.metaKey && !evt.shiftKey) {
++          const replyBtn = (evt.currentTarget as HTMLElement).querySelector(
++            '[aria-label="Reply"]'
++          ) as HTMLElement | null;
++          replyBtn?.click();
++        }
++      },
++      [edit]
++    );
++
+     const handleContextMenu: MouseEventHandler<HTMLDivElement> = (evt) => {
+       if (evt.altKey || !window.getSelection()?.isCollapsed || edit) return;
+       const tag = (evt.target as any).tagName;
+@@ -889,6 +902,7 @@ export const Message = as<'div', MessageProps>(
+         {...props}
+         {...hoverProps}
+         {...focusWithinProps}
++        onKeyDown={handleKeyDown}
+         ref={ref}
+       >
+         {!edit && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
+@@ -925,6 +939,7 @@ export const Message = as<'div', MessageProps>(
                        variant="SurfaceVariant"
                        size="300"
                        radii="300"
@@ -244,7 +335,7 @@ index 9324e1c2..d76a3958 100644
                        aria-pressed={!!emojiBoardAnchor}
                      >
                        <Icon src={Icons.SmilePlus} size="100" />
-@@ -937,6 +938,7 @@ export const Message = as<'div', MessageProps>(
+@@ -937,6 +952,7 @@ export const Message = as<'div', MessageProps>(
                    variant="SurfaceVariant"
                    size="300"
                    radii="300"
@@ -252,7 +343,7 @@ index 9324e1c2..d76a3958 100644
                  >
                    <Icon src={Icons.ReplyArrow} size="100" />
                  </IconButton>
-@@ -947,6 +949,7 @@ export const Message = as<'div', MessageProps>(
+@@ -947,6 +963,7 @@ export const Message = as<'div', MessageProps>(
                      variant="SurfaceVariant"
                      size="300"
                      radii="300"
@@ -260,7 +351,7 @@ index 9324e1c2..d76a3958 100644
                    >
                      <Icon src={Icons.ThreadPlus} size="100" />
                    </IconButton>
-@@ -957,6 +960,7 @@ export const Message = as<'div', MessageProps>(
+@@ -957,6 +974,7 @@ export const Message = as<'div', MessageProps>(
                      variant="SurfaceVariant"
                      size="300"
                      radii="300"
@@ -268,7 +359,7 @@ index 9324e1c2..d76a3958 100644
                    >
                      <Icon src={Icons.Pencil} size="100" />
                    </IconButton>
-@@ -1122,6 +1126,7 @@ export const Message = as<'div', MessageProps>(
+@@ -1122,6 +1140,7 @@ export const Message = as<'div', MessageProps>(
                      size="300"
                      radii="300"
                      onClick={handleOpenMenu}
@@ -276,7 +367,7 @@ index 9324e1c2..d76a3958 100644
                      aria-pressed={!!menuAnchor}
                    >
                      <Icon src={Icons.VerticalDots} size="100" />
-@@ -1288,6 +1293,7 @@ export const Event = as<'div', EventProps>(
+@@ -1288,6 +1307,7 @@ export const Event = as<'div', EventProps>(
                      size="300"
                      radii="300"
                      onClick={handleOpenMenu}
@@ -362,31 +453,6 @@ index 98db9459..850ef8ef 100644
                >
                  <Icon src={Icons.Cross} size="100" />
                </IconButton>
-diff --git a/src/app/features/settings/account/fields/ProfileTextField.tsx b/src/app/features/settings/account/fields/ProfileTextField.tsx
-index fc96cb69..6bed51fa 100644
---- a/src/app/features/settings/account/fields/ProfileTextField.tsx
-+++ b/src/app/features/settings/account/fields/ProfileTextField.tsx
-@@ -51,6 +51,7 @@ export function ProfileTextField<K extends keyof FilterByValues<ExtendedProfile,
-                     size="300"
-                     radii="300"
-                     variant="Secondary"
-+                    aria-label={`Clear ${label}`}
-                   >
-                     <Icon src={Icons.Cross} size="100" />
-                   </IconButton>
-diff --git a/src/app/features/settings/account/fields/ProfileTimezone.tsx b/src/app/features/settings/account/fields/ProfileTimezone.tsx
-index 6ebea2ac..a8cfd45d 100644
---- a/src/app/features/settings/account/fields/ProfileTimezone.tsx
-+++ b/src/app/features/settings/account/fields/ProfileTimezone.tsx
-@@ -75,7 +75,7 @@ export function ProfileTimezone({
-                 <Box grow="Yes">
-                   <Text size="H4">Choose a Timezone</Text>
-                 </Box>
--                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300">
-+                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300" aria-label="Close timezone picker">
-                   <Icon src={Icons.Cross} />
-                 </IconButton>
-               </Header>
 diff --git a/src/app/features/settings/devices/DeviceTile.tsx b/src/app/features/settings/devices/DeviceTile.tsx
 index 71b684f5..dfe7b2aa 100644
 --- a/src/app/features/settings/devices/DeviceTile.tsx
@@ -427,7 +493,7 @@ index be2f204e..a0f3bf39 100644
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
-index 00000000..b6950bdb
+index 00000000..de62d0da
 --- /dev/null
 +++ b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 @@ -0,0 +1,133 @@
@@ -467,37 +533,37 @@ index 00000000..b6950bdb
 +        action: () => setSearchModal(true),
 +      },
 +      {
-+        key: 'alt+1',
++        key: 'alt+r',
 +        description: 'Focus room list',
 +        category: 'Navigation',
 +        action: () => focusSection('#cinny-room-listbox'),
 +      },
 +      {
-+        key: 'alt+2',
++        key: 'alt+t',
 +        description: 'Focus message timeline',
 +        category: 'Navigation',
 +        action: () => focusSection('#cinny-timeline'),
 +      },
 +      {
-+        key: 'alt+3',
++        key: 'alt+c',
 +        description: 'Focus message composer',
 +        category: 'Navigation',
 +        action: () => focusSection('[data-slate-editor="true"]'),
 +      },
 +      {
-+        key: 'alt+4',
++        key: 'alt+h',
 +        description: 'Go to Home',
 +        category: 'Navigation',
 +        action: () => navigate(getHomePath()),
 +      },
 +      {
-+        key: 'alt+5',
++        key: 'alt+d',
 +        description: 'Go to Direct Messages',
 +        category: 'Navigation',
 +        action: () => navigate(getDirectPath()),
 +      },
 +      {
-+        key: 'alt+6',
++        key: 'alt+i',
 +        description: 'Go to Inbox',
 +        category: 'Navigation',
 +        action: () => navigate(getInboxNotificationsPath()),
@@ -515,34 +581,34 @@ index 00000000..b6950bdb
 +  const handleKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
 +      // Section focus shortcuts work even inside editable elements
-+      if (isKeyHotkey('alt+1', evt)) {
++      if (isKeyHotkey('alt+r', evt)) {
 +        evt.preventDefault();
 +        focusSection('#cinny-room-listbox');
 +        return;
 +      }
-+      if (isKeyHotkey('alt+2', evt)) {
++      if (isKeyHotkey('alt+t', evt)) {
 +        evt.preventDefault();
 +        focusSection('#cinny-timeline');
 +        return;
 +      }
-+      if (isKeyHotkey('alt+3', evt)) {
++      if (isKeyHotkey('alt+c', evt)) {
 +        evt.preventDefault();
 +        focusSection('[data-slate-editor="true"]');
 +        return;
 +      }
 +
 +      // Navigation shortcuts that bypass editable-element guard
-+      if (isKeyHotkey('alt+4', evt)) {
++      if (isKeyHotkey('alt+h', evt)) {
 +        evt.preventDefault();
 +        navigate(getHomePath());
 +        return;
 +      }
-+      if (isKeyHotkey('alt+5', evt)) {
++      if (isKeyHotkey('alt+d', evt)) {
 +        evt.preventDefault();
 +        navigate(getDirectPath());
 +        return;
 +      }
-+      if (isKeyHotkey('alt+6', evt)) {
++      if (isKeyHotkey('alt+i', evt)) {
 +        evt.preventDefault();
 +        navigate(getInboxNotificationsPath());
 +        return;
@@ -686,24 +752,36 @@ index 2955f5ef..4817e219 100644
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index a2e1b682..eecf67b4 100644
+index a2e1b682..33446252 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
-@@ -23,6 +23,7 @@ export function SidebarNav() {
+@@ -22,8 +22,25 @@ import { CreateTab } from './sidebar/CreateTab';
+ export function SidebarNav() {
    const scrollRef = useRef<HTMLDivElement>(null);
  
++  const handleKeyDown = (evt: React.KeyboardEvent<HTMLDivElement>) => {
++    if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
++    const sidebar = evt.currentTarget;
++    const buttons = Array.from(sidebar.querySelectorAll('button:not([disabled])')) as HTMLElement[];
++    const current = document.activeElement as HTMLElement;
++    const currentIndex = buttons.indexOf(current);
++    if (currentIndex < 0) return;
++    evt.preventDefault();
++    if (evt.key === 'ArrowDown') {
++      const next = buttons[currentIndex + 1] ?? buttons[0];
++      next?.focus();
++    } else {
++      const prev = buttons[currentIndex - 1] ?? buttons[buttons.length - 1];
++      prev?.focus();
++    }
++  };
++
    return (
-+    <nav aria-label="Main navigation">
-     <Sidebar>
+-    <Sidebar>
++    <Sidebar role="navigation" aria-label="Main navigation" onKeyDown={handleKeyDown}>
        <SidebarContent
          scrollable={
-@@ -52,5 +53,6 @@ export function SidebarNav() {
-         }
-       />
-     </Sidebar>
-+    </nav>
-   );
- }
+           <Scroll ref={scrollRef} variant="Background" size="0">
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
 index 4ffd3dc8..56c827b3 100644
 --- a/src/app/pages/client/direct/Direct.tsx
@@ -816,18 +894,18 @@ index 4ffd3dc8..56c827b3 100644
            </Box>
          </PageNavContent>
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index 721e5518..1e6a26ed 100644
+index 721e5518..8695a612 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
-@@ -66,6 +66,8 @@ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
+@@ -63,6 +63,8 @@ import {
+   useRoomsNotificationPreferencesContext,
+ } from '../../../hooks/useRoomsNotificationPreferences';
+ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
  import { UseStateProvider } from '../../../components/UseStateProvider';
  import { JoinAddressPrompt } from '../../../components/join-address-prompt';
  import { _RoomSearchParams } from '../../paths';
-+import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
-+import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
- 
- type HomeMenuProps = {
-   requestClose: () => void;
 @@ -230,6 +232,13 @@ export function Home() {
      getItemKey: (index) => sortedRooms[index],
    });
@@ -935,7 +1013,7 @@ index e6575cb4..2c4907b0 100644
              >
                <Icon src={Icons.Plus} />
 diff --git a/src/app/pages/client/sidebar/DirectTab.tsx b/src/app/pages/client/sidebar/DirectTab.tsx
-index dcd44e2f..e1771f38 100644
+index dcd44e2f..7f9eaaa4 100644
 --- a/src/app/pages/client/sidebar/DirectTab.tsx
 +++ b/src/app/pages/client/sidebar/DirectTab.tsx
 @@ -93,12 +93,13 @@ export function DirectTab() {
@@ -943,7 +1021,7 @@ index dcd44e2f..e1771f38 100644
    return (
      <SidebarItem active={directSelected}>
 -      <SidebarItemTooltip tooltip="Direct Messages">
-+      <SidebarItemTooltip tooltip="Direct Messages (Alt+5)">
++      <SidebarItemTooltip tooltip="Direct Messages (Alt+D)">
          {(triggerRef) => (
            <SidebarAvatar
              as="button"
@@ -967,7 +1045,7 @@ index a45b5830..63879f82 100644
            </SidebarAvatar>
          )}
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index 778b729e..2a6b7053 100644
+index 778b729e..fbe35241 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
 +++ b/src/app/pages/client/sidebar/HomeTab.tsx
 @@ -95,12 +95,13 @@ export function HomeTab() {
@@ -975,7 +1053,7 @@ index 778b729e..2a6b7053 100644
    return (
      <SidebarItem active={homeSelected}>
 -      <SidebarItemTooltip tooltip="Home">
-+      <SidebarItemTooltip tooltip="Home (Alt+4)">
++      <SidebarItemTooltip tooltip="Home (Alt+H)">
          {(triggerRef) => (
            <SidebarAvatar
              as="button"
@@ -986,7 +1064,7 @@ index 778b729e..2a6b7053 100644
              onContextMenu={handleContextMenu}
            >
 diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
-index 5d13a9ab..ffd4dd0c 100644
+index 5d13a9ab..553cf849 100644
 --- a/src/app/pages/client/sidebar/InboxTab.tsx
 +++ b/src/app/pages/client/sidebar/InboxTab.tsx
 @@ -45,9 +45,9 @@ export function InboxTab() {
@@ -994,7 +1072,7 @@ index 5d13a9ab..ffd4dd0c 100644
    return (
      <SidebarItem active={inboxSelected}>
 -      <SidebarItemTooltip tooltip="Inbox">
-+      <SidebarItemTooltip tooltip="Inbox (Alt+6)">
++      <SidebarItemTooltip tooltip="Inbox (Alt+I)">
          {(triggerRef) => (
 -          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={handleInboxClick}>
 +          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Inbox" onClick={handleInboxClick}>
@@ -1062,7 +1140,7 @@ index 0a2f117b..fa5bd669 100644
                >
                  <Icon
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 616b6fc0..1713ae90 100644
+index 616b6fc0..49af77e5 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -77,6 +77,8 @@ import {
@@ -1074,14 +1152,13 @@ index 616b6fc0..1713ae90 100644
  import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
  import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
  import { useRoomCreators } from '../../../hooks/useRoomCreators';
-@@ -433,13 +435,34 @@ export function Space() {
+@@ -433,13 +435,33 @@ export function Space() {
      getItemKey: (index) => hierarchy[index]?.roomId ?? index,
    });
  
 +  const getToLink = (roomId: string) =>
 +    getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId));
 +
-+  // Only non-space rooms are keyboard-navigable options in the listbox
 +  const roomsOnly = useMemo(
 +    () =>
 +      hierarchy
@@ -1112,7 +1189,7 @@ index 616b6fc0..1713ae90 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -491,48 +514,61 @@ export function Space() {
+@@ -491,48 +513,61 @@ export function Space() {
                position: 'relative',
              }}
            >
