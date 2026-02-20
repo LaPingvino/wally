@@ -1,9 +1,9 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..d62015d8
+index 00000000..2e89883a
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,131 @@
 +import React, { useCallback } from 'react';
 +import { useNavigate } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
@@ -18,7 +18,7 @@ index 00000000..d62015d8
 +import { roomToParentsAtom } from '../state/room/roomToParents';
 +import { allRoomsAtom } from '../state/room-list/roomList';
 +import { useSidebarItems } from '../hooks/useSidebarItems';
-+import { getSpaceLobbyPath, getSpaceRoomPath, getDirectRoomPath, getHomeRoomPath } from '../pages/pathUtils';
++import { getSpaceLobbyPath, getDirectRoomPath, getHomeRoomPath } from '../pages/pathUtils';
 +import { getCanonicalAliasOrRoomId } from '../utils/matrix';
 +import { mDirectAtom } from '../state/mDirectList';
 +import { roomToUnreadAtom } from '../state/room/roomToUnread';
@@ -39,6 +39,12 @@ index 00000000..d62015d8
 +  key: 'alt+n',
 +  description: 'Go to next unread room',
 +  category: 'Navigation',
++};
++
++const CALL_ANSWER_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+space',
++  description: 'Answer incoming call',
++  category: 'Actions',
 +};
 +
 +export function GlobalKeyboardShortcuts() {
@@ -90,7 +96,6 @@ index 00000000..d62015d8
 +  const handleNextUnreadKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
 +      if (!isKeyHotkey('alt+n', evt)) return;
-+      // Collect unread rooms sorted: highlight > 0 first, then by total
 +      const unreadEntries = Array.from(roomToUnread.entries())
 +        .filter(([, u]) => u.total > 0)
 +        .sort((a, b) => (b[1].highlight - a[1].highlight) || (b[1].total - a[1].total));
@@ -101,25 +106,29 @@ index 00000000..d62015d8
 +      if (mDirects.has(roomId)) {
 +        navigate(getDirectRoomPath(roomIdOrAlias));
 +      } else {
-+        const parents = roomToParents.get(roomId);
-+        const spaceId = parents && parents.size > 0 ? [...parents][0] : undefined;
-+        if (spaceId) {
-+          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
-+        } else {
-+          navigate(getHomeRoomPath(roomIdOrAlias));
-+        }
++        navigate(getHomeRoomPath(roomIdOrAlias));
 +      }
 +    },
 +    [roomToUnread, mDirects, mx, navigate]
 +  );
 +
++  const handleAnswerCallKeyDown = useCallback((evt: KeyboardEvent) => {
++    if (!isKeyHotkey('alt+space', evt)) return;
++    const joinBtn = document.getElementById('incoming-call-join') as HTMLButtonElement | null;
++    if (!joinBtn) return;
++    evt.preventDefault();
++    joinBtn.click();
++  }, []);
++
 +  useKeyDown(window, handleCallKeyDown);
 +  useKeyDown(window, handleSpaceKeyDown);
 +  useKeyDown(window, handleNextUnreadKeyDown);
++  useKeyDown(window, handleAnswerCallKeyDown);
 +
 +  const allShortcuts: KeyboardShortcut[] = [
 +    ...shortcuts,
 +    ...CALL_SHORTCUTS.map((s) => ({ ...s, action: () => {} })),
++    { ...CALL_ANSWER_SHORTCUT, action: () => {} },
 +    { ...SPACE_SHORTCUT, action: () => {} },
 +    { ...NEXT_UNREAD_SHORTCUT, action: () => {} },
 +  ];
@@ -302,7 +311,7 @@ index d1678b65..d06f165c 100644
            direction="Column"
            justifyContent="End"
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c2..ebbb77a1 100644
+index 9324e1c2..a7a88796 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -837,6 +837,26 @@ export const Message = as<'div', MessageProps>(
@@ -332,7 +341,15 @@ index 9324e1c2..ebbb77a1 100644
      const handleContextMenu: MouseEventHandler<HTMLDivElement> = (evt) => {
        if (evt.altKey || !window.getSelection()?.isCollapsed || edit) return;
        const tag = (evt.target as any).tagName;
-@@ -889,6 +909,7 @@ export const Message = as<'div', MessageProps>(
+@@ -882,6 +902,7 @@ export const Message = as<'div', MessageProps>(
+           [css.MessageBaseBubbleCollapsed]: messageLayout === MessageLayout.Bubble && collapse,
+         })}
+         tabIndex={0}
++        data-timeline-message=""
+         space={messageSpacing}
+         collapse={collapse}
+         highlight={highlight}
+@@ -889,6 +910,7 @@ export const Message = as<'div', MessageProps>(
          {...props}
          {...hoverProps}
          {...focusWithinProps}
@@ -340,7 +357,7 @@ index 9324e1c2..ebbb77a1 100644
          ref={ref}
        >
          {!edit && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
-@@ -925,6 +946,7 @@ export const Message = as<'div', MessageProps>(
+@@ -925,6 +947,7 @@ export const Message = as<'div', MessageProps>(
                        variant="SurfaceVariant"
                        size="300"
                        radii="300"
@@ -348,7 +365,7 @@ index 9324e1c2..ebbb77a1 100644
                        aria-pressed={!!emojiBoardAnchor}
                      >
                        <Icon src={Icons.SmilePlus} size="100" />
-@@ -937,6 +959,7 @@ export const Message = as<'div', MessageProps>(
+@@ -937,6 +960,7 @@ export const Message = as<'div', MessageProps>(
                    variant="SurfaceVariant"
                    size="300"
                    radii="300"
@@ -356,7 +373,7 @@ index 9324e1c2..ebbb77a1 100644
                  >
                    <Icon src={Icons.ReplyArrow} size="100" />
                  </IconButton>
-@@ -947,6 +970,7 @@ export const Message = as<'div', MessageProps>(
+@@ -947,6 +971,7 @@ export const Message = as<'div', MessageProps>(
                      variant="SurfaceVariant"
                      size="300"
                      radii="300"
@@ -364,7 +381,7 @@ index 9324e1c2..ebbb77a1 100644
                    >
                      <Icon src={Icons.ThreadPlus} size="100" />
                    </IconButton>
-@@ -957,6 +981,7 @@ export const Message = as<'div', MessageProps>(
+@@ -957,6 +982,7 @@ export const Message = as<'div', MessageProps>(
                      variant="SurfaceVariant"
                      size="300"
                      radii="300"
@@ -372,7 +389,7 @@ index 9324e1c2..ebbb77a1 100644
                    >
                      <Icon src={Icons.Pencil} size="100" />
                    </IconButton>
-@@ -1122,6 +1147,7 @@ export const Message = as<'div', MessageProps>(
+@@ -1122,6 +1148,7 @@ export const Message = as<'div', MessageProps>(
                      size="300"
                      radii="300"
                      onClick={handleOpenMenu}
@@ -380,7 +397,15 @@ index 9324e1c2..ebbb77a1 100644
                      aria-pressed={!!menuAnchor}
                    >
                      <Icon src={Icons.VerticalDots} size="100" />
-@@ -1288,6 +1314,7 @@ export const Event = as<'div', EventProps>(
+@@ -1210,6 +1237,7 @@ export const Event = as<'div', EventProps>(
+       <MessageBase
+         className={classNames(css.MessageBase, className)}
+         tabIndex={0}
++        data-timeline-message=""
+         space={messageSpacing}
+         autoCollapse
+         highlight={highlight}
+@@ -1288,6 +1316,7 @@ export const Event = as<'div', EventProps>(
                      size="300"
                      radii="300"
                      onClick={handleOpenMenu}
@@ -645,10 +670,10 @@ index 00000000..de62d0da
 +};
 diff --git a/src/app/hooks/useRoomListKeyboard.ts b/src/app/hooks/useRoomListKeyboard.ts
 new file mode 100644
-index 00000000..b4104b9f
+index 00000000..82edcf6a
 --- /dev/null
 +++ b/src/app/hooks/useRoomListKeyboard.ts
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,134 @@
 +import { useCallback, useEffect, useState } from 'react';
 +import { Virtualizer } from '@tanstack/react-virtual';
 +import { isKeyHotkey } from 'is-hotkey';
@@ -728,11 +753,33 @@ index 00000000..b4104b9f
 +      }
 +
 +      if ((isKeyHotkey('enter', evt) || isKeyHotkey('space', evt)) && focusedIndex >= 0) {
++        // Let child buttons (e.g. phone icon) handle their own Enter/Space
++        if (evt.target !== evt.currentTarget) return;
 +        evt.preventDefault();
 +        const roomId = items[focusedIndex];
 +        if (roomId) {
 +          onNavigate(roomId);
 +        }
++        return;
++      }
++
++      if (isKeyHotkey('pagedown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.min(prev + 10, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('pageup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.max(prev - 10, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
 +        return;
 +      }
 +

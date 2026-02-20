@@ -321,9 +321,11 @@ export function CallNavStatus() {
             >
               {(triggerRef) => (
                 <Chip
+                  id="incoming-call-join"
                   size="500"
                   fill="Soft"
                   as="button"
+                  aria-label={`Join call${room ? ` in ${room.name}` : ''}`}
                   onClick={() => handleJoin(current.roomId)}
                   ref={triggerRef}
                   className={css.RoomButton}
@@ -344,6 +346,7 @@ export function CallNavStatus() {
               size="300"
               onClick={() => setCallPage((p) => Math.min(total - 1, p + 1))}
               disabled={safeIndex === total - 1}
+              aria-label="Next incoming call"
             >
               <Icon src={Icons.ChevronRight} size="50" />
             </IconButton>
@@ -363,6 +366,7 @@ export function CallNavStatus() {
                 fill="None"
                 size="300"
                 ref={triggerRef}
+                aria-label="Dismiss incoming call"
                 onClick={() => {
                   handleDismiss(current.roomId);
                   setCallPage((p) => Math.max(0, p - 1));
@@ -431,6 +435,7 @@ export function CallNavStatus() {
               fill="None"
               size="300"
               ref={triggerRef}
+              aria-label="Hang up"
               onClick={() => {
                 if (activeCallRoomId) {
                   timedOutCalls.add(activeCallRoomId);
@@ -453,7 +458,7 @@ export function CallNavStatus() {
           }
         >
           {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} onClick={toggleAudio}>
+            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'} onClick={toggleAudio}>
               <Icon src={!isAudioEnabled ? Icons.MicMute : Icons.Mic} />
             </IconButton>
           )}
@@ -468,7 +473,7 @@ export function CallNavStatus() {
           }
         >
           {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} onClick={toggleVideo}>
+            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'} onClick={toggleVideo}>
               <Icon src={!isVideoEnabled ? Icons.VideoCameraMute : Icons.VideoCamera} />
             </IconButton>
           )}
