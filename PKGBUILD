@@ -38,6 +38,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "02-element-call.patch"
         "03-pronouns.patch"
         "04-call-settings.patch"
+        "05-login-accessibility.patch"
         "06-accessibility.patch")
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -69,7 +70,8 @@ sha256sums=('SKIP'
             'c642865176cc7580d61dddfafce973b2b9f2ca47bf0121096d5bc68777c11855'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
-            '01b0668968641f3a0a22e2741aa154879b1e4c8e14be2347c7e716d64011afc0')
+            '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
+            '120adea4f9128c0f446bd168e5292db0e67ece092f35b3e66b7c9cfb0a9d36f5')
 
 prepare() {
   cd "$_pkgname"
@@ -119,6 +121,9 @@ prepare() {
 
   echo "Applying call ringtone settings patch..."
   patch -p1 -i "$srcdir/04-call-settings.patch"
+
+  echo "Applying login form accessibility patch..."
+  patch -p1 -i "$srcdir/05-login-accessibility.patch"
 
   echo "Applying accessibility improvements patch..."
   patch -p1 -i "$srcdir/06-accessibility.patch"

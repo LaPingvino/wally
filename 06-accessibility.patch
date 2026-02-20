@@ -15,12 +15,25 @@ index 00000000..e589fc94
 +}
 diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
 new file mode 100644
-index 00000000..c0f95570
+index 00000000..4ae4f133
 --- /dev/null
 +++ b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,88 @@
 +import React from 'react';
-+import { Box, Text, config, Dialog, Header, Scroll, IconButton, Icon, Icons } from 'folds';
++import {
++  Box,
++  Text,
++  config,
++  Header,
++  Scroll,
++  IconButton,
++  Icon,
++  Icons,
++  Modal,
++  Overlay,
++  OverlayBackdrop,
++  OverlayCenter,
++} from 'folds';
 +import { useAtom } from 'jotai';
 +import FocusTrap from 'focus-trap-react';
 +import { keyboardShortcutsHelpAtom } from '../../state/keyboardShortcutsHelp';
@@ -52,42 +65,46 @@ index 00000000..c0f95570
 +  }, {} as Record<string, KeyboardShortcut[]>);
 +
 +  return (
-+    <Dialog open={open} onOpenChange={setOpen}>
-+      <FocusTrap
-+        focusTrapOptions={{
-+          initialFocus: false,
-+          onDeactivate: () => setOpen(false),
-+          clickOutsideDeactivates: true,
-+          escapeDeactivates: stopPropagation,
-+        }}
-+      >
-+        <Box direction="Column" gap="400" style={{ padding: config.space.S400, minWidth: '400px' }}>
-+          <Box direction="Row" justifyContent="SpaceBetween" alignItems="Center">
-+            <Header size="400">Keyboard Shortcuts</Header>
-+            <IconButton size="300" onClick={() => setOpen(false)}>
-+              <Icon src={Icons.Cross} size="200" />
-+            </IconButton>
-+          </Box>
-+          <Scroll style={{ maxHeight: '60vh' }}>
-+            <Box direction="Column" gap="300">
-+              {Object.entries(groupedShortcuts).map(([category, items]) => (
-+                <Box key={category} direction="Column" gap="200">
-+                  <Text size="L400">{category}</Text>
-+                  {items.map((shortcut) => (
-+                    <Box key={shortcut.key} direction="Row" justifyContent="SpaceBetween" gap="400">
-+                      <Text size="T300">{shortcut.description}</Text>
-+                      <Text size="T300" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-+                        {formatShortcut(shortcut.key)}
-+                      </Text>
++    <Overlay open={open} backdrop={<OverlayBackdrop />}>
++      <OverlayCenter>
++        <FocusTrap
++          focusTrapOptions={{
++            initialFocus: false,
++            onDeactivate: () => setOpen(false),
++            clickOutsideDeactivates: true,
++            escapeDeactivates: stopPropagation,
++          }}
++        >
++          <Modal size="500" variant="Background">
++            <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
++              <Box direction="Row" justifyContent="SpaceBetween" alignItems="Center">
++                <Header size="400">Keyboard Shortcuts</Header>
++                <IconButton size="300" onClick={() => setOpen(false)} aria-label="Close">
++                  <Icon src={Icons.Cross} size="200" />
++                </IconButton>
++              </Box>
++              <Scroll style={{ maxHeight: '60vh' }}>
++                <Box direction="Column" gap="300">
++                  {Object.entries(groupedShortcuts).map(([category, items]) => (
++                    <Box key={category} direction="Column" gap="200">
++                      <Text size="L400">{category}</Text>
++                      {items.map((shortcut) => (
++                        <Box key={shortcut.key} direction="Row" justifyContent="SpaceBetween" gap="400">
++                          <Text size="T300">{shortcut.description}</Text>
++                          <Text size="T300" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
++                            {formatShortcut(shortcut.key)}
++                          </Text>
++                        </Box>
++                      ))}
 +                    </Box>
 +                  ))}
 +                </Box>
-+              ))}
++              </Scroll>
 +            </Box>
-+          </Scroll>
-+        </Box>
-+      </FocusTrap>
-+    </Dialog>
++          </Modal>
++        </FocusTrap>
++      </OverlayCenter>
++    </Overlay>
 +  );
 +}
 diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
@@ -133,12 +150,33 @@ index 00000000..9324c513
 +    </div>
 +  );
 +}
+diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
+index d1678b65..d06f165c 100644
+--- a/src/app/features/room/RoomTimeline.tsx
++++ b/src/app/features/room/RoomTimeline.tsx
+@@ -1688,7 +1688,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+           </Chip>
+         </TimelineFloat>
+       )}
+-      <Scroll ref={scrollRef} visibility="Hover">
++      <Scroll
++        ref={scrollRef}
++        visibility="Hover"
++        id="cinny-timeline"
++        role="log"
++        aria-label="Message timeline"
++        aria-live="polite"
++        tabIndex={0}
++      >
+         <Box
+           direction="Column"
+           justifyContent="End"
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
-index 00000000..650c11cb
+index 00000000..97706948
 --- /dev/null
 +++ b/src/app/hooks/useGlobalKeyboardShortcuts.ts
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,87 @@
 +import { useCallback, useMemo } from 'react';
 +import { useSetAtom } from 'jotai';
 +import { isKeyHotkey } from 'is-hotkey';
@@ -153,11 +191,34 @@ index 00000000..650c11cb
 +  action: () => void;
 +}
 +
++const focusSection = (selector: string) => {
++  const el = document.querySelector(selector) as HTMLElement | null;
++  el?.focus();
++};
++
 +export const useGlobalKeyboardShortcuts = () => {
 +  const setShortcutsHelp = useSetAtom(keyboardShortcutsHelpAtom);
 +
 +  const shortcuts = useMemo<KeyboardShortcut[]>(
 +    () => [
++      {
++        key: 'alt+1',
++        description: 'Focus room list',
++        category: 'Navigation',
++        action: () => focusSection('[role="listbox"]'),
++      },
++      {
++        key: 'alt+2',
++        description: 'Focus message timeline',
++        category: 'Navigation',
++        action: () => focusSection('#cinny-timeline'),
++      },
++      {
++        key: 'alt+3',
++        description: 'Focus message composer',
++        category: 'Navigation',
++        action: () => focusSection('[data-slate-editor="true"]'),
++      },
 +      {
 +        key: 'mod+/',
 +        description: 'Show keyboard shortcuts',
@@ -170,6 +231,24 @@ index 00000000..650c11cb
 +
 +  const handleKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
++      // Section focus shortcuts (alt+1/2/3) work even inside editable elements
++      if (isKeyHotkey('alt+1', evt)) {
++        evt.preventDefault();
++        focusSection('[role="listbox"]');
++        return;
++      }
++      if (isKeyHotkey('alt+2', evt)) {
++        evt.preventDefault();
++        focusSection('#cinny-timeline');
++        return;
++      }
++      if (isKeyHotkey('alt+3', evt)) {
++        evt.preventDefault();
++        focusSection('[data-slate-editor="true"]');
++        return;
++      }
++
++      // Other shortcuts only when not typing in an editable element
 +      if (!stopPropagation(evt)) return;
 +
 +      const shortcut = shortcuts.find((s) => isKeyHotkey(s.key, evt));
