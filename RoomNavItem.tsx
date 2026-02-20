@@ -1,5 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useState, MouseEvent } from 'react';
-import { EventType, Room } from 'matrix-js-sdk';
+import { EventType, JoinRule, Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -324,7 +324,11 @@ export function RoomNavItem({
           isActiveCall && 'Currently in Call',
           callMemberships.length && `${callMemberships.length} in Call`,
         ]
-      : 'Text Room',
+      : direct
+        ? 'Direct Message'
+        : room.getJoinRule() === JoinRule.Public
+          ? 'Public Room'
+          : 'Group Room',
     unread?.total && `${unread.total} Messages`,
   ]
     .flat()

@@ -1,6 +1,6 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Box, Text, config } from 'folds';
-import { EventType, Room } from 'matrix-js-sdk';
+import { EventType, JoinRule, Room } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
 import { isKeyHotkey } from 'is-hotkey';
 import { useStateEvent } from '../../hooks/useStateEvent';
@@ -23,6 +23,10 @@ import { settingsAtom } from '../../state/settings';
 import { useSetting } from '../../state/hooks/settings';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { useIsDirectRoom } from '../../hooks/useRoom';
+import { useRoomUnread } from '../../state/hooks/unread';
+import { roomToUnreadAtom } from '../../state/room/roomToUnread';
+import { announce } from '../../utils/announce';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -72,6 +76,22 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
+  const direct = useIsDirectRoom();
+  const unread = useRoomUnread(roomId, roomToUnreadAtom);
+
+  useEffect(() => {
+    const roomType = room.isCallRoom()
+      ? 'Call Room'
+      : direct
+        ? 'Direct Message'
+        : room.getJoinRule() === JoinRule.Public
+          ? 'Public Room'
+          : 'Group Room';
+    const parts: string[] = [room.name, roomType];
+    if (unread?.total) parts.push(`${unread.total} unread messages`);
+    announce(parts.join(', '));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
 
   const permissions = useRoomPermissions(creators, powerLevels);
   const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
