@@ -303,6 +303,7 @@ export function CallNavStatus() {
               size="300"
               onClick={() => setCallPage((p) => Math.max(0, p - 1))}
               disabled={safeIndex === 0}
+              aria-label="Previous incoming call"
             >
               <Icon src={Icons.ChevronLeft} size="50" />
             </IconButton>

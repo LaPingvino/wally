@@ -225,6 +225,9 @@ type RoomNavItemProps = {
   notificationMode?: RoomNotificationMode;
   showAvatar?: boolean;
   direct?: boolean;
+  focused?: boolean;
+  optionId?: string;
+  tabIndex?: number;
 };
 export function RoomNavItem({
   room,
@@ -233,6 +236,9 @@ export function RoomNavItem({
   direct,
   notificationMode,
   linkPath,
+  focused,
+  optionId,
+  tabIndex,
 }: RoomNavItemProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -332,12 +338,15 @@ export function RoomNavItem({
         radii="400"
         highlight={unread !== undefined}
         aria-selected={selected}
+        role="option"
+        id={optionId}
         data-hover={!!menuAnchor}
         onContextMenu={handleContextMenu}
+        style={focused ? { outline: '2px solid', outlineOffset: '-2px', borderRadius: '12px' } : undefined}
         {...hoverProps}
         {...focusWithinProps}
       >
-        <NavButton onClick={handleNavItemClick} aria-label={ariaLabel}>
+        <NavButton onClick={handleNavItemClick} aria-label={ariaLabel} tabIndex={tabIndex}>
           <NavItemContent>
             <Box as="span" grow="Yes" alignItems="Center" gap="200">
               <Avatar size="200" radii="400">

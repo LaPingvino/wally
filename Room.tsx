@@ -114,7 +114,7 @@ export function Room() {
             </Box>
           </Box>
         </Box>
-        {!isCallLayout && screenSize === ScreenSize.Desktop && isDrawer && (
+        {screenSize === ScreenSize.Desktop && isDrawer && (
           <>
             <Line variant="Background" direction="Vertical" size="300" />
             <MembersDrawer key={room.roomId} room={room} members={members} />

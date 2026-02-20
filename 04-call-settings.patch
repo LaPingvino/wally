@@ -1,5 +1,5 @@
 diff --git a/src/app/components/message/content/AudioContent.tsx b/src/app/components/message/content/AudioContent.tsx
-index 478486a4..bd3052a0 100644
+index 478486a4..0c8470a4 100644
 --- a/src/app/components/message/content/AudioContent.tsx
 +++ b/src/app/components/message/content/AudioContent.tsx
 @@ -1,6 +1,8 @@
@@ -21,7 +21,7 @@ index 478486a4..bd3052a0 100644
  
    const [srcState, loadSrc] = useAsyncCallback(
      useCallback(async () => {
-@@ -155,6 +159,29 @@ export function AudioContent({
+@@ -155,12 +159,37 @@ export function AudioContent({
      ),
      rightControl: (
        <>
@@ -42,6 +42,7 @@ index 478486a4..bd3052a0 100644
 +                  setRingtoneSet(true);
 +                  setTimeout(() => setRingtoneSet(false), 2000);
 +                }}
++                aria-label={ringtoneSet ? 'Ringtone set!' : 'Set as ringtone'}
 +              >
 +                <Icon src={ringtoneSet ? Icons.Check : Icons.Bell} size="50" />
 +              </IconButton>
@@ -51,14 +52,21 @@ index 478486a4..bd3052a0 100644
          <IconButton
            variant="SurfaceVariant"
            size="300"
+           radii="Pill"
+           onClick={() => setMute(!mute)}
+           aria-pressed={mute}
++          aria-label={mute ? 'Unmute' : 'Mute'}
+         >
+           <Icon src={mute ? Icons.VolumeMute : Icons.VolumeHigh} size="50" />
+         </IconButton>
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df..5ae6484e 100644
+index e0df06df..e1ff1052 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
 -import React, { useCallback } from 'react';
 -import { Box, Text, Switch, Button, color, Spinner } from 'folds';
-+import React, { MouseEventHandler, useCallback, useEffect, useRef, useState } from 'react';
++import React, { MouseEventHandler, useCallback, useEffect, useState } from 'react';
 +import { Box, Text, Switch, Button, color, Spinner, Icon, IconButton, Icons, Menu, MenuItem, PopOut, RectCords, as, config } from 'folds';
 +import FocusTrap from 'focus-trap-react';
  import { IPusherRequest } from 'matrix-js-sdk';
@@ -72,7 +80,7 @@ index e0df06df..5ae6484e 100644
  
  function EmailNotification() {
    const mx = useMatrixClient();
-@@ -84,6 +86,198 @@ function EmailNotification() {
+@@ -84,6 +86,151 @@ function EmailNotification() {
    );
  }
  
@@ -110,11 +118,8 @@ index e0df06df..5ae6484e 100644
 +);
 +
 +function RingtoneUrlInput() {
-+  const mx = useMatrixClient();
 +  const [callRingtoneUrl, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
 +  const [draft, setDraft] = useState(callRingtoneUrl ?? '');
-+  const [uploading, setUploading] = useState(false);
-+  const fileInputRef = useRef<HTMLInputElement>(null);
 +
 +  // Sync when set externally (e.g., "Set as ringtone" from a chat audio message)
 +  useEffect(() => {
@@ -124,33 +129,6 @@ index e0df06df..5ae6484e 100644
 +  const commit = () => {
 +    const trimmed = draft.trim();
 +    setCallRingtoneUrl(trimmed || null);
-+  };
-+
-+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-+    const file = e.target.files?.[0];
-+    if (!file) return;
-+
-+    // Validate audio file
-+    if (!file.type.startsWith('audio/')) {
-+      alert('Please select an audio file');
-+      return;
-+    }
-+
-+    setUploading(true);
-+    try {
-+      const data = await mx.uploadContent(file);
-+      const mxcUrl = data?.content_uri;
-+      if (!mxcUrl) throw new Error('Upload failed');
-+
-+      setDraft(mxcUrl);
-+      setCallRingtoneUrl(mxcUrl);
-+    } catch (err) {
-+      console.error('Ringtone upload failed:', err);
-+      alert('Upload failed. Please try again.');
-+    } finally {
-+      setUploading(false);
-+      if (fileInputRef.current) fileInputRef.current.value = '';
-+    }
 +  };
 +
 +  return (
@@ -164,6 +142,7 @@ index e0df06df..5ae6484e 100644
 +          if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur(); }
 +        }}
 +        placeholder="https://... or mxc://..."
++        aria-label="Custom ringtone URL"
 +        style={{
 +          flexGrow: 1,
 +          minWidth: 0,
@@ -176,31 +155,13 @@ index e0df06df..5ae6484e 100644
 +          outline: 'none',
 +        }}
 +      />
-+      <input
-+        ref={fileInputRef}
-+        type="file"
-+        accept="audio/*"
-+        onChange={handleFileSelect}
-+        style={{ display: 'none' }}
-+      />
-+      <Button
-+        size="300"
-+        variant="Secondary"
-+        fill="Soft"
-+        radii="Pill"
-+        onClick={() => fileInputRef.current?.click()}
-+        disabled={uploading}
-+        before={uploading ? <Spinner size="50" variant="Secondary" /> : <Icon src={Icons.Upload} size="50" />}
-+      >
-+        <Text size="B300">{uploading ? 'Uploading...' : 'Upload'}</Text>
-+      </Button>
 +      {callRingtoneUrl && (
 +        <IconButton
 +          size="300"
 +          radii="Pill"
 +          variant="SurfaceVariant"
 +          onClick={() => { setDraft(''); setCallRingtoneUrl(null); }}
-+          title="Reset to built-in ringtone"
++          aria-label="Reset to built-in ringtone"
 +        >
 +          <Icon src={Icons.Cross} size="50" />
 +        </IconButton>
@@ -271,7 +232,7 @@ index e0df06df..5ae6484e 100644
  export function SystemNotification() {
    const notifPermission = usePermissionState('notifications', getNotificationState());
    const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
-@@ -145,6 +339,30 @@ export function SystemNotification() {
+@@ -145,6 +292,30 @@ export function SystemNotification() {
            after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
          />
        </SequenceCard>
@@ -303,10 +264,10 @@ index e0df06df..5ae6484e 100644
          className={SequenceCardStyle}
          variant="SurfaceVariant"
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index upstream..modified 100644
+index b31490f9..52679837 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -43,6 +43,8 @@ export interface Settings {
+@@ -42,6 +42,8 @@ export interface Settings {
  
    showNotifications: boolean;
    isNotificationSounds: boolean;
@@ -315,7 +276,7 @@ index upstream..modified 100644
  
    hour24Clock: boolean;
    dateFormatString: string;
-@@ -78,6 +80,8 @@ const defaultSettings: Settings = {
+@@ -76,6 +78,8 @@ const defaultSettings: Settings = {
  
    showNotifications: true,
    isNotificationSounds: true,

@@ -466,7 +466,7 @@ export function RoomViewHeader() {
             />
           )}
 
-          {!room.isCallRoom() && screenSize === ScreenSize.Desktop && (
+          {screenSize === ScreenSize.Desktop && (
             <TooltipProvider
               position="Bottom"
               offset={4}

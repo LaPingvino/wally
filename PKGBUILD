@@ -37,7 +37,8 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "01-emoji-font.patch"
         "02-element-call.patch"
         "03-pronouns.patch"
-        "04-call-settings.patch")
+        "04-call-settings.patch"
+        "06-accessibility.patch")
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
             # hazre/cinny unchanged components
@@ -56,18 +57,19 @@ sha256sums=('SKIP'
             '1e4e4f07d01867cf704a5f7433bbcf41e92a87e9bca264d6c4e9ee31c4011824'
             'aeb3404add2c68bc952b543d77ef155e60fe7776aaf62e29bc68291b98c016f4'
             '1f8649e1ff1eedc4d7415e4800bade9d5014fbdf80aef80a22909f0abb7e67c1'
-            '227ea0a79c61b2058cac1d6a367915a901254b71cc08ff278ee4e5123ea13d5f'
-            'e548b8a5b19b2567cc94c4cbfca1c66c73f60a27c5e3550f894b415fb18cf9e1'
+            '5cf67f923035f69efee0c905f4dcd47abda75a70154efcc88ee2cbbbdb4c6f44'
+            'd49748ffeca4ab129433a509997871eb9bd17b2a4d00acf58e8ba7059dc6e7f8'
             'b3f3b8ee23d06000136ff3e074b9c84ebf81cd0e9731ae7634a3e64ee09610f8'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
-            '21e5e84639362b154da6753d9347ac32d564c83954e3cc78b2daf83e7d4766db'
+            '389ae21ccf824fed47a500a2125ebdb7f1246734e40b8cc8926e688bfa33ba2a'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
-            '7c63bc7095aa2b87522fe1bf698a4f5833de85c28572b70901f6e271e7bdb582'
+            'f8e36249055d5325a8f90c0ec7ec0e430ab30e8409a14e26f47722b603538f6d'
             # Patches
             '7360808ff556756fa2629017a3d0753fab676a1929094a25902e01e9b8fa5197'
             'c642865176cc7580d61dddfafce973b2b9f2ca47bf0121096d5bc68777c11855'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
-            'b10d5805d84a760cde74fb3ccf3c1976c8d64ef3c683aceafb4f1a207bf78ea6')
+            'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
+            '01b0668968641f3a0a22e2741aa154879b1e4c8e14be2347c7e716d64011afc0')
 
 prepare() {
   cd "$_pkgname"
@@ -117,6 +119,9 @@ prepare() {
 
   echo "Applying call ringtone settings patch..."
   patch -p1 -i "$srcdir/04-call-settings.patch"
+
+  echo "Applying accessibility improvements patch..."
+  patch -p1 -i "$srcdir/06-accessibility.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
