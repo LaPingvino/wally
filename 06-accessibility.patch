@@ -1,11 +1,11 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..29e370ce
+index 00000000..1f4c998a
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,162 @@
 +import React, { useCallback } from 'react';
-+import { useNavigate } from 'react-router-dom';
++import { useNavigate, useParams } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
 +import { isKeyHotkey } from 'is-hotkey';
 +import { useGlobalKeyboardShortcuts, KeyboardShortcut } from '../hooks/useGlobalKeyboardShortcuts';
@@ -48,10 +48,16 @@ index 00000000..29e370ce
 +  category: 'Actions',
 +};
 +
++const START_CALL_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+c',
++  description: 'Start or join call in current room',
++  category: 'Actions',
++};
++
 +export function GlobalKeyboardShortcuts() {
 +  const navigate = useNavigate();
 +  const { shortcuts } = useGlobalKeyboardShortcuts();
-+  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId } = useCallState();
++  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = useCallState();
 +  const mx = useMatrixClient();
 +  const roomToParents = useAtomValue(roomToParentsAtom);
 +  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
@@ -59,6 +65,12 @@ index 00000000..29e370ce
 +  const spaceIds = sidebarItems.filter((item): item is string => typeof item === 'string');
 +  const mDirects = useAtomValue(mDirectAtom);
 +  const roomToUnread = useAtomValue(roomToUnreadAtom);
++  const { roomIdOrAlias } = useParams<{ roomIdOrAlias: string }>();
++  const currentRoomId = roomIdOrAlias
++    ? roomIdOrAlias.startsWith('!')
++      ? roomIdOrAlias
++      : mx.getRooms().find((r) => r.getCanonicalAlias() === roomIdOrAlias)?.roomId ?? null
++    : null;
 +
 +  const handleCallKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
@@ -105,18 +117,28 @@ index 00000000..29e370ce
 +      if (unreadEntries.length === 0) return;
 +      evt.preventDefault();
 +      const [roomId] = unreadEntries[0];
-+      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++      const unreadRoomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
 +      const isDirect = mDirects.has(roomId);
 +      if (isDirect) {
-+        navigate(getDirectRoomPath(roomIdOrAlias));
++        navigate(getDirectRoomPath(unreadRoomIdOrAlias));
 +      } else {
-+        navigate(getHomeRoomPath(roomIdOrAlias));
++        navigate(getHomeRoomPath(unreadRoomIdOrAlias));
 +      }
 +      const roomName = mx.getRoom(roomId)?.name ?? 'Room';
 +      const roomType = isDirect ? 'Direct Message' : 'Group Room';
 +      announce(`${roomName}, ${roomType}`);
 +    },
 +    [roomToUnread, mDirects, mx, navigate]
++  );
++
++  const handleStartCallKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (!isKeyHotkey('alt+c', evt)) return;
++      if (!currentRoomId) return;
++      evt.preventDefault();
++      setActiveCallRoomId(currentRoomId, true);
++    },
++    [currentRoomId, setActiveCallRoomId]
 +  );
 +
 +  const handleAnswerCallKeyDown = useCallback((evt: KeyboardEvent) => {
@@ -130,11 +152,13 @@ index 00000000..29e370ce
 +  useKeyDown(window, handleCallKeyDown);
 +  useKeyDown(window, handleSpaceKeyDown);
 +  useKeyDown(window, handleNextUnreadKeyDown);
++  useKeyDown(window, handleStartCallKeyDown);
 +  useKeyDown(window, handleAnswerCallKeyDown);
 +
 +  const allShortcuts: KeyboardShortcut[] = [
 +    ...shortcuts,
 +    ...CALL_SHORTCUTS.map((s) => ({ ...s, action: () => {} })),
++    { ...START_CALL_SHORTCUT, action: () => {} },
 +    { ...CALL_ANSWER_SHORTCUT, action: () => {} },
 +    { ...SPACE_SHORTCUT, action: () => {} },
 +    { ...NEXT_UNREAD_SHORTCUT, action: () => {} },
@@ -1327,18 +1351,6 @@ index 6fc528a1..0d7474b7 100644
                  {folder.content.map((sId) => {
                    const space = mx.getRoom(sId);
                    if (!space) return null;
-diff --git a/src/app/pages/client/sidebar/UnverifiedTab.tsx b/src/app/pages/client/sidebar/UnverifiedTab.tsx
-index 0a2f117b..fa5bd669 100644
---- a/src/app/pages/client/sidebar/UnverifiedTab.tsx
-+++ b/src/app/pages/client/sidebar/UnverifiedTab.tsx
-@@ -56,6 +56,7 @@ function UnverifiedIndicator() {
-                 as="button"
-                 ref={triggerRef}
-                 outlined
-+                aria-label={unverified ? 'Unverified Device' : 'Unverified Devices'}
-                 onClick={() => setSettings(true)}
-               >
-                 <Icon
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
 index 616b6fc0..eb010013 100644
 --- a/src/app/pages/client/space/Space.tsx

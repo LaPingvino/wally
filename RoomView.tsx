@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { Box, Text, config } from 'folds';
 import { EventType, JoinRule, Room } from 'matrix-js-sdk';
+import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { ReactEditor } from 'slate-react';
 import { isKeyHotkey } from 'is-hotkey';
 import { useStateEvent } from '../../hooks/useStateEvent';
@@ -89,7 +90,11 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           : 'Group Room';
     const parts: string[] = [room.name, roomType];
     if (unread?.total) parts.push(`${unread.total} unread messages`);
+    const callMemberCount = MatrixRTCSession.callMembershipsForRoom(room).length;
+    if (callMemberCount > 0)
+      parts.push(`${callMemberCount} member${callMemberCount === 1 ? '' : 's'} in call`);
     announce(parts.join(', '));
+    setTimeout(() => document.getElementById('cinny-timeline')?.focus(), 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
@@ -122,6 +127,12 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
         const active = document.activeElement;
         if (!active?.closest('[role="log"]')) return;
         const noMod = !evt.ctrlKey && !evt.altKey && !evt.metaKey && !evt.shiftKey;
+
+        if (evt.key === 'Escape' && noMod) {
+          evt.preventDefault();
+          ReactEditor.focus(editor);
+          return;
+        }
 
         if (evt.key === '/' && noMod) {
           evt.preventDefault();
