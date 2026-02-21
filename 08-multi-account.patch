@@ -1,0 +1,326 @@
+diff --git a/src/app/pages/App.tsx b/src/app/pages/App.tsx
+index 52ec7f20..3d58e98d 100644
+--- a/src/app/pages/App.tsx
++++ b/src/app/pages/App.tsx
+@@ -12,6 +12,15 @@ import { FeatureCheck } from './FeatureCheck';
+ import { createRouter } from './Router';
+ import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
+ import { useCompositionEndTracking } from '../hooks/useComposingCheck';
++import { setSessionOverride, getSessionForSlot } from '../state/sessions';
++
++// Detect secondary account slot from URL and set session override before router is created
++const _slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
++const _accountSlot = _slotMatch ? parseInt(_slotMatch[1], 10) : null;
++if (_accountSlot !== null) {
++  setSessionOverride(getSessionForSlot(_accountSlot));
++}
++const _basename = _accountSlot !== null ? `/account/${_accountSlot}/` : undefined;
+ 
+ const queryClient = new QueryClient();
+ 
+@@ -37,7 +46,7 @@ function App() {
+                   <ClientConfigProvider value={clientConfig}>
+                     <QueryClientProvider client={queryClient}>
+                       <JotaiProvider>
+-                        <RouterProvider router={createRouter(clientConfig, screenSize)} />
++                        <RouterProvider router={createRouter(clientConfig, screenSize, _basename)} />
+                       </JotaiProvider>
+                       <ReactQueryDevtools initialIsOpen={false} />
+                     </QueryClientProvider>
+diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
+index d600c610..ea9ef1a0 100644
+--- a/src/app/pages/Router.tsx
++++ b/src/app/pages/Router.tsx
+@@ -73,7 +73,7 @@ import { IncomingCallNotification } from '../features/call/IncomingCallNotificat
+ import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
+ import { getFallbackSession } from '../state/sessions';
+ 
+-export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
++export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize, basePath?: string) => {
+   const { hashRouter } = clientConfig;
+   const mobile = screenSize === ScreenSize.Mobile;
+ 
+@@ -323,6 +323,6 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
+     return createHashRouter(routes, { basename: hashRouter.basename });
+   }
+   return createBrowserRouter(routes, {
+-    basename: import.meta.env.BASE_URL,
++    basename: basePath ?? import.meta.env.BASE_URL,
+   });
+ };
+diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
+index e1a5dc0c..793af3a7 100644
+--- a/src/app/pages/client/ClientRoot.tsx
++++ b/src/app/pages/client/ClientRoot.tsx
+@@ -34,7 +34,7 @@ import { useSyncState } from '../../hooks/useSyncState';
+ import { stopPropagation } from '../../utils/keyboard';
+ import { SyncStatus } from './SyncStatus';
+ import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
+-import { getFallbackSession } from '../../state/sessions';
++import { getFallbackSession, removeSecondarySession } from '../../state/sessions';
+ 
+ function ClientRootLoading() {
+   return (
+@@ -127,8 +127,14 @@ const useLogoutListener = (mx?: MatrixClient) => {
+     const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
+       mx?.stopClient();
+       await mx?.clearStores();
+-      window.localStorage.clear();
+-      window.location.reload();
++      const slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
++      if (slotMatch) {
++        removeSecondarySession(parseInt(slotMatch[1], 10));
++        window.location.assign('/');
++      } else {
++        window.localStorage.clear();
++        window.location.reload();
++      }
+     };
+ 
+     mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
+diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
+index 33446252..80f078e3 100644
+--- a/src/app/pages/client/SidebarNav.tsx
++++ b/src/app/pages/client/SidebarNav.tsx
+@@ -1,23 +1,107 @@
+-import React, { useRef } from 'react';
+-import { Scroll } from 'folds';
++import React, { useRef, useState } from 'react';
++import { Icon, Icons, Scroll } from 'folds';
+ 
+ import {
+   Sidebar,
++  SidebarAvatar,
+   SidebarContent,
+-  SidebarStackSeparator,
++  SidebarItem,
++  SidebarItemTooltip,
+   SidebarStack,
++  SidebarStackSeparator,
+ } from '../../components/sidebar';
+ import {
+   DirectTab,
++  ExploreTab,
+   HomeTab,
+-  SpaceTabs,
+   InboxTab,
+-  ExploreTab,
++  SearchTab,
+   SettingsTab,
++  SpaceTabs,
+   UnverifiedTab,
+-  SearchTab,
+ } from './sidebar';
+ import { CreateTab } from './sidebar/CreateTab';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { useUserProfile } from '../../hooks/useUserProfile';
++import { mxcUrlToHttp } from '../../utils/matrix';
++import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { UserAvatar } from '../../components/user-avatar';
++import { getSecondarySessions } from '../../state/sessions';
++import { AddAccountDialog } from './AddAccountDialog';
++
++function AccountsTab() {
++  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  const userId = mx.getUserId() as string;
++  const profile = useUserProfile(userId);
++  const [showAddDialog, setShowAddDialog] = useState(false);
++
++  const avatarUrl = profile.avatarUrl
++    ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 32, 32, 'crop') ?? undefined
++    : undefined;
++
++  const secondarySessions = getSecondarySessions();
++  const currentSlotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
++  const currentSlot = currentSlotMatch ? parseInt(currentSlotMatch[1], 10) : null;
++
++  return (
++    <SidebarStack>
++      <SidebarItem active={currentSlot === null}>
++        <SidebarItemTooltip tooltip={`${userId} (current)`}>
++          {(triggerRef) => (
++            <SidebarAvatar
++              as="button"
++              ref={triggerRef}
++              aria-label={`Switch to ${userId}`}
++              onClick={() => currentSlot !== null && window.location.assign('/')}
++            >
++              <UserAvatar
++                userId={userId}
++                src={avatarUrl}
++                renderFallback={() => <Icon size="400" src={Icons.User} filled />}
++              />
++            </SidebarAvatar>
++          )}
++        </SidebarItemTooltip>
++      </SidebarItem>
++      {secondarySessions.map(({ slot, session }) => (
++        <SidebarItem key={slot} active={currentSlot === slot}>
++          <SidebarItemTooltip tooltip={session.userId}>
++            {(triggerRef) => (
++              <SidebarAvatar
++                as="button"
++                ref={triggerRef}
++                aria-label={`Switch to ${session.userId}`}
++                onClick={() => currentSlot !== slot && window.location.assign(`/account/${slot}/`)}
++              >
++                <UserAvatar
++                  userId={session.userId}
++                  src={undefined}
++                  renderFallback={() => <Icon size="400" src={Icons.User} filled />}
++                />
++              </SidebarAvatar>
++            )}
++          </SidebarItemTooltip>
++        </SidebarItem>
++      ))}
++      <SidebarItem>
++        <SidebarItemTooltip tooltip="Add Account">
++          {(triggerRef) => (
++            <SidebarAvatar
++              as="button"
++              ref={triggerRef}
++              aria-label="Add Account"
++              onClick={() => setShowAddDialog(true)}
++            >
++              <Icon size="400" src={Icons.Plus} filled />
++            </SidebarAvatar>
++          )}
++        </SidebarItemTooltip>
++      </SidebarItem>
++      {showAddDialog && <AddAccountDialog onClose={() => setShowAddDialog(false)} />}
++    </SidebarStack>
++  );
++}
+ 
+ export function SidebarNav() {
+   const scrollRef = useRef<HTMLDivElement>(null);
+@@ -44,6 +128,8 @@ export function SidebarNav() {
+       <SidebarContent
+         scrollable={
+           <Scroll ref={scrollRef} variant="Background" size="0">
++            <AccountsTab />
++            <SidebarStackSeparator />
+             <SidebarStack>
+               <HomeTab />
+               <DirectTab />
+diff --git a/src/app/state/sessions.ts b/src/app/state/sessions.ts
+index a9c34ce9..b2c674fb 100644
+--- a/src/app/state/sessions.ts
++++ b/src/app/state/sessions.ts
+@@ -46,7 +46,15 @@ export const removeFallbackSession = () => {
+   localStorage.removeItem('cinny_device_id');
+   localStorage.removeItem('cinny_access_token');
+ };
++let sessionOverride: Session | undefined;
++
++export function setSessionOverride(session: Session | undefined) {
++  sessionOverride = session;
++}
++
+ export const getFallbackSession = (): Session | undefined => {
++  if (sessionOverride) return sessionOverride;
++
+   const baseUrl = localStorage.getItem('cinny_hs_base_url');
+   const userId = localStorage.getItem('cinny_user_id');
+   const deviceId = localStorage.getItem('cinny_device_id');
+@@ -70,6 +78,38 @@ export const getFallbackSession = (): Session | undefined => {
+  * End of migration code for old session
+  */
+ 
++const SECONDARY_SESSIONS_KEY = 'cinny_sessions';
++
++type SlottedSession = { slot: number; session: Session };
++
++export function getSecondarySessions(): SlottedSession[] {
++  try {
++    const raw = localStorage.getItem(SECONDARY_SESSIONS_KEY);
++    return raw ? JSON.parse(raw) : [];
++  } catch {
++    return [];
++  }
++}
++
++export function addSecondarySession(session: Session): number {
++  const sessions = getSecondarySessions();
++  const usedSlots = sessions.map((s) => s.slot);
++  let slot = 1;
++  while (usedSlots.includes(slot)) slot++;
++  sessions.push({ slot, session });
++  localStorage.setItem(SECONDARY_SESSIONS_KEY, JSON.stringify(sessions));
++  return slot;
++}
++
++export function removeSecondarySession(slot: number): void {
++  const sessions = getSecondarySessions().filter((s) => s.slot !== slot);
++  localStorage.setItem(SECONDARY_SESSIONS_KEY, JSON.stringify(sessions));
++}
++
++export function getSessionForSlot(slot: number): Session | undefined {
++  return getSecondarySessions().find((s) => s.slot === slot)?.session;
++}
++
+ // export const getSessionStoreName = (session: Session): SessionStoreName => {
+ //   if (session.fallbackSdkStores) {
+ //     return FALLBACK_STORE_NAME;
+diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
+index 498d4f75..09f22342 100644
+--- a/src/client/initMatrix.ts
++++ b/src/client/initMatrix.ts
+@@ -3,22 +3,36 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
+ import { cryptoCallbacks } from './secretStorageKeys';
+ import { clearNavToActivePathStore } from '../app/state/navToActivePath';
+ import { pushSessionToSW } from '../sw-session';
++import { removeSecondarySession } from '../app/state/sessions';
+ 
+ type Session = {
+   baseUrl: string;
+   accessToken: string;
+   userId: string;
+   deviceId: string;
++  fallbackSdkStores?: boolean;
++};
++
++const getSessionDbNames = (session: Session) => {
++  if (session.fallbackSdkStores) {
++    return { sync: 'web-sync-store', crypto: 'crypto-store' };
++  }
++  return {
++    sync: `sync@${session.userId}`,
++    crypto: `crypto@${session.userId}`,
++  };
+ };
+ 
+ export const initClient = async (session: Session): Promise<MatrixClient> => {
++  const dbNames = getSessionDbNames(session);
++
+   const indexedDBStore = new IndexedDBStore({
+     indexedDB: global.indexedDB,
+     localStorage: global.localStorage,
+-    dbName: 'web-sync-store',
++    dbName: dbNames.sync,
+   });
+ 
+-  const legacyCryptoStore = new IndexedDBCryptoStore(global.indexedDB, 'crypto-store');
++  const legacyCryptoStore = new IndexedDBCryptoStore(global.indexedDB, dbNames.crypto);
+ 
+   const mx = createClient({
+     baseUrl: session.baseUrl,
+@@ -62,8 +76,14 @@ export const logoutClient = async (mx: MatrixClient) => {
+     // ignore if failed to logout
+   }
+   await mx.clearStores();
+-  window.localStorage.clear();
+-  window.location.reload();
++  const slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
++  if (slotMatch) {
++    removeSecondarySession(parseInt(slotMatch[1], 10));
++    window.location.assign('/');
++  } else {
++    window.localStorage.clear();
++    window.location.reload();
++  }
+ };
+ 
+ export const clearLoginData = async () => {
