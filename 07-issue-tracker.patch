@@ -1,9 +1,9 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 00000000..ae0291b6
+index 00000000..39e90a0d
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,906 @@
+@@ -0,0 +1,1063 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixEvent, Room } from 'matrix-js-sdk';
@@ -54,6 +54,10 @@ index 00000000..ae0291b6
 +
 +type IssueContent = Record<string, unknown> & { _deleted?: boolean };
 +
++// An issue entry carries the state event (for editing/deleting) plus the
++// effective content to display (last non-redacted version if redacted).
++type IssueEntry = { event: MatrixEvent; content: IssueContent; redacted: boolean };
++
 +type ViewMode = { type: 'kanban'; fieldKey: string } | { type: 'list' };
 +
 +// ── Default schema ─────────────────────────────────────────────────────────────
@@ -93,12 +97,40 @@ index 00000000..ae0291b6
 +  return { fields: content.fields as SchemaField[] };
 +}
 +
-+function getIssues(room: Room): MatrixEvent[] {
-+  const events = room
++function getIssues(room: Room): IssueEntry[] {
++  const stateEvents = room
 +    .getLiveTimeline()
 +    .getState(EventTimeline.FORWARDS)
 +    ?.getStateEvents('eu.kiefte.issue') as MatrixEvent[] | undefined;
-+  return (events ?? []).filter((e) => !e.isRedacted() && !e.getContent()?._deleted);
++  if (!stateEvents || stateEvents.length === 0) return [];
++
++  const timelineEvents = room.getUnfilteredTimelineSet().getLiveTimeline().getEvents();
++  const result: IssueEntry[] = [];
++
++  for (const event of stateEvents) {
++    const stateKey = event.getStateKey()!;
++    if (!event.isRedacted()) {
++      const content = event.getContent() as IssueContent;
++      if (!content._deleted) result.push({ event, content, redacted: false });
++    } else {
++      // Find last non-redacted, non-deleted version in the timeline
++      for (let i = timelineEvents.length - 1; i >= 0; i--) {
++        const e = timelineEvents[i];
++        if (
++          e.getType() === 'eu.kiefte.issue' &&
++          e.getStateKey() === stateKey &&
++          !e.isRedacted()
++        ) {
++          const c = e.getContent() as IssueContent;
++          if (!c._deleted) {
++            result.push({ event, content: c, redacted: true });
++            break;
++          }
++        }
++      }
++    }
++  }
++  return result;
 +}
 +
 +function generateId(): string {
@@ -144,10 +176,18 @@ index 00000000..ae0291b6
 +  return result;
 +}
 +
-+function defaultViewMode(schema: IssueSchema | null): ViewMode {
-+  const kanbanField = schema?.fields.find((f) => f.kanban_group);
-+  if (kanbanField) return { type: 'kanban', fieldKey: kanbanField.key };
-+  return { type: 'list' };
++function compareFieldValues(a: string, b: string, field: SchemaField): number {
++  if (field.type === 'enum' && field.values && field.values.length > 0) {
++    const ai = field.values.indexOf(a);
++    const bi = field.values.indexOf(b);
++    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
++  }
++  return a.localeCompare(b);
++}
++
++function defaultKanbanField(schema: IssueSchema): string | null {
++  const enumFields = schema.fields.filter((f) => f.type === 'enum');
++  return (enumFields.find((f) => f.kanban_group) ?? enumFields[0])?.key ?? null;
 +}
 +
 +function loadViewMode(roomId: string, schema: IssueSchema | null): ViewMode {
@@ -156,14 +196,17 @@ index 00000000..ae0291b6
 +    if (stored === 'list') return { type: 'list' };
 +    if (stored?.startsWith('kanban:')) {
 +      const fieldKey = stored.slice(7);
-+      if (schema?.fields.some((f) => f.key === fieldKey && f.kanban_group)) {
-+        return { type: 'kanban', fieldKey };
-+      }
++      const enumFields = schema?.fields.filter((f) => f.type === 'enum') ?? [];
++      if (enumFields.some((f) => f.key === fieldKey)) return { type: 'kanban', fieldKey };
 +    }
 +  } catch {
 +    // ignore
 +  }
-+  return defaultViewMode(schema);
++  if (schema) {
++    const preferred = defaultKanbanField(schema);
++    if (preferred) return { type: 'kanban', fieldKey: preferred };
++  }
++  return { type: 'list' };
 +}
 +
 +function saveViewMode(roomId: string, mode: ViewMode) {
@@ -188,6 +231,16 @@ index 00000000..ae0291b6
 +  color: 'inherit',
 +  font: 'inherit',
 +  boxSizing: 'border-box',
++};
++
++const inlineSelectStyle: React.CSSProperties = {
++  padding: '2px ' + config.space.S200,
++  borderRadius: config.radii.R300,
++  border: '1px solid ' + color.Surface.ContainerLine,
++  background: color.Surface.Container,
++  color: 'inherit',
++  font: 'inherit',
++  fontSize: '0.85em',
 +};
 +
 +// ── User display helpers ───────────────────────────────────────────────────────
@@ -490,7 +543,7 @@ index 00000000..ae0291b6
 +                    <Box alignItems="Center" gap="100">
 +                      <input id={'sf-kanban-' + selected.key} type="checkbox" checked={!!selected.kanban_group}
 +                        onChange={(e) => updateField(selected.key, { kanban_group: e.target.checked ? true : undefined })} />
-+                      <label htmlFor={'sf-kanban-' + selected.key}><Text size="T200">Can be used as kanban grouping</Text></label>
++                      <label htmlFor={'sf-kanban-' + selected.key}><Text size="T200">Default kanban grouping field</Text></label>
 +                    </Box>
 +                  </Box>
 +                )}
@@ -503,21 +556,17 @@ index 00000000..ae0291b6
 +                </Box>
 +              </Box>
 +            ) : (
-+              <Box grow="Yes" alignItems="Center" justifyContent="Center" style={{ padding: config.space.S400 }}>
-+                <Text size="T300" priority="300">Select a field to edit, or add a new one.</Text>
++              <Box direction="Column" alignItems="Center" justifyContent="Center" grow="Yes" gap="200" style={{ padding: config.space.S400, opacity: 0.5 }}>
++                <Icon src={Icons.Plus} size="400" aria-hidden="true" />
++                <Text size="T300">Add a field or select one to edit</Text>
 +              </Box>
 +            )}
 +          </Box>
 +        </Box>
-+
-+        {error && (
-+          <Box style={{ padding: '0 ' + config.space.S400 + ' ' + config.space.S200 }}>
-+            <Text size="T300" style={{ color: color.Critical.Main }}>{error}</Text>
-+          </Box>
-+        )}
 +      </form>
 +
 +      <Box gap="200" style={{ padding: config.space.S300, borderTop: '1px solid ' + color.Surface.ContainerLine, justifyContent: 'flex-end' }}>
++        {error && <Text size="T300" style={{ color: color.Critical.Main, flexGrow: 1 }}>{error}</Text>}
 +        <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={onCancel}><Text>Cancel</Text></Button>
 +        <Button type="submit" form="schema-editor-form" variant="Primary" size="300" aria-disabled={saving}>
 +          <Text>{saving ? 'Saving\u2026' : 'Save Schema'}</Text>
@@ -542,11 +591,11 @@ index 00000000..ae0291b6
 +
 +function IssueForm({ schema, initial, room, issueId, onSave, onCancel, canDelete, onDelete }: IssueFormProps) {
 +  const titleId = 'issue-form-title';
-+  const [values, setValues] = useState<IssueContent>(initial ?? {});
++  const [values, setValues] = useState<IssueContent>(() => ({ ...initial }));
 +  const [saving, setSaving] = useState(false);
 +  const [error, setError] = useState<string | null>(null);
 +
-+  const set = (key: string, value: string) => setValues((prev) => ({ ...prev, [key]: value }));
++  const set = (key: string, value: unknown) => setValues((v) => ({ ...v, [key]: value }));
 +
 +  const handleSubmit = async (e: React.FormEvent) => {
 +    e.preventDefault();
@@ -563,38 +612,30 @@ index 00000000..ae0291b6
 +  const handleDelete = async () => {
 +    if (!onDelete) return;
 +    setSaving(true);
-+    try {
-+      await onDelete();
-+    } catch (err) {
-+      setError(err instanceof Error ? err.message : 'Failed to delete');
-+      setSaving(false);
-+    }
++    try { await onDelete(); } catch { setSaving(false); }
 +  };
 +
 +  return (
-+    <Dialog variant="Surface" style={{ width: '90vw', maxWidth: '540px' }}>
++    <Dialog variant="Surface" style={{ width: '90vw', maxWidth: '520px' }}>
 +      <Header style={{ padding: '0 ' + config.space.S200 + ' 0 ' + config.space.S400, borderBottomWidth: config.borderWidth.B300 }} variant="Surface" size="500">
-+        <Box grow="Yes"><Text id={titleId} size="H4">{initial ? 'Edit Issue' : 'New Issue'}</Text></Box>
-+        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close dialog"><Icon src={Icons.Cross} /></IconButton>
++        <Box grow="Yes"><Text id={titleId} size="H4">{issueId ? 'Edit Issue' : 'New Issue'}</Text></Box>
++        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close"><Icon src={Icons.Cross} /></IconButton>
 +      </Header>
 +
-+      <Scroll>
-+        <form id="issue-form" onSubmit={handleSubmit} role="dialog" aria-labelledby={titleId} aria-modal="true">
++      <Scroll style={{ maxHeight: '70vh' }}>
++        <form id="issue-form" onSubmit={handleSubmit}>
 +          <Box direction="Column" gap="300" style={{ padding: config.space.S400 }}>
 +            {schema.fields.map((field) => (
 +              <Box key={field.key} direction="Column" gap="100">
 +                <label htmlFor={'issue-field-' + field.key}>
-+                  <Text size="T300">
-+                    {field.label}
-+                    {field.required && <span aria-hidden="true"> *</span>}
-+                    {field.required && <span className="sr-only"> (required)</span>}
-+                  </Text>
++                  <Text size="T200">{field.label}{field.required && ' *'}</Text>
 +                </label>
-+                {field.type === 'enum' && field.values ? (
-+                  <select id={'issue-field-' + field.key} value={(values[field.key] as string) ?? ''}
++                {field.type === 'enum' ? (
++                  <select id={'issue-field-' + field.key}
++                    value={(values[field.key] as string) ?? ''}
 +                    onChange={(e) => set(field.key, e.target.value)} required={field.required} style={inputStyle}>
 +                    <option value="">&mdash; Select &mdash;</option>
-+                    {field.values.map((v) => <option key={v} value={v}>{v}</option>)}
++                    {field.values?.map((v) => <option key={v} value={v}>{v}</option>)}
 +                  </select>
 +                ) : field.type === 'user' ? (
 +                  <UserPicker room={room} id={'issue-field-' + field.key}
@@ -634,10 +675,10 @@ index 00000000..ae0291b6
 +
 +// ── IssueCard (kanban) ─────────────────────────────────────────────────────────
 +
-+function IssueCard({ event, schema, room, kanbanFieldKey, canWrite, onClick }: {
-+  event: MatrixEvent; schema: IssueSchema; room: Room; kanbanFieldKey: string; canWrite: boolean; onClick: () => void;
++function IssueCard({ entry, schema, room, kanbanFieldKey, canWrite, onClick }: {
++  entry: IssueEntry; schema: IssueSchema; room: Room; kanbanFieldKey: string; canWrite: boolean; onClick: () => void;
 +}) {
-+  const content = event.getContent() as IssueContent;
++  const { content, redacted } = entry;
 +  const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
 +  const title = titleField ? ((content[titleField.key] as string) ?? '(untitled)') : '(untitled)';
 +  const secondaryFields = schema.fields.filter((f) => f.key !== titleField?.key && f.key !== kanbanFieldKey && content[f.key]);
@@ -645,10 +686,14 @@ index 00000000..ae0291b6
 +  return (
 +    <button type="button" onClick={canWrite ? onClick : undefined}
 +      aria-label={canWrite ? title + ' \u2014 click to edit' : title} disabled={!canWrite}
-+      style={{ padding: config.space.S200, background: color.Surface.Container, border: '1px solid ' + color.Surface.ContainerLine,
++      style={{ padding: config.space.S200, background: color.Surface.Container,
++        border: '1px solid ' + (redacted ? color.Warning.Main : color.Surface.ContainerLine),
 +        borderRadius: config.radii.R300, textAlign: 'left', cursor: canWrite ? 'pointer' : 'default',
 +        width: '100%', display: 'flex', flexDirection: 'column', gap: config.space.S100 }}>
-+      <Text size="T300" truncate>{title}</Text>
++      <Box alignItems="Center" gap="100" style={{ justifyContent: 'space-between' }}>
++        <Text size="T300" truncate>{title}</Text>
++        {redacted && <Text size="T200" style={{ color: color.Warning.Main, flexShrink: 0 }} title="Current state redacted">\u26A0\uFE0F</Text>}
++      </Box>
 +      {secondaryFields.map((f) => (
 +        <Box key={f.key} gap="100" alignItems="Center">
 +          <Text size="T200" priority="300">{f.label}:</Text>
@@ -661,19 +706,23 @@ index 00000000..ae0291b6
 +
 +// ── IssueListItem (list view) ─────────────────────────────────────────────────
 +
-+function IssueListItem({ event, schema, room, canWrite, onEdit }: {
-+  event: MatrixEvent; schema: IssueSchema; room: Room; canWrite: boolean; onEdit: () => void;
++function IssueListItem({ entry, schema, room, canWrite, onEdit }: {
++  entry: IssueEntry; schema: IssueSchema; room: Room; canWrite: boolean; onEdit: () => void;
 +}) {
-+  const content = event.getContent() as IssueContent;
++  const { content, redacted } = entry;
 +  const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
 +  const title = titleField ? ((content[titleField.key] as string) ?? '(untitled)') : '(untitled)';
 +  const otherFields = schema.fields.filter((f) => f !== titleField);
 +
 +  return (
 +    <Box direction="Column" gap="200"
-+      style={{ border: '1px solid ' + color.Surface.ContainerLine, borderRadius: config.radii.R300, background: color.Surface.Container }}>
++      style={{ border: '1px solid ' + (redacted ? color.Warning.Main : color.Surface.ContainerLine),
++        borderRadius: config.radii.R300, background: color.Surface.Container }}>
 +      <Box alignItems="Center" gap="200" style={{ justifyContent: 'space-between', padding: config.space.S300 + ' ' + config.space.S300 + ' 0' }}>
-+        <Text size="T300" as="h3" style={{ margin: 0, fontWeight: 'bold' }}>{title}</Text>
++        <Box alignItems="Center" gap="100">
++          {redacted && <Text size="T200" style={{ color: color.Warning.Main }} title="Current state redacted — showing last known version">\u26A0\uFE0F</Text>}
++          <Text size="T300" as="h3" style={{ margin: 0, fontWeight: 'bold' }}>{title}</Text>
++        </Box>
 +        {canWrite && (
 +          <Button size="300" variant="Secondary" fill="Soft" onClick={onEdit} aria-label={'Edit issue: ' + title}>
 +            <Icon src={Icons.Pencil} size="100" aria-hidden="true" /><Text>Edit</Text>
@@ -690,7 +739,7 @@ index 00000000..ae0291b6
 +          ))}
 +        </Box>
 +      )}
-+      <IssueActivity room={room} issueId={event.getStateKey()!} />
++      <IssueActivity room={room} issueId={entry.event.getStateKey()!} />
 +    </Box>
 +  );
 +}
@@ -723,20 +772,26 @@ index 00000000..ae0291b6
 +  const issues = useMemo(() => getIssues(room), [room, tick]);
 +
 +  const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewMode(room.roomId, getIssueSchema(room)));
-+
 +  const switchView = (mode: ViewMode) => { setViewMode(mode); saveViewMode(room.roomId, mode); };
 +
++  // List sort/filter state
++  const [sortField, setSortField] = useState<string | null>(null);
++  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
++  const [filterField, setFilterField] = useState<string | null>(null);
++  const [filterValue, setFilterValue] = useState('');
++
 +  const editTriggerRef = useRef<HTMLButtonElement>(null);
-+  const [editing, setEditing] = useState<MatrixEvent | 'new' | null>(null);
++  const [editing, setEditing] = useState<IssueEntry | 'new' | null>(null);
 +  const [editingSchema, setEditingSchema] = useState(false);
 +  const closeEdit = () => { setEditing(null); setTimeout(() => editTriggerRef.current?.focus(), 50); };
 +
 +  const handleSaveIssue = useCallback(async (content: IssueContent) => {
-+    const isNew = !(editing instanceof MatrixEvent);
-+    const stateKey = !isNew ? editing.getStateKey()! : generateId();
++    const isNew = editing === 'new';
++    const entry = editing !== 'new' && editing !== null ? editing : null;
++    const stateKey = entry ? entry.event.getStateKey()! : generateId();
 +    await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, content, stateKey);
 +    try {
-+      const oldContent = !isNew ? (editing.getContent() as IssueContent) : undefined;
++      const oldContent = entry ? entry.content : undefined;
 +      const body = schema ? formatIssueDiff(schema, oldContent, content) : 'Issue updated';
 +      await mx.sendEvent(room.roomId, 'm.room.message' as any, { msgtype: 'm.notice', body, 'eu.kiefte.issue_id': stateKey });
 +    } catch { /* non-critical */ }
@@ -745,9 +800,9 @@ index 00000000..ae0291b6
 +  }, [mx, room.roomId, editing, schema]);
 +
 +  const handleDeleteIssue = useCallback(async () => {
-+    if (!(editing instanceof MatrixEvent)) return;
-+    const stateKey = editing.getStateKey()!;
-+    const current = editing.getContent() as IssueContent;
++    if (editing === null || editing === 'new') return;
++    const stateKey = editing.event.getStateKey()!;
++    const current = editing.content;
 +    await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, { ...current, _deleted: true }, stateKey);
 +    try {
 +      const titleField = schema?.fields.find((f) => f.key === 'title') ?? schema?.fields[0];
@@ -780,28 +835,53 @@ index 00000000..ae0291b6
 +    );
 +  }
 +
-+  const kanbanFields = schema.fields.filter((f) => f.kanban_group && f.type === 'enum');
++  // All enum fields can be used as kanban grouping; kanban_group marks the preferred default.
++  const enumFields = schema.fields.filter((f) => f.type === 'enum');
 +
 +  const effectiveViewMode: ViewMode = (() => {
 +    if (viewMode.type === 'list') return viewMode;
-+    if (schema.fields.some((f) => f.key === viewMode.fieldKey && f.kanban_group)) return viewMode;
-+    return kanbanFields.length > 0 ? { type: 'kanban', fieldKey: kanbanFields[0].key } : { type: 'list' };
++    if (enumFields.some((f) => f.key === viewMode.fieldKey)) return viewMode;
++    const preferred = enumFields.find((f) => f.kanban_group) ?? enumFields[0];
++    return preferred ? { type: 'kanban', fieldKey: preferred.key } : { type: 'list' };
 +  })();
 +
-+  const initialContent = editing instanceof MatrixEvent ? (editing.getContent() as IssueContent) : undefined;
++  // Sorted + filtered issue list for list view
++  const filterFieldDef = schema.fields.find((f) => f.key === filterField);
++  const displayedIssues = useMemo(() => {
++    let list = [...issues];
++    if (filterField && filterValue) {
++      list = list.filter((entry) => {
++        const val = String(entry.content[filterField] ?? '');
++        return val.toLowerCase().includes(filterValue.toLowerCase());
++      });
++    }
++    if (sortField) {
++      const field = schema.fields.find((f) => f.key === sortField);
++      list.sort((a, b) => {
++        const av = String(a.content[sortField] ?? '');
++        const bv = String(b.content[sortField] ?? '');
++        const cmp = field ? compareFieldValues(av, bv, field) : av.localeCompare(bv);
++        return sortDir === 'asc' ? cmp : -cmp;
++      });
++    }
++    return list;
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [issues, filterField, filterValue, sortField, sortDir]);
++
++  const initialContent = editing !== null && editing !== 'new' ? editing.content : undefined;
 +
 +  const renderKanban = (kanbanFieldKey: string) => {
 +    const kanbanField = schema.fields.find((f) => f.key === kanbanFieldKey);
 +    if (!kanbanField) return null;
-+    interface Column { key: string; label: string; issues: MatrixEvent[]; }
++    interface Column { key: string; label: string; entries: IssueEntry[]; }
 +    const columns: Column[] = [
 +      ...(kanbanField.values ?? []).map((value) => ({
 +        key: value, label: value,
-+        issues: issues.filter((e) => (e.getContent() as IssueContent)[kanbanField.key] === value),
++        entries: issues.filter((entry) => entry.content[kanbanField.key] === value),
 +      })),
 +      { key: '__uncategorized__', label: 'Uncategorized',
-+        issues: issues.filter((e) => !kanbanField.values?.includes((e.getContent() as IssueContent)[kanbanField.key] as string)) },
-+    ].filter((col) => col.issues.length > 0 || kanbanField.values?.includes(col.key));
++        entries: issues.filter((entry) => !kanbanField.values?.includes(entry.content[kanbanField.key] as string)) },
++    ].filter((col) => col.entries.length > 0 || kanbanField.values?.includes(col.key));
 +
 +    return (
 +      <div style={{ flexGrow: 1, overflow: 'auto' }} role="region" aria-label="Issue board">
@@ -814,15 +894,15 @@ index 00000000..ae0291b6
 +                  borderRadius: config.radii.R300, padding: config.space.S300, display: 'flex', flexDirection: 'column', gap: config.space.S200 }}>
 +                <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
 +                  <Text id={colHeadingId} as="h3" size="H6">{col.label.replace(/_/g, ' ')}</Text>
-+                  <Text size="T200" priority="300" aria-label={col.issues.length + ' issues'}>{col.issues.length}</Text>
++                  <Text size="T200" priority="300" aria-label={col.entries.length + ' issues'}>{col.entries.length}</Text>
 +                </Box>
 +                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: config.space.S200 }}>
-+                  {col.issues.map((evt) => (
-+                    <li key={evt.getStateKey()}>
-+                      <IssueCard event={evt} schema={schema} room={room} kanbanFieldKey={kanbanFieldKey} canWrite={canWriteIssues} onClick={() => setEditing(evt)} />
++                  {col.entries.map((entry) => (
++                    <li key={entry.event.getStateKey()}>
++                      <IssueCard entry={entry} schema={schema} room={room} kanbanFieldKey={kanbanFieldKey} canWrite={canWriteIssues} onClick={() => setEditing(entry)} />
 +                    </li>
 +                  ))}
-+                  {col.issues.length === 0 && (
++                  {col.entries.length === 0 && (
 +                    <li aria-live="polite">
 +                      <Text size="T200" priority="300" style={{ textAlign: 'center', padding: config.space.S200 }}>No issues</Text>
 +                    </li>
@@ -839,32 +919,38 @@ index 00000000..ae0291b6
 +  const renderList = () => (
 +    <Scroll style={{ flexGrow: 1 }}>
 +      <Box direction="Column" gap="300" style={{ padding: config.space.S300 }} role="list" aria-label="Issues">
-+        {issues.length === 0 && (
-+          <Text size="T300" priority="300" style={{ textAlign: 'center', padding: config.space.S400 }}>No issues yet.</Text>
++        {displayedIssues.length === 0 && (
++          <Text size="T300" priority="300" style={{ textAlign: 'center', padding: config.space.S400 }}>
++            {issues.length === 0 ? 'No issues yet.' : 'No issues match the current filter.'}
++          </Text>
 +        )}
-+        {issues.map((evt) => (
-+          <Box key={evt.getStateKey()} role="listitem">
-+            <IssueListItem event={evt} schema={schema} room={room} canWrite={canWriteIssues} onEdit={() => setEditing(evt)} />
++        {displayedIssues.map((entry) => (
++          <Box key={entry.event.getStateKey()} role="listitem">
++            <IssueListItem entry={entry} schema={schema} room={room} canWrite={canWriteIssues} onEdit={() => setEditing(entry)} />
 +          </Box>
 +        ))}
 +      </Box>
 +    </Scroll>
 +  );
 +
++  const preferredKanbanField = enumFields.find((f) => f.kanban_group) ?? enumFields[0];
++
 +  return (
 +    <Box grow="Yes" direction="Column" style={{ overflow: 'hidden' }}>
++      {/* Main toolbar */}
 +      <Box shrink="No" alignItems="Center" gap="200" role="toolbar" aria-label="Issue tracker controls"
 +        style={{ padding: config.space.S200 + ' ' + config.space.S400, borderBottom: '1px solid ' + color.Surface.ContainerLine, flexWrap: 'wrap' }}>
 +        <Text size="T300" style={{ flexGrow: 1 }} aria-live="polite">{issues.length} {issues.length === 1 ? 'issue' : 'issues'}</Text>
 +        <Box gap="100" alignItems="Center">
-+          {kanbanFields.map((field) => (
-+            <Button key={field.key} size="300" variant="Secondary"
-+              fill={effectiveViewMode.type === 'kanban' && effectiveViewMode.fieldKey === field.key ? 'Solid' : 'Soft'}
-+              onClick={() => switchView({ type: 'kanban', fieldKey: field.key })}
-+              aria-pressed={effectiveViewMode.type === 'kanban' && effectiveViewMode.fieldKey === field.key}>
-+              <Text>{kanbanFields.length === 1 ? 'Kanban' : 'By ' + field.label}</Text>
++          {/* Kanban button — uses preferred field; when in kanban, group-by selector shown below */}
++          {enumFields.length > 0 && (
++            <Button size="300" variant="Secondary"
++              fill={effectiveViewMode.type === 'kanban' ? 'Solid' : 'Soft'}
++              onClick={() => { if (preferredKanbanField) switchView({ type: 'kanban', fieldKey: preferredKanbanField.key }); }}
++              aria-pressed={effectiveViewMode.type === 'kanban'}>
++              <Text>Kanban</Text>
 +            </Button>
-+          ))}
++          )}
 +          <Button size="300" variant="Secondary" fill={effectiveViewMode.type === 'list' ? 'Solid' : 'Soft'}
 +            onClick={() => switchView({ type: 'list' })} aria-pressed={effectiveViewMode.type === 'list'}>
 +            <Text>List</Text>
@@ -882,6 +968,77 @@ index 00000000..ae0291b6
 +        )}
 +      </Box>
 +
++      {/* Secondary toolbar: kanban group-by selector (when in kanban with multiple enum fields) */}
++      {effectiveViewMode.type === 'kanban' && enumFields.length > 1 && (
++        <Box shrink="No" alignItems="Center" gap="200"
++          style={{ padding: config.space.S100 + ' ' + config.space.S400, borderBottom: '1px solid ' + color.Surface.ContainerLine, background: color.SurfaceVariant.Container }}>
++          <Text size="T200">Group by:</Text>
++          <select
++            value={effectiveViewMode.fieldKey}
++            onChange={(e) => switchView({ type: 'kanban', fieldKey: e.target.value })}
++            aria-label="Kanban grouping field"
++            style={inlineSelectStyle}>
++            {enumFields.map((f) => (
++              <option key={f.key} value={f.key}>{f.label}</option>
++            ))}
++          </select>
++        </Box>
++      )}
++
++      {/* Secondary toolbar: sort + filter (when in list view) */}
++      {effectiveViewMode.type === 'list' && (
++        <Box shrink="No" alignItems="Center" gap="300" style={{ flexWrap: 'wrap',
++          padding: config.space.S100 + ' ' + config.space.S400, borderBottom: '1px solid ' + color.Surface.ContainerLine, background: color.SurfaceVariant.Container }}>
++          {/* Sort */}
++          <Box alignItems="Center" gap="100">
++            <Text size="T200">Sort:</Text>
++            <select value={sortField ?? ''} onChange={(e) => setSortField(e.target.value || null)}
++              aria-label="Sort by field" style={inlineSelectStyle}>
++              <option value="">Default</option>
++              {schema.fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
++            </select>
++            {sortField && (
++              <button type="button"
++                onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
++                aria-label={sortDir === 'asc' ? 'Ascending, click to reverse' : 'Descending, click to reverse'}
++                style={{ background: 'transparent', border: '1px solid ' + color.Surface.ContainerLine,
++                  borderRadius: config.radii.R300, cursor: 'pointer', padding: '2px 8px',
++                  font: 'inherit', fontSize: '0.85em', color: 'inherit' }}>
++                {sortDir === 'asc' ? '\u2191 Asc' : '\u2193 Desc'}
++              </button>
++            )}
++          </Box>
++          {/* Filter */}
++          <Box alignItems="Center" gap="100">
++            <Text size="T200">Filter:</Text>
++            <select value={filterField ?? ''} onChange={(e) => { setFilterField(e.target.value || null); setFilterValue(''); }}
++              aria-label="Filter by field" style={inlineSelectStyle}>
++              <option value="">None</option>
++              {schema.fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
++            </select>
++            {filterField && filterFieldDef?.type === 'enum' ? (
++              <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
++                aria-label={'Filter value for ' + filterFieldDef.label} style={inlineSelectStyle}>
++                <option value="">Any</option>
++                {filterFieldDef.values?.map((v) => <option key={v} value={v}>{v}</option>)}
++              </select>
++            ) : filterField ? (
++              <input type="text" value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
++                aria-label={'Filter value'} placeholder="Filter\u2026"
++                style={{ ...inlineSelectStyle, width: '120px' }} />
++            ) : null}
++            {filterField && filterValue && (
++              <button type="button" onClick={() => { setFilterField(null); setFilterValue(''); }}
++                aria-label="Clear filter"
++                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 4px',
++                  font: 'inherit', color: 'inherit', opacity: 0.7 }}>
++                \u00D7
++              </button>
++            )}
++          </Box>
++        </Box>
++      )}
++
 +      {effectiveViewMode.type === 'kanban' ? renderKanban(effectiveViewMode.fieldKey) : renderList()}
 +
 +      <Overlay open={editing !== null} backdrop={<OverlayBackdrop />}>
@@ -889,10 +1046,10 @@ index 00000000..ae0291b6
 +          <FocusTrap focusTrapOptions={{ initialFocus: false, clickOutsideDeactivates: true, onDeactivate: closeEdit, escapeDeactivates: stopPropagation }}>
 +            {schema && editing !== null && (
 +              <IssueForm schema={schema} initial={initialContent} room={room}
-+                issueId={editing instanceof MatrixEvent ? editing.getStateKey()! : undefined}
++                issueId={editing !== 'new' ? editing.event.getStateKey()! : undefined}
 +                onSave={handleSaveIssue} onCancel={closeEdit}
-+                canDelete={editing instanceof MatrixEvent && canWriteIssues}
-+                onDelete={editing instanceof MatrixEvent ? handleDeleteIssue : undefined} />
++                canDelete={editing !== 'new' && canWriteIssues}
++                onDelete={editing !== 'new' ? handleDeleteIssue : undefined} />
 +            )}
 +          </FocusTrap>
 +        </OverlayCenter>
@@ -911,7 +1068,7 @@ index 00000000..ae0291b6
 +  );
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index 01e6e6a4..cb5427a6 100644
+index 01e6e6a4..37c6be1e 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -48,6 +48,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
@@ -936,7 +1093,7 @@ index 01e6e6a4..cb5427a6 100644
 +                    >
 +                      <SettingTile
 +                        title="Issue Tracker"
-+                        description="Enable per-room issue tracker (experimental). Adds an 'Initialize Issue Tracker' option to room menus for admins."
++                        description="Enable per-room issue tracker (experimental)."
 +                        after={
 +                          <Switch
 +                            variant="Primary"
