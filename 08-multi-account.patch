@@ -265,7 +265,7 @@ index a9c34ce9..b2c674fb 100644
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..09f22342 100644
+index 498d4f75..b849bff2 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,36 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -307,7 +307,19 @@ index 498d4f75..09f22342 100644
  
    const mx = createClient({
      baseUrl: session.baseUrl,
-@@ -62,8 +76,14 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -33,7 +47,10 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
+   });
+ 
+   await indexedDBStore.startup();
+-  await mx.initRustCrypto();
++  const cryptoArgs = session.fallbackSdkStores
++    ? undefined
++    : { cryptoDatabasePrefix: session.userId };
++  await mx.initRustCrypto(cryptoArgs);
+ 
+   mx.setMaxListeners(50);
+ 
+@@ -62,8 +79,14 @@ export const logoutClient = async (mx: MatrixClient) => {
      // ignore if failed to logout
    }
    await mx.clearStores();

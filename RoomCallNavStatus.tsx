@@ -32,6 +32,9 @@ import * as css from './RoomCallNavStatus.css';
 // Module-level: persists across tab switches (Direct/Home/Space each mount their own CallNavStatus).
 // Stores rooms where the ring timed out so we don't re-ring on remount.
 const timedOutCalls = new Set<string>();
+// Rooms the user explicitly hung up or dismissed — SessionStarted won't clear these,
+// so the call can't re-ring until it truly ends (SessionEnded) and restarts.
+const hungUpCalls = new Set<string>();
 
 const RING_TIMEOUT_MS = 30_000;
 
@@ -222,15 +225,21 @@ export function CallNavStatus() {
     }
 
     const handleSessionStarted = (roomId: string, session: MatrixRTCSession) => {
-      // New session means a fresh call — clear any previous timeout/dismiss state
-      timedOutCalls.delete(roomId);
-      dismissedRef.current.delete(roomId);
+      // New session means a fresh call — clear timeout/dismiss state, UNLESS the user
+      // explicitly hung up or dismissed this room (hungUpCalls). In that case, keep
+      // suppressing the ring until SessionEnded confirms the call truly ended.
+      if (!hungUpCalls.has(roomId)) {
+        timedOutCalls.delete(roomId);
+        dismissedRef.current.delete(roomId);
+      }
       clearCallTimeout(roomId);
       addCall(roomId, session);
     };
 
     const handleSessionEnded = (roomId: string) => {
+      // Session truly ended — clear all state including explicit hang-up, allow re-ring next time.
       timedOutCalls.delete(roomId);
+      hungUpCalls.delete(roomId);
       dismissedRef.current.delete(roomId);
       clearCallTimeout(roomId);
       setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
@@ -259,6 +268,7 @@ export function CallNavStatus() {
     (roomId: string) => {
       clearCallTimeout(roomId);
       timedOutCalls.add(roomId);
+      hungUpCalls.add(roomId);
       dismissedRef.current.add(roomId);
       setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
     },
@@ -439,6 +449,7 @@ export function CallNavStatus() {
               onClick={() => {
                 if (activeCallRoomId) {
                   timedOutCalls.add(activeCallRoomId);
+                  hungUpCalls.add(activeCallRoomId);
                   dismissedRef.current.add(activeCallRoomId);
                 }
                 hangUp();
