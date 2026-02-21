@@ -43,6 +43,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "06-accessibility.patch"
         "07-issue-tracker.patch"
         "08-multi-account.patch"
+        "09-verification-signal.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -79,6 +80,7 @@ sha256sums=('SKIP'
             'ac0ea5face8de6bceacbdd9e2bfc4aeed6290ddb5d137e864f21169d809682bd'
             'ad09310dd77da39d5cdc68ac0d348ab8d102fd9ffe722d410e25694756ccc150'
             '820b44f6303bd6a6bf4498fecc27ff4870184b248bd66ffa711bb95581b1a337'
+            'a3b6621014eb70dd723ea3d12b515ed44b8540ca48b3f0a2a9ef4af470eabd00'
             )
 
 prepare() {
@@ -143,6 +145,9 @@ prepare() {
 
   echo "Applying multi-account support patch..."
   patch -p1 -i "$srcdir/08-multi-account.patch"
+
+  echo "Applying verification signal fix patch..."
+  patch -p1 -i "$srcdir/09-verification-signal.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
