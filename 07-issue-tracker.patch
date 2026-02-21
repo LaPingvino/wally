@@ -1,9 +1,9 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 00000000..ca13d504
+index 00000000..4a1a5343
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,1063 @@
+@@ -0,0 +1,1155 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixEvent, Room } from 'matrix-js-sdk';
@@ -37,7 +37,7 @@ index 00000000..ca13d504
 +
 +// ── Types ─────────────────────────────────────────────────────────────────────
 +
-+type FieldType = 'text' | 'enum' | 'user' | 'date';
++type FieldType = 'text' | 'enum' | 'user' | 'date' | 'follow';
 +
 +export interface SchemaField {
 +  key: string;
@@ -380,7 +380,8 @@ index 00000000..ca13d504
 +  );
 +}
 +
-+function IssueActivity({ room, issueId }: { room: Room; issueId: string }) {
++function IssueActivity({ room, issueId, defaultFolded }: { room: Room; issueId: string; defaultFolded?: boolean }) {
++  const [folded, setFolded] = useState(defaultFolded ?? false);
 +  const [allEvents, setAllEvents] = useState<MatrixEvent[]>(() =>
 +    room.getUnfilteredTimelineSet().getLiveTimeline().getEvents()
 +  );
@@ -399,8 +400,57 @@ index 00000000..ca13d504
 +  if (activityEvents.length === 0) return null;
 +  return (
 +    <Box direction="Column" gap="200" style={{ padding: config.space.S300 + ' ' + config.space.S400, borderTop: '1px solid ' + color.Surface.ContainerLine }}>
-+      <Text size="L400">Activity</Text>
-+      {activityEvents.map((evt) => (
++      <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
++        <Text size="L400">Activity ({activityEvents.length})</Text>
++        <button type="button" onClick={() => setFolded((f) => !f)} aria-expanded={!folded}
++          aria-label={folded ? 'Expand activity' : 'Collapse activity'}
++          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 4px', font: 'inherit', color: 'inherit', opacity: 0.7 }}>
++          {folded ? '\u25B6' : '\u25BC'}
++        </button>
++      </Box>
++      {!folded && activityEvents.map((evt) => (
++        <IssueActivityRow key={evt.getId()} event={evt} allEvents={allEvents} room={room} />
++      ))}
++    </Box>
++  );
++}
++
++function FollowActivity({ room, patterns, label }: { room: Room; patterns: string[]; label: string }) {
++  const [folded, setFolded] = useState(true);
++  const [allEvents, setAllEvents] = useState<MatrixEvent[]>(() =>
++    room.getUnfilteredTimelineSet().getLiveTimeline().getEvents()
++  );
++  useEffect(() => {
++    const refresh = () => setAllEvents([...room.getUnfilteredTimelineSet().getLiveTimeline().getEvents()]);
++    room.on('Room.timeline' as any, refresh);
++    room.on('Room.redaction' as any, refresh);
++    return () => { room.off('Room.timeline' as any, refresh); room.off('Room.redaction' as any, refresh); };
++  }, [room]);
++
++  const matchingEvents = useMemo(() => {
++    if (patterns.length === 0) return [];
++    const lower = patterns.map((p) => p.toLowerCase());
++    return allEvents.filter((e) => {
++      if (e.getType() !== 'm.room.message' || e.isRedacted()) return false;
++      const content = e.getContent() as Record<string, unknown>;
++      if (content['eu.kiefte.issue_id']) return false;
++      const body = String(content.body ?? '').toLowerCase();
++      return lower.some((p) => body.includes(p));
++    });
++  }, [allEvents, patterns]);
++
++  if (matchingEvents.length === 0) return null;
++  return (
++    <Box direction="Column" gap="200" style={{ padding: config.space.S300 + ' ' + config.space.S400, borderTop: '1px solid ' + color.Surface.ContainerLine }}>
++      <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
++        <Text size="L400">{label}: {matchingEvents.length} match{matchingEvents.length !== 1 ? 'es' : ''}</Text>
++        <button type="button" onClick={() => setFolded((f) => !f)} aria-expanded={!folded}
++          aria-label={folded ? 'Expand matches' : 'Collapse matches'}
++          style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 4px', font: 'inherit', color: 'inherit', opacity: 0.7 }}>
++          {folded ? '\u25B6' : '\u25BC'}
++        </button>
++      </Box>
++      {!folded && matchingEvents.map((evt) => (
 +        <IssueActivityRow key={evt.getId()} event={evt} allEvents={allEvents} room={room} />
 +      ))}
 +    </Box>
@@ -424,7 +474,7 @@ index 00000000..ca13d504
 +  return field;
 +}
 +
-+const TYPE_LABELS: Record<FieldType, string> = { text: 'Text', enum: 'Choice', user: 'User', date: 'Date' };
++const TYPE_LABELS: Record<FieldType, string> = { text: 'Text', enum: 'Choice', user: 'User', date: 'Date', follow: 'Follow' };
 +
 +export interface SchemaEditorProps {
 +  initial: IssueSchema;
@@ -524,6 +574,7 @@ index 00000000..ca13d504
 +                      <option value="enum">Choice</option>
 +                      <option value="user">User</option>
 +                      <option value="date">Date</option>
++                      <option value="follow">Follow</option>
 +                    </select>
 +                  </Box>
 +                </Box>
@@ -533,6 +584,13 @@ index 00000000..ca13d504
 +                    onChange={(e) => updateField(selected.key, { required: e.target.checked || undefined })} />
 +                  <label htmlFor={'sf-req-' + selected.key}><Text size="T200">Required</Text></label>
 +                </Box>
++
++                {selected.type === 'follow' && (
++                  <Box direction="Column" gap="100">
++                    <Text size="T200">Follow fields watch room messages for keywords (entered per issue) and list matches inline alongside Activity.</Text>
++                    <Text size="T200" priority="300">Users enter comma-separated keywords in each issue&apos;s field value.</Text>
++                  </Box>
++                )}
 +
 +                {selected.type === 'enum' && (
 +                  <Box direction="Column" gap="100">
@@ -645,6 +703,11 @@ index 00000000..ca13d504
 +                  <input id={'issue-field-' + field.key} type="date"
 +                    value={(values[field.key] as string) ?? ''}
 +                    onChange={(e) => set(field.key, e.target.value)} required={field.required} style={inputStyle} />
++                ) : field.type === 'follow' ? (
++                  <input id={'issue-field-' + field.key} type="text"
++                    value={(values[field.key] as string) ?? ''}
++                    onChange={(e) => set(field.key, e.target.value)} style={inputStyle}
++                    placeholder="Keywords to watch (comma-separated)" />
 +                ) : (
 +                  <input id={'issue-field-' + field.key} type="text"
 +                    value={(values[field.key] as string) ?? ''}
@@ -656,6 +719,10 @@ index 00000000..ca13d504
 +          </Box>
 +        </form>
 +        {issueId && <IssueActivity room={room} issueId={issueId} />}
++        {issueId && schema.fields.filter((f) => f.type === 'follow').map((f) => {
++          const pats = String(values[f.key] ?? '').split(',').map((p) => p.trim()).filter(Boolean);
++          return pats.length > 0 ? <FollowActivity key={f.key} label={f.label} room={room} patterns={pats} /> : null;
++        })}
 +      </Scroll>
 +
 +      <Box gap="200" style={{ padding: config.space.S300, borderTop: '1px solid ' + color.Surface.ContainerLine, justifyContent: 'flex-end' }}>
@@ -739,7 +806,11 @@ index 00000000..ca13d504
 +          ))}
 +        </Box>
 +      )}
-+      <IssueActivity room={room} issueId={entry.event.getStateKey()!} />
++      <IssueActivity room={room} issueId={entry.event.getStateKey()!} defaultFolded />
++      {schema.fields.filter((f) => f.type === 'follow').map((f) => {
++        const pats = String(content[f.key] ?? '').split(',').map((p) => p.trim()).filter(Boolean);
++        return pats.length > 0 ? <FollowActivity key={f.key} label={f.label} room={room} patterns={pats} /> : null;
++      })}
 +    </Box>
 +  );
 +}
@@ -779,6 +850,8 @@ index 00000000..ca13d504
 +  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 +  const [filterField, setFilterField] = useState<string | null>(null);
 +  const [filterValue, setFilterValue] = useState('');
++  const [filterDateFrom, setFilterDateFrom] = useState('');
++  const [filterDateTo, setFilterDateTo] = useState('');
 +
 +  const editTriggerRef = useRef<HTMLButtonElement>(null);
 +  const [editing, setEditing] = useState<IssueEntry | 'new' | null>(null);
@@ -849,7 +922,15 @@ index 00000000..ca13d504
 +  const filterFieldDef = schema.fields.find((f) => f.key === filterField);
 +  const displayedIssues = useMemo(() => {
 +    let list = [...issues];
-+    if (filterField && filterValue) {
++    if (filterField && filterFieldDef?.type === 'date' && (filterDateFrom || filterDateTo)) {
++      list = list.filter((entry) => {
++        const val = String(entry.content[filterField] ?? '');
++        if (!val) return !filterDateFrom;
++        if (filterDateFrom && val < filterDateFrom) return false;
++        if (filterDateTo && val > filterDateTo) return false;
++        return true;
++      });
++    } else if (filterField && filterValue) {
 +      list = list.filter((entry) => {
 +        const val = String(entry.content[filterField] ?? '');
 +        return val.toLowerCase().includes(filterValue.toLowerCase());
@@ -866,7 +947,7 @@ index 00000000..ca13d504
 +    }
 +    return list;
 +  // eslint-disable-next-line react-hooks/exhaustive-deps
-+  }, [issues, filterField, filterValue, sortField, sortDir]);
++  }, [issues, filterField, filterValue, filterDateFrom, filterDateTo, sortField, sortDir]);
 +
 +  const initialContent = editing !== null && editing !== 'new' ? editing.content : undefined;
 +
@@ -1011,12 +1092,23 @@ index 00000000..ca13d504
 +          {/* Filter */}
 +          <Box alignItems="Center" gap="100">
 +            <Text size="T200">Filter:</Text>
-+            <select value={filterField ?? ''} onChange={(e) => { setFilterField(e.target.value || null); setFilterValue(''); }}
++            <select value={filterField ?? ''} onChange={(e) => { setFilterField(e.target.value || null); setFilterValue(''); setFilterDateFrom(''); setFilterDateTo(''); }}
 +              aria-label="Filter by field" style={inlineSelectStyle}>
 +              <option value="">None</option>
 +              {schema.fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
 +            </select>
-+            {filterField && filterFieldDef?.type === 'enum' ? (
++            {filterField && filterFieldDef?.type === 'date' ? (
++              <Box alignItems="Center" gap="100">
++                <label htmlFor="filter-date-from"><Text size="T200">From:</Text></label>
++                <input id="filter-date-from" type="date" value={filterDateFrom}
++                  onChange={(e) => setFilterDateFrom(e.target.value)}
++                  aria-label="Filter from date" style={inlineSelectStyle} />
++                <label htmlFor="filter-date-to"><Text size="T200">To:</Text></label>
++                <input id="filter-date-to" type="date" value={filterDateTo}
++                  onChange={(e) => setFilterDateTo(e.target.value)}
++                  aria-label="Filter to date" style={inlineSelectStyle} />
++              </Box>
++            ) : filterField && filterFieldDef?.type === 'enum' ? (
 +              <select value={filterValue} onChange={(e) => setFilterValue(e.target.value)}
 +                aria-label={'Filter value for ' + filterFieldDef.label} style={inlineSelectStyle}>
 +                <option value="">Any</option>
@@ -1027,8 +1119,8 @@ index 00000000..ca13d504
 +                aria-label={'Filter value'} placeholder="Filter…"
 +                style={{ ...inlineSelectStyle, width: '120px' }} />
 +            ) : null}
-+            {filterField && filterValue && (
-+              <button type="button" onClick={() => { setFilterField(null); setFilterValue(''); }}
++            {filterField && (filterValue || filterDateFrom || filterDateTo) && (
++              <button type="button" onClick={() => { setFilterField(null); setFilterValue(''); setFilterDateFrom(''); setFilterDateTo(''); }}
 +                aria-label="Clear filter"
 +                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 4px',
 +                  font: 'inherit', color: 'inherit', opacity: 0.7 }}>
