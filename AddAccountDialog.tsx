@@ -32,6 +32,7 @@ type AddAccountDialogProps = {
 export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
   const clientConfig = useClientConfig();
   const defaultServer = clientDefaultServer(clientConfig);
+  const { hashRouter } = clientConfig;
   const [server, setServer] = useState(defaultServer);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -66,7 +67,12 @@ export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
         accessToken: response.access_token,
       };
       const slot = addSecondarySession(session);
-      window.location.assign(`/account/${slot}/`);
+      sessionStorage.setItem('cinny-account-slot', String(slot));
+      if (hashRouter?.enabled) {
+        window.location.reload();
+      } else {
+        window.location.assign(`/account/${slot}/`);
+      }
     }
   }, [loginState]);
 

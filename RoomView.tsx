@@ -162,6 +162,30 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           if (next && next !== active) {
             next.focus({ preventScroll: true });
             next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            // Announce message content for screen readers
+            const evtId = next.getAttribute('data-event-id');
+            if (evtId) {
+              const mxEvent = room.findEventById(evtId);
+              if (mxEvent) {
+                const sender = room.getMember(mxEvent.getSender() ?? '')?.name ?? mxEvent.getSender() ?? '';
+                const content = mxEvent.getContent() as Record<string, unknown>;
+                const body = (content.body as string | undefined) ?? '';
+                const replyRel = (content['m.relates_to'] as Record<string, unknown> | undefined)?.['m.in_reply_to'] as Record<string, unknown> | undefined;
+                const replyId = replyRel?.event_id as string | undefined;
+                const ts = mxEvent.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
+                const parts: string[] = [sender, body];
+                if (replyId) {
+                  const replyEvt = room.findEventById(replyId);
+                  if (replyEvt) {
+                    const replySender = room.getMember(replyEvt.getSender() ?? '')?.name ?? replyEvt.getSender() ?? '';
+                    const replyBody = (replyEvt.getContent().body as string | undefined) ?? '';
+                    if (replyBody) parts.push(`In reply to ${replySender}: ${replyBody.slice(0, 80)}`);
+                  }
+                }
+                if (ts) parts.push(ts);
+                announce(parts.filter(Boolean).join('. '));
+              }
+            }
           }
           return;
         }
@@ -176,7 +200,7 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
           });
         }
       },
-      [setSearchModal]
+      [setSearchModal, room]
     )
   );
 

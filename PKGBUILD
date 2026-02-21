@@ -43,7 +43,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "06-accessibility.patch"
         "07-issue-tracker.patch"
         "08-multi-account.patch"
-        "09-verification-signal.patch"
+        #"09-verification-signal.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -65,12 +65,12 @@ sha256sums=('SKIP'
             '1f8649e1ff1eedc4d7415e4800bade9d5014fbdf80aef80a22909f0abb7e67c1'
             'c61c12de95066abbc797465c243cab70a46156d7690de6a050d033683cf87f88'
             '3de49149b788cf8ff6433a413d8e5ba6995e2364db13fd3c2e02ae8da1307661'
-            'c53be6eed7150f17e28f17f032a32a2bad9b476e59bcfad4d1f5c3abb887e57c'
+            '7d9f9c69a9b67b9830c8560abfee42909bee1fe0f2a8b032c7667bbe5cef53d0'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
             'b6b545d5827fc5d0dcb3a125f1dd0594e8607826a8576ac0d873bc0953aff113'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
             '568b1fd4b37f0254503694e895ffebc7816aad522a6c0a30746e3c4303076f84'
-            '22d224655e92203ea620d43e684bbd7b6ed4c568ba24b8d3f062b50fefc03f09'
+            'f7f70ae5125509b7e7b7a7a4b644805fb261c5220ef67d898dc65786321c67df'
             # Patches
             '7360808ff556756fa2629017a3d0753fab676a1929094a25902e01e9b8fa5197'
             'c642865176cc7580d61dddfafce973b2b9f2ca47bf0121096d5bc68777c11855'
@@ -79,8 +79,8 @@ sha256sums=('SKIP'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
             'ac0ea5face8de6bceacbdd9e2bfc4aeed6290ddb5d137e864f21169d809682bd'
             'd0faa8346cfca40c65ed03013a4e2af597fe09fdba7de61da9f6e026b7fb14e9'
-            '820b44f6303bd6a6bf4498fecc27ff4870184b248bd66ffa711bb95581b1a337'
-            'a3b6621014eb70dd723ea3d12b515ed44b8540ca48b3f0a2a9ef4af470eabd00'
+            '88f2545921a33549673203c3a586fd0fd2da609851270b45493492828fe617b6'
+            # '09-verification-signal.patch' sha256 (disabled): a3b6621014eb70dd723ea3d12b515ed44b8540ca48b3f0a2a9ef4af470eabd00
             )
 
 prepare() {
@@ -146,8 +146,8 @@ prepare() {
   echo "Applying multi-account support patch..."
   patch -p1 -i "$srcdir/08-multi-account.patch"
 
-  echo "Applying verification signal fix patch..."
-  patch -p1 -i "$srcdir/09-verification-signal.patch"
+  #echo disabled
+  #patch disabled
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
