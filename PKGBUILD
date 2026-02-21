@@ -33,6 +33,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "RoomNavItem.tsx"
         "SmallWidgetDriver.ts"
         "RoomCallNavStatus.tsx"
+        "AddAccountDialog.tsx"
         # Patches on upstream cinny files (allows security fixes to flow through)
         "01-emoji-font.patch"
         "02-element-call.patch"
@@ -41,6 +42,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "05-login-accessibility.patch"
         "06-accessibility.patch"
         "07-issue-tracker.patch"
+        "08-multi-account.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -67,6 +69,7 @@ sha256sums=('SKIP'
             'b6b545d5827fc5d0dcb3a125f1dd0594e8607826a8576ac0d873bc0953aff113'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
             '521b980661ce402c10982d8658a18bdc2022e6926d8b391c342800e365e06132'
+            '22d224655e92203ea620d43e684bbd7b6ed4c568ba24b8d3f062b50fefc03f09'
             # Patches
             '7360808ff556756fa2629017a3d0753fab676a1929094a25902e01e9b8fa5197'
             'c642865176cc7580d61dddfafce973b2b9f2ca47bf0121096d5bc68777c11855'
@@ -75,6 +78,7 @@ sha256sums=('SKIP'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
             'ac0ea5face8de6bceacbdd9e2bfc4aeed6290ddb5d137e864f21169d809682bd'
             'ad09310dd77da39d5cdc68ac0d348ab8d102fd9ffe722d410e25694756ccc150'
+            '86fca2b5291c5b0c6ee7f9ab3cf61dad9cde4ed3f4c731402675f3d6eafedef2'
             )
 
 prepare() {
@@ -113,6 +117,7 @@ prepare() {
   cp "$srcdir/IncomingCallNotification.tsx" "src/app/features/call/"
   cp "$srcdir/RoomNavItem.tsx" "src/app/features/room-nav/"
   cp "$srcdir/SmallWidgetDriver.ts" "src/app/features/call/"
+  cp "$srcdir/AddAccountDialog.tsx" "src/app/pages/client/"
 
   echo "Applying emoji font patch..."
   patch -p1 -i "$srcdir/01-emoji-font.patch"
@@ -135,6 +140,9 @@ prepare() {
   echo "Applying issue tracker patch..."
   mkdir -p "src/app/features/issues"
   patch -p1 -i "$srcdir/07-issue-tracker.patch"
+
+  echo "Applying multi-account support patch..."
+  patch -p1 -i "$srcdir/08-multi-account.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
