@@ -1,3 +1,28 @@
+diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
+index 5f3e2323..bc5f35ff 100644
+--- a/src/app/components/GlobalKeyboardShortcuts.tsx
++++ b/src/app/components/GlobalKeyboardShortcuts.tsx
+@@ -49,6 +49,12 @@ const START_CALL_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
+   category: 'Actions',
+ };
+ 
++const ACCOUNT_SWITCH_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+shift+1–9',
++  description: 'Switch to 1st–9th account',
++  category: 'Navigation',
++};
++
+ export function GlobalKeyboardShortcuts() {
+   const navigate = useNavigate();
+   const { shortcuts } = useGlobalKeyboardShortcuts();
+@@ -166,6 +172,7 @@ export function GlobalKeyboardShortcuts() {
+     { ...CALL_ANSWER_SHORTCUT, action: () => {} },
+     { ...SPACE_SHORTCUT, action: () => {} },
+     { ...NEXT_UNREAD_SHORTCUT, action: () => {} },
++    { ...ACCOUNT_SWITCH_SHORTCUT, action: () => {} },
+   ];
+ 
+   return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
 diff --git a/src/app/pages/App.tsx b/src/app/pages/App.tsx
 index 52ec7f20..8a069988 100644
 --- a/src/app/pages/App.tsx
@@ -80,13 +105,13 @@ index e1a5dc0c..f3f36fc0 100644
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index 33446252..f7aa8ae7 100644
+index 33446252..a82c4218 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -1,9 +1,12 @@
 -import React, { useRef } from 'react';
 -import { Scroll } from 'folds';
-+import React, { useRef, useState } from 'react';
++import React, { useCallback, useEffect, useRef, useState } from 'react';
 +import { Icon, Icons, Scroll } from 'folds';
  
  import {
@@ -98,7 +123,7 @@ index 33446252..f7aa8ae7 100644
    SidebarStackSeparator,
    SidebarStack,
  } from '../../components/sidebar';
-@@ -18,6 +21,109 @@ import {
+@@ -18,6 +21,135 @@ import {
    SearchTab,
  } from './sidebar';
  import { CreateTab } from './sidebar/CreateTab';
@@ -123,25 +148,48 @@ index 33446252..f7aa8ae7 100644
 +
 +  const secondarySessions = getSecondarySessions();
 +
-+  const switchToSlot = (slot: number | null) => {
-+    if (slot === null) {
-+      // Switch to main account
-+      sessionStorage.removeItem('cinny-account-slot');
-+      if (hashRouter?.enabled) {
-+        window.location.reload();
++  const switchToSlot = useCallback(
++    (slot: number | null) => {
++      if (slot === null) {
++        sessionStorage.removeItem('cinny-account-slot');
++        if (hashRouter?.enabled) {
++          window.location.reload();
++        } else {
++          window.location.assign('/');
++        }
 +      } else {
-+        window.location.assign('/');
++        sessionStorage.setItem('cinny-account-slot', String(slot));
++        if (hashRouter?.enabled) {
++          window.location.reload();
++        } else {
++          window.location.assign(`/account/${slot}/`);
++        }
 +      }
-+    } else {
-+      // Switch to secondary account
-+      sessionStorage.setItem('cinny-account-slot', String(slot));
-+      if (hashRouter?.enabled) {
-+        window.location.reload();
-+      } else {
-+        window.location.assign(`/account/${slot}/`);
++    },
++    [hashRouter]
++  );
++
++  // Alt+Shift+1 = main account, Alt+Shift+2..9 = secondary slots
++  useEffect(() => {
++    const totalAccounts = (mainSession ? 1 : 0) + secondarySessions.length;
++    if (totalAccounts <= 1) return;
++    const slots: Array<number | null> = [
++      ...(mainSession ? [null] : []),
++      ...secondarySessions.map(({ slot }) => slot),
++    ];
++    const handleKeyDown = (evt: KeyboardEvent) => {
++      if (!evt.altKey || !evt.shiftKey || evt.ctrlKey || evt.metaKey) return;
++      const n = parseInt(evt.key, 10);
++      if (isNaN(n) || n < 1 || n > 9) return;
++      const target = slots[n - 1];
++      if (target !== undefined) {
++        evt.preventDefault();
++        switchToSlot(target);
 +      }
-+    }
-+  };
++    };
++    window.addEventListener('keydown', handleKeyDown);
++    return () => window.removeEventListener('keydown', handleKeyDown);
++  }, [mainSession, secondarySessions, switchToSlot]);
 +
 +  if (!mainSession && secondarySessions.length === 0) return null;
 +
@@ -158,6 +206,7 @@ index 33446252..f7aa8ae7 100644
 +                  onClick={() => switchToSlot(null)}
 +                  aria-label={`Main account: ${mainSession.userId}${isMainActive ? ' (active)' : ''}`}
 +                  aria-pressed={isMainActive}
++                  aria-keyshortcuts="Alt+Shift+1"
 +                >
 +                  <Icon size="100" src={Icons.User} filled={isMainActive} />
 +                </SidebarAvatar>
@@ -165,8 +214,9 @@ index 33446252..f7aa8ae7 100644
 +            </SidebarItemTooltip>
 +          </SidebarItem>
 +        )}
-+        {secondarySessions.map(({ slot, session }) => {
++        {secondarySessions.map(({ slot, session }, idx) => {
 +          const isActive = currentSlot === slot;
++          const shortcutN = (mainSession ? 1 : 0) + idx + 1;
 +          return (
 +            <SidebarItem key={slot} active={isActive}>
 +              <SidebarItemTooltip tooltip={session.userId}>
@@ -177,6 +227,7 @@ index 33446252..f7aa8ae7 100644
 +                    onClick={() => switchToSlot(slot)}
 +                    aria-label={`Account: ${session.userId}${isActive ? ' (active)' : ''}`}
 +                    aria-pressed={isActive}
++                    aria-keyshortcuts={`Alt+Shift+${shortcutN}`}
 +                  >
 +                    <Icon size="100" src={Icons.User} filled={isActive} />
 +                  </SidebarAvatar>
@@ -208,7 +259,7 @@ index 33446252..f7aa8ae7 100644
  
  export function SidebarNav() {
    const scrollRef = useRef<HTMLDivElement>(null);
-@@ -44,6 +150,7 @@ export function SidebarNav() {
+@@ -44,6 +176,7 @@ export function SidebarNav() {
        <SidebarContent
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
@@ -217,10 +268,10 @@ index 33446252..f7aa8ae7 100644
                <HomeTab />
                <DirectTab />
 diff --git a/src/app/state/sessions.ts b/src/app/state/sessions.ts
-index a9c34ce9..a2b3b3e2 100644
+index a9c34ce9..2b01c052 100644
 --- a/src/app/state/sessions.ts
 +++ b/src/app/state/sessions.ts
-@@ -46,7 +46,14 @@ export const removeFallbackSession = () => {
+@@ -46,7 +46,15 @@ export const removeFallbackSession = () => {
    localStorage.removeItem('cinny_device_id');
    localStorage.removeItem('cinny_access_token');
  };
@@ -232,10 +283,11 @@ index a9c34ce9..a2b3b3e2 100644
  export const getFallbackSession = (): Session | undefined => {
 +  if (sessionOverride) return sessionOverride;
 +
++
    const baseUrl = localStorage.getItem('cinny_hs_base_url');
    const userId = localStorage.getItem('cinny_user_id');
    const deviceId = localStorage.getItem('cinny_device_id');
-@@ -70,6 +77,39 @@ export const getFallbackSession = (): Session | undefined => {
+@@ -70,6 +78,39 @@ export const getFallbackSession = (): Session | undefined => {
   * End of migration code for old session
   */
  

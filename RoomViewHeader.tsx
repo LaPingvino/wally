@@ -382,7 +382,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
           <BackRouteHandler>
             {(onBack) => (
               <Box shrink="No" alignItems="Center">
-                <IconButton fill="None" onClick={onBack}>
+                <IconButton fill="None" onClick={onBack} aria-label="Go back">
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>
               </Box>
@@ -458,7 +458,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
               }
             >
               {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleSearchClick}>
+                <IconButton fill="None" ref={triggerRef} onClick={handleSearchClick} aria-label="Search room">
                   <Icon size="400" src={Icons.Search} />
                 </IconButton>
               )}
@@ -481,6 +481,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                   onClick={handleOpenPinMenu}
                   ref={triggerRef}
                   aria-pressed={!!pinMenuAnchor}
+                  aria-label={`Pinned messages${pinnedEvents.length > 0 ? ` (${pinnedEvents.length} pinned)` : ''}`}
                 >
                   {pinnedEvents.length > 0 && (
                     <Badge
@@ -541,6 +542,8 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                   fill="None"
                   ref={triggerRef}
                   onClick={() => setPeopleDrawer((drawer) => !drawer)}
+                  aria-label={peopleDrawer ? 'Hide members' : 'Show members'}
+                  aria-pressed={peopleDrawer}
                 >
                   <Icon size="400" src={Icons.User} />
                 </IconButton>
@@ -565,6 +568,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                   ref={triggerRef}
                   onClick={onToggleIssueBoard}
                   aria-pressed={isIssueBoard}
+                  aria-label={isIssueBoard ? 'Show chat' : 'Issue tracker'}
                 >
                   <Icon size="400" src={Icons.CheckTwice} filled={isIssueBoard} />
                 </IconButton>
@@ -584,7 +588,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
               }
             >
               {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleStartCall}>
+                <IconButton fill="None" ref={triggerRef} onClick={handleStartCall} aria-label="Start call" aria-keyshortcuts="Alt+J">
                   <Icon size="400" src={Icons.Phone} />
                 </IconButton>
               )}
@@ -604,7 +608,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                 }
               >
                 {(triggerRef) => (
-                  <IconButton fill="None" ref={triggerRef} onClick={toggleCallView}>
+                  <IconButton fill="None" ref={triggerRef} onClick={toggleCallView} aria-label={isCallViewOpen ? 'Hide call' : 'Show call'} aria-pressed={isCallViewOpen}>
                     <Icon size="400" src={Icons.Phone} filled={isCallViewOpen} />
                   </IconButton>
                 )}
@@ -619,7 +623,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                 }
               >
                 {(triggerRef) => (
-                  <IconButton fill="None" ref={triggerRef} onClick={toggleChat}>
+                  <IconButton fill="None" ref={triggerRef} onClick={toggleChat} aria-label={isChatOpen ? 'Hide chat' : 'Show chat'} aria-pressed={isChatOpen}>
                     <Icon size="400" src={Icons.Message} filled={isChatOpen} />
                   </IconButton>
                 )}
@@ -643,6 +647,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                 onClick={handleOpenMenu}
                 ref={triggerRef}
                 aria-pressed={!!menuAnchor}
+                aria-label="More options"
               >
                 <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
               </IconButton>
