@@ -49,25 +49,56 @@ index d600c610..ea9ef1a0 100644
    });
  };
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index e1a5dc0c..793af3a7 100644
+index e1a5dc0c..62d40d83 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -34,7 +34,7 @@ import { useSyncState } from '../../hooks/useSyncState';
+@@ -19,6 +19,7 @@ import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState }
+ import {
+   clearCacheAndReload,
+   clearLoginData,
++  clearSecondaryLoginData,
+   initClient,
+   logoutClient,
+   startClient,
+@@ -34,7 +35,7 @@ import { useSyncState } from '../../hooks/useSyncState';
  import { stopPropagation } from '../../utils/keyboard';
  import { SyncStatus } from './SyncStatus';
  import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 -import { getFallbackSession } from '../../state/sessions';
-+import { getFallbackSession, removeSecondarySession } from '../../state/sessions';
++import { getFallbackSession, getSessionForSlot, removeSecondarySession } from '../../state/sessions';
  
  function ClientRootLoading() {
    return (
-@@ -127,8 +127,14 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -102,7 +103,18 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+                       logoutClient(mx);
+                       return;
+                     }
+-                    clearLoginData();
++                    const slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
++                    if (slotMatch) {
++                      const slot = parseInt(slotMatch[1], 10);
++                      const session = getSessionForSlot(slot);
++                      if (session) {
++                        clearSecondaryLoginData(slot, session.userId);
++                      } else {
++                        window.location.assign('/');
++                      }
++                    } else {
++                      clearLoginData();
++                    }
+                   }}
+                   size="300"
+                   radii="300"
+@@ -126,9 +138,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
+   useEffect(() => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
-       await mx?.clearStores();
+-      await mx?.clearStores();
 -      window.localStorage.clear();
 -      window.location.reload();
 +      const slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
++      const cryptoDatabasePrefix = slotMatch ? mx?.getSafeUserId() ?? undefined : undefined;
++      await mx?.clearStores({ cryptoDatabasePrefix });
 +      if (slotMatch) {
 +        removeSecondarySession(parseInt(slotMatch[1], 10));
 +        window.location.assign('/');
@@ -265,7 +296,7 @@ index a9c34ce9..b2c674fb 100644
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..b849bff2 100644
+index 498d4f75..a82180c9 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,36 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -319,13 +350,16 @@ index 498d4f75..b849bff2 100644
  
    mx.setMaxListeners(50);
  
-@@ -62,8 +79,14 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -61,9 +78,40 @@ export const logoutClient = async (mx: MatrixClient) => {
+   } catch {
      // ignore if failed to logout
    }
-   await mx.clearStores();
+-  await mx.clearStores();
 -  window.localStorage.clear();
 -  window.location.reload();
 +  const slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
++  const cryptoDatabasePrefix = slotMatch ? mx.getSafeUserId() : undefined;
++  await mx.clearStores({ cryptoDatabasePrefix });
 +  if (slotMatch) {
 +    removeSecondarySession(parseInt(slotMatch[1], 10));
 +    window.location.assign('/');
@@ -333,6 +367,30 @@ index 498d4f75..b849bff2 100644
 +    window.localStorage.clear();
 +    window.location.reload();
 +  }
++};
++
++export const clearSecondaryLoginData = async (slot: number, userId: string): Promise<void> => {
++  const idb = globalThis.indexedDB;
++  if (idb) {
++    const dbNames = [
++      `sync@${userId}`,
++      `crypto@${userId}`,
++      `${userId}::matrix-sdk-crypto`,
++      `${userId}::matrix-sdk-crypto-meta`,
++    ];
++    await Promise.all(
++      dbNames.map(
++        (name) =>
++          new Promise<void>((resolve) => {
++            const req = idb.deleteDatabase(name);
++            req.onsuccess = () => resolve();
++            req.onerror = () => resolve();
++          })
++      )
++    );
++  }
++  removeSecondarySession(slot);
++  window.location.assign('/');
  };
  
  export const clearLoginData = async () => {
