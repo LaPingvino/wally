@@ -1,0 +1,54 @@
+diff --git a/src/app/hooks/useDeviceVerificationStatus.ts b/src/app/hooks/useDeviceVerificationStatus.ts
+index 9e723bd7..ae2a9cdd 100644
+--- a/src/app/hooks/useDeviceVerificationStatus.ts
++++ b/src/app/hooks/useDeviceVerificationStatus.ts
+@@ -1,5 +1,5 @@
+ import { useCallback, useEffect, useState } from 'react';
+-import { CryptoApi } from 'matrix-js-sdk/lib/crypto-api';
++import { CryptoApi, CryptoEvent } from 'matrix-js-sdk/lib/crypto-api';
+ import { verifiedDevice } from '../utils/matrix-crypto';
+ import { useAlive } from './useAlive';
+ import { fulfilledPromiseSettledResult } from '../utils/common';
+@@ -48,6 +48,17 @@ export const useDeviceVerificationDetect = (
+       [userId, updateStatus]
+     )
+   );
++
++  // DevicesUpdated doesn't fire after local verification — also listen for trust changes
++  useEffect(() => {
++    const handleTrustChange = (changedUserId: string) => {
++      if (changedUserId === userId) updateStatus();
++    };
++    mx.on(CryptoEvent.UserTrustStatusChanged, handleTrustChange);
++    return () => {
++      mx.removeListener(CryptoEvent.UserTrustStatusChanged, handleTrustChange);
++    };
++  }, [mx, userId, updateStatus]);
+ };
+ 
+ export const useDeviceVerificationStatus = (
+@@ -67,6 +78,7 @@ export const useUnverifiedDeviceCount = (
+   userId: string,
+   devices: string[]
+ ): number | undefined => {
++  const mx = useMatrixClient();
+   const [unverifiedCount, setUnverifiedCount] = useState<number>();
+   const alive = useAlive();
+ 
+@@ -102,5 +114,16 @@ export const useUnverifiedDeviceCount = (
+     updateCount();
+   }, [updateCount]);
+ 
++  // DevicesUpdated doesn't fire after local verification — also listen for trust changes
++  useEffect(() => {
++    const handleTrustChange = (changedUserId: string) => {
++      if (changedUserId === userId) updateCount();
++    };
++    mx.on(CryptoEvent.UserTrustStatusChanged, handleTrustChange);
++    return () => {
++      mx.removeListener(CryptoEvent.UserTrustStatusChanged, handleTrustChange);
++    };
++  }, [mx, userId, updateCount]);
++
+   return unverifiedCount;
+ };
