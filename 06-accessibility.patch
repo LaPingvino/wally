@@ -1,6 +1,6 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..556b8dde
+index 00000000..5f3e2323
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
 @@ -0,0 +1,172 @@
@@ -28,7 +28,7 @@ index 00000000..556b8dde
 +const CALL_SHORTCUTS: Omit<KeyboardShortcut, 'action'>[] = [
 +  { key: 'mod+shift+m', description: 'Toggle mute (in call)', category: 'Actions' },
 +  { key: 'mod+shift+v', description: 'Toggle video (in call)', category: 'Actions' },
-+  { key: 'mod+shift+e', description: 'End call', category: 'Actions' },
++  { key: 'mod+shift+h', description: 'End call', category: 'Actions' },
 +];
 +
 +const SPACE_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
@@ -92,7 +92,7 @@ index 00000000..556b8dde
 +      } else if (isKeyHotkey('mod+shift+v', evt)) {
 +        evt.preventDefault();
 +        toggleVideo();
-+      } else if (isKeyHotkey('mod+shift+e', evt)) {
++      } else if (isKeyHotkey('mod+shift+h', evt)) {
 +        evt.preventDefault();
 +        hangUp();
 +      }
@@ -933,7 +933,7 @@ index 00000000..82edcf6a
 +  };
 +};
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index 2955f5ef..30553001 100644
+index bea09a92..d600c610 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
 @@ -70,6 +70,7 @@ import { SearchModalRenderer } from '../features/search';
@@ -942,9 +942,9 @@ index 2955f5ef..30553001 100644
  import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
 +import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
  import { getFallbackSession } from '../state/sessions';
- import { pushSessionToSW } from '../../sw-session';
  
-@@ -142,6 +143,21 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
+ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
+@@ -140,6 +141,21 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                            </PersistentCallContainer>
                          </ClientLayout>
                          <IncomingCallNotification />

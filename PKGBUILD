@@ -1,7 +1,7 @@
 # Maintainer: Andy Bao <contact@andybao.me>
 _pkgname=cinny-web
 pkgname="${_pkgname}-git"
-pkgver=r1465.29ec172c
+pkgver=r1466.170f5cd4
 pkgrel=1
 pkgdesc="Yet another matrix client — web version"
 arch=('any')
@@ -73,8 +73,8 @@ sha256sums=('SKIP'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            '2d7c377c2497ca4ec142c6dee8096fd2b96349e95e1ea15ece6f02c8ac30dfb4'
-            '0a2a6b685bd6fe97eb90d2ec1e5695436aa4615082e1a0d78504971a2d971f06'
+            'ac0ea5face8de6bceacbdd9e2bfc4aeed6290ddb5d137e864f21169d809682bd'
+            '1bf286bf8da49449ec3cdef69932e252c5fac94b57b6b01730ce5bccb27f47d5'
             )
 
 prepare() {
