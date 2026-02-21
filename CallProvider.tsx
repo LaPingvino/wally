@@ -288,6 +288,14 @@ export function CallProvider({ children }: CallProviderProps) {
     activeClientWidgetApi.on(`action:${WIDGET_TILE_UPDATE}`, handleOnTileLayout);
     activeClientWidgetApi.on(`action:${WIDGET_ON_SCREEN_ACTION}`, handleOnScreenStateUpdate);
     activeClientWidgetApi.on(`action:${WIDGET_JOIN_ACTION}`, handleJoin);
+
+    return () => {
+      activeClientWidgetApi.off(`action:${WIDGET_HANGUP_ACTION}`, handleHangup);
+      activeClientWidgetApi.off(`action:${WIDGET_MEDIA_STATE_UPDATE_ACTION}`, handleMediaStateUpdate);
+      activeClientWidgetApi.off(`action:${WIDGET_TILE_UPDATE}`, handleOnTileLayout);
+      activeClientWidgetApi.off(`action:${WIDGET_ON_SCREEN_ACTION}`, handleOnScreenStateUpdate);
+      activeClientWidgetApi.off(`action:${WIDGET_JOIN_ACTION}`, handleJoin);
+    };
   }, [
     activeClientWidgetIframeRef,
     activeClientWidgetApi,
