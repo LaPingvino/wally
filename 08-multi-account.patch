@@ -86,22 +86,29 @@ index e1a5dc0c..5df8c3a4 100644
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index 33446252..bb48a881 100644
+index 33446252..f7aa8ae7 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
-@@ -1,5 +1,5 @@
+@@ -1,9 +1,12 @@
 -import React, { useRef } from 'react';
 -import { Scroll } from 'folds';
 +import React, { useRef, useState } from 'react';
-+import { Box, Icon, IconButton, Icons, Scroll, Text, Tooltip, TooltipProvider, config } from 'folds';
++import { Icon, Icons, Scroll } from 'folds';
  
  import {
    Sidebar,
-@@ -18,6 +18,134 @@ import {
++  SidebarAvatar,
+   SidebarContent,
++  SidebarItem,
++  SidebarItemTooltip,
+   SidebarStackSeparator,
+   SidebarStack,
+ } from '../../components/sidebar';
+@@ -18,6 +21,109 @@ import {
    SearchTab,
  } from './sidebar';
  import { CreateTab } from './sidebar/CreateTab';
-+import { getFallbackSession, getSecondarySessions } from '../../state/sessions';
++import { getSecondarySessions } from '../../state/sessions';
 +import { useClientConfig } from '../../hooks/useClientConfig';
 +import { AddAccountDialog } from './AddAccountDialog';
 +
@@ -148,81 +155,56 @@ index 33446252..bb48a881 100644
 +    <>
 +      <SidebarStack>
 +        {mainSession && (
-+          <TooltipProvider
-+            position="Right"
-+            content={
-+              <Tooltip>
-+                <Text>{mainSession.userId}</Text>
-+              </Tooltip>
-+            }
-+          >
-+            {(ref) => (
-+              <IconButton
-+                ref={ref}
-+                onClick={() => switchToSlot(null)}
-+                variant={isMainActive ? 'Success' : 'Background'}
-+                fill={isMainActive ? 'Solid' : 'None'}
-+                radii="Pill"
-+                size="300"
-+                aria-label={`Main account: ${mainSession.userId}${isMainActive ? ' (active)' : ''}`}
-+                aria-pressed={isMainActive}
-+              >
-+                <Icon size="100" src={Icons.User} />
-+              </IconButton>
-+            )}
-+          </TooltipProvider>
++          <SidebarItem active={isMainActive}>
++            <SidebarItemTooltip tooltip={mainSession.userId}>
++              {(ref) => (
++                <SidebarAvatar
++                  as="button"
++                  ref={ref}
++                  onClick={() => switchToSlot(null)}
++                  aria-label={`Main account: ${mainSession.userId}${isMainActive ? ' (active)' : ''}`}
++                  aria-pressed={isMainActive}
++                >
++                  <Icon size="100" src={Icons.User} filled={isMainActive} />
++                </SidebarAvatar>
++              )}
++            </SidebarItemTooltip>
++          </SidebarItem>
 +        )}
 +        {secondarySessions.map(({ slot, session }) => {
 +          const isActive = currentSlot === slot;
 +          return (
-+            <TooltipProvider
-+              key={slot}
-+              position="Right"
-+              content={
-+                <Tooltip>
-+                  <Text>{session.userId}</Text>
-+                </Tooltip>
-+              }
-+            >
-+              {(ref) => (
-+                <IconButton
-+                  ref={ref}
-+                  onClick={() => switchToSlot(slot)}
-+                  variant={isActive ? 'Success' : 'Background'}
-+                  fill={isActive ? 'Solid' : 'None'}
-+                  radii="Pill"
-+                  size="300"
-+                  aria-label={`Account: ${session.userId}${isActive ? ' (active)' : ''}`}
-+                  aria-pressed={isActive}
-+                >
-+                  <Icon size="100" src={Icons.User} />
-+                </IconButton>
-+              )}
-+            </TooltipProvider>
++            <SidebarItem key={slot} active={isActive}>
++              <SidebarItemTooltip tooltip={session.userId}>
++                {(ref) => (
++                  <SidebarAvatar
++                    as="button"
++                    ref={ref}
++                    onClick={() => switchToSlot(slot)}
++                    aria-label={`Account: ${session.userId}${isActive ? ' (active)' : ''}`}
++                    aria-pressed={isActive}
++                  >
++                    <Icon size="100" src={Icons.User} filled={isActive} />
++                  </SidebarAvatar>
++                )}
++              </SidebarItemTooltip>
++            </SidebarItem>
 +          );
 +        })}
-+        <TooltipProvider
-+          position="Right"
-+          content={
-+            <Tooltip>
-+              <Text>Add Account</Text>
-+            </Tooltip>
-+          }
-+        >
-+          {(ref) => (
-+            <IconButton
-+              ref={ref}
-+              onClick={() => setShowAddAccount(true)}
-+              variant="Background"
-+              fill="None"
-+              radii="Pill"
-+              size="300"
-+              aria-label="Add account"
-+            >
-+              <Icon size="100" src={Icons.Plus} />
-+            </IconButton>
-+          )}
-+        </TooltipProvider>
++        <SidebarItem>
++          <SidebarItemTooltip tooltip="Add Account">
++            {(ref) => (
++              <SidebarAvatar
++                as="button"
++                ref={ref}
++                onClick={() => setShowAddAccount(true)}
++                aria-label="Add account"
++              >
++                <Icon size="100" src={Icons.Plus} />
++              </SidebarAvatar>
++            )}
++          </SidebarItemTooltip>
++        </SidebarItem>
 +      </SidebarStack>
 +      <SidebarStackSeparator />
 +      {showAddAccount && <AddAccountDialog onClose={() => setShowAddAccount(false)} />}
@@ -232,7 +214,7 @@ index 33446252..bb48a881 100644
  
  export function SidebarNav() {
    const scrollRef = useRef<HTMLDivElement>(null);
-@@ -44,6 +172,7 @@ export function SidebarNav() {
+@@ -44,6 +150,7 @@ export function SidebarNav() {
        <SidebarContent
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
@@ -241,7 +223,7 @@ index 33446252..bb48a881 100644
                <HomeTab />
                <DirectTab />
 diff --git a/src/app/state/sessions.ts b/src/app/state/sessions.ts
-index a9c34ce9..be9c094c 100644
+index a9c34ce9..a2b3b3e2 100644
 --- a/src/app/state/sessions.ts
 +++ b/src/app/state/sessions.ts
 @@ -46,7 +46,14 @@ export const removeFallbackSession = () => {
@@ -259,7 +241,7 @@ index a9c34ce9..be9c094c 100644
    const baseUrl = localStorage.getItem('cinny_hs_base_url');
    const userId = localStorage.getItem('cinny_user_id');
    const deviceId = localStorage.getItem('cinny_device_id');
-@@ -70,6 +77,34 @@ export const getFallbackSession = (): Session | undefined => {
+@@ -70,6 +77,39 @@ export const getFallbackSession = (): Session | undefined => {
   * End of migration code for old session
   */
  
@@ -288,8 +270,13 @@ index a9c34ce9..be9c094c 100644
 +  localStorage.setItem(SECONDARY_SESSIONS_KEY, JSON.stringify(sessions));
 +};
 +
-+export const getSessionForSlot = (slot: number): Session | undefined =>
-+  getSecondarySessions().find((s) => s.slot === slot)?.session;
++export const getSessionForSlot = (slot: number): Session | undefined => {
++  const entry = getSecondarySessions().find((s) => s.slot === slot);
++  if (!entry) return undefined;
++  // Strip fallbackSdkStores so secondary accounts always use per-user IndexedDB names
++  const { fallbackSdkStores: _ignored, ...rest } = entry.session;
++  return rest;
++};
 +
  // export const getSessionStoreName = (session: Session): SessionStoreName => {
  //   if (session.fallbackSdkStores) {
