@@ -1,9 +1,9 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 00000000..8bf86d28
+index 00000000..5df3ca27
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,1238 @@
+@@ -0,0 +1,1236 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixEvent, Room } from 'matrix-js-sdk';
@@ -969,14 +969,12 @@ index 00000000..8bf86d28
 +  // ── View mode helpers ─────────────────────────────────────────────────────────
 +
 +  const kanbanFields = schema.fields.filter((f) => f.kanban_group && f.type === 'enum');
-+
-+  // Ensure current viewMode is still valid (field might have been removed)
-+  const effectiveViewMode: ViewMode =
-+    viewMode.type === 'kanban' && schema.fields.some((f) => f.key === viewMode.fieldKey && f.kanban_group)
-+      ? viewMode
-+      : kanbanFields.length > 0
-+        ? { type: 'kanban', fieldKey: kanbanFields[0].key }
-+        : { type: 'list' };
++  // Ensure current viewMode is still valid (field might have been removed from schema)
++  const effectiveViewMode: ViewMode = (() => {
++    if (viewMode.type === 'list') return viewMode;
++    if (schema.fields.some((f) => f.key === viewMode.fieldKey && f.kanban_group)) return viewMode;
++    return kanbanFields.length > 0 ? { type: 'kanban', fieldKey: kanbanFields[0].key } : { type: 'list' };
++  })();
 +
 +  const initialContent =
 +    editing instanceof MatrixEvent ? (editing.getContent() as IssueContent) : undefined;
