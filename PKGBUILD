@@ -79,7 +79,7 @@ sha256sums=('SKIP'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
             'ac0ea5face8de6bceacbdd9e2bfc4aeed6290ddb5d137e864f21169d809682bd'
             'd0faa8346cfca40c65ed03013a4e2af597fe09fdba7de61da9f6e026b7fb14e9'
-            'b426fdbfd527f4efc782ba2a15a49dc8de0ce6d8d9a4b89ea56161932ecc16d3'
+            'cc70fa0acb55cd04d238aecbe66056fceb35070b0769348530c597c7965b8d53'
             # '09-verification-signal.patch' sha256 (disabled): a3b6621014eb70dd723ea3d12b515ed44b8540ca48b3f0a2a9ef4af470eabd00
             )
 
