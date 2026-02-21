@@ -1,6 +1,6 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 00000000..1062bc0f
+index 00000000..ca13d504
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
 @@ -0,0 +1,1063 @@
@@ -692,7 +692,7 @@ index 00000000..1062bc0f
 +        width: '100%', display: 'flex', flexDirection: 'column', gap: config.space.S100 }}>
 +      <Box alignItems="Center" gap="100" style={{ justifyContent: 'space-between' }}>
 +        <Text size="T300" truncate>{title}</Text>
-+        {redacted && <Text size="T200" style={{ color: color.Warning.Main, flexShrink: 0 }} title="Current state redacted">\u26A0\uFE0F</Text>}
++        {redacted && <Text size="T200" style={{ color: color.Warning.Main, flexShrink: 0 }} title="Current state redacted">⚠️</Text>}
 +      </Box>
 +      {secondaryFields.map((f) => (
 +        <Box key={f.key} gap="100" alignItems="Center">
@@ -720,7 +720,7 @@ index 00000000..1062bc0f
 +        borderRadius: config.radii.R300, background: color.Surface.Container }}>
 +      <Box alignItems="Center" gap="200" style={{ justifyContent: 'space-between', padding: config.space.S300 + ' ' + config.space.S300 + ' 0' }}>
 +        <Box alignItems="Center" gap="100">
-+          {redacted && <Text size="T200" style={{ color: color.Warning.Main }} title="Current state redacted — showing last known version">\u26A0\uFE0F</Text>}
++          {redacted && <Text size="T200" style={{ color: color.Warning.Main }} title="Current state redacted — showing last known version">⚠️</Text>}
 +          <Text size="T300" as="h3" style={{ margin: 0, fontWeight: 'bold' }}>{title}</Text>
 +        </Box>
 +        {canWrite && (
@@ -1032,7 +1032,7 @@ index 00000000..1062bc0f
 +                aria-label="Clear filter"
 +                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 4px',
 +                  font: 'inherit', color: 'inherit', opacity: 0.7 }}>
-+                \u00D7
++                ×
 +              </button>
 +            )}
 +          </Box>
@@ -1068,193 +1068,21 @@ index 00000000..1062bc0f
 +  );
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567..37c6be1e 100644
+index 01e6e6a4..37c6be1e 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
-@@ -1,5 +1,7 @@
- import React, { useCallback, useState } from 'react';
- import { Box, Text, IconButton, Icon, Icons, Scroll, Switch, Button } from 'folds';
-+import { AccountDataEvents } from 'matrix-js-sdk';
-+import { Feature, ServerSupport } from 'matrix-js-sdk/lib/feature';
- import { Page, PageContent, PageHeader } from '../../../components/page';
- import { SequenceCard } from '../../../components/sequence-card';
- import { SequenceCardStyle } from '../styles.css';
-@@ -8,117 +10,231 @@ import { useSetting } from '../../../state/hooks/settings';
- import { settingsAtom } from '../../../state/settings';
- import { useMatrixClient } from '../../../hooks/useMatrixClient';
- import {
-+  AccountDataDeleteCallback,
-   AccountDataEditor,
-   AccountDataSubmitCallback,
- } from '../../../components/AccountDataEditor';
- import { copyToClipboard } from '../../../utils/dom';
--import { AccountData } from './AccountData';
-+import { AccountDataList } from './AccountDataList';
-+import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
-+import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
-+import { CollapsibleCard } from '../../../components/CollapsibleCard';
-+
-+type DeveloperToolsPage =
-+  | { name: 'index' }
-+  | { name: 'account-data'; type: string | null }
-+  | { name: 'profile-field'; type: string | null };
+@@ -48,6 +48,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+   const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
  
- type DeveloperToolsProps = {
-   requestClose: () => void;
- };
- export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
-   const mx = useMatrixClient();
-+  const userId = mx.getUserId() as string;
-+
-+  const [accountDataTypes, setAccountDataKeys] = useState(() =>
-+    Array.from(mx.store.accountData.keys())
-+  );
-+  const accountDataDeletionSupported =
-+    (mx.canSupport.get(Feature.AccountDataDeletion) ?? ServerSupport.Unsupported) !==
-+    ServerSupport.Unsupported;
-+  useAccountDataCallback(
-+    mx,
-+    useCallback(() => {
-+      setAccountDataKeys(Array.from(mx.store.accountData.keys()));
-+    }, [mx])
-+  );
-+
-+  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
-+
    const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
--  const [expand, setExpend] = useState(false);
--  const [accountDataType, setAccountDataType] = useState<string | null>();
 +  const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
-+  const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
-+  const [globalExpand, setGlobalExpand] = useState(false);
-+  const [profileExpand, setProfileExpand] = useState(false);
- 
-   const submitAccountData: AccountDataSubmitCallback = useCallback(
-     async (type, content) => {
--      await mx.setAccountData(type, content);
-+      await mx.setAccountData(type as keyof AccountDataEvents, content);
-     },
-     [mx]
-   );
- 
--  if (accountDataType !== undefined) {
--    return (
--      <AccountDataEditor
--        type={accountDataType ?? undefined}
--        content={accountDataType ? mx.getAccountData(accountDataType)?.getContent() : undefined}
--        submitChange={submitAccountData}
--        requestClose={() => setAccountDataType(undefined)}
--      />
--    );
--  }
-+  const deleteAccountData: AccountDataDeleteCallback = useCallback(
-+    async (type) => {
-+      await mx.deleteAccountData(type as keyof AccountDataEvents);
-+    },
-+    [mx]
-+  );
- 
--  return (
--    <Page>
--      <PageHeader outlined={false}>
--        <Box grow="Yes" gap="200">
--          <Box grow="Yes" alignItems="Center" gap="200">
--            <Text size="H3" truncate>
--              Developer Tools
--            </Text>
--          </Box>
--          <Box shrink="No">
--            <IconButton onClick={requestClose} variant="Surface">
--              <Icon src={Icons.Cross} />
--            </IconButton>
--          </Box>
--        </Box>
--      </PageHeader>
--      <Box grow="Yes">
--        <Scroll hideTrack visibility="Hover">
--          <PageContent>
--            <Box direction="Column" gap="700">
--              <Box direction="Column" gap="100">
--                <Text size="L400">Options</Text>
--                <SequenceCard
--                  className={SequenceCardStyle}
--                  variant="SurfaceVariant"
--                  direction="Column"
--                  gap="400"
--                >
--                  <SettingTile
--                    title="Enable Developer Tools"
--                    after={
--                      <Switch
--                        variant="Primary"
--                        value={developerTools}
--                        onChange={setDeveloperTools}
-+  const submitProfileField: AccountDataSubmitCallback = useCallback(
-+    async (type, content) => {
-+      await mx.setExtendedProfileProperty(type, content);
-+      await refreshExtendedProfile();
-+    },
-+    [mx, refreshExtendedProfile]
-+  );
-+
-+  const deleteProfileField: AccountDataDeleteCallback = useCallback(
-+    async (type) => {
-+      await mx.deleteExtendedProfileProperty(type);
-+      await refreshExtendedProfile();
-+    },
-+    [mx, refreshExtendedProfile]
-+  );
-+
-+  const handleClose = useCallback(() => setPage({ name: 'index' }), [setPage]);
-+
-+  switch (page.name) {
-+    case 'account-data':
-+      return (
-+        <AccountDataEditor
-+          type={page.type ?? undefined}
-+          content={
-+            page.type
-+              ? mx.getAccountData(page.type as keyof AccountDataEvents)?.getContent()
-+              : undefined
-+          }
-+          submitChange={submitAccountData}
-+          submitDelete={accountDataDeletionSupported ? deleteAccountData : undefined}
-+          requestClose={handleClose}
-+        />
-+      );
-+
-+    case 'profile-field':
-+      return (
-+        <AccountDataEditor
-+          type={page.type ?? undefined}
-+          content={page.type ? extendedProfile?.[page.type] : undefined}
-+          submitChange={submitProfileField}
-+          submitDelete={deleteProfileField}
-+          requestClose={handleClose}
-+        />
-+      );
-+
-+    default:
-+      return (
-+        <Page>
-+          <PageHeader outlined={false}>
-+            <Box grow="Yes" gap="200">
-+              <Box grow="Yes" alignItems="Center" gap="200">
-+                <Text size="H3" truncate>
-+                  Developer Tools
-+                </Text>
-+              </Box>
-+              <Box shrink="No">
-+                <IconButton onClick={requestClose} variant="Surface">
-+                  <Icon src={Icons.Cross} />
-+                </IconButton>
-+              </Box>
-+            </Box>
-+          </PageHeader>
-+          <Box grow="Yes">
-+            <Scroll hideTrack visibility="Hover">
-+              <PageContent>
-+                <Box direction="Column" gap="700">
+   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
+   const [globalExpand, setGlobalExpand] = useState(false);
+   const [profileExpand, setProfileExpand] = useState(false);
+@@ -132,6 +133,27 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+             <Scroll hideTrack visibility="Hover">
+               <PageContent>
+                 <Box direction="Column" gap="700">
 +                  <Box direction="Column" gap="100">
 +                    <Text size="L400">Experimental Features</Text>
 +                    <SequenceCard
@@ -1276,166 +1104,14 @@ index a3f04567..37c6be1e 100644
 +                      />
 +                    </SequenceCard>
 +                  </Box>
-+                  <Box direction="Column" gap="100">
-+                    <Text size="L400">Options</Text>
-+                    <SequenceCard
-+                      className={SequenceCardStyle}
-+                      variant="SurfaceVariant"
-+                      direction="Column"
-+                      gap="400"
-+                    >
-+                      <SettingTile
-+                        title="Enable Developer Tools"
-+                        after={
-+                          <Switch
-+                            variant="Primary"
-+                            value={developerTools}
-+                            onChange={setDeveloperTools}
-+                          />
-+                        }
-                       />
--                    }
--                  />
--                </SequenceCard>
--                {developerTools && (
--                  <SequenceCard
--                    className={SequenceCardStyle}
--                    variant="SurfaceVariant"
--                    direction="Column"
--                    gap="400"
--                  >
--                    <SettingTile
--                      title="Access Token"
--                      description="Copy access token to clipboard."
--                      after={
--                        <Button
--                          onClick={() =>
--                            copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
-+                    </SequenceCard>
-+                    {developerTools && (
-+                      <SequenceCard
-+                        className={SequenceCardStyle}
-+                        variant="SurfaceVariant"
-+                        direction="Column"
-+                        gap="400"
-+                      >
-+                        <SettingTile
-+                          title="Access Token"
-+                          description="Copy access token to clipboard."
-+                          after={
-+                            <Button
-+                              onClick={() =>
-+                                copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
-+                              }
-+                              variant="Secondary"
-+                              fill="Soft"
-+                              size="300"
-+                              radii="300"
-+                              outlined
-+                            >
-+                              <Text size="B300">Copy</Text>
-+                            </Button>
-                           }
--                          variant="Secondary"
--                          fill="Soft"
--                          size="300"
--                          radii="300"
--                          outlined
-+                        />
-+                      </SequenceCard>
-+                    )}
-+                  </Box>
-+                  {developerTools && (
-+                    <Box direction="Column" gap="100">
-+                      <Text size="L400">Account Data</Text>
-+                      <CollapsibleCard
-+                        expand={globalExpand}
-+                        setExpand={setGlobalExpand}
-+                        title="Account"
-+                        description="Private data stored in your account."
-+                      >
-+                        <AccountDataList
-+                          types={accountDataTypes}
-+                          onSelect={(type) => setPage({ name: 'account-data', type })}
-+                        />
-+                      </CollapsibleCard>
-+                      {extendedProfile && (
-+                        <CollapsibleCard
-+                          expand={profileExpand}
-+                          setExpand={setProfileExpand}
-+                          title="Profile"
-+                          description="Public data attached to your Matrix profile."
-                         >
--                          <Text size="B300">Copy</Text>
--                        </Button>
--                      }
--                    />
--                  </SequenceCard>
--                )}
--              </Box>
--              {developerTools && (
--                <AccountData
--                  expand={expand}
--                  onExpandToggle={setExpend}
--                  onSelect={setAccountDataType}
--                />
--              )}
--            </Box>
--          </PageContent>
--        </Scroll>
--      </Box>
--    </Page>
--  );
-+                          <AccountDataList
-+                            types={Object.keys(extendedProfile)}
-+                            onSelect={(type) => setPage({ name: 'profile-field', type })}
-+                          />
-+                        </CollapsibleCard>
-+                      )}
-+                    </Box>
-+                  )}
-+                </Box>
-+              </PageContent>
-+            </Scroll>
-+          </Box>
-+        </Page>
-+      );
-+  }
- }
+                   <Box direction="Column" gap="100">
+                     <Text size="L400">Options</Text>
+                     <SequenceCard
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb..21690ccf 100644
+index 52679837..21690ccf 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -8,6 +8,11 @@ export enum MessageLayout {
-   Compact = 1,
-   Bubble = 2,
- }
-+export enum EmojiFont {
-+  System = 'system',
-+  Twemoji = 'twemoji',
-+  NotoColorEmojiBahai = 'noto-bahai',
-+}
- 
- export interface Settings {
-   themeId?: string;
-@@ -17,7 +22,8 @@ export interface Settings {
-   monochromeMode?: boolean;
-   isMarkdown: boolean;
-   editorToolbar: boolean;
--  twitterEmoji: boolean;
-+  emojiFont: EmojiFont;
-+  twitterEmoji?: boolean; // deprecated, kept for migration
-   pageZoom: number;
-   hideActivity: boolean;
- 
-@@ -36,11 +42,14 @@ export interface Settings {
- 
-   showNotifications: boolean;
-   isNotificationSounds: boolean;
-+  callRingScope: 'dm' | 'nonVoice' | 'all';
-+  callRingtoneUrl: string | null;
- 
-   hour24Clock: boolean;
+@@ -49,6 +49,7 @@ export interface Settings {
    dateFormatString: string;
  
    developerTools: boolean;
@@ -1443,23 +1119,7 @@ index 31ee6ccb..21690ccf 100644
  }
  
  const defaultSettings: Settings = {
-@@ -51,7 +60,7 @@ const defaultSettings: Settings = {
-   monochromeMode: false,
-   isMarkdown: true,
-   editorToolbar: false,
--  twitterEmoji: false,
-+  emojiFont: EmojiFont.System,
-   pageZoom: 100,
-   hideActivity: false,
- 
-@@ -70,19 +79,30 @@ const defaultSettings: Settings = {
- 
-   showNotifications: true,
-   isNotificationSounds: true,
-+  callRingScope: 'nonVoice',
-+  callRingtoneUrl: null,
- 
-   hour24Clock: false,
+@@ -85,6 +86,7 @@ const defaultSettings: Settings = {
    dateFormatString: 'D MMM YYYY',
  
    developerTools: false,
@@ -1467,20 +1127,3 @@ index 31ee6ccb..21690ccf 100644
  };
  
  export const getSettings = () => {
-   const settings = localStorage.getItem(STORAGE_KEY);
-   if (settings === null) return defaultSettings;
-+  const parsed = JSON.parse(settings) as Settings;
-+
-+  // Migrate old twitterEmoji boolean to new emojiFont enum
-+  if (parsed.twitterEmoji !== undefined && parsed.emojiFont === undefined) {
-+    parsed.emojiFont = parsed.twitterEmoji ? EmojiFont.Twemoji : EmojiFont.System;
-+    delete parsed.twitterEmoji;
-+  }
-+
-   return {
-     ...defaultSettings,
--    ...(JSON.parse(settings) as Settings),
-+    ...parsed,
-   };
- };
- 
