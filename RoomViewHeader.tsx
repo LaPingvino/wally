@@ -23,7 +23,7 @@ import {
   Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import { Room } from 'matrix-js-sdk';
+import { EventTimeline, Room } from 'matrix-js-sdk';
 
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { PageHeader } from '../../components/page';
@@ -69,6 +69,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { ContainerColor } from '../../styles/ContainerColor.css';
+import { DEFAULT_ISSUE_SCHEMA } from '../issues/IssueBoard';
 
 type RoomMenuProps = {
   room: Room;
@@ -77,17 +78,33 @@ type RoomMenuProps = {
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
   const mx = useMatrixClient();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const [issueTrackerEnabled] = useSetting(settingsAtom, 'issueTracker');
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
 
   const permissions = useRoomPermissions(creators, powerLevels);
   const canInvite = permissions.action('invite', mx.getSafeUserId());
+  // Check room creator directly from the create event (creatorsSupported returns false for
+  // room versions 1–11, which covers virtually all real rooms, breaking the creator bypass).
+  const roomCreateEvent = room
+    .getLiveTimeline()
+    .getState(EventTimeline.BACKWARDS)
+    ?.getStateEvents(StateEvent.RoomCreate, '');
+  const isRoomCreator = roomCreateEvent?.getSender() === mx.getSafeUserId();
+  const canConfigSchema =
+    isRoomCreator ||
+    permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
   const { navigateRoom } = useRoomNavigate();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
+
+  const hasIssueSchema = !!room
+    .getLiveTimeline()
+    .getState(EventTimeline.FORWARDS)
+    ?.getStateEvents('eu.kiefte.issues.schema', '');
 
   const handleMarkAsRead = () => {
     markAsRead(mx, room.roomId, hideActivity);
@@ -109,6 +126,16 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const parentSpace = useSpaceOptionally();
   const handleOpenSettings = () => {
     openSettings(room.roomId, parentSpace?.roomId);
+    requestClose();
+  };
+
+  const handleInitializeIssueTracker = async () => {
+    await mx.sendStateEvent(
+      room.roomId,
+      'eu.kiefte.issues.schema' as any,
+      DEFAULT_ISSUE_SCHEMA,
+      ''
+    );
     requestClose();
   };
 
@@ -221,6 +248,26 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           )}
         </UseStateProvider>
       </Box>
+      {/* Experimental: Issue Tracker setup (requires experimental setting + admin rights) */}
+      {issueTrackerEnabled && canConfigSchema && !hasIssueSchema && (
+        <>
+          <Line variant="Surface" size="300" />
+          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+            <MenuItem
+              onClick={handleInitializeIssueTracker}
+              variant="Primary"
+              fill="None"
+              size="300"
+              after={<Icon size="100" src={Icons.CheckTwice} />}
+              radii="300"
+            >
+              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                Init Issue Tracker
+              </Text>
+            </MenuItem>
+          </Box>
+        </>
+      )}
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <UseStateProvider initial={false}>
@@ -254,7 +301,12 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   );
 });
 
-export function RoomViewHeader() {
+type RoomViewHeaderProps = {
+  isIssueBoard?: boolean;
+  onToggleIssueBoard?: () => void;
+};
+
+export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHeaderProps) {
   const navigate = useNavigate();
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -273,6 +325,23 @@ export function RoomViewHeader() {
   const creators = useRoomCreators(room);
   const permissions = useRoomPermissions(creators, powerLevels);
   const canCall = permissions.stateEvent('org.matrix.msc3401.call.member', mx.getSafeUserId());
+  const canWriteIssues = permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
+  // Check room creator directly (creatorsSupported returns false for versions 1–11).
+  const headerCreateEvent = room
+    .getLiveTimeline()
+    .getState(EventTimeline.BACKWARDS)
+    ?.getStateEvents(StateEvent.RoomCreate, '');
+  const isHeaderRoomCreator = headerCreateEvent?.getSender() === mx.getSafeUserId();
+  const canConfigSchema =
+    isHeaderRoomCreator ||
+    permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
+
+  // Issues button is shown when schema exists AND user has rights to interact with issues.
+  const hasIssueSchema = !!room
+    .getLiveTimeline()
+    .getState(EventTimeline.FORWARDS)
+    ?.getStateEvents('eu.kiefte.issues.schema', '');
+  const showIssuesButton = hasIssueSchema && (canWriteIssues || canConfigSchema);
 
   // NOTE: This handler is a new addition compared to the PR (hazre/cinny feat/element-call).
   // The PR only adds a Chat toggle for voice rooms; this adds a Start Call button for
@@ -387,7 +456,7 @@ export function RoomViewHeader() {
         </Box>
 
         <Box shrink="No">
-          {!ecryptedRoom && (!room.isCallRoom() || isChatOpen) && (
+          {!ecryptedRoom && (!room.isCallRoom() || isChatOpen) && !isIssueBoard && (
             <TooltipProvider
               position="Bottom"
               offset={4}
@@ -404,7 +473,7 @@ export function RoomViewHeader() {
               )}
             </TooltipProvider>
           )}
-          {(!room.isCallRoom() || isChatOpen) && (
+          {(!room.isCallRoom() || isChatOpen) && !isIssueBoard && (
             <TooltipProvider
               position="Bottom"
               offset={4}
@@ -444,7 +513,7 @@ export function RoomViewHeader() {
               )}
             </TooltipProvider>
           )}
-          {(!room.isCallRoom() || isChatOpen) && (
+          {(!room.isCallRoom() || isChatOpen) && !isIssueBoard && (
             <PopOut
               anchor={pinMenuAnchor}
               position="Bottom"
@@ -488,8 +557,32 @@ export function RoomViewHeader() {
             </TooltipProvider>
           )}
 
+          {/* Issue board toggle — only when schema exists and user has rights */}
+          {showIssuesButton && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{isIssueBoard ? 'Show Chat' : 'Issue Tracker'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={onToggleIssueBoard}
+                  aria-pressed={isIssueBoard}
+                >
+                  <Icon size="400" src={Icons.CheckTwice} filled={isIssueBoard} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
           {/* NOTE: New addition - Start Call button for regular/DM rooms (not in the PR). */}
-          {!room.isCallRoom() && !isActiveCall && canCall && (
+          {!room.isCallRoom() && !isActiveCall && canCall && !isIssueBoard && (
             <TooltipProvider
               position="Bottom"
               offset={4}
@@ -508,7 +601,7 @@ export function RoomViewHeader() {
           )}
 
           {/* When in a call: separate toggles for call view and chat view. */}
-          {(room.isCallRoom() || isActiveCall) && (
+          {(room.isCallRoom() || isActiveCall) && !isIssueBoard && (
             <>
               <TooltipProvider
                 position="Bottom"

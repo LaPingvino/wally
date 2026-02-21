@@ -1,0 +1,635 @@
+diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
+new file mode 100644
+index 00000000..b5b99e64
+--- /dev/null
++++ b/src/app/features/issues/IssueBoard.tsx
+@@ -0,0 +1,569 @@
++import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import FocusTrap from 'focus-trap-react';
++import { EventTimeline, MatrixEvent, Room } from 'matrix-js-sdk';
++import {
++  Box,
++  Button,
++  Icon,
++  Icons,
++  Overlay,
++  OverlayBackdrop,
++  OverlayCenter,
++  Text,
++  config,
++} from 'folds';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
++import { useRoomCreators } from '../../hooks/useRoomCreators';
++import { useRoomPermissions } from '../../hooks/useRoomPermissions';
++import { stopPropagation } from '../../utils/keyboard';
++
++// ── Types ─────────────────────────────────────────────────────────────────────
++
++type FieldType = 'text' | 'enum' | 'user';
++
++export interface SchemaField {
++  key: string;
++  type: FieldType;
++  label: string;
++  required?: boolean;
++  values?: string[];
++  kanban_group?: boolean;
++}
++
++export interface IssueSchema {
++  fields: SchemaField[];
++}
++
++type IssueContent = Record<string, unknown> & { _deleted?: boolean };
++
++// ── Default schema for initialization ─────────────────────────────────────────
++
++export const DEFAULT_ISSUE_SCHEMA: IssueSchema = {
++  fields: [
++    { key: 'title', type: 'text', label: 'Title', required: true },
++    {
++      key: 'status',
++      type: 'enum',
++      label: 'Status',
++      values: ['backlog', 'todo', 'in_progress', 'done'],
++      kanban_group: true,
++    },
++    {
++      key: 'priority',
++      type: 'enum',
++      label: 'Priority',
++      values: ['low', 'medium', 'high', 'critical'],
++    },
++    { key: 'description', type: 'text', label: 'Description' },
++  ],
++};
++
++// ── Helpers ───────────────────────────────────────────────────────────────────
++
++export function getIssueSchema(room: Room): IssueSchema | null {
++  const event = room
++    .getLiveTimeline()
++    .getState(EventTimeline.FORWARDS)
++    ?.getStateEvents('eu.kiefte.issues.schema', '');
++  if (!event) return null;
++  const content = event.getContent() as { fields?: unknown };
++  if (!Array.isArray(content.fields)) return null;
++  return { fields: content.fields as SchemaField[] };
++}
++
++function getIssues(room: Room): MatrixEvent[] {
++  const events = room
++    .getLiveTimeline()
++    .getState(EventTimeline.FORWARDS)
++    ?.getStateEvents('eu.kiefte.issue') as MatrixEvent[] | undefined;
++  return (events ?? []).filter((e) => !e.getContent()?._deleted);
++}
++
++function generateId(): string {
++  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
++}
++
++// ── Shared styles ─────────────────────────────────────────────────────────────
++
++const fieldControlStyle: React.CSSProperties = {
++  width: '100%',
++  padding: `${config.space.S100} ${config.space.S200}`,
++  borderRadius: 'var(--bo-medium)',
++  border: '1px solid var(--bg-surface-border)',
++  background: 'var(--bg-surface)',
++  color: 'inherit',
++  font: 'inherit',
++  boxSizing: 'border-box',
++};
++
++// ── IssueForm ─────────────────────────────────────────────────────────────────
++
++interface IssueFormProps {
++  schema: IssueSchema;
++  initial?: IssueContent;
++  onSave: (content: IssueContent) => void;
++  onCancel: () => void;
++  canDelete?: boolean;
++  onDelete?: () => void;
++}
++
++function IssueForm({ schema, initial, onSave, onCancel, canDelete, onDelete }: IssueFormProps) {
++  const titleId = 'issue-form-dialog-title';
++  const [values, setValues] = useState<IssueContent>(initial ?? {});
++
++  const set = (key: string, value: string) =>
++    setValues((prev) => ({ ...prev, [key]: value }));
++
++  const handleSubmit = (e: React.FormEvent) => {
++    e.preventDefault();
++    onSave(values);
++  };
++
++  return (
++    // role="dialog" + aria-modal on the wrapper so screen readers treat this as a dialog.
++    // FocusTrap (in the caller) ensures focus stays inside while open.
++    <div
++      role="dialog"
++      aria-modal="true"
++      aria-labelledby={titleId}
++    >
++      <form onSubmit={handleSubmit}>
++        <Box
++          direction="Column"
++          gap="300"
++          style={{
++            background: 'var(--bg-surface)',
++            borderRadius: 'var(--bo-medium)',
++            padding: config.space.S500,
++            minWidth: '300px',
++            maxWidth: '480px',
++            width: '90vw',
++            boxShadow: 'var(--shadow-overlay)',
++          }}
++        >
++          {/* Dialog title + close button */}
++          <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
++            <Text id={titleId} size="H5">
++              {initial ? 'Edit Issue' : 'New Issue'}
++            </Text>
++            <button
++              type="button"
++              onClick={onCancel}
++              aria-label="Close dialog"
++              style={{
++                background: 'none',
++                border: 'none',
++                cursor: 'pointer',
++                padding: config.space.S100,
++                color: 'inherit',
++                borderRadius: 'var(--bo-medium)',
++              }}
++            >
++              <Icon src={Icons.Cross} size="200" />
++            </button>
++          </Box>
++
++          {schema.fields.map((field) => (
++            <Box key={field.key} direction="Column" gap="100">
++              <label htmlFor={`issue-field-${field.key}`}>
++                <Text size="T300">
++                  {field.label}
++                  {field.required && (
++                    <span aria-hidden="true"> *</span>
++                  )}
++                  {field.required && (
++                    <span className="sr-only"> (required)</span>
++                  )}
++                </Text>
++              </label>
++              {field.type === 'enum' && field.values ? (
++                <select
++                  id={`issue-field-${field.key}`}
++                  value={(values[field.key] as string) ?? ''}
++                  onChange={(e) => set(field.key, e.target.value)}
++                  required={field.required}
++                  style={fieldControlStyle}
++                >
++                  <option value="">— Select —</option>
++                  {field.values.map((v) => (
++                    <option key={v} value={v}>
++                      {v}
++                    </option>
++                  ))}
++                </select>
++              ) : (
++                <input
++                  id={`issue-field-${field.key}`}
++                  type="text"
++                  value={(values[field.key] as string) ?? ''}
++                  onChange={(e) => set(field.key, e.target.value)}
++                  required={field.required}
++                  style={fieldControlStyle}
++                />
++              )}
++            </Box>
++          ))}
++
++          <Box gap="200" style={{ justifyContent: 'flex-end' }}>
++            {canDelete && onDelete && (
++              <Button type="button" variant="Critical" fill="Soft" size="300" onClick={onDelete}>
++                <Text>Delete</Text>
++              </Button>
++            )}
++            <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={onCancel}>
++              <Text>Cancel</Text>
++            </Button>
++            <Button type="submit" variant="Primary" size="300">
++              <Text>Save</Text>
++            </Button>
++          </Box>
++        </Box>
++      </form>
++    </div>
++  );
++}
++
++// ── IssueCard ─────────────────────────────────────────────────────────────────
++
++interface IssueCardProps {
++  event: MatrixEvent;
++  schema: IssueSchema;
++  canWrite: boolean;
++  triggerRef?: React.RefObject<HTMLButtonElement>;
++  onClick: () => void;
++}
++
++function IssueCard({ event, schema, canWrite, triggerRef, onClick }: IssueCardProps) {
++  const content = event.getContent() as IssueContent;
++  const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
++  const title = titleField ? ((content[titleField.key] as string) ?? '(untitled)') : '(untitled)';
++  const kanbanField = schema.fields.find((f) => f.kanban_group);
++  const secondaryFields = schema.fields.filter(
++    (f) => f !== titleField && f !== kanbanField && content[f.key]
++  );
++
++  const description = canWrite
++    ? `${title} — click to edit`
++    : title;
++
++  return (
++    <button
++      ref={triggerRef}
++      type="button"
++      onClick={canWrite ? onClick : undefined}
++      aria-label={description}
++      disabled={!canWrite}
++      style={{
++        padding: config.space.S200,
++        background: 'var(--bg-surface)',
++        border: '1px solid var(--bg-surface-border)',
++        borderRadius: 'var(--bo-medium)',
++        textAlign: 'left',
++        cursor: canWrite ? 'pointer' : 'default',
++        width: '100%',
++        display: 'flex',
++        flexDirection: 'column',
++        gap: config.space.S100,
++      }}
++    >
++      <Text size="T300" truncate>
++        {title}
++      </Text>
++      {secondaryFields.map((f) => (
++        <Text key={f.key} size="T200" priority="300">
++          {f.label}: {content[f.key] as string}
++        </Text>
++      ))}
++    </button>
++  );
++}
++
++// ── IssueBoard ────────────────────────────────────────────────────────────────
++
++export interface IssueBoardProps {
++  room: Room;
++}
++
++export function IssueBoard({ room }: IssueBoardProps) {
++  const mx = useMatrixClient();
++  const powerLevels = usePowerLevelsContext();
++  const creators = useRoomCreators(room);
++  const permissions = useRoomPermissions(creators, powerLevels);
++  const canWriteIssues = permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
++  const canConfigSchema = permissions.stateEvent(
++    'eu.kiefte.issues.schema' as any,
++    mx.getSafeUserId()
++  );
++
++  const [tick, setTick] = useState(0);
++
++  // Re-render on any room state change (new/updated state events).
++  useEffect(() => {
++    const refresh = () => setTick((t) => t + 1);
++    mx.on('RoomState.events' as any, refresh);
++    return () => {
++      mx.off('RoomState.events' as any, refresh);
++    };
++  }, [mx]);
++
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  const schema = useMemo(() => getIssueSchema(room), [room, tick]);
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  const issues = useMemo(() => getIssues(room), [room, tick]);
++
++  // Track which card triggered the edit dialog so focus can return on close.
++  const editTriggerRef = useRef<HTMLButtonElement>(null);
++  const [editing, setEditing] = useState<MatrixEvent | 'new' | null>(null);
++
++  const openEdit = (evt: MatrixEvent | 'new') => {
++    setEditing(evt);
++  };
++
++  const closeEdit = () => {
++    setEditing(null);
++    // Return focus to the card that opened the dialog (or the "New Issue" button).
++    setTimeout(() => editTriggerRef.current?.focus(), 50);
++  };
++
++  const handleSave = useCallback(
++    async (content: IssueContent) => {
++      const stateKey =
++        editing instanceof MatrixEvent ? editing.getStateKey()! : generateId();
++      await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, content, stateKey);
++      closeEdit();
++    },
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++    [mx, room.roomId, editing]
++  );
++
++  const handleDelete = useCallback(async () => {
++    if (!(editing instanceof MatrixEvent)) return;
++    const stateKey = editing.getStateKey()!;
++    const current = editing.getContent() as IssueContent;
++    await mx.sendStateEvent(
++      room.roomId,
++      'eu.kiefte.issue' as any,
++      { ...current, _deleted: true },
++      stateKey
++    );
++    closeEdit();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [mx, room.roomId, editing]);
++
++  const handleInitializeSchema = useCallback(async () => {
++    await mx.sendStateEvent(
++      room.roomId,
++      'eu.kiefte.issues.schema' as any,
++      DEFAULT_ISSUE_SCHEMA,
++      ''
++    );
++  }, [mx, room.roomId]);
++
++  // ── No schema state ──────────────────────────────────────────────────────────
++
++  if (!schema) {
++    return (
++      <Box
++        grow="Yes"
++        direction="Column"
++        alignItems="Center"
++        justifyContent="Center"
++        gap="300"
++        style={{ padding: config.space.S500, textAlign: 'center' }}
++        role="status"
++        aria-label="Issue tracker not configured"
++      >
++        <Icon src={Icons.CheckTwice} size="600" aria-hidden="true" />
++        <Text as="h2" size="H5">
++          Issue Tracker Not Configured
++        </Text>
++        <Text size="T300" priority="300">
++          No <code>eu.kiefte.issues.schema</code> state event found in this room.
++        </Text>
++        {canConfigSchema && (
++          <Button variant="Primary" size="300" onClick={handleInitializeSchema}>
++            <Icon src={Icons.Plus} size="100" aria-hidden="true" />
++            <Text>Initialize with Default Schema</Text>
++          </Button>
++        )}
++      </Box>
++    );
++  }
++
++  // ── Kanban columns ────────────────────────────────────────────────────────────
++
++  const kanbanField = schema.fields.find((f) => f.kanban_group);
++
++  interface Column {
++    key: string;
++    label: string;
++    issues: MatrixEvent[];
++  }
++
++  const columns: Column[] = kanbanField
++    ? [
++        ...(kanbanField.values ?? []).map((value) => ({
++          key: value,
++          label: value,
++          issues: issues.filter(
++            (e) => (e.getContent() as IssueContent)[kanbanField.key] === value
++          ),
++        })),
++        {
++          key: '__uncategorized__',
++          label: 'Uncategorized',
++          issues: issues.filter(
++            (e) =>
++              !kanbanField.values?.includes(
++                (e.getContent() as IssueContent)[kanbanField.key] as string
++              )
++          ),
++        },
++      ].filter((col) => col.issues.length > 0 || kanbanField.values?.includes(col.key))
++    : [{ key: '__all__', label: 'All Issues', issues }];
++
++  const initialContent =
++    editing instanceof MatrixEvent ? (editing.getContent() as IssueContent) : undefined;
++
++  return (
++    <Box grow="Yes" direction="Column" style={{ overflow: 'hidden' }}>
++      {/* Toolbar */}
++      <Box
++        shrink="No"
++        alignItems="Center"
++        gap="300"
++        role="toolbar"
++        aria-label="Issue tracker controls"
++        style={{
++          padding: `${config.space.S200} ${config.space.S400}`,
++          borderBottom: '1px solid var(--bg-surface-border)',
++        }}
++      >
++        <Text size="T300" style={{ flexGrow: 1 }} aria-live="polite">
++          {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
++        </Text>
++        {canWriteIssues && (
++          <Button
++            size="300"
++            variant="Primary"
++            onClick={() => openEdit('new')}
++            aria-label="Create new issue"
++          >
++            <Icon src={Icons.Plus} size="100" aria-hidden="true" />
++            <Text>New Issue</Text>
++          </Button>
++        )}
++      </Box>
++
++      {/* Kanban / list board */}
++      <div
++        style={{ flexGrow: 1, overflow: 'auto' }}
++        role="region"
++        aria-label="Issue board"
++      >
++        {/* Horizontal scroll container — rendered as a flex row of columns */}
++        <Box
++          gap="300"
++          style={{
++            padding: config.space.S300,
++            minHeight: '100%',
++            alignItems: 'flex-start',
++          }}
++        >
++          {columns.map((col) => {
++            const colHeadingId = `issue-col-heading-${col.key}`;
++            return (
++              // Each column is a labelled group so assistive tech announces the column name.
++              <section
++                key={col.key}
++                aria-labelledby={colHeadingId}
++                style={{
++                  minWidth: '240px',
++                  maxWidth: '320px',
++                  flexShrink: 0,
++                  background: 'var(--bg-surface-low)',
++                  borderRadius: 'var(--bo-medium)',
++                  padding: config.space.S300,
++                  display: 'flex',
++                  flexDirection: 'column',
++                  gap: config.space.S200,
++                }}
++              >
++                <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
++                  <Text
++                    id={colHeadingId}
++                    as="h3"
++                    size="H6"
++                    style={{ textTransform: 'capitalize' }}
++                  >
++                    {col.label.replace(/_/g, ' ')}
++                  </Text>
++                  <Text size="T200" priority="300" aria-label={`${col.issues.length} issues`}>
++                    {col.issues.length}
++                  </Text>
++                </Box>
++                {/* <ul> gives screen readers proper list navigation */}
++                <ul
++                  style={{
++                    listStyle: 'none',
++                    padding: 0,
++                    margin: 0,
++                    display: 'flex',
++                    flexDirection: 'column',
++                    gap: config.space.S200,
++                  }}
++                >
++                  {col.issues.map((evt) => (
++                    <li key={evt.getStateKey()}>
++                      <IssueCard
++                        event={evt}
++                        schema={schema}
++                        canWrite={canWriteIssues}
++                        onClick={() => openEdit(evt)}
++                      />
++                    </li>
++                  ))}
++                  {col.issues.length === 0 && (
++                    <li aria-live="polite">
++                      <Text
++                        size="T200"
++                        priority="300"
++                        style={{ textAlign: 'center', padding: config.space.S200 }}
++                      >
++                        No issues
++                      </Text>
++                    </li>
++                  )}
++                </ul>
++              </section>
++            );
++          })}
++        </Box>
++      </div>
++
++      {/* Issue form modal */}
++      <Overlay open={editing !== null} backdrop={<OverlayBackdrop />}>
++        <OverlayCenter>
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              clickOutsideDeactivates: true,
++              onDeactivate: closeEdit,
++              escapeDeactivates: stopPropagation,
++            }}
++          >
++            <IssueForm
++              schema={schema}
++              initial={initialContent}
++              onSave={handleSave}
++              onCancel={closeEdit}
++              canDelete={editing instanceof MatrixEvent && canWriteIssues}
++              onDelete={handleDelete}
++            />
++          </FocusTrap>
++        </OverlayCenter>
++      </Overlay>
++    </Box>
++  );
++}
+diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
+index 01e6e6a4..cb5427a6 100644
+--- a/src/app/features/settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
+@@ -48,6 +48,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+   const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
+ 
+   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
++  const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
+   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
+   const [globalExpand, setGlobalExpand] = useState(false);
+   const [profileExpand, setProfileExpand] = useState(false);
+@@ -132,6 +133,27 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+             <Scroll hideTrack visibility="Hover">
+               <PageContent>
+                 <Box direction="Column" gap="700">
++                  <Box direction="Column" gap="100">
++                    <Text size="L400">Experimental Features</Text>
++                    <SequenceCard
++                      className={SequenceCardStyle}
++                      variant="SurfaceVariant"
++                      direction="Column"
++                      gap="400"
++                    >
++                      <SettingTile
++                        title="Issue Tracker"
++                        description="Enable per-room issue tracker (experimental). Adds an 'Initialize Issue Tracker' option to room menus for admins."
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={issueTracker}
++                            onChange={setIssueTracker}
++                          />
++                        }
++                      />
++                    </SequenceCard>
++                  </Box>
+                   <Box direction="Column" gap="100">
+                     <Text size="L400">Options</Text>
+                     <SequenceCard
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 52679837..21690ccf 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -49,6 +49,7 @@ export interface Settings {
+   dateFormatString: string;
+ 
+   developerTools: boolean;
++  issueTracker: boolean;
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -85,6 +86,7 @@ const defaultSettings: Settings = {
+   dateFormatString: 'D MMM YYYY',
+ 
+   developerTools: false,
++  issueTracker: false,
+ };
+ 
+ export const getSettings = () => {

@@ -1,11 +1,11 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..84046da7
+index 00000000..556b8dde
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,172 @@
 +import React, { useCallback } from 'react';
-+import { useNavigate, useParams } from 'react-router-dom';
++import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
 +import { isKeyHotkey } from 'is-hotkey';
 +import { useGlobalKeyboardShortcuts, KeyboardShortcut } from '../hooks/useGlobalKeyboardShortcuts';
@@ -19,6 +19,7 @@ index 00000000..84046da7
 +import { allRoomsAtom } from '../state/room-list/roomList';
 +import { useSidebarItems } from '../hooks/useSidebarItems';
 +import { getSpaceLobbyPath, getDirectRoomPath, getHomeRoomPath } from '../pages/pathUtils';
++import { HOME_ROOM_PATH, DIRECT_ROOM_PATH, SPACE_ROOM_PATH } from '../pages/paths';
 +import { getCanonicalAliasOrRoomId } from '../utils/matrix';
 +import { mDirectAtom } from '../state/mDirectList';
 +import { roomToUnreadAtom } from '../state/room/roomToUnread';
@@ -65,7 +66,16 @@ index 00000000..84046da7
 +  const spaceIds = sidebarItems.filter((item): item is string => typeof item === 'string');
 +  const mDirects = useAtomValue(mDirectAtom);
 +  const roomToUnread = useAtomValue(roomToUnreadAtom);
-+  const { roomIdOrAlias } = useParams<{ roomIdOrAlias: string }>();
++  // GlobalKeyboardShortcuts is rendered outside the room routes, so useParams() never
++  // returns roomIdOrAlias. Use useLocation() + matchPath() to get it from the URL directly.
++  const location = useLocation();
++  const roomMatch =
++    matchPath(HOME_ROOM_PATH, location.pathname) ??
++    matchPath(DIRECT_ROOM_PATH, location.pathname) ??
++    matchPath(SPACE_ROOM_PATH, location.pathname);
++  const roomIdOrAlias = roomMatch?.params.roomIdOrAlias
++    ? decodeURIComponent(roomMatch.params.roomIdOrAlias)
++    : undefined;
 +  const currentRoomId = roomIdOrAlias
 +    ? roomIdOrAlias.startsWith('!')
 +      ? roomIdOrAlias

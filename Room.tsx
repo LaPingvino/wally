@@ -16,6 +16,7 @@ import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { CallView } from '../call/CallView';
 import { RoomViewHeader } from './RoomViewHeader';
 import { useCallState } from '../../pages/client/call/CallProvider';
+import { IssueBoard } from '../issues/IssueBoard';
 
 export function Room() {
   const { eventId } = useParams();
@@ -31,6 +32,13 @@ export function Room() {
   const { activeCallRoomId, isCallViewOpen, isChatOpen } = useCallState();
   const isActiveCall = activeCallRoomId === room?.roomId;
 
+  const [isIssueBoard, setIsIssueBoard] = useState(false);
+
+  // Reset issue board view when navigating to a different room.
+  useEffect(() => {
+    setIsIssueBoard(false);
+  }, [room.roomId]);
+
   useEffect(() => {
     const name = room.name || room.roomId;
     document.title = `${name} – Cinny`;
@@ -38,6 +46,7 @@ export function Room() {
       document.title = 'Cinny';
     };
   }, [room.name, room.roomId]);
+
   const isVoiceRoom = room.isCallRoom();
   const isCallLayout = isVoiceRoom || isActiveCall;
   const showCallPanel = isCallLayout && isCallViewOpen;
@@ -86,40 +95,49 @@ export function Room() {
     <PowerLevelsContextProvider value={powerLevels}>
       <Box grow="Yes">
         <Box grow="Yes" direction="Column">
-          <RoomViewHeader />
+          <RoomViewHeader
+            isIssueBoard={isIssueBoard}
+            onToggleIssueBoard={() => setIsIssueBoard((b) => !b)}
+          />
           <Box grow="Yes" ref={containerRef}>
-            {isCallLayout && (
-              <Box
-                grow={showBoth ? undefined : showCallPanel ? 'Yes' : undefined}
-                direction="Column"
-                style={
-                  showBoth
-                    ? { flexBasis: `${splitRatio * 100}%`, flexShrink: 0, overflow: 'hidden' }
-                    : { display: showCallPanel ? 'flex' : 'none' }
-                }
-              >
-                <CallView room={room} />
-              </Box>
+            {isIssueBoard ? (
+              <IssueBoard room={room} />
+            ) : (
+              <>
+                {isCallLayout && (
+                  <Box
+                    grow={showBoth ? undefined : showCallPanel ? 'Yes' : undefined}
+                    direction="Column"
+                    style={
+                      showBoth
+                        ? { flexBasis: `${splitRatio * 100}%`, flexShrink: 0, overflow: 'hidden' }
+                        : { display: showCallPanel ? 'flex' : 'none' }
+                    }
+                  >
+                    <CallView room={room} />
+                  </Box>
+                )}
+                {showBoth && (
+                  <div
+                    role="separator"
+                    style={{
+                      width: '6px',
+                      cursor: 'col-resize',
+                      flexShrink: 0,
+                      background: 'var(--bg-surface-border)',
+                    }}
+                    onMouseDown={handleDividerMouseDown}
+                  />
+                )}
+                <Box
+                  grow={showChatPanel ? 'Yes' : undefined}
+                  direction="Column"
+                  style={{ display: showChatPanel ? 'flex' : 'none' }}
+                >
+                  <RoomView room={room} eventId={eventId} />
+                </Box>
+              </>
             )}
-            {showBoth && (
-              <div
-                role="separator"
-                style={{
-                  width: '6px',
-                  cursor: 'col-resize',
-                  flexShrink: 0,
-                  background: 'var(--bg-surface-border)',
-                }}
-                onMouseDown={handleDividerMouseDown}
-              />
-            )}
-            <Box
-              grow={showChatPanel ? 'Yes' : undefined}
-              direction="Column"
-              style={{ display: showChatPanel ? 'flex' : 'none' }}
-            >
-              <RoomView room={room} eventId={eventId} />
-            </Box>
           </Box>
         </Box>
         {screenSize === ScreenSize.Desktop && isDrawer && (

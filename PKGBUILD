@@ -40,6 +40,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "04-call-settings.patch"
         "05-login-accessibility.patch"
         "06-accessibility.patch"
+        "07-issue-tracker.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -59,8 +60,8 @@ sha256sums=('SKIP'
             '1e4e4f07d01867cf704a5f7433bbcf41e92a87e9bca264d6c4e9ee31c4011824'
             'aeb3404add2c68bc952b543d77ef155e60fe7776aaf62e29bc68291b98c016f4'
             '1f8649e1ff1eedc4d7415e4800bade9d5014fbdf80aef80a22909f0abb7e67c1'
-            'aac3d97b225d2a3b4ec911f4f3ca9480d2bb8a6c4ec360b7b0fe9762273ebd42'
-            'd49748ffeca4ab129433a509997871eb9bd17b2a4d00acf58e8ba7059dc6e7f8'
+            'c61c12de95066abbc797465c243cab70a46156d7690de6a050d033683cf87f88'
+            'b382e9a145f5b6ee1004c00dca9223c59ca9918ede5691149555179ca041f730'
             'c53be6eed7150f17e28f17f032a32a2bad9b476e59bcfad4d1f5c3abb887e57c'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
             'b6b545d5827fc5d0dcb3a125f1dd0594e8607826a8576ac0d873bc0953aff113'
@@ -72,7 +73,8 @@ sha256sums=('SKIP'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            'fe5488dae9014bce15bcd4605173505371126449f9d2408d0de868ce51e69197'
+            '2d7c377c2497ca4ec142c6dee8096fd2b96349e95e1ea15ece6f02c8ac30dfb4'
+            '3446e48d18145c93a4684e6df36531cfd4518cd8351ea51e8a4cf832615a44c0'
             )
 
 prepare() {
@@ -129,6 +131,10 @@ prepare() {
 
   echo "Applying accessibility improvements patch..."
   patch -p1 -i "$srcdir/06-accessibility.patch"
+
+  echo "Applying issue tracker patch..."
+  mkdir -p "src/app/features/issues"
+  patch -p1 -i "$srcdir/07-issue-tracker.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
