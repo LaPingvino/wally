@@ -69,13 +69,14 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { DEFAULT_ISSUE_SCHEMA } from '../issues/IssueBoard';
+import { getIssueSchema } from '../issues/IssueBoard';
 
 type RoomMenuProps = {
   room: Room;
   requestClose: () => void;
+  onOpenIssueBoard?: () => void;
 };
-const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
+const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard }, ref) => {
   const mx = useMatrixClient();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [issueTrackerEnabled] = useSetting(settingsAtom, 'issueTracker');
@@ -101,10 +102,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
-  const hasIssueSchema = !!room
-    .getLiveTimeline()
-    .getState(EventTimeline.FORWARDS)
-    ?.getStateEvents('eu.kiefte.issues.schema', '');
+  const hasIssueSchema = !!getIssueSchema(room);
 
   const handleMarkAsRead = () => {
     markAsRead(mx, room.roomId, hideActivity);
@@ -129,13 +127,9 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     requestClose();
   };
 
-  const handleInitializeIssueTracker = async () => {
-    await mx.sendStateEvent(
-      room.roomId,
-      'eu.kiefte.issues.schema' as any,
-      DEFAULT_ISSUE_SCHEMA,
-      ''
-    );
+  const handleInitializeIssueTracker = () => {
+    // Open the issue board — when no schema exists, IssueBoard renders the schema editor inline.
+    onOpenIssueBoard?.();
     requestClose();
   };
 
@@ -337,10 +331,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
     permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
 
   // Issues button is shown when schema exists AND user has rights to interact with issues.
-  const hasIssueSchema = !!room
-    .getLiveTimeline()
-    .getState(EventTimeline.FORWARDS)
-    ?.getStateEvents('eu.kiefte.issues.schema', '');
+  const hasIssueSchema = !!getIssueSchema(room);
   const showIssuesButton = hasIssueSchema && (canWriteIssues || canConfigSchema);
 
   // NOTE: This handler is a new addition compared to the PR (hazre/cinny feat/element-call).
@@ -673,7 +664,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                   escapeDeactivates: stopPropagation,
                 }}
               >
-                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} />
+                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} onOpenIssueBoard={onToggleIssueBoard} />
               </FocusTrap>
             }
           />

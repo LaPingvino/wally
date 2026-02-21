@@ -1,21 +1,26 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 00000000..b5b99e64
+index 00000000..ecf22ca1
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,569 @@
+@@ -0,0 +1,858 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixEvent, Room } from 'matrix-js-sdk';
 +import {
 +  Box,
 +  Button,
++  Dialog,
++  Header,
 +  Icon,
++  IconButton,
 +  Icons,
 +  Overlay,
 +  OverlayBackdrop,
 +  OverlayCenter,
++  Scroll,
 +  Text,
++  color,
 +  config,
 +} from 'folds';
 +import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -23,6 +28,7 @@ index 00000000..b5b99e64
 +import { useRoomCreators } from '../../hooks/useRoomCreators';
 +import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 +import { stopPropagation } from '../../utils/keyboard';
++import { StateEvent } from '../../../types/matrix/room';
 +
 +// ── Types ─────────────────────────────────────────────────────────────────────
 +
@@ -43,7 +49,7 @@ index 00000000..b5b99e64
 +
 +type IssueContent = Record<string, unknown> & { _deleted?: boolean };
 +
-+// ── Default schema for initialization ─────────────────────────────────────────
++// ── Default schema ─────────────────────────────────────────────────────────────
 +
 +export const DEFAULT_ISSUE_SCHEMA: IssueSchema = {
 +  fields: [
@@ -52,14 +58,14 @@ index 00000000..b5b99e64
 +      key: 'status',
 +      type: 'enum',
 +      label: 'Status',
-+      values: ['backlog', 'todo', 'in_progress', 'done'],
++      values: ['Backlog', 'To Do', 'In Progress', 'Done'],
 +      kanban_group: true,
 +    },
 +    {
 +      key: 'priority',
 +      type: 'enum',
 +      label: 'Priority',
-+      values: ['low', 'medium', 'high', 'critical'],
++      values: ['Low', 'Medium', 'High', 'Critical'],
 +    },
 +    { key: 'description', type: 'text', label: 'Description' },
 +  ],
@@ -90,97 +96,324 @@ index 00000000..b5b99e64
 +  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 +}
 +
-+// ── Shared styles ─────────────────────────────────────────────────────────────
++// ── Shared input style ─────────────────────────────────────────────────────────
++// Uses folds color tokens so it inherits the correct theme colours.
 +
-+const fieldControlStyle: React.CSSProperties = {
++const inputStyle: React.CSSProperties = {
 +  width: '100%',
 +  padding: `${config.space.S100} ${config.space.S200}`,
-+  borderRadius: 'var(--bo-medium)',
-+  border: '1px solid var(--bg-surface-border)',
-+  background: 'var(--bg-surface)',
++  borderRadius: config.radii.R300,
++  border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
++  background: color.SurfaceVariant.Container,
 +  color: 'inherit',
 +  font: 'inherit',
 +  boxSizing: 'border-box',
 +};
++
++// ── SchemaEditor ───────────────────────────────────────────────────────────────
++
++interface DraftField extends SchemaField {
++  _enumRaw: string; // comma-separated enum values string for the text input
++}
++
++function fieldToDraft(f: SchemaField): DraftField {
++  return { ...f, _enumRaw: f.values?.join(', ') ?? '' };
++}
++
++function draftToField(d: DraftField): SchemaField {
++  const { _enumRaw, ...field } = d;
++  if (field.type === 'enum') {
++    field.values = _enumRaw
++      .split(',')
++      .map((v) => v.trim())
++      .filter(Boolean);
++  } else {
++    delete field.values;
++    delete field.kanban_group;
++  }
++  return field;
++}
++
++export interface SchemaEditorProps {
++  initial: IssueSchema;
++  titleText?: string;
++  onSave: (schema: IssueSchema) => Promise<void>;
++  onCancel: () => void;
++}
++
++export function SchemaEditor({ initial, titleText, onSave, onCancel }: SchemaEditorProps) {
++  const titleId = 'schema-editor-title';
++  const [fields, setFields] = useState<DraftField[]>(() => initial.fields.map(fieldToDraft));
++  const [saving, setSaving] = useState(false);
++  const [error, setError] = useState<string | null>(null);
++
++  const updateField = (key: string, patch: Partial<DraftField>) =>
++    setFields((fs) => fs.map((f) => (f.key === key ? { ...f, ...patch } : f)));
++
++  const removeField = (key: string) => setFields((fs) => fs.filter((f) => f.key !== key));
++
++  const addField = () =>
++    setFields((fs) => [
++      ...fs,
++      { key: generateId(), type: 'text', label: '', _enumRaw: '' },
++    ]);
++
++  const setKanban = (key: string) =>
++    setFields((fs) =>
++      fs.map((f) => ({
++        ...f,
++        kanban_group: f.key === key && f.type === 'enum' ? true : undefined,
++      }))
++    );
++
++  const handleSave = async (e: React.FormEvent) => {
++    e.preventDefault();
++    const finalFields = fields.map(draftToField);
++    setSaving(true);
++    setError(null);
++    try {
++      await onSave({ fields: finalFields });
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Failed to save schema');
++      setSaving(false);
++    }
++  };
++
++  return (
++    <Dialog variant="Surface" style={{ width: '90vw', maxWidth: '540px' }}>
++      <Header
++        style={{
++          padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
++          borderBottomWidth: config.borderWidth.B300,
++        }}
++        variant="Surface"
++        size="500"
++      >
++        <Box grow="Yes">
++          <Text id={titleId} size="H4">
++            {titleText ?? 'Configure Issue Tracker'}
++          </Text>
++        </Box>
++        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
++          <Icon src={Icons.Cross} />
++        </IconButton>
++      </Header>
++
++      <Scroll>
++        <form id="schema-editor-form" onSubmit={handleSave}>
++          <Box direction="Column" gap="300" style={{ padding: config.space.S400 }}>
++            <Text size="T300" priority="300">
++              Fields define what information is tracked per issue. One enum field can be the kanban
++              grouping column.
++            </Text>
++
++            {fields.map((field, idx) => (
++              <Box
++                key={field.key}
++                direction="Column"
++                gap="200"
++                style={{
++                  padding: config.space.S300,
++                  border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
++                  borderRadius: config.radii.R300,
++                  background: color.SurfaceVariant.Container,
++                }}
++              >
++                <Box alignItems="Center" gap="200">
++                  <Text size="T300" style={{ flexShrink: 0 }}>
++                    Field {idx + 1}
++                  </Text>
++                  <Box grow="Yes" />
++                  <IconButton
++                    type="button"
++                    size="300"
++                    variant="Critical"
++                    fill="None"
++                    radii="300"
++                    aria-label={`Remove field ${idx + 1}`}
++                    onClick={() => removeField(field.key)}
++                  >
++                    <Icon src={Icons.Delete} size="100" />
++                  </IconButton>
++                </Box>
++
++                <Box gap="200">
++                  <Box direction="Column" gap="100" style={{ flex: 1 }}>
++                    <label htmlFor={`sf-label-${field.key}`}>
++                      <Text size="T200">Label</Text>
++                    </label>
++                    <input
++                      id={`sf-label-${field.key}`}
++                      type="text"
++                      required
++                      value={field.label}
++                      onChange={(e) => updateField(field.key, { label: e.target.value })}
++                      style={inputStyle}
++                      placeholder="e.g. Status"
++                    />
++                  </Box>
++
++                  <Box direction="Column" gap="100" style={{ flexShrink: 0, width: '120px' }}>
++                    <label htmlFor={`sf-type-${field.key}`}>
++                      <Text size="T200">Type</Text>
++                    </label>
++                    <select
++                      id={`sf-type-${field.key}`}
++                      value={field.type}
++                      onChange={(e) =>
++                        updateField(field.key, { type: e.target.value as FieldType })
++                      }
++                      style={inputStyle}
++                    >
++                      <option value="text">Text</option>
++                      <option value="enum">Choice</option>
++                      <option value="user">User</option>
++                    </select>
++                  </Box>
++                </Box>
++
++                {field.type === 'enum' && (
++                  <Box direction="Column" gap="100">
++                    <label htmlFor={`sf-vals-${field.key}`}>
++                      <Text size="T200">Choices (comma-separated)</Text>
++                    </label>
++                    <input
++                      id={`sf-vals-${field.key}`}
++                      type="text"
++                      value={field._enumRaw}
++                      onChange={(e) => updateField(field.key, { _enumRaw: e.target.value })}
++                      style={inputStyle}
++                      placeholder="e.g. Backlog, To Do, In Progress, Done"
++                    />
++                    <Box alignItems="Center" gap="100">
++                      <input
++                        id={`sf-kanban-${field.key}`}
++                        type="checkbox"
++                        checked={!!field.kanban_group}
++                        onChange={(e) => {
++                          if (e.target.checked) setKanban(field.key);
++                          else updateField(field.key, { kanban_group: undefined });
++                        }}
++                      />
++                      <label htmlFor={`sf-kanban-${field.key}`}>
++                        <Text size="T200">Use as Kanban columns</Text>
++                      </label>
++                    </Box>
++                  </Box>
++                )}
++              </Box>
++            ))}
++
++            <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={addField}>
++              <Icon src={Icons.Plus} size="100" aria-hidden="true" />
++              <Text>Add Field</Text>
++            </Button>
++
++            {error && (
++              <Text size="T300" style={{ color: color.Critical.Main }}>
++                {error}
++              </Text>
++            )}
++          </Box>
++        </form>
++      </Scroll>
++
++      <Box
++        gap="200"
++        style={{
++          padding: config.space.S300,
++          borderTop: `1px solid ${color.Surface.ContainerLine}`,
++          justifyContent: 'flex-end',
++        }}
++      >
++        <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={onCancel}>
++          <Text>Cancel</Text>
++        </Button>
++        <Button
++          type="submit"
++          form="schema-editor-form"
++          variant="Primary"
++          size="300"
++          aria-disabled={saving}
++        >
++          <Text>{saving ? 'Saving…' : 'Save Schema'}</Text>
++        </Button>
++      </Box>
++    </Dialog>
++  );
++}
 +
 +// ── IssueForm ─────────────────────────────────────────────────────────────────
 +
 +interface IssueFormProps {
 +  schema: IssueSchema;
 +  initial?: IssueContent;
-+  onSave: (content: IssueContent) => void;
++  onSave: (content: IssueContent) => Promise<void>;
 +  onCancel: () => void;
 +  canDelete?: boolean;
-+  onDelete?: () => void;
++  onDelete?: () => Promise<void>;
 +}
 +
 +function IssueForm({ schema, initial, onSave, onCancel, canDelete, onDelete }: IssueFormProps) {
-+  const titleId = 'issue-form-dialog-title';
++  const titleId = 'issue-form-title';
 +  const [values, setValues] = useState<IssueContent>(initial ?? {});
++  const [saving, setSaving] = useState(false);
++  const [error, setError] = useState<string | null>(null);
 +
-+  const set = (key: string, value: string) =>
-+    setValues((prev) => ({ ...prev, [key]: value }));
++  const set = (key: string, value: string) => setValues((prev) => ({ ...prev, [key]: value }));
 +
-+  const handleSubmit = (e: React.FormEvent) => {
++  const handleSubmit = async (e: React.FormEvent) => {
 +    e.preventDefault();
-+    onSave(values);
++    setSaving(true);
++    setError(null);
++    try {
++      await onSave(values);
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Failed to save');
++      setSaving(false);
++    }
++  };
++
++  const handleDelete = async () => {
++    if (!onDelete) return;
++    setSaving(true);
++    try {
++      await onDelete();
++    } catch (err) {
++      setError(err instanceof Error ? err.message : 'Failed to delete');
++      setSaving(false);
++    }
 +  };
 +
 +  return (
-+    // role="dialog" + aria-modal on the wrapper so screen readers treat this as a dialog.
-+    // FocusTrap (in the caller) ensures focus stays inside while open.
-+    <div
-+      role="dialog"
-+      aria-modal="true"
-+      aria-labelledby={titleId}
-+    >
-+      <form onSubmit={handleSubmit}>
-+        <Box
-+          direction="Column"
-+          gap="300"
-+          style={{
-+            background: 'var(--bg-surface)',
-+            borderRadius: 'var(--bo-medium)',
-+            padding: config.space.S500,
-+            minWidth: '300px',
-+            maxWidth: '480px',
-+            width: '90vw',
-+            boxShadow: 'var(--shadow-overlay)',
-+          }}
-+        >
-+          {/* Dialog title + close button */}
-+          <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
-+            <Text id={titleId} size="H5">
-+              {initial ? 'Edit Issue' : 'New Issue'}
-+            </Text>
-+            <button
-+              type="button"
-+              onClick={onCancel}
-+              aria-label="Close dialog"
-+              style={{
-+                background: 'none',
-+                border: 'none',
-+                cursor: 'pointer',
-+                padding: config.space.S100,
-+                color: 'inherit',
-+                borderRadius: 'var(--bo-medium)',
-+              }}
-+            >
-+              <Icon src={Icons.Cross} size="200" />
-+            </button>
-+          </Box>
++    <Dialog variant="Surface" style={{ width: '90vw', maxWidth: '480px' }}>
++      <Header
++        style={{
++          padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
++          borderBottomWidth: config.borderWidth.B300,
++        }}
++        variant="Surface"
++        size="500"
++      >
++        <Box grow="Yes">
++          <Text id={titleId} size="H4">
++            {initial ? 'Edit Issue' : 'New Issue'}
++          </Text>
++        </Box>
++        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close dialog">
++          <Icon src={Icons.Cross} />
++        </IconButton>
++      </Header>
 +
++      <form id="issue-form" onSubmit={handleSubmit} role="dialog" aria-labelledby={titleId} aria-modal="true">
++        <Box direction="Column" gap="300" style={{ padding: config.space.S400 }}>
 +          {schema.fields.map((field) => (
 +            <Box key={field.key} direction="Column" gap="100">
 +              <label htmlFor={`issue-field-${field.key}`}>
 +                <Text size="T300">
 +                  {field.label}
-+                  {field.required && (
-+                    <span aria-hidden="true"> *</span>
-+                  )}
-+                  {field.required && (
-+                    <span className="sr-only"> (required)</span>
-+                  )}
++                  {field.required && <span aria-hidden="true"> *</span>}
++                  {field.required && <span className="sr-only"> (required)</span>}
 +                </Text>
 +              </label>
 +              {field.type === 'enum' && field.values ? (
@@ -189,7 +422,7 @@ index 00000000..b5b99e64
 +                  value={(values[field.key] as string) ?? ''}
 +                  onChange={(e) => set(field.key, e.target.value)}
 +                  required={field.required}
-+                  style={fieldControlStyle}
++                  style={inputStyle}
 +                >
 +                  <option value="">— Select —</option>
 +                  {field.values.map((v) => (
@@ -205,28 +438,54 @@ index 00000000..b5b99e64
 +                  value={(values[field.key] as string) ?? ''}
 +                  onChange={(e) => set(field.key, e.target.value)}
 +                  required={field.required}
-+                  style={fieldControlStyle}
++                  style={inputStyle}
 +                />
 +              )}
 +            </Box>
 +          ))}
 +
-+          <Box gap="200" style={{ justifyContent: 'flex-end' }}>
-+            {canDelete && onDelete && (
-+              <Button type="button" variant="Critical" fill="Soft" size="300" onClick={onDelete}>
-+                <Text>Delete</Text>
-+              </Button>
-+            )}
-+            <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={onCancel}>
-+              <Text>Cancel</Text>
-+            </Button>
-+            <Button type="submit" variant="Primary" size="300">
-+              <Text>Save</Text>
-+            </Button>
-+          </Box>
++          {error && (
++            <Text size="T300" style={{ color: color.Critical.Main }}>
++              {error}
++            </Text>
++          )}
 +        </Box>
 +      </form>
-+    </div>
++
++      <Box
++        gap="200"
++        style={{
++          padding: config.space.S300,
++          borderTop: `1px solid ${color.Surface.ContainerLine}`,
++          justifyContent: 'flex-end',
++        }}
++      >
++        {canDelete && onDelete && (
++          <Button
++            type="button"
++            variant="Critical"
++            fill="Soft"
++            size="300"
++            onClick={handleDelete}
++            aria-disabled={saving}
++          >
++            <Text>Delete</Text>
++          </Button>
++        )}
++        <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={onCancel}>
++          <Text>Cancel</Text>
++        </Button>
++        <Button
++          type="submit"
++          form="issue-form"
++          variant="Primary"
++          size="300"
++          aria-disabled={saving}
++        >
++          <Text>{saving ? 'Saving…' : 'Save'}</Text>
++        </Button>
++      </Box>
++    </Dialog>
 +  );
 +}
 +
@@ -236,11 +495,10 @@ index 00000000..b5b99e64
 +  event: MatrixEvent;
 +  schema: IssueSchema;
 +  canWrite: boolean;
-+  triggerRef?: React.RefObject<HTMLButtonElement>;
 +  onClick: () => void;
 +}
 +
-+function IssueCard({ event, schema, canWrite, triggerRef, onClick }: IssueCardProps) {
++function IssueCard({ event, schema, canWrite, onClick }: IssueCardProps) {
 +  const content = event.getContent() as IssueContent;
 +  const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
 +  const title = titleField ? ((content[titleField.key] as string) ?? '(untitled)') : '(untitled)';
@@ -249,22 +507,17 @@ index 00000000..b5b99e64
 +    (f) => f !== titleField && f !== kanbanField && content[f.key]
 +  );
 +
-+  const description = canWrite
-+    ? `${title} — click to edit`
-+    : title;
-+
 +  return (
 +    <button
-+      ref={triggerRef}
 +      type="button"
 +      onClick={canWrite ? onClick : undefined}
-+      aria-label={description}
++      aria-label={canWrite ? `${title} — click to edit` : title}
 +      disabled={!canWrite}
 +      style={{
 +        padding: config.space.S200,
-+        background: 'var(--bg-surface)',
-+        border: '1px solid var(--bg-surface-border)',
-+        borderRadius: 'var(--bo-medium)',
++        background: color.Surface.Container,
++        border: `1px solid ${color.Surface.ContainerLine}`,
++        borderRadius: config.radii.R300,
 +        textAlign: 'left',
 +        cursor: canWrite ? 'pointer' : 'default',
 +        width: '100%',
@@ -296,15 +549,20 @@ index 00000000..b5b99e64
 +  const powerLevels = usePowerLevelsContext();
 +  const creators = useRoomCreators(room);
 +  const permissions = useRoomPermissions(creators, powerLevels);
-+  const canWriteIssues = permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
-+  const canConfigSchema = permissions.stateEvent(
-+    'eu.kiefte.issues.schema' as any,
-+    mx.getSafeUserId()
-+  );
++
++  // Mirror the creator-bypass fix from RoomViewHeader (creatorsSupported is false for versions 1–11).
++  const roomCreateEvent = room
++    .getLiveTimeline()
++    .getState(EventTimeline.BACKWARDS)
++    ?.getStateEvents(StateEvent.RoomCreate, '');
++  const isRoomCreator = roomCreateEvent?.getSender() === mx.getSafeUserId();
++
++  const canWriteIssues = isRoomCreator || permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
++  const canConfigSchema =
++    isRoomCreator ||
++    permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
 +
 +  const [tick, setTick] = useState(0);
-+
-+  // Re-render on any room state change (new/updated state events).
 +  useEffect(() => {
 +    const refresh = () => setTick((t) => t + 1);
 +    mx.on('RoomState.events' as any, refresh);
@@ -318,21 +576,16 @@ index 00000000..b5b99e64
 +  // eslint-disable-next-line react-hooks/exhaustive-deps
 +  const issues = useMemo(() => getIssues(room), [room, tick]);
 +
-+  // Track which card triggered the edit dialog so focus can return on close.
 +  const editTriggerRef = useRef<HTMLButtonElement>(null);
 +  const [editing, setEditing] = useState<MatrixEvent | 'new' | null>(null);
-+
-+  const openEdit = (evt: MatrixEvent | 'new') => {
-+    setEditing(evt);
-+  };
++  const [editingSchema, setEditingSchema] = useState(false);
 +
 +  const closeEdit = () => {
 +    setEditing(null);
-+    // Return focus to the card that opened the dialog (or the "New Issue" button).
 +    setTimeout(() => editTriggerRef.current?.focus(), 50);
 +  };
 +
-+  const handleSave = useCallback(
++  const handleSaveIssue = useCallback(
 +    async (content: IssueContent) => {
 +      const stateKey =
 +        editing instanceof MatrixEvent ? editing.getStateKey()! : generateId();
@@ -343,7 +596,7 @@ index 00000000..b5b99e64
 +    [mx, room.roomId, editing]
 +  );
 +
-+  const handleDelete = useCallback(async () => {
++  const handleDeleteIssue = useCallback(async () => {
 +    if (!(editing instanceof MatrixEvent)) return;
 +    const stateKey = editing.getStateKey()!;
 +    const current = editing.getContent() as IssueContent;
@@ -357,42 +610,52 @@ index 00000000..b5b99e64
 +    // eslint-disable-next-line react-hooks/exhaustive-deps
 +  }, [mx, room.roomId, editing]);
 +
-+  const handleInitializeSchema = useCallback(async () => {
-+    await mx.sendStateEvent(
-+      room.roomId,
-+      'eu.kiefte.issues.schema' as any,
-+      DEFAULT_ISSUE_SCHEMA,
-+      ''
-+    );
-+  }, [mx, room.roomId]);
++  const handleSaveSchema = useCallback(
++    async (newSchema: IssueSchema) => {
++      await mx.sendStateEvent(
++        room.roomId,
++        'eu.kiefte.issues.schema' as any,
++        newSchema,
++        ''
++      );
++      setEditingSchema(false);
++    },
++    [mx, room.roomId]
++  );
 +
-+  // ── No schema state ──────────────────────────────────────────────────────────
++  // ── No schema: show schema editor inline for admins ───────────────────────────
 +
 +  if (!schema) {
++    if (!canConfigSchema) {
++      return (
++        <Box
++          grow="Yes"
++          direction="Column"
++          alignItems="Center"
++          justifyContent="Center"
++          gap="300"
++          style={{ padding: config.space.S500, textAlign: 'center' }}
++        >
++          <Icon src={Icons.CheckTwice} size="600" aria-hidden="true" />
++          <Text as="h2" size="H5">
++            Issue Tracker Not Set Up
++          </Text>
++          <Text size="T300" priority="300">
++            Ask a room admin to initialize the issue tracker.
++          </Text>
++        </Box>
++      );
++    }
++
++    // Admin sees the schema editor directly — no extra dialog needed
 +    return (
-+      <Box
-+        grow="Yes"
-+        direction="Column"
-+        alignItems="Center"
-+        justifyContent="Center"
-+        gap="300"
-+        style={{ padding: config.space.S500, textAlign: 'center' }}
-+        role="status"
-+        aria-label="Issue tracker not configured"
-+      >
-+        <Icon src={Icons.CheckTwice} size="600" aria-hidden="true" />
-+        <Text as="h2" size="H5">
-+          Issue Tracker Not Configured
-+        </Text>
-+        <Text size="T300" priority="300">
-+          No <code>eu.kiefte.issues.schema</code> state event found in this room.
-+        </Text>
-+        {canConfigSchema && (
-+          <Button variant="Primary" size="300" onClick={handleInitializeSchema}>
-+            <Icon src={Icons.Plus} size="100" aria-hidden="true" />
-+            <Text>Initialize with Default Schema</Text>
-+          </Button>
-+        )}
++      <Box grow="Yes" direction="Column" style={{ overflow: 'auto', alignItems: 'center', justifyContent: 'center', padding: config.space.S400 }}>
++        <SchemaEditor
++          initial={DEFAULT_ISSUE_SCHEMA}
++          titleText="Initialize Issue Tracker"
++          onSave={handleSaveSchema}
++          onCancel={() => {}}
++        />
 +      </Box>
 +    );
 +  }
@@ -443,17 +706,30 @@ index 00000000..b5b99e64
 +        aria-label="Issue tracker controls"
 +        style={{
 +          padding: `${config.space.S200} ${config.space.S400}`,
-+          borderBottom: '1px solid var(--bg-surface-border)',
++          borderBottom: `1px solid ${color.Surface.ContainerLine}`,
 +        }}
 +      >
 +        <Text size="T300" style={{ flexGrow: 1 }} aria-live="polite">
 +          {issues.length} {issues.length === 1 ? 'issue' : 'issues'}
 +        </Text>
-+        {canWriteIssues && (
++        {canConfigSchema && (
 +          <Button
 +            size="300"
++            variant="Secondary"
++            fill="Soft"
++            onClick={() => setEditingSchema(true)}
++            aria-label="Edit issue tracker schema"
++          >
++            <Icon src={Icons.Setting} size="100" aria-hidden="true" />
++            <Text>Schema</Text>
++          </Button>
++        )}
++        {canWriteIssues && (
++          <Button
++            ref={editTriggerRef}
++            size="300"
 +            variant="Primary"
-+            onClick={() => openEdit('new')}
++            onClick={() => setEditing('new')}
 +            aria-label="Create new issue"
 +          >
 +            <Icon src={Icons.Plus} size="100" aria-hidden="true" />
@@ -463,12 +739,7 @@ index 00000000..b5b99e64
 +      </Box>
 +
 +      {/* Kanban / list board */}
-+      <div
-+        style={{ flexGrow: 1, overflow: 'auto' }}
-+        role="region"
-+        aria-label="Issue board"
-+      >
-+        {/* Horizontal scroll container — rendered as a flex row of columns */}
++      <div style={{ flexGrow: 1, overflow: 'auto' }} role="region" aria-label="Issue board">
 +        <Box
 +          gap="300"
 +          style={{
@@ -480,7 +751,6 @@ index 00000000..b5b99e64
 +          {columns.map((col) => {
 +            const colHeadingId = `issue-col-heading-${col.key}`;
 +            return (
-+              // Each column is a labelled group so assistive tech announces the column name.
 +              <section
 +                key={col.key}
 +                aria-labelledby={colHeadingId}
@@ -488,8 +758,8 @@ index 00000000..b5b99e64
 +                  minWidth: '240px',
 +                  maxWidth: '320px',
 +                  flexShrink: 0,
-+                  background: 'var(--bg-surface-low)',
-+                  borderRadius: 'var(--bo-medium)',
++                  background: color.SurfaceVariant.Container,
++                  borderRadius: config.radii.R300,
 +                  padding: config.space.S300,
 +                  display: 'flex',
 +                  flexDirection: 'column',
@@ -497,19 +767,13 @@ index 00000000..b5b99e64
 +                }}
 +              >
 +                <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
-+                  <Text
-+                    id={colHeadingId}
-+                    as="h3"
-+                    size="H6"
-+                    style={{ textTransform: 'capitalize' }}
-+                  >
++                  <Text id={colHeadingId} as="h3" size="H6">
 +                    {col.label.replace(/_/g, ' ')}
 +                  </Text>
 +                  <Text size="T200" priority="300" aria-label={`${col.issues.length} issues`}>
 +                    {col.issues.length}
 +                  </Text>
 +                </Box>
-+                {/* <ul> gives screen readers proper list navigation */}
 +                <ul
 +                  style={{
 +                    listStyle: 'none',
@@ -526,7 +790,7 @@ index 00000000..b5b99e64
 +                        event={evt}
 +                        schema={schema}
 +                        canWrite={canWriteIssues}
-+                        onClick={() => openEdit(evt)}
++                        onClick={() => setEditing(evt)}
 +                      />
 +                    </li>
 +                  ))}
@@ -559,14 +823,39 @@ index 00000000..b5b99e64
 +              escapeDeactivates: stopPropagation,
 +            }}
 +          >
-+            <IssueForm
-+              schema={schema}
-+              initial={initialContent}
-+              onSave={handleSave}
-+              onCancel={closeEdit}
-+              canDelete={editing instanceof MatrixEvent && canWriteIssues}
-+              onDelete={handleDelete}
-+            />
++            {schema && editing !== null && (
++              <IssueForm
++                schema={schema}
++                initial={initialContent}
++                onSave={handleSaveIssue}
++                onCancel={closeEdit}
++                canDelete={editing instanceof MatrixEvent && canWriteIssues}
++                onDelete={editing instanceof MatrixEvent ? handleDeleteIssue : undefined}
++              />
++            )}
++          </FocusTrap>
++        </OverlayCenter>
++      </Overlay>
++
++      {/* Schema editor modal */}
++      <Overlay open={editingSchema} backdrop={<OverlayBackdrop />}>
++        <OverlayCenter>
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              clickOutsideDeactivates: true,
++              onDeactivate: () => setEditingSchema(false),
++              escapeDeactivates: stopPropagation,
++            }}
++          >
++            {editingSchema && (
++              <SchemaEditor
++                initial={schema}
++                titleText="Edit Schema"
++                onSave={handleSaveSchema}
++                onCancel={() => setEditingSchema(false)}
++              />
++            )}
 +          </FocusTrap>
 +        </OverlayCenter>
 +      </Overlay>
