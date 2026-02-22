@@ -53,6 +53,26 @@ export function Room() {
     }
   }, [openThreadId, setPeopleDrawer]);
 
+  const handleThreadDividerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    const startX = e.clientX;
+    const startWidth = threadWidthRef.current;
+    const onMove = (me: PointerEvent) => {
+      // Divider is on the LEFT of the thread panel, so dragging left = wider thread
+      const newWidth = Math.max(200, Math.min(600, startWidth - (me.clientX - startX)));
+      threadWidthRef.current = newWidth;
+      setThreadPanelWidth(newWidth);
+    };
+    const onUp = () => {
+      localStorage.setItem(THREAD_WIDTH_KEY, String(threadWidthRef.current));
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, []);
+
   const handleToggleThreadsDrawer = useCallback(() => {
     setIsThreadsDrawer((open) => {
       const opening = !open;
@@ -82,24 +102,34 @@ export function Room() {
   const splitRatioRef = useRef(0.5);
   const [splitRatio, setSplitRatio] = useState(0.5);
 
-  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+  // Thread panel width — persisted in localStorage
+  const THREAD_WIDTH_KEY = 'cinny_thread_panel_width';
+  const getStoredThreadWidth = () => {
+    const stored = localStorage.getItem(THREAD_WIDTH_KEY);
+    return stored ? Math.max(200, Math.min(600, Number(stored))) : 320;
+  };
+  const threadWidthRef = useRef<number>(getStoredThreadWidth());
+  const [threadPanelWidth, setThreadPanelWidth] = useState<number>(threadWidthRef.current);
+
+  const handleDividerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const container = containerRef.current;
     if (!container) return;
     const startX = e.clientX;
     const startRatio = splitRatioRef.current;
     const totalWidth = container.getBoundingClientRect().width;
-    const onMove = (me: MouseEvent) => {
+    const onMove = (me: PointerEvent) => {
       const ratio = Math.max(0.2, Math.min(0.8, startRatio + (me.clientX - startX) / totalWidth));
       splitRatioRef.current = ratio;
       setSplitRatio(ratio);
     };
     const onUp = () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   }, []);
 
   useKeyDown(
@@ -151,7 +181,7 @@ export function Room() {
                       flexShrink: 0,
                       background: 'var(--bg-surface-border)',
                     }}
-                    onMouseDown={handleDividerMouseDown}
+                    onPointerDown={handleDividerPointerDown}
                   />
                 )}
                 <Box
@@ -172,7 +202,24 @@ export function Room() {
           </>
         )}
         {screenSize === ScreenSize.Desktop && isThreadsDrawer && (
-          <ThreadsDrawer key={room.roomId} room={room} onClose={handleToggleThreadsDrawer} />
+          <>
+            <div
+              role="separator"
+              style={{
+                width: '6px',
+                cursor: 'col-resize',
+                flexShrink: 0,
+                background: 'var(--bg-surface-border)',
+              }}
+              onPointerDown={handleThreadDividerPointerDown}
+            />
+            <ThreadsDrawer
+              key={room.roomId}
+              room={room}
+              onClose={handleToggleThreadsDrawer}
+              width={threadPanelWidth}
+            />
+          </>
         )}
       </Box>
     </PowerLevelsContextProvider>

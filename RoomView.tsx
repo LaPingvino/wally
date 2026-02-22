@@ -127,6 +127,8 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
       (evt) => {
         const active = document.activeElement;
         if (!active?.closest('[role="log"]')) return;
+        // Don't intercept keys while typing in the message editor or any other contenteditable
+        if ((active as HTMLElement)?.isContentEditable) return;
         const noMod = !evt.ctrlKey && !evt.altKey && !evt.metaKey && !evt.shiftKey;
 
         if (evt.key === 'Escape' && noMod) {

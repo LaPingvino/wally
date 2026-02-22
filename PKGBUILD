@@ -46,7 +46,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "06-accessibility.patch"
         "07-issue-tracker.patch"
         "08-multi-account.patch"
-        #"09-verification-signal.patch"
+        "09-threads-view.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -66,9 +66,9 @@ sha256sums=('SKIP'
             '792e182f957abe9dfc26929e5d56c89883cf9c7c52fb4c6690df3a5963862f8b'
             'aeb3404add2c68bc952b543d77ef155e60fe7776aaf62e29bc68291b98c016f4'
             '1f8649e1ff1eedc4d7415e4800bade9d5014fbdf80aef80a22909f0abb7e67c1'
-            'c4bf19276badd2949ac8c820a9dc97c42952b3ab95a0cd0e4164c754f20caf7a'
+            '03aba43179d7c70ba081b95ef1257a4aaef9c49f5c3cc85473688b5e822b6fbc'
             '60e051924fbe3f8f8d73fcfef471e240b1c93319d391f0c9b1f3af3eff465a7d'
-            'fe69379249e39af381089b592d0a32f64f3063597ce227429f8876913165c4cf'
+            '3df82820787b0c275214180b485647d7e336f0d90d93104db3c3b5ae61703c3e'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
             'b6b545d5827fc5d0dcb3a125f1dd0594e8607826a8576ac0d873bc0953aff113'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
@@ -76,17 +76,17 @@ sha256sums=('SKIP'
             'f7f70ae5125509b7e7b7a7a4b644805fb261c5220ef67d898dc65786321c67df'
             '98730c8cd1afccb9f315d9bd7540cb753329558733176fa724b407d285a1b6eb'
             'b91a3c0f6a7ddbf1d1c03f698098d49a45513be555cc9e594b227bbb806b054b'
-            '01bc00af69d667d4fc27d272217d1ce44bf6285c5bac48cba35b7860053ba351'
+            '1ba4c41a9d4e5b6d93de8c4c86fc446f1f72b8aa712fc0b110d4f9c48c2db596'
             # Patches
             '7360808ff556756fa2629017a3d0753fab676a1929094a25902e01e9b8fa5197'
             '28e873262af447706506eafaa9ec125ed9a3f5632becdb65fe9edd488ca5ce7a'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            'f6f189effa87e26d07c334cd0084895edcf8e3740db7f86f38412003f0f5d7b3'
+            'c68d419b05a503233a6f3f792652ffcd0f6c30a4e3cf035f46361d5c3057089e'
             'd0faa8346cfca40c65ed03013a4e2af597fe09fdba7de61da9f6e026b7fb14e9'
             '960ed617e448ee251ea12836aba4c075ca024a0c989c7ce2536a4ef17756a61a'
-            # '09-verification-signal.patch' sha256 (disabled): a3b6621014eb70dd723ea3d12b515ed44b8540ca48b3f0a2a9ef4af470eabd00
+            '419b4b68283b5b7174ed52e1d80d6522427086083a97f0ce650a9b11f0bf6080'
             )
 
 prepare() {
@@ -156,6 +156,9 @@ prepare() {
 
   echo "Applying multi-account support patch..."
   patch -p1 -i "$srcdir/08-multi-account.patch"
+
+  echo "Applying threads view patch..."
+  patch -p1 -i "$srcdir/09-threads-view.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
