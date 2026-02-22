@@ -99,21 +99,6 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
-  // Mute the timeline aria-live region while the editor has focus so busy rooms
-  // don't interrupt composing; restore polite mode on blur.
-  useEffect(() => {
-    const container = roomInputRef.current;
-    if (!container) return;
-    const onIn = () => document.getElementById('cinny-timeline')?.setAttribute('aria-live', 'off');
-    const onOut = () => document.getElementById('cinny-timeline')?.setAttribute('aria-live', 'polite');
-    container.addEventListener('focusin', onIn);
-    container.addEventListener('focusout', onOut);
-    return () => {
-      container.removeEventListener('focusin', onIn);
-      container.removeEventListener('focusout', onOut);
-    };
-  }, []);
-
   const permissions = useRoomPermissions(creators, powerLevels);
   const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
 

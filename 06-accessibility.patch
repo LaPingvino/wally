@@ -1129,10 +1129,10 @@ index bea09a92..d600c610 100644
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index e0977d97..0059eed6 100644
+index e0977d97..9ffc249b 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
-@@ -1,12 +1,11 @@
+@@ -1,7 +1,7 @@
  import { useAtomValue } from 'jotai';
  import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
  import { useNavigate } from 'react-router-dom';
@@ -1141,31 +1141,21 @@ index e0977d97..0059eed6 100644
  import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
  import LogoSVG from '../../../../public/res/svg/cinny.svg';
  import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
- import LogoHighlightSVG from '../../../../public/res/svg/cinny-highlight.svg';
--import NotificationSound from '../../../../public/sound/notification.ogg';
- import InviteSound from '../../../../public/sound/invite.ogg';
- import { notificationPermission, setFavicon } from '../../utils/dom';
- import { useSetting } from '../../state/hooks/settings';
-@@ -26,6 +25,14 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+@@ -26,6 +26,12 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
  import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 +import { announce } from '../../utils/announce';
 +import {
-+  playMentionSound,
 +  playCurrentRoomSound,
-+  playOtherRoomSound,
 +  playTypingSound,
 +  playReactionSound,
 +} from '../../utils/sounds';
  
  function SystemEmojiFeature() {
    const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-@@ -136,13 +143,14 @@ function InviteNotifications() {
- }
- 
- function MessageNotifications() {
--  const audioRef = useRef<HTMLAudioElement>(null);
+@@ -139,10 +145,12 @@ function MessageNotifications() {
+   const audioRef = useRef<HTMLAudioElement>(null);
    const notifRef = useRef<Notification>();
    const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
 +  const prevTypingCountRef = useRef(0);
@@ -1177,19 +1167,7 @@ index e0977d97..0059eed6 100644
  
    const navigate = useNavigate();
    const notificationSelected = useInboxNotificationsSelected();
-@@ -179,11 +187,6 @@ function MessageNotifications() {
-     [navigate]
-   );
- 
--  const playSound = useCallback(() => {
--    const audioElement = audioRef.current;
--    audioElement?.play();
--  }, []);
--
-   useEffect(() => {
-     const handleTimelineEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
-       mEvent,
-@@ -193,7 +196,6 @@ function MessageNotifications() {
+@@ -193,7 +201,6 @@ function MessageNotifications() {
        data
      ) => {
        if (mx.getSyncState() !== 'SYNCING') return;
@@ -1197,7 +1175,7 @@ index e0977d97..0059eed6 100644
        if (
          !room ||
          !data.liveEvent ||
-@@ -206,7 +208,7 @@ function MessageNotifications() {
+@@ -206,7 +213,7 @@ function MessageNotifications() {
  
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
@@ -1206,7 +1184,7 @@ index e0977d97..0059eed6 100644
        const unreadInfo = getUnreadInfo(room);
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
-@@ -219,45 +221,96 @@ function MessageNotifications() {
+@@ -219,31 +226,88 @@ function MessageNotifications() {
          return;
        }
  
@@ -1243,16 +1221,15 @@ index e0977d97..0059eed6 100644
        }
  
 -      if (notificationSound) {
--        playSound();
-+      // Differentiated sounds
++      // Differentiated sounds: OGG for mentions/other-room, generated soft beep for current room
 +      const isHighlight = unreadInfo.highlight > (cachedUnreadInfo?.highlight ?? 0);
 +      if (isHighlight && notificationSound) {
-+        playMentionSound();
++        playSound();
 +        announce(`Mention in ${room.name}`);
 +      } else if (isCurrentRoom && isFocused && inRoomActivitySound) {
 +        playCurrentRoomSound();
 +      } else if (!isCurrentRoom && notificationSound) {
-+        playOtherRoomSound();
+         playSound();
        }
      };
      mx.on(RoomEvent.Timeline, handleTimelineEvent);
@@ -1308,22 +1285,7 @@ index e0977d97..0059eed6 100644
 +    inRoomActivitySound,
      notificationSelected,
      showNotifications,
--    playSound,
-     notify,
-     selectedRoomId,
-     useAuthentication,
-   ]);
- 
--  return (
--    // eslint-disable-next-line jsx-a11y/media-has-caption
--    <audio ref={audioRef} style={{ display: 'none' }}>
--      <source src={NotificationSound} type="audio/ogg" />
--    </audio>
--  );
-+  return null;
- }
- 
- type ClientNonUIFeaturesProps = {
+     playSound,
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
 index a2e1b682..d24d5747 100644
 --- a/src/app/pages/client/SidebarNav.tsx

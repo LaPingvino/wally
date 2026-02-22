@@ -303,7 +303,7 @@ index a9c34ce9..2b01c052 100644
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..452b674a 100644
+index 498d4f75..c7665d11 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,37 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -346,7 +346,13 @@ index 498d4f75..452b674a 100644
  
    const mx = createClient({
      baseUrl: session.baseUrl,
-@@ -33,7 +48,7 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
+@@ -28,12 +43,13 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
+     cryptoStore: legacyCryptoStore,
+     deviceId: session.deviceId,
+     timelineSupport: true,
++    threadSupport: true,
+     cryptoCallbacks: cryptoCallbacks as any,
+     verificationMethods: ['m.sas.v1'],
    });
  
    await indexedDBStore.startup();
@@ -355,7 +361,7 @@ index 498d4f75..452b674a 100644
  
    mx.setMaxListeners(50);
  
-@@ -54,6 +69,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
+@@ -54,6 +70,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
  };
  
  export const logoutClient = async (mx: MatrixClient) => {
@@ -367,7 +373,7 @@ index 498d4f75..452b674a 100644
    pushSessionToSW();
    mx.stopClient();
    try {
-@@ -62,8 +82,20 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -62,8 +83,20 @@ export const logoutClient = async (mx: MatrixClient) => {
      // ignore if failed to logout
    }
    await mx.clearStores();
