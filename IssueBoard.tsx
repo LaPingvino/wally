@@ -1157,6 +1157,38 @@ export function IssueBoard({ room }: IssueBoardProps) {
     closeSchema();
   }, [mx, room.roomId, closeSchema]);
 
+  // Must be declared before any conditional return to satisfy Rules of Hooks.
+  const displayedIssues = useMemo(() => {
+    if (!schema) return [];
+    const fDef = schema.fields.find((f) => f.key === filterField);
+    let list = [...issues];
+    if (filterField && fDef?.type === 'date' && (filterDateFrom || filterDateTo)) {
+      list = list.filter((entry) => {
+        const val = String(entry.content[filterField] ?? '');
+        if (!val) return !filterDateFrom;
+        if (filterDateFrom && val < filterDateFrom) return false;
+        if (filterDateTo && val > filterDateTo) return false;
+        return true;
+      });
+    } else if (filterField && filterValue) {
+      list = list.filter((entry) => {
+        const val = String(entry.content[filterField] ?? '');
+        return val.toLowerCase().includes(filterValue.toLowerCase());
+      });
+    }
+    if (sortField) {
+      const field = schema.fields.find((f) => f.key === sortField);
+      list.sort((a, b) => {
+        const av = String(a.content[sortField] ?? '');
+        const bv = String(b.content[sortField] ?? '');
+        const cmp = field ? compareFieldValues(av, bv, field) : av.localeCompare(bv);
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+    return list;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [issues, schema, filterField, filterValue, filterDateFrom, filterDateTo, sortField, sortDir]);
+
   if (!schema) {
     if (!canConfigSchema) {
       return (
@@ -1186,34 +1218,6 @@ export function IssueBoard({ room }: IssueBoardProps) {
 
   // Sorted + filtered issue list for list view
   const filterFieldDef = schema.fields.find((f) => f.key === filterField);
-  const displayedIssues = useMemo(() => {
-    let list = [...issues];
-    if (filterField && filterFieldDef?.type === 'date' && (filterDateFrom || filterDateTo)) {
-      list = list.filter((entry) => {
-        const val = String(entry.content[filterField] ?? '');
-        if (!val) return !filterDateFrom;
-        if (filterDateFrom && val < filterDateFrom) return false;
-        if (filterDateTo && val > filterDateTo) return false;
-        return true;
-      });
-    } else if (filterField && filterValue) {
-      list = list.filter((entry) => {
-        const val = String(entry.content[filterField] ?? '');
-        return val.toLowerCase().includes(filterValue.toLowerCase());
-      });
-    }
-    if (sortField) {
-      const field = schema.fields.find((f) => f.key === sortField);
-      list.sort((a, b) => {
-        const av = String(a.content[sortField] ?? '');
-        const bv = String(b.content[sortField] ?? '');
-        const cmp = field ? compareFieldValues(av, bv, field) : av.localeCompare(bv);
-        return sortDir === 'asc' ? cmp : -cmp;
-      });
-    }
-    return list;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [issues, filterField, filterValue, filterDateFrom, filterDateTo, sortField, sortDir]);
 
   const initialContent = editing !== null && editing !== 'new' ? editing.content : undefined;
 
