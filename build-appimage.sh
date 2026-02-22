@@ -114,17 +114,24 @@ echo "==> Installing electron-builder..."
 echo "==> Building AppImage..."
 (cd "$WORK_DIR/electron" && npx electron-builder --linux AppImage)
 
-if [[ "$BUILD_WIN" == "true" ]]; then
-  echo "==> Building Windows portable..."
-  (cd "$WORK_DIR/electron" && npx electron-builder --win portable)
-fi
-
-# ---------------------------------------------------------------------------
-# 6. Copy results back next to this script
-# ---------------------------------------------------------------------------
-find "$WORK_DIR/electron/dist" -maxdepth 1 \( -name "*.AppImage" -o -name "*.exe" \) | while read -r artifact; do
+# Copy AppImage immediately so it is preserved even if the Windows build fails
+find "$WORK_DIR/electron/dist" -maxdepth 1 -name "*.AppImage" | while read -r artifact; do
   dest="$SCRIPT_DIR/$(basename "$artifact")"
   cp "$artifact" "$dest"
   chmod +x "$dest"
   echo "==> Saved: $dest"
 done
+
+if [[ "$BUILD_WIN" == "true" ]]; then
+  echo "==> Building Windows portable (code-signing disabled for cross-compile)..."
+  # CSC_IDENTITY_AUTO_DISCOVERY=false suppresses Wine-based code-signing on Linux.
+  # The resulting portable .exe is unsigned but fully functional.
+  (cd "$WORK_DIR/electron" && CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win portable)
+
+  find "$WORK_DIR/electron/dist" -maxdepth 1 -name "*.exe" | while read -r artifact; do
+    dest="$SCRIPT_DIR/$(basename "$artifact")"
+    cp "$artifact" "$dest"
+    chmod +x "$dest"
+    echo "==> Saved: $dest"
+  done
+fi
