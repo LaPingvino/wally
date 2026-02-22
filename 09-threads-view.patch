@@ -58,7 +58,7 @@ index 4df67cd0..83d8f218 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d06f165c..072c2631 100644
+index d06f165c..987f1704 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -22,6 +22,8 @@ import {
@@ -78,7 +78,65 @@ index d06f165c..072c2631 100644
  };
  
  const PAGINATION_LIMIT = 80;
-@@ -361,8 +364,25 @@ const useTimelinePagination = (
+@@ -272,7 +275,8 @@ const useTimelinePagination = (
+   mx: MatrixClient,
+   timeline: Timeline,
+   setTimeline: Dispatch<SetStateAction<Timeline>>,
+-  limit: number
++  limit: number,
++  getTimelinesForTop?: (top: EventTimeline) => EventTimeline[]
+ ) => {
+   const timelineRef = useRef(timeline);
+   timelineRef.current = timeline;
+@@ -289,7 +293,9 @@ const useTimelinePagination = (
+       const topTimeline = linkedTimelines[0];
+       const timelineMatch = (mt: EventTimeline) => (t: EventTimeline) => t === mt;
+ 
+-      const newLTimelines = getLinkedTimelines(topTimeline);
++      const newLTimelines = getTimelinesForTop
++        ? getTimelinesForTop(topTimeline)
++        : getLinkedTimelines(topTimeline);
+       const topTmIndex = newLTimelines.findIndex(timelineMatch(topTimeline));
+       const topAddedTm = topTmIndex === -1 ? [] : newLTimelines.slice(0, topTmIndex);
+ 
+@@ -297,16 +303,22 @@ const useTimelinePagination = (
+         timelineToEventsCount(newLTimelines[topTmIndex]) - timelinesEventsCount[0];
+       const offsetRange = getTimelinesEventsCount(topAddedTm) + (backwards ? topTmAddedEvt : 0);
+ 
+-      setTimeline((currentTimeline) => ({
+-        linkedTimelines: newLTimelines,
+-        range:
++      setTimeline((currentTimeline) => {
++        const newStart = currentTimeline.range.start + offsetRange;
++        const newEnd = currentTimeline.range.end + offsetRange;
++        const newRange =
+           offsetRange > 0
+-            ? {
+-                start: currentTimeline.range.start + offsetRange,
+-                end: currentTimeline.range.end + offsetRange,
+-              }
+-            : { ...currentTimeline.range },
+-      }));
++            ? newStart === newEnd
++              ? (() => {
++                  // Zero-width range (happens on initial empty thread timeline):
++                  // show the most recent events instead of preserving an empty window.
++                  const total = getTimelinesEventsCount(newLTimelines);
++                  return { start: Math.max(total - limit, 0), end: total };
++                })()
++              : { start: newStart, end: newEnd }
++            : { ...currentTimeline.range };
++        return { linkedTimelines: newLTimelines, range: newRange };
++      });
+     };
+ 
+     return async (backwards: boolean) => {
+@@ -357,12 +369,29 @@ const useTimelinePagination = (
+         recalibratePagination(lTimelines, timelinesEventsCount, backwards);
+       }
+     };
+-  }, [mx, alive, setTimeline, limit]);
++  }, [mx, alive, setTimeline, limit, getTimelinesForTop]);
    return handleTimelinePagination;
  };
  
@@ -105,7 +163,7 @@ index d06f165c..072c2631 100644
      const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
        mEvent,
        eventRoom,
-@@ -384,7 +404,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
+@@ -384,7 +413,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
        room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
        room.removeListener(RoomEvent.Redaction, handleRedaction);
      };
@@ -114,7 +172,7 @@ index d06f165c..072c2631 100644
  };
  
  const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
-@@ -401,7 +421,20 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+@@ -401,7 +430,21 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
    }, [room, onRefresh]);
  };
  
@@ -127,16 +185,37 @@ index d06f165c..072c2631 100644
 +    const thread = room.getThread(threadId);
 +    if (!thread) return getEmptyTimeline();
 +    const threadTimeline = thread.liveTimeline;
-+    const evLength = threadTimeline.getEvents().length;
++    const timelines = getThreadTimelines(threadTimeline);
++    const evLength = getTimelinesEventsCount(timelines);
 +    return {
-+      linkedTimelines: [threadTimeline],
-+      range: { start: 0, end: evLength },
++      linkedTimelines: timelines,
++      range: { start: Math.max(evLength - PAGINATION_LIMIT, 0), end: evLength },
 +    };
 +  }
    const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
    const evLength = getTimelinesEventsCount(linkedTimelines);
    return {
-@@ -430,7 +463,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+@@ -418,6 +461,19 @@ const getEmptyTimeline = () => ({
+   linkedTimelines: [],
+ });
+ 
++// Walk backward from liveTimeline staying within the same EventTimelineSet (thread-safe).
++// Prevents getLinkedTimelines() from crossing into the room's main timeline chain.
++const getThreadTimelines = (liveTimeline: EventTimeline): EventTimeline[] => {
++  const threadSet = liveTimeline.getTimelineSet();
++  const timelines: EventTimeline[] = [liveTimeline];
++  let cur = liveTimeline.getNeighbouringTimeline(Direction.Backward);
++  while (cur && cur.getTimelineSet() === threadSet) {
++    timelines.unshift(cur);
++    cur = cur.getNeighbouringTimeline(Direction.Backward);
++  }
++  return timelines;
++};
++
+ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+   const readUptoEventId = room.getEventReadUpTo(room.client.getUserId() ?? '');
+   if (!readUptoEventId) return undefined;
+@@ -430,7 +486,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
    };
  };
  
@@ -145,7 +224,7 @@ index d06f165c..072c2631 100644
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-@@ -453,7 +486,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -453,7 +509,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const ignoredUsersList = useIgnoredUsers();
    const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
  
@@ -155,7 +234,7 @@ index d06f165c..072c2631 100644
    const powerLevels = usePowerLevelsContext();
    const creators = useRoomCreators(room);
  
-@@ -486,7 +520,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -486,7 +543,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
  
    const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
  
@@ -164,7 +243,7 @@ index d06f165c..072c2631 100644
    const readUptoEventIdRef = useRef<string>();
    if (unreadInfo) {
      readUptoEventIdRef.current = unreadInfo.readUptoEventId;
-@@ -535,11 +569,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -535,11 +592,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const parseMemberEvent = useMemberEventParser();
  
    const [timeline, setTimeline] = useState<Timeline>(() =>
@@ -182,7 +261,17 @@ index d06f165c..072c2631 100644
    const canPaginateBack =
      typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
    const rangeAtStart = timeline.range.start === 0;
-@@ -597,10 +635,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -551,7 +612,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+     mx,
+     timeline,
+     setTimeline,
+-    PAGINATION_LIMIT
++    PAGINATION_LIMIT,
++    threadId ? getThreadTimelines : undefined
+   );
+ 
+   const getScrollElement = useCallback(() => scrollRef.current, []);
+@@ -597,10 +659,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      ),
      useCallback(() => {
        if (!alive()) return;
@@ -195,7 +284,7 @@ index d06f165c..072c2631 100644
    );
  
    useLiveEventArrive(
-@@ -612,14 +650,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -612,14 +674,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
          // otherwise we update timeline without paginating
          // so timeline can be updated with evt like: edits, reactions etc
          if (atBottomRef.current) {
@@ -212,7 +301,7 @@ index d06f165c..072c2631 100644
              setUnreadInfo(getRoomUnreadInfo(room));
            }
  
-@@ -636,12 +674,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -636,12 +698,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            return;
          }
          setTimeline((ct) => ({ ...ct }));
@@ -229,7 +318,7 @@ index d06f165c..072c2631 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,9 +717,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -678,9 +741,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      room,
      useCallback(() => {
        if (liveTimelineLinked) {
@@ -241,7 +330,7 @@ index d06f165c..072c2631 100644
    );
  
    // Stay at bottom when room editor resize
-@@ -886,7 +925,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -886,7 +949,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
@@ -252,7 +341,7 @@ index d06f165c..072c2631 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..dd04b529
+index 00000000..885f348a
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
 @@ -0,0 +1,163 @@
@@ -406,7 +495,7 @@ index 00000000..dd04b529
 +          threadId={threadRootId}
 +        />
 +      </Box>
-+      <Box shrink="No">
++      <Box shrink="No" direction="Column">
 +        <RoomInput
 +          room={room}
 +          roomId={room.roomId}
