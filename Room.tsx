@@ -17,13 +17,15 @@ import { CallView } from '../call/CallView';
 import { RoomViewHeader } from './RoomViewHeader';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { IssueBoard } from '../issues/IssueBoard';
+import { ThreadsDrawer, openThreadIdAtom } from './ThreadsDrawer';
+import { useAtom } from 'jotai';
 
 export function Room() {
   const { eventId } = useParams();
   const room = useRoom();
   const mx = useMatrixClient();
 
-  const [isDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+  const [isDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const screenSize = useScreenSizeContext();
   const powerLevels = usePowerLevels(room);
@@ -33,11 +35,32 @@ export function Room() {
   const isActiveCall = activeCallRoomId === room?.roomId;
 
   const [isIssueBoard, setIsIssueBoard] = useState(false);
+  const [isThreadsDrawer, setIsThreadsDrawer] = useState(false);
+  const [openThreadId] = useAtom(openThreadIdAtom);
 
-  // Reset issue board view when navigating to a different room.
+  // Reset all panel views when navigating to a different room.
   useEffect(() => {
     setIsIssueBoard(false);
+    setIsThreadsDrawer(false);
   }, [room.roomId]);
+
+  // When something (e.g. a timeline thread indicator) requests a thread to be opened,
+  // ensure the threads drawer is visible. ThreadsDrawer itself handles resetting the atom.
+  useEffect(() => {
+    if (openThreadId) {
+      setIsThreadsDrawer(true);
+      setPeopleDrawer(false);
+    }
+  }, [openThreadId, setPeopleDrawer]);
+
+  const handleToggleThreadsDrawer = useCallback(() => {
+    setIsThreadsDrawer((open) => {
+      const opening = !open;
+      // Close members drawer when opening threads to avoid two sidebars
+      if (opening) setPeopleDrawer(false);
+      return opening;
+    });
+  }, [setPeopleDrawer]);
 
   useEffect(() => {
     const name = room.name || room.roomId;
@@ -98,6 +121,8 @@ export function Room() {
           <RoomViewHeader
             isIssueBoard={isIssueBoard}
             onToggleIssueBoard={() => setIsIssueBoard((b) => !b)}
+            isThreadsDrawer={isThreadsDrawer}
+            onToggleThreadsDrawer={handleToggleThreadsDrawer}
           />
           <Box grow="Yes" ref={containerRef}>
             {isIssueBoard ? (
@@ -145,6 +170,9 @@ export function Room() {
             <Line variant="Background" direction="Vertical" size="300" />
             <MembersDrawer key={room.roomId} room={room} members={members} />
           </>
+        )}
+        {screenSize === ScreenSize.Desktop && isThreadsDrawer && (
+          <ThreadsDrawer key={room.roomId} room={room} onClose={handleToggleThreadsDrawer} />
         )}
       </Box>
     </PowerLevelsContextProvider>

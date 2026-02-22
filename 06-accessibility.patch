@@ -1,9 +1,9 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..43eedca4
+index 00000000..b5a5e3d4
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,229 @@
+@@ -0,0 +1,243 @@
 +import React, { useCallback, useRef } from 'react';
 +import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
@@ -18,7 +18,7 @@ index 00000000..43eedca4
 +import { roomToParentsAtom } from '../state/room/roomToParents';
 +import { allRoomsAtom } from '../state/room-list/roomList';
 +import { useSidebarItems } from '../hooks/useSidebarItems';
-+import { getSpaceLobbyPath, getDirectRoomPath, getHomeRoomPath } from '../pages/pathUtils';
++import { getSpaceLobbyPath, getDirectRoomPath, getHomeRoomPath, getSpaceRoomPath } from '../pages/pathUtils';
 +import { HOME_ROOM_PATH, DIRECT_ROOM_PATH, SPACE_ROOM_PATH } from '../pages/paths';
 +import { getCanonicalAliasOrRoomId } from '../utils/matrix';
 +import { mDirectAtom } from '../state/mDirectList';
@@ -152,14 +152,21 @@ index 00000000..43eedca4
 +      if (isDirect) {
 +        navigate(getDirectRoomPath(unreadRoomIdOrAlias));
 +      } else {
-+        navigate(getHomeRoomPath(unreadRoomIdOrAlias));
++        const parents = roomToParents.get(roomId);
++        if (parents && parents.size > 0) {
++          const spaceId = Array.from(parents)[0];
++          const spaceIdOrAlias = getCanonicalAliasOrRoomId(mx, spaceId);
++          navigate(getSpaceRoomPath(spaceIdOrAlias, unreadRoomIdOrAlias));
++        } else {
++          navigate(getHomeRoomPath(unreadRoomIdOrAlias));
++        }
 +      }
 +      const roomName = mx.getRoom(roomId)?.name ?? 'Room';
 +      const roomType = isDirect ? 'Direct Message' : 'Group Room';
 +      const remaining = unreadEntries.length - 1;
 +      announce(`${roomName}, ${roomType}. ${remaining} room${remaining === 1 ? '' : 's'} unread.`);
 +    },
-+    [roomToUnread, mDirects, mx, navigate]
++    [roomToUnread, mDirects, mx, navigate, roomToParents]
 +  );
 +
 +  const handleUnreadNavKeyDown = useCallback(
@@ -184,14 +191,21 @@ index 00000000..43eedca4
 +      if (isDirect) {
 +        navigate(getDirectRoomPath(unreadRoomIdOrAlias));
 +      } else {
-+        navigate(getHomeRoomPath(unreadRoomIdOrAlias));
++        const parents = roomToParents.get(roomId);
++        if (parents && parents.size > 0) {
++          const spaceId = Array.from(parents)[0];
++          const spaceIdOrAlias = getCanonicalAliasOrRoomId(mx, spaceId);
++          navigate(getSpaceRoomPath(spaceIdOrAlias, unreadRoomIdOrAlias));
++        } else {
++          navigate(getHomeRoomPath(unreadRoomIdOrAlias));
++        }
 +      }
 +      const roomName = mx.getRoom(roomId)?.name ?? 'Room';
 +      const roomType = isDirect ? 'Direct Message' : 'Group Room';
 +      const remaining = unreadEntries.length - 1;
 +      announce(`${roomName}, ${roomType}. ${remaining} room${remaining === 1 ? '' : 's'} unread.`);
 +    },
-+    [roomToUnread, mDirects, mx, navigate]
++    [roomToUnread, mDirects, mx, navigate, roomToParents]
 +  );
 +
 +  const handleStartCallKeyDown = useCallback(
@@ -1731,18 +1745,6 @@ index 6fc528a1..0d7474b7 100644
                  {folder.content.map((sId) => {
                    const space = mx.getRoom(sId);
                    if (!space) return null;
-diff --git a/src/app/pages/client/sidebar/UnverifiedTab.tsx b/src/app/pages/client/sidebar/UnverifiedTab.tsx
-index 0a2f117b..fa5bd669 100644
---- a/src/app/pages/client/sidebar/UnverifiedTab.tsx
-+++ b/src/app/pages/client/sidebar/UnverifiedTab.tsx
-@@ -56,6 +56,7 @@ function UnverifiedIndicator() {
-                 as="button"
-                 ref={triggerRef}
-                 outlined
-+                aria-label={unverified ? 'Unverified Device' : 'Unverified Devices'}
-                 onClick={() => setSettings(true)}
-               >
-                 <Icon
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
 index 616b6fc0..eb010013 100644
 --- a/src/app/pages/client/space/Space.tsx

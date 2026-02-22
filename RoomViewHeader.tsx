@@ -298,9 +298,11 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
 type RoomViewHeaderProps = {
   isIssueBoard?: boolean;
   onToggleIssueBoard?: () => void;
+  isThreadsDrawer?: boolean;
+  onToggleThreadsDrawer?: () => void;
 };
 
-export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHeaderProps) {
+export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDrawer, onToggleThreadsDrawer }: RoomViewHeaderProps) {
   const navigate = useNavigate();
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -551,6 +553,31 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
             </TooltipProvider>
           )}
 
+          {/* Threads drawer toggle — Desktop only */}
+          {screenSize === ScreenSize.Desktop && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{isThreadsDrawer ? 'Hide Threads' : 'Show Threads'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={onToggleThreadsDrawer}
+                  aria-pressed={isThreadsDrawer}
+                  aria-label={isThreadsDrawer ? 'Hide threads panel' : 'Show threads panel'}
+                >
+                  <Icon size="400" src={Icons.Message} filled={isThreadsDrawer} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
           {/* Issue board toggle — only when schema exists and user has rights */}
           {showIssuesButton && (
             <TooltipProvider
@@ -571,25 +598,6 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
                   aria-label={isIssueBoard ? 'Show chat' : 'Issue tracker'}
                 >
                   <Icon size="400" src={Icons.CheckTwice} filled={isIssueBoard} />
-                </IconButton>
-              )}
-            </TooltipProvider>
-          )}
-
-          {/* NOTE: New addition - Start Call button for regular/DM rooms (not in the PR). */}
-          {!room.isCallRoom() && !isActiveCall && canCall && !isIssueBoard && (
-            <TooltipProvider
-              position="Bottom"
-              offset={4}
-              tooltip={
-                <Tooltip>
-                  <Text>Start Call</Text>
-                </Tooltip>
-              }
-            >
-              {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleStartCall} aria-label="Start call" aria-keyshortcuts="Alt+J">
-                  <Icon size="400" src={Icons.Phone} />
                 </IconButton>
               )}
             </TooltipProvider>
@@ -673,6 +681,26 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard }: RoomViewHea
               </FocusTrap>
             }
           />
+
+          {/* Start Call — rightmost button, after "…" to prevent accidental presses */}
+          {!room.isCallRoom() && !isActiveCall && canCall && !isIssueBoard && (
+            <TooltipProvider
+              position="Bottom"
+              align="End"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Start Call</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton fill="None" ref={triggerRef} onClick={handleStartCall} aria-label="Start call" aria-keyshortcuts="Alt+J">
+                  <Icon size="400" src={Icons.Phone} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
         </Box>
       </Box>
     </PageHeader>
