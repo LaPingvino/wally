@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Room, MatrixEvent, RoomEvent, RelationType } from 'matrix-js-sdk';
+import { Room, MatrixEvent, RoomEvent, ThreadEvent, RelationType } from 'matrix-js-sdk';
 import {
   Box,
   Text,
@@ -278,12 +278,28 @@ export function ThreadsDrawer({ room, onClose }: ThreadsDrawerProps) {
   }, [room]);
 
   const [threads, setThreads] = useState(getThreads);
+  const [loading, setLoading] = useState(true);
 
+  // Fetch all historical threads on mount — room.getThreads() only returns
+  // threads already in memory from the current sync window.
+  useEffect(() => {
+    setLoading(true);
+    room.fetchRoomThreads().then(() => {
+      setThreads(getThreads());
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [room, getThreads]);
+
+  // Keep list updated as new threads arrive or get replies
   useEffect(() => {
     const update = () => setThreads(getThreads());
-    mx.on(RoomEvent.Timeline as any, update);
-    return () => { mx.off(RoomEvent.Timeline as any, update); };
-  }, [mx, room, getThreads]);
+    room.on(ThreadEvent.New as any, update);
+    room.on(ThreadEvent.NewReply as any, update);
+    return () => {
+      room.off(ThreadEvent.New as any, update);
+      room.off(ThreadEvent.NewReply as any, update);
+    };
+  }, [room, getThreads]);
 
   // Open a specific thread when requested via atom (inline support)
   useEffect(() => {
@@ -326,7 +342,11 @@ export function ThreadsDrawer({ room, onClose }: ThreadsDrawerProps) {
         />
       ) : (
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {threads.length === 0 ? (
+          {loading ? (
+            <Box style={{ padding: config.space.S400 }} justifyContent="Center">
+              <Text size="T300" priority="300">Loading threads…</Text>
+            </Box>
+          ) : threads.length === 0 ? (
             <Box style={{ padding: config.space.S400 }} justifyContent="Center">
               <Text size="T300" priority="300">
                 No threads in this room yet
