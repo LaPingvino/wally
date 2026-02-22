@@ -243,7 +243,7 @@ export function ThreadsDrawer({ room, onClose, width = 320 }: ThreadsDrawerProps
       </Box>
 
       {selectedThreadId ? (
-        <Box grow="Yes" style={{ overflow: 'hidden' }}>
+        <Box grow="Yes" direction="Column" style={{ overflow: 'hidden' }}>
           <ThreadView room={room} threadRootId={selectedThreadId} />
         </Box>
       ) : (

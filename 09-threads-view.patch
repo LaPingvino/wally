@@ -340,10 +340,10 @@ index d06f165c..987f1704 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..c5c01a2e
+index 00000000..1b4256e3
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,202 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -358,9 +358,9 @@ index 00000000..c5c01a2e
 + *   ┌─ RoomInput (sends thread replies) ──────────────┐
 + *   └──────────────────────────────────────────────────┘
 + */
-+import React, { useRef } from 'react';
++import React, { useRef, useState, useEffect } from 'react';
 +import { Box, Text, config, toRem } from 'folds';
-+import { Room, MatrixEvent } from 'matrix-js-sdk';
++import { Room, MatrixEvent, ThreadEvent } from 'matrix-js-sdk';
 +import { useEditor } from '../../components/editor';
 +import { RoomTimeline } from './RoomTimeline';
 +import { RoomInput } from './RoomInput';
@@ -480,8 +480,45 @@ index 00000000..c5c01a2e
 +  const viewRef = useRef<HTMLDivElement>(null);
 +  const editor = useEditor();
 +
++  // Wait for the thread's initial events to be fetched before rendering the timeline.
++  // When a thread is first opened, the SDK calls paginateEventTimeline() asynchronously
++  // (in Thread.updateThreadMetadata) to populate the liveTimeline. If we render
++  // RoomTimeline before that completes, getInitialTimeline() sees 0 events and no
++  // backward pagination token, so the timeline stays blank. Waiting for
++  // thread.initialEventsFetched ensures the liveTimeline has events (or a pagination
++  // token) before we render.
++  const [threadReady, setThreadReady] = useState(() => {
++    const thread = room.getThread(threadRootId);
++    return !thread || thread.initialEventsFetched;
++  });
++
++  useEffect(() => {
++    const thread = room.getThread(threadRootId);
++    if (!thread || thread.initialEventsFetched) {
++      setThreadReady(true);
++      return;
++    }
++    const handleUpdate = () => {
++      if (thread.initialEventsFetched) setThreadReady(true);
++    };
++    thread.on(ThreadEvent.Update as any, handleUpdate);
++    return () => {
++      thread.off(ThreadEvent.Update as any, handleUpdate);
++    };
++  }, [room, threadRootId]);
++
 +  const rootEvent =
 +    room.getThread(threadRootId)?.rootEvent ?? room.findEventById(threadRootId) ?? null;
++
++  if (!threadReady) {
++    return (
++      <Page>
++        <Box grow="Yes" justifyContent="Center" alignItems="Center">
++          <Text size="T300" priority="300">Loading thread…</Text>
++        </Box>
++      </Page>
++    );
++  }
 +
 +  return (
 +    <Page ref={viewRef}>
