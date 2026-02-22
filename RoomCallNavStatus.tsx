@@ -21,6 +21,7 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { mxcUrlToHttp } from '../../utils/matrix';
+import { announce } from '../../utils/announce';
 import {
   getRoomNotificationMode,
   RoomNotificationMode,
@@ -85,6 +86,8 @@ export function CallNavStatus() {
   const dismissedRef = useRef<Set<string>>(new Set());
   // Per-call ring timeout handles
   const callTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Track which incoming call we've already announced to avoid re-announcing on re-render
+  const announcedCallRef = useRef<string | null>(null);
 
   // Ringtone
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -275,15 +278,22 @@ export function CallNavStatus() {
     [clearCallTimeout]
   );
 
-  // Ring while incoming calls are waiting
+  // Ring while incoming calls are waiting; announce the first call to screen readers
   useEffect(() => {
     if (!hasActiveCall && incomingCalls.length > 0) {
       startRingtone();
+      const firstRoomId = incomingCalls[0].roomId;
+      if (announcedCallRef.current !== firstRoomId) {
+        announcedCallRef.current = firstRoomId;
+        const room = mx.getRoom(firstRoomId);
+        announce(`Incoming call${room ? ` in ${room.name}` : ''}`);
+      }
     } else {
       stopRingtone();
+      announcedCallRef.current = null;
     }
     return stopRingtone;
-  }, [hasActiveCall, incomingCalls.length, startRingtone, stopRingtone]);
+  }, [hasActiveCall, incomingCalls, startRingtone, stopRingtone, mx]);
 
   // Clamp page index when calls list shrinks
   const safeIndex = Math.min(callPage, Math.max(0, incomingCalls.length - 1));
@@ -469,7 +479,7 @@ export function CallNavStatus() {
           }
         >
           {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'} onClick={toggleAudio}>
+            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'} onClick={() => { toggleAudio(); announce(isAudioEnabled ? 'Microphone muted' : 'Microphone unmuted'); }}>
               <Icon src={!isAudioEnabled ? Icons.MicMute : Icons.Mic} />
             </IconButton>
           )}
@@ -484,7 +494,7 @@ export function CallNavStatus() {
           }
         >
           {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'} onClick={toggleVideo}>
+            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'} onClick={() => { toggleVideo(); announce(isVideoEnabled ? 'Camera off' : 'Camera on'); }}>
               <Icon src={!isVideoEnabled ? Icons.VideoCameraMute : Icons.VideoCamera} />
             </IconButton>
           )}

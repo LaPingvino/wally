@@ -1,7 +1,7 @@
 # Maintainer: Andy Bao <contact@andybao.me>
 _pkgname=cinny-web
 pkgname="${_pkgname}-git"
-pkgver=r1466.170f5cd4
+pkgver=r1473.826b3c29
 pkgrel=1
 pkgdesc="Yet another matrix client — web version"
 arch=('any')
@@ -67,11 +67,11 @@ sha256sums=('SKIP'
             '1f8649e1ff1eedc4d7415e4800bade9d5014fbdf80aef80a22909f0abb7e67c1'
             'c61c12de95066abbc797465c243cab70a46156d7690de6a050d033683cf87f88'
             '23d85b6a708bd12604ce7dd50ec02db731ab39f2c22095c9e9a528fac240ca01'
-            '7d9f9c69a9b67b9830c8560abfee42909bee1fe0f2a8b032c7667bbe5cef53d0'
+            '12619bd381e6d9badc344ee6e2960920d0270a19cbe067964931e83330862a52'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
             'b6b545d5827fc5d0dcb3a125f1dd0594e8607826a8576ac0d873bc0953aff113'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
-            '568b1fd4b37f0254503694e895ffebc7816aad522a6c0a30746e3c4303076f84'
+            '4e23040bf54d3fbeec2bf1e3950ac8aa94087898178b10196caefade53a60fb5'
             'f7f70ae5125509b7e7b7a7a4b644805fb261c5220ef67d898dc65786321c67df'
             '31ae1042f2b3a5ef462411c356b7f8cf7535fe654808db06b9b9f9c2e058b383'
             'b91a3c0f6a7ddbf1d1c03f698098d49a45513be555cc9e594b227bbb806b054b'
@@ -81,9 +81,9 @@ sha256sums=('SKIP'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            'ac0ea5face8de6bceacbdd9e2bfc4aeed6290ddb5d137e864f21169d809682bd'
+            '1bee1a746ad0a8549d3310583646df2dab5707f85e4d6a3eaae53e91c8e33bcb'
             'd0faa8346cfca40c65ed03013a4e2af597fe09fdba7de61da9f6e026b7fb14e9'
-            '1e5c284e0d7b2f64fbb9685730a4d680dd687ba252fa721ffbcd975cde9fb432'
+            '4922c3f2703184334da3440c1e808d565b96b3fbe2bb96dfce192923d66ad38f'
             # '09-verification-signal.patch' sha256 (disabled): a3b6621014eb70dd723ea3d12b515ed44b8540ca48b3f0a2a9ef4af470eabd00
             )
 

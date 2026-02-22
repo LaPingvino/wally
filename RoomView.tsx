@@ -28,6 +28,7 @@ import { useIsDirectRoom } from '../../hooks/useRoom';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { announce } from '../../utils/announce';
+import { playReactionSound, playReplyToMeSound } from '../../utils/sounds';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -97,6 +98,21 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
     setTimeout(() => document.getElementById('cinny-timeline')?.focus(), 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
+
+  // Mute the timeline aria-live region while the editor has focus so busy rooms
+  // don't interrupt composing; restore polite mode on blur.
+  useEffect(() => {
+    const container = roomInputRef.current;
+    if (!container) return;
+    const onIn = () => document.getElementById('cinny-timeline')?.setAttribute('aria-live', 'off');
+    const onOut = () => document.getElementById('cinny-timeline')?.setAttribute('aria-live', 'polite');
+    container.addEventListener('focusin', onIn);
+    container.addEventListener('focusout', onOut);
+    return () => {
+      container.removeEventListener('focusin', onIn);
+      container.removeEventListener('focusout', onOut);
+    };
+  }, []);
 
   const permissions = useRoomPermissions(creators, powerLevels);
   const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
@@ -174,12 +190,23 @@ export function RoomView({ room, eventId }: { room: Room; eventId?: string }) {
                 const replyId = replyRel?.event_id as string | undefined;
                 const ts = mxEvent.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
                 const parts: string[] = [sender, body];
+                // Reactions on this message
+                const relations = room.getUnfilteredTimelineSet()
+                  .getRelationsForEvent?.(evtId, 'm.annotation', 'm.reaction');
+                if (relations && relations.getRelations().length > 0) {
+                  playReactionSound();
+                  parts.push('has reactions');
+                }
                 if (replyId) {
                   const replyEvt = room.findEventById(replyId);
                   if (replyEvt) {
                     const replySender = room.getMember(replyEvt.getSender() ?? '')?.name ?? replyEvt.getSender() ?? '';
                     const replyBody = (replyEvt.getContent().body as string | undefined) ?? '';
                     if (replyBody) parts.push(`In reply to ${replySender}: ${replyBody.slice(0, 80)}`);
+                    // Reply to my own message
+                    if (replyEvt.getSender() === mx.getUserId()) {
+                      playReplyToMeSound();
+                    }
                   }
                 }
                 if (ts) parts.push(ts);

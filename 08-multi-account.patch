@@ -1,28 +1,3 @@
-diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
-index 5f3e2323..bc5f35ff 100644
---- a/src/app/components/GlobalKeyboardShortcuts.tsx
-+++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -49,6 +49,12 @@ const START_CALL_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
-   category: 'Actions',
- };
- 
-+const ACCOUNT_SWITCH_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
-+  key: 'alt+shift+1–9',
-+  description: 'Switch to 1st–9th account',
-+  category: 'Navigation',
-+};
-+
- export function GlobalKeyboardShortcuts() {
-   const navigate = useNavigate();
-   const { shortcuts } = useGlobalKeyboardShortcuts();
-@@ -166,6 +172,7 @@ export function GlobalKeyboardShortcuts() {
-     { ...CALL_ANSWER_SHORTCUT, action: () => {} },
-     { ...SPACE_SHORTCUT, action: () => {} },
-     { ...NEXT_UNREAD_SHORTCUT, action: () => {} },
-+    { ...ACCOUNT_SWITCH_SHORTCUT, action: () => {} },
-   ];
- 
-   return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
 diff --git a/src/app/pages/App.tsx b/src/app/pages/App.tsx
 index 52ec7f20..8a069988 100644
 --- a/src/app/pages/App.tsx
@@ -105,11 +80,11 @@ index e1a5dc0c..f3f36fc0 100644
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index 33446252..a82c4218 100644
+index d24d5747..f9b4ceba 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -1,9 +1,12 @@
--import React, { useRef } from 'react';
+-import React, { useEffect, useRef } from 'react';
 -import { Scroll } from 'folds';
 +import React, { useCallback, useEffect, useRef, useState } from 'react';
 +import { Icon, Icons, Scroll } from 'folds';
@@ -259,7 +234,7 @@ index 33446252..a82c4218 100644
  
  export function SidebarNav() {
    const scrollRef = useRef<HTMLDivElement>(null);
-@@ -44,6 +176,7 @@ export function SidebarNav() {
+@@ -64,6 +196,7 @@ export function SidebarNav() {
        <SidebarContent
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">

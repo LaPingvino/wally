@@ -1,10 +1,10 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..5f3e2323
+index 00000000..43eedca4
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,172 @@
-+import React, { useCallback } from 'react';
+@@ -0,0 +1,229 @@
++import React, { useCallback, useRef } from 'react';
 +import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
 +import { isKeyHotkey } from 'is-hotkey';
@@ -55,10 +55,29 @@ index 00000000..5f3e2323
 +  category: 'Actions',
 +};
 +
++const ACCOUNT_SWITCH_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+shift+1–9',
++  description: 'Switch to 1st–9th account',
++  category: 'Navigation',
++};
++
++const NEXT_UNREAD_DOWN_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+shift+down',
++  description: 'Next unread room',
++  category: 'Navigation',
++};
++
++const PREV_UNREAD_UP_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+shift+up',
++  description: 'Previous unread room',
++  category: 'Navigation',
++};
++
 +export function GlobalKeyboardShortcuts() {
 +  const navigate = useNavigate();
 +  const { shortcuts } = useGlobalKeyboardShortcuts();
 +  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = useCallState();
++  const unreadIndexRef = useRef(0);
 +  const mx = useMatrixClient();
 +  const roomToParents = useAtomValue(roomToParentsAtom);
 +  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
@@ -126,6 +145,7 @@ index 00000000..5f3e2323
 +        .sort((a, b) => (b[1].highlight - a[1].highlight) || (b[1].total - a[1].total));
 +      if (unreadEntries.length === 0) return;
 +      evt.preventDefault();
++      unreadIndexRef.current = 0;
 +      const [roomId] = unreadEntries[0];
 +      const unreadRoomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
 +      const isDirect = mDirects.has(roomId);
@@ -136,7 +156,40 @@ index 00000000..5f3e2323
 +      }
 +      const roomName = mx.getRoom(roomId)?.name ?? 'Room';
 +      const roomType = isDirect ? 'Direct Message' : 'Group Room';
-+      announce(`${roomName}, ${roomType}`);
++      const remaining = unreadEntries.length - 1;
++      announce(`${roomName}, ${roomType}. ${remaining} room${remaining === 1 ? '' : 's'} unread.`);
++    },
++    [roomToUnread, mDirects, mx, navigate]
++  );
++
++  const handleUnreadNavKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      const isDown = isKeyHotkey('alt+shift+down', evt);
++      const isUp = isKeyHotkey('alt+shift+up', evt);
++      if (!isDown && !isUp) return;
++      const unreadEntries = Array.from(roomToUnread.entries())
++        .filter(([, u]) => u.total > 0)
++        .sort((a, b) => (b[1].highlight - a[1].highlight) || (b[1].total - a[1].total));
++      if (unreadEntries.length === 0) return;
++      evt.preventDefault();
++      if (isDown) {
++        unreadIndexRef.current = (unreadIndexRef.current + 1) % unreadEntries.length;
++      } else {
++        unreadIndexRef.current =
++          (unreadIndexRef.current - 1 + unreadEntries.length) % unreadEntries.length;
++      }
++      const [roomId] = unreadEntries[unreadIndexRef.current];
++      const unreadRoomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++      const isDirect = mDirects.has(roomId);
++      if (isDirect) {
++        navigate(getDirectRoomPath(unreadRoomIdOrAlias));
++      } else {
++        navigate(getHomeRoomPath(unreadRoomIdOrAlias));
++      }
++      const roomName = mx.getRoom(roomId)?.name ?? 'Room';
++      const roomType = isDirect ? 'Direct Message' : 'Group Room';
++      const remaining = unreadEntries.length - 1;
++      announce(`${roomName}, ${roomType}. ${remaining} room${remaining === 1 ? '' : 's'} unread.`);
 +    },
 +    [roomToUnread, mDirects, mx, navigate]
 +  );
@@ -162,6 +215,7 @@ index 00000000..5f3e2323
 +  useKeyDown(window, handleCallKeyDown);
 +  useKeyDown(window, handleSpaceKeyDown);
 +  useKeyDown(window, handleNextUnreadKeyDown);
++  useKeyDown(window, handleUnreadNavKeyDown);
 +  useKeyDown(window, handleStartCallKeyDown);
 +  useKeyDown(window, handleAnswerCallKeyDown);
 +
@@ -172,17 +226,20 @@ index 00000000..5f3e2323
 +    { ...CALL_ANSWER_SHORTCUT, action: () => {} },
 +    { ...SPACE_SHORTCUT, action: () => {} },
 +    { ...NEXT_UNREAD_SHORTCUT, action: () => {} },
++    { ...NEXT_UNREAD_DOWN_SHORTCUT, action: () => {} },
++    { ...PREV_UNREAD_UP_SHORTCUT, action: () => {} },
++    { ...ACCOUNT_SWITCH_SHORTCUT, action: () => {} },
 +  ];
 +
 +  return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
 +}
 diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
 new file mode 100644
-index 00000000..bfe764eb
+index 00000000..1a8cf1eb
 --- /dev/null
 +++ b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
-@@ -0,0 +1,96 @@
-+import React from 'react';
+@@ -0,0 +1,155 @@
++import React, { useCallback, useRef } from 'react';
 +import {
 +  Box,
 +  Text,
@@ -216,10 +273,56 @@ index 00000000..bfe764eb
 +    .join('+');
 +}
 +
++// Render each key segment as its own <kbd> element for screen reader semantics.
++function ShortcutKeys({ keyStr }: { keyStr: string }) {
++  const formatted = formatShortcut(keyStr);
++  // Handle ranges like "Alt+1–9" or "Alt+Shift+1–9" — treat as a single kbd
++  if (formatted.includes('\u2013') || formatted.includes('\u2014')) {
++    return <kbd style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{formatted}</kbd>;
++  }
++  const parts = formatted.split('+');
++  return (
++    <span aria-label={formatted}>
++      {parts.map((part, i) => (
++        <React.Fragment key={part}>
++          <kbd style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{part}</kbd>
++          {i < parts.length - 1 && (
++            <span aria-hidden="true" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
++              {'+'}
++            </span>
++          )}
++        </React.Fragment>
++      ))}
++    </span>
++  );
++}
++
++const TITLE_ID = 'kb-shortcuts-help-title';
++
 +export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps) {
 +  const [open, setOpen] = useAtom(keyboardShortcutsHelpAtom);
++  const triggerRef = useRef<HTMLElement | null>(null);
++
++  const handleOpen = useCallback(() => {
++    triggerRef.current = document.activeElement as HTMLElement | null;
++  }, []);
++
++  const handleClose = useCallback(() => {
++    setOpen(false);
++    setTimeout(() => {
++      if (triggerRef.current && document.body.contains(triggerRef.current)) {
++        (triggerRef.current as HTMLElement).focus();
++      }
++      triggerRef.current = null;
++    }, 50);
++  }, [setOpen]);
 +
 +  if (!open) return null;
++
++  // Record trigger when first rendered (open just became true)
++  if (!triggerRef.current) {
++    handleOpen();
++  }
 +
 +  const groupedShortcuts = shortcuts.reduce(
 +    (acc, shortcut) => {
@@ -236,38 +339,51 @@ index 00000000..bfe764eb
 +        <FocusTrap
 +          focusTrapOptions={{
 +            initialFocus: false,
-+            onDeactivate: () => setOpen(false),
++            onDeactivate: handleClose,
 +            clickOutsideDeactivates: true,
 +            escapeDeactivates: stopPropagation,
 +          }}
 +        >
-+          <Modal size="500" variant="Background">
++          <Modal
++            size="500"
++            variant="Background"
++            role="dialog"
++            aria-modal="true"
++            aria-labelledby={TITLE_ID}
++          >
 +            <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
 +              <Box direction="Row" justifyContent="SpaceBetween" alignItems="Center">
-+                <Header size="400">Keyboard Shortcuts</Header>
-+                <IconButton size="300" onClick={() => setOpen(false)} aria-label="Close">
++                <Header id={TITLE_ID} size="400">Keyboard Shortcuts</Header>
++                <IconButton size="300" onClick={handleClose} aria-label="Close keyboard shortcuts">
 +                  <Icon src={Icons.Cross} size="200" />
 +                </IconButton>
 +              </Box>
 +              <Scroll style={{ maxHeight: '60vh' }}>
 +                <Box direction="Column" gap="300">
 +                  {Object.entries(groupedShortcuts).map(([category, items]) => (
-+                    <Box key={category} direction="Column" gap="200">
-+                      <Text size="L400">{category}</Text>
-+                      {items.map((shortcut) => (
-+                        <Box
-+                          key={shortcut.key}
-+                          direction="Row"
-+                          justifyContent="SpaceBetween"
-+                          gap="400"
-+                        >
-+                          <Text size="T300">{shortcut.description}</Text>
-+                          <Text size="T300" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-+                            {formatShortcut(shortcut.key)}
-+                          </Text>
-+                        </Box>
-+                      ))}
-+                    </Box>
++                    <section key={category} aria-label={`${category} shortcuts`}>
++                      <Text size="L400" as="h3" style={{ marginBottom: config.space.S100 }}>
++                        {category}
++                      </Text>
++                      <dl style={{ margin: 0 }}>
++                        {items.map((shortcut) => (
++                          <Box
++                            key={shortcut.key}
++                            direction="Row"
++                            justifyContent="SpaceBetween"
++                            gap="400"
++                            as="div"
++                          >
++                            <dt style={{ listStyle: 'none' }}>
++                              <Text size="T300">{shortcut.description}</Text>
++                            </dt>
++                            <dd style={{ margin: 0 }}>
++                              <ShortcutKeys keyStr={shortcut.key} />
++                            </dd>
++                          </Box>
++                        ))}
++                      </dl>
++                    </section>
 +                  ))}
 +                </Box>
 +              </Scroll>
@@ -347,7 +463,7 @@ index 00000000..7e3a46eb
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index ae46d2d0..c69c2f58 100644
+index ae46d2d0..4df67cd0 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -553,6 +553,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
@@ -358,15 +474,16 @@ index ae46d2d0..c69c2f58 100644
                      variant="SurfaceVariant"
                      size="300"
                      radii="300"
-@@ -585,6 +586,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+@@ -585,6 +586,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
            before={
              <IconButton
                onClick={() => pickFile('*')}
 +              aria-label="Attach file"
++              tabIndex={-1}
                variant="SurfaceVariant"
                size="300"
                radii="300"
-@@ -595,6 +597,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+@@ -595,6 +598,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
            after={
              <>
                <IconButton
@@ -375,7 +492,7 @@ index ae46d2d0..c69c2f58 100644
                  variant="SurfaceVariant"
                  size="300"
                  radii="300"
-@@ -637,6 +641,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+@@ -637,6 +642,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                    >
                      {!hideStickerBtn && (
                        <IconButton
@@ -383,7 +500,7 @@ index ae46d2d0..c69c2f58 100644
                          aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
                          onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
                          variant="SurfaceVariant"
-@@ -651,6 +656,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+@@ -651,6 +657,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                      )}
                      <IconButton
                        ref={emojiBtnRef}
@@ -391,7 +508,7 @@ index ae46d2d0..c69c2f58 100644
                        aria-pressed={
                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
                        }
-@@ -669,7 +675,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+@@ -669,7 +676,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                    </PopOut>
                  )}
                </UseStateProvider>
@@ -653,6 +770,37 @@ index be2f204e..a0f3bf39 100644
            aria-pressed={!!anchor}
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
+diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
+index e1ff1052..edf9dbac 100644
+--- a/src/app/features/settings/notifications/SystemNotification.tsx
++++ b/src/app/features/settings/notifications/SystemNotification.tsx
+@@ -238,6 +238,10 @@ export function SystemNotification() {
+     settingsAtom,
+     'isNotificationSounds'
+   );
++  const [inRoomActivitySound, setInRoomActivitySound] = useSetting(
++    settingsAtom,
++    'inRoomActivitySound'
++  );
+ 
+   const requestNotificationPermission = () => {
+     window.Notification.requestPermission();
+@@ -288,9 +292,14 @@ export function SystemNotification() {
+       >
+         <SettingTile
+           title="Notification Sound"
+-          description="Play sound when new message arrive."
++          description="Play mention, other-room, and reaction sounds when messages arrive."
+           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
+         />
++        <SettingTile
++          title="In-Room Activity Sounds"
++          description="Play a soft beep for messages in the current room, and a click when someone starts typing."
++          after={<Switch value={inRoomActivitySound} onChange={setInRoomActivitySound} />}
++        />
+       </SequenceCard>
+       <SequenceCard
+         className={SequenceCardStyle}
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
 index 00000000..de62d0da
@@ -966,14 +1114,232 @@ index bea09a92..d600c610 100644
                        </CallProvider>
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
+diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
+index e0977d97..0059eed6 100644
+--- a/src/app/pages/client/ClientNonUIFeatures.tsx
++++ b/src/app/pages/client/ClientNonUIFeatures.tsx
+@@ -1,12 +1,11 @@
+ import { useAtomValue } from 'jotai';
+ import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
+ import { useNavigate } from 'react-router-dom';
+-import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
++import { MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
+ import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
+ import LogoSVG from '../../../../public/res/svg/cinny.svg';
+ import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
+ import LogoHighlightSVG from '../../../../public/res/svg/cinny-highlight.svg';
+-import NotificationSound from '../../../../public/sound/notification.ogg';
+ import InviteSound from '../../../../public/sound/invite.ogg';
+ import { notificationPermission, setFavicon } from '../../utils/dom';
+ import { useSetting } from '../../state/hooks/settings';
+@@ -26,6 +25,14 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { announce } from '../../utils/announce';
++import {
++  playMentionSound,
++  playCurrentRoomSound,
++  playOtherRoomSound,
++  playTypingSound,
++  playReactionSound,
++} from '../../utils/sounds';
+ 
+ function SystemEmojiFeature() {
+   const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
+@@ -136,13 +143,14 @@ function InviteNotifications() {
+ }
+ 
+ function MessageNotifications() {
+-  const audioRef = useRef<HTMLAudioElement>(null);
+   const notifRef = useRef<Notification>();
+   const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
++  const prevTypingCountRef = useRef(0);
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
+   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
+   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
++  const [inRoomActivitySound] = useSetting(settingsAtom, 'inRoomActivitySound');
+ 
+   const navigate = useNavigate();
+   const notificationSelected = useInboxNotificationsSelected();
+@@ -179,11 +187,6 @@ function MessageNotifications() {
+     [navigate]
+   );
+ 
+-  const playSound = useCallback(() => {
+-    const audioElement = audioRef.current;
+-    audioElement?.play();
+-  }, []);
+-
+   useEffect(() => {
+     const handleTimelineEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
+       mEvent,
+@@ -193,7 +196,6 @@ function MessageNotifications() {
+       data
+     ) => {
+       if (mx.getSyncState() !== 'SYNCING') return;
+-      if (document.hasFocus() && (selectedRoomId === room?.roomId || notificationSelected)) return;
+       if (
+         !room ||
+         !data.liveEvent ||
+@@ -206,7 +208,7 @@ function MessageNotifications() {
+ 
+       const sender = mEvent.getSender();
+       const eventId = mEvent.getId();
+-      if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
++      if (!sender || !eventId || sender === mx.getUserId()) return;
+       const unreadInfo = getUnreadInfo(room);
+       const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
+       unreadCacheRef.current.set(room.roomId, unreadInfo);
+@@ -219,45 +221,96 @@ function MessageNotifications() {
+         return;
+       }
+ 
+-      if (showNotifications && notificationPermission('granted')) {
+-        const avatarMxc =
+-          room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room.getMxcAvatarUrl();
+-        notify({
+-          roomName: room.name ?? 'Unknown',
+-          roomAvatar: avatarMxc
+-            ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
+-            : undefined,
+-          username: getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender,
+-          roomId: room.roomId,
+-          eventId,
+-        });
++      const isCurrentRoom = room.roomId === selectedRoomId;
++      const isFocused = document.hasFocus();
++
++      // Desktop notification -- skip when page is focused on current room or inbox
++      if (!(isFocused && (isCurrentRoom || notificationSelected))) {
++        if (showNotifications && notificationPermission('granted')) {
++          const avatarMxc =
++            room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room.getMxcAvatarUrl();
++          notify({
++            roomName: room.name ?? 'Unknown',
++            roomAvatar: avatarMxc
++              ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
++              : undefined,
++            username: getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender,
++            roomId: room.roomId,
++            eventId,
++          });
++        }
+       }
+ 
+-      if (notificationSound) {
+-        playSound();
++      // Differentiated sounds
++      const isHighlight = unreadInfo.highlight > (cachedUnreadInfo?.highlight ?? 0);
++      if (isHighlight && notificationSound) {
++        playMentionSound();
++        announce(`Mention in ${room.name}`);
++      } else if (isCurrentRoom && isFocused && inRoomActivitySound) {
++        playCurrentRoomSound();
++      } else if (!isCurrentRoom && notificationSound) {
++        playOtherRoomSound();
+       }
+     };
+     mx.on(RoomEvent.Timeline, handleTimelineEvent);
++
++    // Reaction to my own message
++    const handleReactionEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
++      mEvent,
++      room,
++      _toStart,
++      _removed,
++      data
++    ) => {
++      if (!data.liveEvent || mEvent.getType() !== 'm.reaction') return;
++      const rel = mEvent.getContent()['m.relates_to'] as
++        | { rel_type?: string; event_id?: string; key?: string }
++        | undefined;
++      if (rel?.rel_type !== 'm.annotation' || !rel.event_id) return;
++      const targetEvt = room?.findEventById(rel.event_id);
++      if (targetEvt?.getSender() !== mx.getUserId()) return;
++      if (notificationSound) playReactionSound();
++      const reactor = mEvent.getSender() ?? 'Someone';
++      const reactorName = room
++        ? (getMemberDisplayName(room, reactor) ?? getMxIdLocalPart(reactor) ?? reactor)
++        : reactor;
++      announce(`${reactorName} reacted ${rel.key ?? ''} to your message`);
++    };
++    mx.on(RoomEvent.Timeline, handleReactionEvent);
++
++    // Typing sound for current room
++    const handleTyping = (event: MatrixEvent, room: Room) => {
++      if (room.roomId !== selectedRoomId) return;
++      const typingUserIds =
++        (event.getContent() as { user_ids?: string[] }).user_ids ?? [];
++      const othersTyping = typingUserIds.filter((uid) => uid !== mx.getUserId());
++      if (othersTyping.length > 0 && prevTypingCountRef.current === 0) {
++        if (inRoomActivitySound) playTypingSound();
++        announce('Someone is typing');
++      }
++      prevTypingCountRef.current = othersTyping.length;
++    };
++    // eslint-disable-next-line @typescript-eslint/no-explicit-any
++    mx.on(RoomEvent.Typing as any, handleTyping);
++
+     return () => {
+       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
++      mx.removeListener(RoomEvent.Timeline, handleReactionEvent);
++      // eslint-disable-next-line @typescript-eslint/no-explicit-any
++      mx.removeListener(RoomEvent.Typing as any, handleTyping);
+     };
+   }, [
+     mx,
+     notificationSound,
++    inRoomActivitySound,
+     notificationSelected,
+     showNotifications,
+-    playSound,
+     notify,
+     selectedRoomId,
+     useAuthentication,
+   ]);
+ 
+-  return (
+-    // eslint-disable-next-line jsx-a11y/media-has-caption
+-    <audio ref={audioRef} style={{ display: 'none' }}>
+-      <source src={NotificationSound} type="audio/ogg" />
+-    </audio>
+-  );
++  return null;
+ }
+ 
+ type ClientNonUIFeaturesProps = {
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index a2e1b682..33446252 100644
+index a2e1b682..d24d5747 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
-@@ -22,8 +22,25 @@ import { CreateTab } from './sidebar/CreateTab';
+@@ -1,4 +1,4 @@
+-import React, { useRef } from 'react';
++import React, { useEffect, useRef } from 'react';
+ import { Scroll } from 'folds';
+ 
+ import {
+@@ -22,8 +22,45 @@ import { CreateTab } from './sidebar/CreateTab';
  export function SidebarNav() {
    const scrollRef = useRef<HTMLDivElement>(null);
  
++  // Initialise roving tabIndex: all sidebar buttons get tabindex=-1 except the first.
++  // This makes the sidebar a single tab stop; arrow keys move within it.
++  useEffect(() => {
++    const id = setTimeout(() => {
++      const sidebar = document.querySelector(
++        '[role="navigation"][aria-label="Main navigation"]'
++      );
++      if (!sidebar) return;
++      const allBtns = Array.from(
++        sidebar.querySelectorAll('button:not([disabled])')
++      ) as HTMLElement[];
++      allBtns.forEach((b, i) => b.setAttribute('tabindex', i === 0 ? '0' : '-1'));
++    }, 0);
++    return () => clearTimeout(id);
++  }, []);
++
 +  const handleKeyDown = (evt: React.KeyboardEvent<HTMLDivElement>) => {
 +    if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
 +    const sidebar = evt.currentTarget;
@@ -982,12 +1348,16 @@ index a2e1b682..33446252 100644
 +    const currentIndex = buttons.indexOf(current);
 +    if (currentIndex < 0) return;
 +    evt.preventDefault();
++    let target: HTMLElement | undefined;
 +    if (evt.key === 'ArrowDown') {
-+      const next = buttons[currentIndex + 1] ?? buttons[0];
-+      next?.focus();
++      target = buttons[currentIndex + 1] ?? buttons[0];
 +    } else {
-+      const prev = buttons[currentIndex - 1] ?? buttons[buttons.length - 1];
-+      prev?.focus();
++      target = buttons[currentIndex - 1] ?? buttons[buttons.length - 1];
++    }
++    if (target) {
++      buttons.forEach((b) => b.setAttribute('tabindex', '-1'));
++      target.setAttribute('tabindex', '0');
++      target.focus();
 +    }
 +  };
 +
@@ -1361,6 +1731,18 @@ index 6fc528a1..0d7474b7 100644
                  {folder.content.map((sId) => {
                    const space = mx.getRoom(sId);
                    if (!space) return null;
+diff --git a/src/app/pages/client/sidebar/UnverifiedTab.tsx b/src/app/pages/client/sidebar/UnverifiedTab.tsx
+index 0a2f117b..fa5bd669 100644
+--- a/src/app/pages/client/sidebar/UnverifiedTab.tsx
++++ b/src/app/pages/client/sidebar/UnverifiedTab.tsx
+@@ -56,6 +56,7 @@ function UnverifiedIndicator() {
+                 as="button"
+                 ref={triggerRef}
+                 outlined
++                aria-label={unverified ? 'Unverified Device' : 'Unverified Devices'}
+                 onClick={() => setSettings(true)}
+               >
+                 <Icon
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
 index 616b6fc0..eb010013 100644
 --- a/src/app/pages/client/space/Space.tsx
@@ -1520,6 +1902,26 @@ index 00000000..f978ab4d
 +import { atom } from 'jotai';
 +
 +export const keyboardShortcutsHelpAtom = atom<boolean>(false);
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 52679837..f4bff2e5 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -42,6 +42,7 @@ export interface Settings {
+ 
+   showNotifications: boolean;
+   isNotificationSounds: boolean;
++  inRoomActivitySound: boolean;
+   callRingScope: 'dm' | 'nonVoice' | 'all';
+   callRingtoneUrl: string | null;
+ 
+@@ -78,6 +79,7 @@ const defaultSettings: Settings = {
+ 
+   showNotifications: true,
+   isNotificationSounds: true,
++  inRoomActivitySound: true,
+   callRingScope: 'nonVoice',
+   callRingtoneUrl: null,
+ 
 diff --git a/src/app/utils/announce.ts b/src/app/utils/announce.ts
 new file mode 100644
 index 00000000..c854ce58
@@ -1533,4 +1935,77 @@ index 00000000..c854ce58
 +  requestAnimationFrame(() => {
 +    el.textContent = msg;
 +  });
++}
+diff --git a/src/app/utils/sounds.ts b/src/app/utils/sounds.ts
+new file mode 100644
+index 00000000..45e00b57
+--- /dev/null
++++ b/src/app/utils/sounds.ts
+@@ -0,0 +1,67 @@
++// Shared lazy AudioContext + named tone generators.
++// All sounds are short Web Audio API tones — no asset files needed.
++// Callers are responsible for checking user settings before calling.
++
++let audioCtx: AudioContext | null = null;
++
++function ctx(): AudioContext {
++  if (!audioCtx || audioCtx.state === 'closed') {
++    audioCtx = new AudioContext();
++  }
++  return audioCtx;
++}
++
++function tone(freq: number, dur: number, gain: number, type: OscillatorType = 'sine'): void {
++  try {
++    const c = ctx();
++    const now = c.currentTime;
++    const g = c.createGain();
++    g.connect(c.destination);
++    g.gain.setValueAtTime(0, now);
++    g.gain.linearRampToValueAtTime(gain, now + 0.01);
++    g.gain.setValueAtTime(gain, now + dur - 0.02);
++    g.gain.linearRampToValueAtTime(0, now + dur);
++    const osc = c.createOscillator();
++    osc.type = type;
++    osc.frequency.value = freq;
++    osc.connect(g);
++    osc.start(now);
++    osc.stop(now + dur);
++  } catch {
++    // Audio not supported or blocked by browser
++  }
++}
++
++/** C5->E5 two-tone ascending -- urgent mention alert */
++export function playMentionSound(): void {
++  tone(523.25, 0.12, 0.25);
++  setTimeout(() => tone(659.25, 0.15, 0.3), 120);
++}
++
++/** Single A4 soft beep -- activity in current room */
++export function playCurrentRoomSound(): void {
++  tone(440, 0.08, 0.1);
++}
++
++/** Low Eb4 tick, very quiet -- activity in another room */
++export function playOtherRoomSound(): void {
++  tone(311.13, 0.06, 0.07);
++}
++
++/** Very brief 800Hz click -- someone started typing */
++export function playTypingSound(): void {
++  tone(800, 0.04, 0.05, 'square');
++}
++
++/** A5->C#6 two quick sparkle tones -- reaction received */
++export function playReactionSound(): void {
++  tone(880, 0.08, 0.15);
++  setTimeout(() => tone(1108.73, 0.1, 0.12), 80);
++}
++
++/** A4->C#5->E5 three-step sweep -- reply to your message */
++export function playReplyToMeSound(): void {
++  tone(440, 0.1, 0.15);
++  setTimeout(() => tone(554.37, 0.1, 0.15), 100);
++  setTimeout(() => tone(659.25, 0.12, 0.18), 200);
 +}
