@@ -280,14 +280,22 @@ export function ThreadsDrawer({ room, onClose }: ThreadsDrawerProps) {
   const [threads, setThreads] = useState(getThreads);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all historical threads on mount — room.getThreads() only returns
-  // threads already in memory from the current sync window.
+  // Fetch all historical threads on mount.
+  // room.getThreads() only returns threads already in memory.
+  // fetchRoomThreads() silently no-ops unless threadsTimelineSets is
+  // already initialised — so we must call createThreadsTimelineSets() first.
   useEffect(() => {
     setLoading(true);
-    room.fetchRoomThreads().then(() => {
-      setThreads(getThreads());
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    room.createThreadsTimelineSets()
+      .then(() => room.fetchRoomThreads())
+      .then(() => {
+        setThreads(getThreads());
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.warn('ThreadsDrawer: failed to fetch threads', err);
+        setLoading(false);
+      });
   }, [room, getThreads]);
 
   // Keep list updated as new threads arrive or get replies
