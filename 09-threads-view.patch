@@ -1,5 +1,5 @@
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index 4df67cd0..83d8f218 100644
+index 4df67cd0..a2a09dd6 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -123,9 +123,10 @@ interface RoomInputProps {
@@ -26,17 +26,16 @@ index 4df67cd0..83d8f218 100644
      const replyUserID = replyDraft?.userId;
  
      const powerLevelTags = usePowerLevelTags(room, powerLevels);
-@@ -360,7 +362,20 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+@@ -360,7 +362,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
          content.format = 'org.matrix.custom.html';
          content.formatted_body = formattedBody;
        }
 -      if (replyDraft) {
 +      if (threadId) {
-+        // Sending a thread reply
++        // Sending a thread reply (thread-native, no fallback to main timeline)
 +        content['m.relates_to'] = {
 +          rel_type: RelationType.Thread,
 +          event_id: threadId,
-+          is_falling_back: true,
 +          ...(replyDraft
 +            ? {
 +                'm.in_reply_to': { event_id: replyDraft.eventId },
@@ -48,7 +47,7 @@ index 4df67cd0..83d8f218 100644
          content['m.relates_to'] = {
            'm.in_reply_to': {
              event_id: replyDraft.eventId,
-@@ -377,7 +392,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+@@ -377,7 +391,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
        resetEditorHistory(editor);
        setReplyDraft(undefined);
        sendTypingStatus(false);
@@ -341,10 +340,10 @@ index d06f165c..987f1704 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..885f348a
+index 00000000..c5c01a2e
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,165 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -487,7 +486,7 @@ index 00000000..885f348a
 +  return (
 +    <Page ref={viewRef}>
 +      {rootEvent && <RootEventHeader room={room} rootEvent={rootEvent} />}
-+      <Box grow="Yes" style={{ overflow: 'hidden' }}>
++      <Box grow="Yes" direction="Column">
 +        <RoomTimeline
 +          room={room}
 +          roomInputRef={inputRef}
@@ -496,14 +495,16 @@ index 00000000..885f348a
 +        />
 +      </Box>
 +      <Box shrink="No" direction="Column">
-+        <RoomInput
-+          room={room}
-+          roomId={room.roomId}
-+          threadId={threadRootId}
-+          editor={editor}
-+          fileDropContainerRef={viewRef}
-+          ref={inputRef}
-+        />
++        <div style={{ padding: `0 ${config.space.S400}` }}>
++          <RoomInput
++            room={room}
++            roomId={room.roomId}
++            threadId={threadRootId}
++            editor={editor}
++            fileDropContainerRef={viewRef}
++            ref={inputRef}
++          />
++        </div>
 +      </Box>
 +    </Page>
 +  );
