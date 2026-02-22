@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
-import { EventTimeline, MatrixEvent, Room } from 'matrix-js-sdk';
+import { EventTimeline, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -451,6 +451,215 @@ function FollowActivity({ room, patterns, label }: { room: Room; patterns: strin
   );
 }
 
+// ── Thread discussions ─────────────────────────────────────────────────────────
+
+function IssueThreadView({
+  room,
+  threadRootId,
+  onClose,
+}: {
+  room: Room;
+  threadRootId: string;
+  onClose: () => void;
+}) {
+  const mx = useMatrixClient();
+  const [allEvents, setAllEvents] = useState<MatrixEvent[]>(() =>
+    room.getUnfilteredTimelineSet().getLiveTimeline().getEvents()
+  );
+  useEffect(() => {
+    const refresh = () => setAllEvents([...room.getUnfilteredTimelineSet().getLiveTimeline().getEvents()]);
+    room.on('Room.timeline' as any, refresh);
+    return () => { room.off('Room.timeline' as any, refresh); };
+  }, [room]);
+
+  const rootEvent = useMemo(
+    () => allEvents.find((e) => e.getId() === threadRootId && !e.isRedacted()),
+    [allEvents, threadRootId]
+  );
+
+  const threadReplies = useMemo(() => {
+    const sdkThread = room.getThread(threadRootId);
+    if (sdkThread) return sdkThread.events.filter((e) => !e.isRedacted());
+    return allEvents.filter((e) => {
+      if (e.isRedacted()) return false;
+      const rel = e.getContent()['m.relates_to'] as { rel_type?: string; event_id?: string } | undefined;
+      return rel?.rel_type === RelationType.Thread && rel.event_id === threadRootId;
+    });
+  }, [allEvents, room, threadRootId]);
+
+  const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [threadReplies.length]);
+
+  const handleReply = async () => {
+    const text = replyText.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      const lastEvent = threadReplies[threadReplies.length - 1] ?? rootEvent;
+      await mx.sendEvent(room.roomId, 'm.room.message' as any, {
+        msgtype: 'm.text',
+        body: text,
+        'm.relates_to': {
+          rel_type: RelationType.Thread,
+          event_id: threadRootId,
+          'm.in_reply_to': { event_id: lastEvent?.getId() ?? threadRootId },
+          is_falling_back: false,
+        },
+      });
+      setReplyText('');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const displayName = (userId: string) => getMemberDisplayName(room, userId) ?? userId;
+  const allMessages = [...(rootEvent ? [rootEvent] : []), ...threadReplies];
+
+  return (
+    <Box direction="Column" style={{ border: '1px solid ' + color.Surface.ContainerLine, borderRadius: config.radii.R300, overflow: 'hidden' }}>
+      <Box alignItems="Center" style={{ justifyContent: 'space-between', padding: config.space.S100 + ' ' + config.space.S200, background: color.SurfaceVariant.Container, borderBottom: '1px solid ' + color.Surface.ContainerLine }}>
+        <Text size="T200" priority="300">{threadReplies.length} {threadReplies.length === 1 ? 'reply' : 'replies'}</Text>
+        <IconButton size="200" onClick={onClose} radii="300" aria-label="Collapse thread">
+          <Icon src={Icons.Cross} size="50" />
+        </IconButton>
+      </Box>
+      <div ref={scrollRef} style={{ maxHeight: '220px', overflowY: 'auto', padding: config.space.S200 + ' ' + config.space.S300 }}>
+        {allMessages.length === 0 && (
+          <Text size="T200" priority="300" style={{ display: 'block', textAlign: 'center', padding: config.space.S200 }}>
+            No messages yet — start the discussion below.
+          </Text>
+        )}
+        <Box direction="Column" gap="200">
+          {allMessages.map((e) => {
+            const sender = e.getSender() ?? '';
+            const time = e.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
+            const isRoot = e.getId() === threadRootId;
+            return (
+              <Box key={e.getId()} direction="Column" gap="50"
+                style={{ paddingBottom: config.space.S100, borderBottom: isRoot ? '1px solid ' + color.Surface.ContainerLine : undefined }}>
+                <Box gap="100" alignItems="Center">
+                  <Text size="T200" style={{ fontWeight: 600 }}>{displayName(sender)}</Text>
+                  <Text size="T200" priority="300">{time}</Text>
+                  {isRoot && <Text size="T200" priority="300" style={{ fontStyle: 'italic' }}> · thread root</Text>}
+                </Box>
+                <Text size="T200" style={{ whiteSpace: 'pre-line' }}>{e.getContent().body as string}</Text>
+              </Box>
+            );
+          })}
+        </Box>
+      </div>
+      <Box gap="100" style={{ padding: config.space.S100 + ' ' + config.space.S200, borderTop: '1px solid ' + color.Surface.ContainerLine }}>
+        <input
+          type="text"
+          value={replyText}
+          onChange={(e) => setReplyText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReply(); } }}
+          placeholder="Reply to thread…"
+          aria-label="Reply to thread"
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        <Button size="300" variant="Primary" onClick={handleReply} aria-disabled={sending || !replyText.trim()}>
+          <Text>{sending ? '\u2026' : 'Send'}</Text>
+        </Button>
+      </Box>
+    </Box>
+  );
+}
+
+function IssueDiscussion({
+  room,
+  issueId,
+  initialThreads,
+  issueTitle,
+  onThreadAdded,
+}: {
+  room: Room;
+  issueId: string;
+  initialThreads: string[];
+  issueTitle: string;
+  onThreadAdded: (id: string) => void;
+}) {
+  const mx = useMatrixClient();
+  const [threads, setThreads] = useState<string[]>(initialThreads);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(
+    initialThreads.length > 0 ? initialThreads[initialThreads.length - 1] : null
+  );
+  const [starting, setStarting] = useState(false);
+
+  const handleStartDiscussion = async () => {
+    if (starting) return;
+    setStarting(true);
+    try {
+      const body = 'Discussion: ' + (issueTitle || 'Untitled issue');
+      const response = await mx.sendEvent(room.roomId, 'm.room.message' as any, {
+        msgtype: 'm.text',
+        body,
+        'eu.kiefte.issue_id': issueId,
+      }) as { event_id: string };
+      const threadRootId = response.event_id;
+      const newThreads = [...threads, threadRootId];
+      setThreads(newThreads);
+      onThreadAdded(threadRootId);
+      setOpenThreadId(threadRootId);
+      // Persist the thread link on the state event
+      const currentStateEvent = room
+        .getLiveTimeline()
+        .getState(EventTimeline.FORWARDS)
+        ?.getStateEvents('eu.kiefte.issue', issueId) as MatrixEvent | null | undefined;
+      const currentContent = (currentStateEvent?.getContent() as IssueContent | undefined) ?? {};
+      await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, { ...currentContent, threads: newThreads }, issueId);
+    } catch {
+      // Thread root message already sent but link failed — revert optimistic update
+      setThreads((prev) => prev.slice(0, -1));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <Box direction="Column" gap="200" style={{ padding: config.space.S300 + ' ' + config.space.S400, borderTop: '1px solid ' + color.Surface.ContainerLine }}>
+      <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
+        <Text size="L400">{'\uD83D\uDCAC'} Discussions{threads.length > 0 ? ' (' + threads.length + ')' : ''}</Text>
+        <Button size="300" variant="Secondary" fill="Soft" onClick={handleStartDiscussion} aria-disabled={starting}>
+          <Icon src={Icons.Plus} size="100" aria-hidden="true" />
+          <Text>{starting ? 'Starting\u2026' : threads.length === 0 ? 'Start Discussion' : 'Add Discussion'}</Text>
+        </Button>
+      </Box>
+      {threads.map((threadRootId, idx) => {
+        const isOpen = openThreadId === threadRootId;
+        return (
+          <Box key={threadRootId} direction="Column" gap="100">
+            <button
+              type="button"
+              onClick={() => setOpenThreadId(isOpen ? null : threadRootId)}
+              aria-expanded={isOpen}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: config.space.S100 + ' ' + config.space.S200,
+                borderRadius: config.radii.R300,
+                border: '1px solid ' + color.Surface.ContainerLine,
+                background: isOpen ? color.SurfaceVariant.Container : 'transparent',
+                cursor: 'pointer', font: 'inherit', color: 'inherit', width: '100%',
+              }}
+            >
+              <Text size="T300">Thread {idx + 1}</Text>
+              <Text size="T200" priority="300">{isOpen ? '\u25B2' : '\u25BC'}</Text>
+            </button>
+            {isOpen && (
+              <IssueThreadView room={room} threadRootId={threadRootId} onClose={() => setOpenThreadId(null)} />
+            )}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
 // ── SchemaEditor ───────────────────────────────────────────────────────────────
 
 interface DraftField extends SchemaField { _enumRaw: string; }
@@ -649,6 +858,16 @@ function IssueForm({ schema, initial, room, issueId, onSave, onCancel, canDelete
 
   const set = (key: string, value: unknown) => setValues((v) => ({ ...v, [key]: value }));
 
+  const handleThreadAdded = useCallback((threadRootId: string) => {
+    setValues((v) => ({
+      ...v,
+      threads: [...((v.threads as string[] | undefined) ?? []), threadRootId],
+    }));
+  }, []);
+
+  const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
+  const issueTitle = titleField ? String(values[titleField.key] ?? '') : '';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -713,6 +932,15 @@ function IssueForm({ schema, initial, room, issueId, onSave, onCancel, canDelete
           </Box>
         </form>
         {issueId && <IssueActivity room={room} issueId={issueId} />}
+        {issueId && (
+          <IssueDiscussion
+            room={room}
+            issueId={issueId}
+            initialThreads={(values.threads as string[] | undefined) ?? []}
+            issueTitle={issueTitle}
+            onThreadAdded={handleThreadAdded}
+          />
+        )}
         {issueId && schema.fields.filter((f) => f.type === 'follow').map((f) => {
           const pats = String(values[f.key] ?? '').split(',').map((p) => p.trim()).filter(Boolean);
           return pats.length > 0 ? <FollowActivity key={f.key} label={f.label} room={room} patterns={pats} /> : null;
@@ -743,6 +971,7 @@ function IssueCard({ entry, schema, room, kanbanFieldKey, canWrite, onClick }: {
   const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
   const title = titleField ? ((content[titleField.key] as string) ?? '(untitled)') : '(untitled)';
   const secondaryFields = schema.fields.filter((f) => f.key !== titleField?.key && f.key !== kanbanFieldKey && content[f.key]);
+  const threadCount = ((content.threads as string[] | undefined) ?? []).length;
 
   return (
     <button type="button" onClick={canWrite ? onClick : undefined}
@@ -753,7 +982,10 @@ function IssueCard({ entry, schema, room, kanbanFieldKey, canWrite, onClick }: {
         width: '100%', display: 'flex', flexDirection: 'column', gap: config.space.S100 }}>
       <Box alignItems="Center" gap="100" style={{ justifyContent: 'space-between' }}>
         <Text size="T300" truncate>{title}</Text>
-        {redacted && <Text size="T200" style={{ color: color.Warning.Main, flexShrink: 0 }} title="Current state redacted">⚠️</Text>}
+        <Box gap="100" alignItems="Center">
+          {threadCount > 0 && <Text size="T200" priority="300" style={{ flexShrink: 0 }}>{'\uD83D\uDCAC'} {threadCount}</Text>}
+          {redacted && <Text size="T200" style={{ color: color.Warning.Main, flexShrink: 0 }} title="Current state redacted">⚠️</Text>}
+        </Box>
       </Box>
       {secondaryFields.map((f) => (
         <Box key={f.key} gap="100" alignItems="Center">
@@ -774,6 +1006,7 @@ function IssueListItem({ entry, schema, room, canWrite, onEdit }: {
   const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
   const title = titleField ? ((content[titleField.key] as string) ?? '(untitled)') : '(untitled)';
   const otherFields = schema.fields.filter((f) => f !== titleField);
+  const threadCount = ((content.threads as string[] | undefined) ?? []).length;
 
   return (
     <Box direction="Column" gap="200"
@@ -783,6 +1016,7 @@ function IssueListItem({ entry, schema, room, canWrite, onEdit }: {
         <Box alignItems="Center" gap="100">
           {redacted && <Text size="T200" style={{ color: color.Warning.Main }} title="Current state redacted — showing last known version">⚠️</Text>}
           <Text size="T300" as="h3" style={{ margin: 0, fontWeight: 'bold' }}>{title}</Text>
+          {threadCount > 0 && <Text size="T200" priority="300">{'\uD83D\uDCAC'} {threadCount}</Text>}
         </Box>
         {canWrite && (
           <Button size="300" variant="Secondary" fill="Soft" onClick={onEdit} aria-label={'Edit issue: ' + title}>
