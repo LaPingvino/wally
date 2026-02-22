@@ -58,7 +58,7 @@ index 4df67cd0..83d8f218 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d06f165c..d9f57d2c 100644
+index d06f165c..072c2631 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -22,6 +22,8 @@ import {
@@ -114,21 +114,29 @@ index d06f165c..d9f57d2c 100644
  };
  
  const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
-@@ -401,8 +421,11 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+@@ -401,7 +421,20 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
    }, [room, onRefresh]);
  };
  
 -const getInitialTimeline = (room: Room) => {
--  const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
 +const getInitialTimeline = (room: Room, threadId?: string) => {
-+  const liveTimeline = threadId
-+    ? room.getThread(threadId)?.liveTimeline ?? getLiveTimeline(room)
-+    : getLiveTimeline(room);
-+  const linkedTimelines = getLinkedTimelines(liveTimeline);
++  if (threadId) {
++    // Thread mode: use ONLY the thread's own timeline without following backward/forward
++    // links — getLinkedTimelines() can traverse into the room's main timeline chain
++    // via pagination tokens, which would show unrelated room events.
++    const thread = room.getThread(threadId);
++    if (!thread) return getEmptyTimeline();
++    const threadTimeline = thread.liveTimeline;
++    const evLength = threadTimeline.getEvents().length;
++    return {
++      linkedTimelines: [threadTimeline],
++      range: { start: 0, end: evLength },
++    };
++  }
+   const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
    const evLength = getTimelinesEventsCount(linkedTimelines);
    return {
-     linkedTimelines,
-@@ -430,7 +453,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+@@ -430,7 +463,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
    };
  };
  
@@ -137,7 +145,17 @@ index d06f165c..d9f57d2c 100644
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-@@ -486,7 +509,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -453,7 +486,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+   const ignoredUsersList = useIgnoredUsers();
+   const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
+ 
+-  const setReplyDraft = useSetAtom(roomIdToReplyDraftAtomFamily(room.roomId));
++  const replyDraftKey = threadId ? `${room.roomId}_thread_${threadId}` : room.roomId;
++  const setReplyDraft = useSetAtom(roomIdToReplyDraftAtomFamily(replyDraftKey));
+   const powerLevels = usePowerLevelsContext();
+   const creators = useRoomCreators(room);
+ 
+@@ -486,7 +520,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
  
    const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
  
@@ -146,7 +164,7 @@ index d06f165c..d9f57d2c 100644
    const readUptoEventIdRef = useRef<string>();
    if (unreadInfo) {
      readUptoEventIdRef.current = unreadInfo.readUptoEventId;
-@@ -535,11 +558,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -535,11 +569,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const parseMemberEvent = useMemberEventParser();
  
    const [timeline, setTimeline] = useState<Timeline>(() =>
@@ -154,16 +172,17 @@ index d06f165c..d9f57d2c 100644
 +    eventId ? getEmptyTimeline() : getInitialTimeline(room, threadId)
    );
    const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
-+  const threadLiveTimeline = threadId
-+    ? room.getThread(threadId)?.liveTimeline ?? getLiveTimeline(room)
++  const currentLiveTimeline = threadId
++    ? room.getThread(threadId)?.liveTimeline
 +    : getLiveTimeline(room);
    const liveTimelineLinked =
 -    timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === getLiveTimeline(room);
-+    timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === threadLiveTimeline;
++    !!currentLiveTimeline &&
++    timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === currentLiveTimeline;
    const canPaginateBack =
      typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
    const rangeAtStart = timeline.range.start === 0;
-@@ -597,10 +623,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -597,10 +635,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      ),
      useCallback(() => {
        if (!alive()) return;
@@ -176,7 +195,7 @@ index d06f165c..d9f57d2c 100644
    );
  
    useLiveEventArrive(
-@@ -612,14 +638,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -612,14 +650,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
          // otherwise we update timeline without paginating
          // so timeline can be updated with evt like: edits, reactions etc
          if (atBottomRef.current) {
@@ -193,7 +212,7 @@ index d06f165c..d9f57d2c 100644
              setUnreadInfo(getRoomUnreadInfo(room));
            }
  
-@@ -636,12 +662,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -636,12 +674,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            return;
          }
          setTimeline((ct) => ({ ...ct }));
@@ -210,7 +229,7 @@ index d06f165c..d9f57d2c 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,9 +705,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -678,9 +717,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      room,
      useCallback(() => {
        if (liveTimelineLinked) {
@@ -222,7 +241,7 @@ index d06f165c..d9f57d2c 100644
    );
  
    // Stay at bottom when room editor resize
-@@ -886,7 +913,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -886,7 +925,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
