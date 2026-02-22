@@ -5,10 +5,12 @@
 # Usage:
 #   ./build-appimage.sh           — Linux AppImage only
 #   ./build-appimage.sh --win     — Linux AppImage + Windows portable zip
+#   ./build-appimage.sh --all     — same as --win (alias)
 #                                   (cross-compilation; Wine is NOT required)
 #
-# The resulting bundles are self-contained — no system Electron or npm packages
-# are required at runtime.
+# If run from the PKGBUILD directory after makepkg, uses the local
+# src/cinny-web tree (already fully patched) to avoid re-cloning.
+# Otherwise clones the element-call branch from Codeberg.
 #
 # Build-time dependencies: git, node, npm
 
@@ -19,30 +21,40 @@ WORK_DIR="$(mktemp -d)"
 trap 'echo "==> Cleaning up $WORK_DIR..."; rm -rf "$WORK_DIR"' EXIT
 
 BUILD_WIN=false
-[[ "${1:-}" == "--win" ]] && BUILD_WIN=true
+[[ "${1:-}" == "--win" || "${1:-}" == "--all" ]] && BUILD_WIN=true
 
 # ---------------------------------------------------------------------------
-# 1. Clone source
+# 1. Source: use local makepkg build tree if available, else clone
 # ---------------------------------------------------------------------------
-echo "==> Cloning lapingvino/cinny (element-call branch)..."
-git clone --depth=1 -b element-call \
-  https://codeberg.org/lapingvino/cinny.git "$WORK_DIR/cinny"
+if [[ -d "$SCRIPT_DIR/src/cinny-web/.git" ]]; then
+  echo "==> Using local build tree from $SCRIPT_DIR/src/cinny-web..."
+  CINNY_SRC="$SCRIPT_DIR/src/cinny-web"
+  NEED_NPM_INSTALL=false
+else
+  echo "==> Cloning lapingvino/cinny (element-call branch)..."
+  git clone --depth=1 -b element-call \
+    https://codeberg.org/lapingvino/cinny.git "$WORK_DIR/cinny"
+  CINNY_SRC="$WORK_DIR/cinny"
+  NEED_NPM_INSTALL=true
+fi
 
 # ---------------------------------------------------------------------------
 # 2. Patch device display name
 # ---------------------------------------------------------------------------
 echo "==> Patching device name..."
-grep -rl "'Cinny Web'" "$WORK_DIR/cinny/src/" | \
+grep -rl "'Cinny Web'" "$CINNY_SRC/src/" | \
   xargs sed -i "s/'Cinny Web'/'Cinny Electron (lapingvino fork)'/g"
 
 # ---------------------------------------------------------------------------
 # 3. Build web app
 # ---------------------------------------------------------------------------
-echo "==> Installing cinny npm dependencies..."
-(cd "$WORK_DIR/cinny" && npm ci)
+if [[ "$NEED_NPM_INSTALL" == "true" ]]; then
+  echo "==> Installing cinny npm dependencies..."
+  (cd "$CINNY_SRC" && npm ci)
+fi
 
 echo "==> Building cinny web app..."
-(cd "$WORK_DIR/cinny" && NODE_OPTIONS=--max_old_space_size=4096 npm run build)
+(cd "$CINNY_SRC" && NODE_OPTIONS=--max_old_space_size=4096 npm run build)
 
 # ---------------------------------------------------------------------------
 # 4. Set up electron-builder project
@@ -51,17 +63,17 @@ echo "==> Preparing Electron wrapper..."
 mkdir -p "$WORK_DIR/electron"
 
 # Bundle the built web app under 'www/' so main.js can find it via app.isPackaged
-cp -r "$WORK_DIR/cinny/dist" "$WORK_DIR/electron/www"
+cp -r "$CINNY_SRC/dist" "$WORK_DIR/electron/www"
 
 # Shared main.js from this repository (handles both installed and packaged paths)
 cp "$SCRIPT_DIR/main.js" "$WORK_DIR/electron/main.js"
 
 # App icon (512 px PNG — electron-builder scales it for each target)
-cp "$WORK_DIR/cinny/public/res/android/android-chrome-512x512.png" \
+cp "$CINNY_SRC/public/res/android/android-chrome-512x512.png" \
    "$WORK_DIR/electron/icon.png"
 
 # Read version from cinny's own package.json
-VERSION="$(node -p "require('$WORK_DIR/cinny/package.json').version")"
+VERSION="$(node -p "require('$CINNY_SRC/package.json').version")"
 
 cat > "$WORK_DIR/electron/package.json" << EOF
 {
