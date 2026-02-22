@@ -2,6 +2,7 @@
 
 const { app, BrowserWindow, Tray, Menu, nativeImage, shell, protocol, net, session } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 // When installed via PKGBUILD (system install), app.isPackaged is false and we
 // use the fixed system paths.  When bundled with electron-builder (AppImage or
@@ -115,7 +116,7 @@ app.whenReady().then(() => {
     const filePath = path.extname(pathname)
       ? path.join(APP_DIR, pathname)
       : path.join(APP_DIR, 'index.html');
-    return net.fetch('file://' + filePath);
+    return net.fetch(pathToFileURL(filePath).href);
   });
 
   createWindow(ses);
