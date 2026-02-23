@@ -29,13 +29,13 @@ index 37c6be1e..00db376b 100644
                    </Box>
                    <Box direction="Column" gap="100">
 diff --git a/src/app/pages/App.tsx b/src/app/pages/App.tsx
-index 52ec7f20..8a069988 100644
+index 52ec7f20..b2470310 100644
 --- a/src/app/pages/App.tsx
 +++ b/src/app/pages/App.tsx
-@@ -11,6 +11,24 @@ import { ConfigConfigError, ConfigConfigLoading } from './ConfigConfig';
- import { FeatureCheck } from './FeatureCheck';
+@@ -12,6 +12,24 @@ import { FeatureCheck } from './FeatureCheck';
  import { createRouter } from './Router';
  import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
+ import { useCompositionEndTracking } from '../hooks/useComposingCheck';
 +import { setSessionOverride, getSessionForSlot } from '../state/sessions';
 +
 +// Detect secondary account slot from URL (browser router) or sessionStorage (hash router)
@@ -54,9 +54,9 @@ index 52ec7f20..8a069988 100644
 +  }
 +}
 +const _basename = _slotMatch ? `/account/${_accountSlot}/` : undefined;
- import { useCompositionEndTracking } from '../hooks/useComposingCheck';
  
  const queryClient = new QueryClient();
+ 
 @@ -37,7 +55,7 @@ function App() {
                    <ClientConfigProvider value={clientConfig}>
                      <QueryClientProvider client={queryClient}>
@@ -88,10 +88,18 @@ index d600c610..ea9ef1a0 100644
    });
  };
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index e1a5dc0c..560fb3b9 100644
+index e1a5dc0c..3292599a 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -127,8 +127,15 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -30,7 +30,6 @@ import { MediaConfigProvider } from '../../hooks/useMediaConfig';
+ import { MatrixClientProvider } from '../../hooks/useMatrixClient';
+ import { SpecVersions } from './SpecVersions';
+ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+-import { useSyncState } from '../../hooks/useSyncState';
+ import { stopPropagation } from '../../utils/keyboard';
+ import { SyncStatus } from './SyncStatus';
+ import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
+@@ -127,8 +126,15 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -109,7 +117,29 @@ index e1a5dc0c..560fb3b9 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -202,6 +209,15 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -173,14 +179,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+     }
+   }, [mx, startMatrix]);
+ 
+-  useSyncState(
+-    mx,
+-    useCallback((state) => {
+-      if (state === 'PREPARED') {
+-        setLoading(false);
+-      }
+-    }, [])
+-  );
++  // Show the app as soon as the client has started — store already has cached room
++  // data at this point. SyncStatus handles showing a banner while sync completes.
++  useEffect(() => {
++    if (startState.status === AsyncStatus.Success) {
++      setLoading(false);
++    }
++  }, [startState.status]);
+ 
+   return (
+     <SpecVersions baseUrl={baseUrl!}>
+@@ -202,6 +207,15 @@ export function ClientRoot({ children }: ClientRootProps) {
                      Retry
                    </Text>
                  </Button>
@@ -295,10 +325,10 @@ index d24d5747..f2a19775 100644
                <HomeTab />
                <DirectTab />
 diff --git a/src/app/state/sessions.ts b/src/app/state/sessions.ts
-index a9c34ce9..2b01c052 100644
+index a9c34ce9..a2b3b3e2 100644
 --- a/src/app/state/sessions.ts
 +++ b/src/app/state/sessions.ts
-@@ -46,7 +46,15 @@ export const removeFallbackSession = () => {
+@@ -46,7 +46,14 @@ export const removeFallbackSession = () => {
    localStorage.removeItem('cinny_device_id');
    localStorage.removeItem('cinny_access_token');
  };
@@ -310,11 +340,10 @@ index a9c34ce9..2b01c052 100644
  export const getFallbackSession = (): Session | undefined => {
 +  if (sessionOverride) return sessionOverride;
 +
-+
    const baseUrl = localStorage.getItem('cinny_hs_base_url');
    const userId = localStorage.getItem('cinny_user_id');
    const deviceId = localStorage.getItem('cinny_device_id');
-@@ -70,6 +78,39 @@ export const getFallbackSession = (): Session | undefined => {
+@@ -70,6 +77,39 @@ export const getFallbackSession = (): Session | undefined => {
   * End of migration code for old session
   */
  
@@ -375,7 +404,7 @@ index 9365e5b3..a9e71a50 100644
  
  export const getSettings = () => {
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..2edc411a 100644
+index 498d4f75..3e97525a 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,38 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -434,7 +463,7 @@ index 498d4f75..2edc411a 100644
  
    mx.setMaxListeners(50);
  
-@@ -54,6 +72,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
+@@ -54,6 +71,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
  };
  
  export const logoutClient = async (mx: MatrixClient) => {
@@ -446,7 +475,7 @@ index 498d4f75..2edc411a 100644
    pushSessionToSW();
    mx.stopClient();
    try {
-@@ -62,8 +85,20 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -62,8 +84,20 @@ export const logoutClient = async (mx: MatrixClient) => {
      // ignore if failed to logout
    }
    await mx.clearStores();
