@@ -356,10 +356,10 @@ index d06f165c..b463bfc2 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..c538e70a
+index 00000000..b1f74389
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,289 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -505,9 +505,9 @@ index 00000000..c538e70a
 +  //
 +  // 2. paginateEventTimeline may return 404 (server doesn't support MSC3440 thread
 +  //    pagination, e.g. Continuwuity).  In that case thread.initialEventsFetched stays
-+  //    false AND ThreadEvent.Update has already fired.  We render anyway: the thread
-+  //    liveTimeline still exists (resetLiveTimeline ran synchronously before the failed
-+  //    fetch), so liveTimelineLinked=true and new replies will appear as they arrive.
++  //    false AND ThreadEvent.Update has already fired.  We fall back to populating the
++  //    thread timeline from the main room timeline, which always has thread reply events
++  //    bundled in by /sync regardless of server MSC3440 support.
 +  const [threadReady, setThreadReady] = useState(() => {
 +    const thread = room.getThread(threadRootId);
 +    if (!thread) return false;
@@ -529,6 +529,41 @@ index 00000000..c538e70a
 +      const goReady = () => {
 +        if (readyCalled) return;
 +        readyCalled = true;
++
++        // If server-side pagination failed (initialEventsFetched still false), the
++        // thread timeline was cleared by resetLiveTimeline and never repopulated.
++        // Recover by scanning the main room timeline for replies to this thread —
++        // /sync bundles them there regardless of whether the server supports MSC3440.
++        if (!thread.initialEventsFetched) {
++          // Force the flag so future reactions/edits are added directly instead of
++          // being buffered in the internal replayEvents array.
++          thread.initialEventsFetched = true;
++
++          // Replay any annotation/edit events buffered during the failed fetch.
++          const pending = (thread as any).replayEvents;
++          if (Array.isArray(pending)) {
++            (thread as any).replayEvents = null;
++            thread.addEvents(pending, false);
++          }
++
++          // Collect existing event IDs to avoid duplicates.
++          const existingIds = new Set<string>(
++            (thread.liveTimeline.getEvents() as MatrixEvent[]).map((e) => e.getId()!)
++          );
++
++          // Find all m.thread reply events in the main room timeline.
++          const mainEvents = room.getUnfilteredTimelineSet().getLiveTimeline().getEvents() as MatrixEvent[];
++          const replies = mainEvents.filter((e) => {
++            if (e.isRedacted() || existingIds.has(e.getId()!)) return false;
++            const rel = e.getContent()?.['m.relates_to'];
++            return rel?.rel_type === 'm.thread' && rel?.event_id === thread.id;
++          });
++
++          if (replies.length > 0) {
++            thread.addEvents(replies, false);
++          }
++        }
++
 +        setThreadReady(true);
 +      };
 +
