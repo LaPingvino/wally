@@ -88,18 +88,10 @@ index d600c610..ea9ef1a0 100644
    });
  };
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index e1a5dc0c..3292599a 100644
+index e1a5dc0c..e993e004 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -30,7 +30,6 @@ import { MediaConfigProvider } from '../../hooks/useMediaConfig';
- import { MatrixClientProvider } from '../../hooks/useMatrixClient';
- import { SpecVersions } from './SpecVersions';
- import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
--import { useSyncState } from '../../hooks/useSyncState';
- import { stopPropagation } from '../../utils/keyboard';
- import { SyncStatus } from './SyncStatus';
- import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
-@@ -127,8 +126,15 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -127,8 +127,15 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -117,29 +109,30 @@ index e1a5dc0c..3292599a 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -173,14 +179,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -173,14 +180,21 @@ export function ClientRoot({ children }: ClientRootProps) {
      }
    }, [mx, startMatrix]);
  
--  useSyncState(
--    mx,
--    useCallback((state) => {
++  // Show app once cached rooms are ready. With IndexedDB data this fires in <1s.
++  // Falls back to showing the app after 1.5s for first-time or slow loads.
+   useSyncState(
+     mx,
+     useCallback((state) => {
 -      if (state === 'PREPARED') {
--        setLoading(false);
--      }
--    }, [])
--  );
-+  // Show the app as soon as the client has started — store already has cached room
-+  // data at this point. SyncStatus handles showing a banner while sync completes.
++      if (state === 'PREPARED' || state === 'SYNCING') {
+         setLoading(false);
+       }
+     }, [])
+   );
 +  useEffect(() => {
-+    if (startState.status === AsyncStatus.Success) {
-+      setLoading(false);
-+    }
-+  }, [startState.status]);
++    if (!mx) return;
++    const fallback = setTimeout(() => setLoading(false), 1500);
++    return () => clearTimeout(fallback);
++  }, [mx]);
  
    return (
      <SpecVersions baseUrl={baseUrl!}>
-@@ -202,6 +207,15 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -202,6 +216,15 @@ export function ClientRoot({ children }: ClientRootProps) {
                      Retry
                    </Text>
                  </Button>
@@ -404,7 +397,7 @@ index 9365e5b3..a9e71a50 100644
  
  export const getSettings = () => {
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..3e97525a 100644
+index 498d4f75..c7665d11 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,37 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -447,7 +440,7 @@ index 498d4f75..3e97525a 100644
  
    const mx = createClient({
      baseUrl: session.baseUrl,
-@@ -28,12 +44,13 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
+@@ -28,12 +43,13 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
      cryptoStore: legacyCryptoStore,
      deviceId: session.deviceId,
      timelineSupport: true,
@@ -462,7 +455,7 @@ index 498d4f75..3e97525a 100644
  
    mx.setMaxListeners(50);
  
-@@ -54,6 +71,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
+@@ -54,6 +70,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
  };
  
  export const logoutClient = async (mx: MatrixClient) => {
@@ -474,7 +467,7 @@ index 498d4f75..3e97525a 100644
    pushSessionToSW();
    mx.stopClient();
    try {
-@@ -62,8 +84,20 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -62,8 +83,20 @@ export const logoutClient = async (mx: MatrixClient) => {
      // ignore if failed to logout
    }
    await mx.clearStores();
