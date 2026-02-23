@@ -57,7 +57,7 @@ index 4df67cd0..a2a09dd6 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d06f165c..987f1704 100644
+index d06f165c..b6a8d2ea 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -22,6 +22,8 @@ import {
@@ -317,7 +317,7 @@ index d06f165c..987f1704 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,9 +741,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -678,11 +741,24 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      room,
      useCallback(() => {
        if (liveTimelineLinked) {
@@ -328,8 +328,23 @@ index d06f165c..987f1704 100644
 +    }, [room, threadId, liveTimelineLinked])
    );
  
++  // Thread mode: if liveTimelineLinked becomes false (e.g. thread.liveTimeline was replaced
++  // by resetLiveTimeline after our initial render), re-initialize to the current live
++  // timeline so messages can actually load. Without this, paginate(Forward) is a no-op
++  // because it operates on the stale timeline and recalibratePagination keeps returning it.
++  useEffect(() => {
++    if (!threadId || liveTimelineLinked) return;
++    const thread = room.getThread(threadId);
++    if (!thread?.initialEventsFetched) return;
++    const newTimeline = getInitialTimeline(room, threadId);
++    if (newTimeline.linkedTimelines.length === 0) return; // thread still not ready
++    setTimeline(newTimeline);
++  }, [room, threadId, liveTimelineLinked]);
++
    // Stay at bottom when room editor resize
-@@ -886,7 +949,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+   useResizeObserver(
+     useMemo(() => {
+@@ -886,7 +962,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
@@ -340,10 +355,10 @@ index d06f165c..987f1704 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..1b4256e3
+index 00000000..12aab5c2
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,226 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -487,24 +502,48 @@ index 00000000..1b4256e3
 +  // backward pagination token, so the timeline stays blank. Waiting for
 +  // thread.initialEventsFetched ensures the liveTimeline has events (or a pagination
 +  // token) before we render.
++  //
++  // IMPORTANT: !thread must map to false (not true). Rendering RoomTimeline before the
++  // Thread SDK object exists causes getInitialTimeline() to return getEmptyTimeline()
++  // (linkedTimelines=[]), which gives liveTimelineLinked=false → persistent front
++  // loading placeholders that can never resolve.
 +  const [threadReady, setThreadReady] = useState(() => {
 +    const thread = room.getThread(threadRootId);
-+    return !thread || thread.initialEventsFetched;
++    if (!thread) return false;
++    return thread.initialEventsFetched;
 +  });
 +
 +  useEffect(() => {
++    let cleanup: (() => void) | undefined;
++
++    const attachToThread = (thread: any) => {
++      if (thread.initialEventsFetched) {
++        setThreadReady(true);
++        return;
++      }
++      const handleUpdate = () => {
++        if (thread.initialEventsFetched) setThreadReady(true);
++      };
++      thread.on(ThreadEvent.Update as any, handleUpdate);
++      cleanup = () => thread.off(ThreadEvent.Update as any, handleUpdate);
++    };
++
 +    const thread = room.getThread(threadRootId);
-+    if (!thread || thread.initialEventsFetched) {
-+      setThreadReady(true);
-+      return;
++    if (thread) {
++      attachToThread(thread);
++    } else {
++      // Thread SDK object not yet registered (e.g. fetchRoomThreads still in flight).
++      // Wait for the room to emit ThreadEvent.New for this thread.
++      const handleNewThread = (newThread: any) => {
++        if (newThread.id !== threadRootId) return;
++        room.off(ThreadEvent.New as any, handleNewThread);
++        attachToThread(newThread);
++      };
++      room.on(ThreadEvent.New as any, handleNewThread);
++      cleanup = () => room.off(ThreadEvent.New as any, handleNewThread);
 +    }
-+    const handleUpdate = () => {
-+      if (thread.initialEventsFetched) setThreadReady(true);
-+    };
-+    thread.on(ThreadEvent.Update as any, handleUpdate);
-+    return () => {
-+      thread.off(ThreadEvent.Update as any, handleUpdate);
-+    };
++
++    return () => cleanup?.();
 +  }, [room, threadRootId]);
 +
 +  const rootEvent =
