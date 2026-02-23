@@ -130,44 +130,39 @@ export function ThreadsDrawer({ room, onClose, width = 320 }: ThreadsDrawerProps
   // Build thread list from BOTH SDK thread objects (populated after fetchRoomThreads or
   // fresh sync with threadSupport:true) AND a main-timeline scan (works with old session
   // data that predates threadSupport being enabled, or when server lacks MSC3856).
+  //
+  // We always merge both sources so that opening a thread (which calls room.createThread()
+  // to register one SDK Thread object) does not cause the rest of the list to disappear.
+  // SDK entries take precedence over fallback entries for the same thread ID.
   const getThreads = useCallback((): ThreadEntry[] => {
-    const sdkThreads = room.getThreads();
-    if (sdkThreads.length > 0) {
-      // SDK threads available — use them directly (filter out any with missing rootEvent)
-      return sdkThreads
-        .filter((t) => t.rootEvent != null)
-        .map((t) => ({ id: t.id, rootEvent: t.rootEvent!, replyCount: t.length }))
-        .sort((a, b) => b.rootEvent.getTs() - a.rootEvent.getTs());
-    }
+    const entries = new Map<string, ThreadEntry>();
 
-    // Fallback: scan main timeline for m.thread relations.
-    // Events land here in sessions predating threadSupport:true because thread replies
-    // were stored in the main timeline before the SDK started tracking them separately.
+    // 1. Fallback: scan main timeline for m.thread relations.
     const timeline = room.getUnfilteredTimelineSet().getLiveTimeline().getEvents();
-    const replyMap = new Map<string, { latestTs: number; count: number }>();
+    const replyMap = new Map<string, number>();
     for (const evt of timeline) {
       if (evt.isRedacted()) continue;
       const rel = evt.getContent()['m.relates_to'] as
         | { rel_type?: string; event_id?: string }
         | undefined;
       if (rel?.rel_type === RelationType.Thread && rel.event_id) {
-        const existing = replyMap.get(rel.event_id);
-        const ts = evt.getTs() ?? 0;
-        replyMap.set(rel.event_id, {
-          latestTs: Math.max(existing?.latestTs ?? 0, ts),
-          count: (existing?.count ?? 0) + 1,
-        });
+        replyMap.set(rel.event_id, (replyMap.get(rel.event_id) ?? 0) + 1);
       }
     }
+    for (const [rootId, count] of replyMap.entries()) {
+      const rootEvent = room.findEventById(rootId);
+      if (!rootEvent || rootEvent.isRedacted()) continue;
+      entries.set(rootId, { id: rootId, rootEvent, replyCount: count });
+    }
 
-    return [...replyMap.entries()]
-      .map(([rootId, { count }]) => {
-        const rootEvent = room.findEventById(rootId);
-        if (!rootEvent || rootEvent.isRedacted()) return null;
-        return { id: rootId, rootEvent, replyCount: count } as ThreadEntry;
-      })
-      .filter((e): e is ThreadEntry => e !== null)
-      .sort((a, b) => b.rootEvent.getTs() - a.rootEvent.getTs());
+    // 2. SDK threads override fallback entries (more accurate reply count, includes
+    //    fetched history). Skip any that lack a rootEvent — they aren't ready yet.
+    for (const t of room.getThreads()) {
+      if (!t.rootEvent) continue;
+      entries.set(t.id, { id: t.id, rootEvent: t.rootEvent, replyCount: t.length });
+    }
+
+    return [...entries.values()].sort((a, b) => b.rootEvent.getTs() - a.rootEvent.getTs());
   }, [room]);
 
   const [threads, setThreads] = useState<ThreadEntry[]>(getThreads);
