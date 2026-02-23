@@ -1,3 +1,33 @@
+diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
+index 37c6be1e..00db376b 100644
+--- a/src/app/features/settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
+@@ -49,6 +49,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+ 
+   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+   const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
++  const [multiAccount, setMultiAccount] = useSetting(settingsAtom, 'multiAccount');
+   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
+   const [globalExpand, setGlobalExpand] = useState(false);
+   const [profileExpand, setProfileExpand] = useState(false);
+@@ -152,6 +153,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+                           />
+                         }
+                       />
++                      <SettingTile
++                        title="Multi-Account"
++                        description="Show account switcher in sidebar (experimental)."
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={multiAccount}
++                            onChange={setMultiAccount}
++                          />
++                        }
++                      />
+                     </SequenceCard>
+                   </Box>
+                   <Box direction="Column" gap="100">
 diff --git a/src/app/pages/App.tsx b/src/app/pages/App.tsx
 index 52ec7f20..8a069988 100644
 --- a/src/app/pages/App.tsx
@@ -80,7 +110,7 @@ index e1a5dc0c..f3f36fc0 100644
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index d24d5747..f9b4ceba 100644
+index d24d5747..f2a19775 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -1,9 +1,12 @@
@@ -98,13 +128,15 @@ index d24d5747..f9b4ceba 100644
    SidebarStackSeparator,
    SidebarStack,
  } from '../../components/sidebar';
-@@ -18,6 +21,135 @@ import {
+@@ -18,9 +21,141 @@ import {
    SearchTab,
  } from './sidebar';
  import { CreateTab } from './sidebar/CreateTab';
 +import { getSecondarySessions } from '../../state/sessions';
 +import { useClientConfig } from '../../hooks/useClientConfig';
 +import { AddAccountDialog } from './AddAccountDialog';
++import { useSetting } from '../../state/hooks/settings';
++import { settingsAtom } from '../../state/settings';
 +
 +function AccountsTab() {
 +  const { hashRouter } = useClientConfig();
@@ -234,11 +266,15 @@ index d24d5747..f9b4ceba 100644
  
  export function SidebarNav() {
    const scrollRef = useRef<HTMLDivElement>(null);
-@@ -64,6 +196,7 @@ export function SidebarNav() {
++  const [multiAccount] = useSetting(settingsAtom, 'multiAccount');
+ 
+   // Initialise roving tabIndex: all sidebar buttons get tabindex=-1 except the first.
+   // This makes the sidebar a single tab stop; arrow keys move within it.
+@@ -64,6 +199,7 @@ export function SidebarNav() {
        <SidebarContent
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
-+            <AccountsTab />
++            {multiAccount && <AccountsTab />}
              <SidebarStack>
                <HomeTab />
                <DirectTab />
@@ -302,6 +338,26 @@ index a9c34ce9..2b01c052 100644
  // export const getSessionStoreName = (session: Session): SessionStoreName => {
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 9365e5b3..a9e71a50 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -51,6 +51,7 @@ export interface Settings {
+ 
+   developerTools: boolean;
+   issueTracker: boolean;
++  multiAccount: boolean;
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -89,6 +90,7 @@ const defaultSettings: Settings = {
+ 
+   developerTools: false,
+   issueTracker: false,
++  multiAccount: false,
+ };
+ 
+ export const getSettings = () => {
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
 index 498d4f75..c7665d11 100644
 --- a/src/client/initMatrix.ts
