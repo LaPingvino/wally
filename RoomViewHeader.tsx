@@ -449,93 +449,22 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
         </Box>
 
         <Box shrink="No">
-          {!ecryptedRoom && (!room.isCallRoom() || isChatOpen) && !isIssueBoard && (
-            <TooltipProvider
-              position="Bottom"
-              offset={4}
-              tooltip={
-                <Tooltip>
-                  <Text>Search</Text>
-                </Tooltip>
-              }
-            >
-              {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleSearchClick} aria-label="Search room">
-                  <Icon size="400" src={Icons.Search} />
-                </IconButton>
-              )}
-            </TooltipProvider>
-          )}
-          {(!room.isCallRoom() || isChatOpen) && !isIssueBoard && (
-            <TooltipProvider
-              position="Bottom"
-              offset={4}
-              tooltip={
-                <Tooltip>
-                  <Text>Pinned Messages</Text>
-                </Tooltip>
-              }
-            >
-              {(triggerRef) => (
-                <IconButton
-                  fill="None"
-                  style={{ position: 'relative' }}
-                  onClick={handleOpenPinMenu}
-                  ref={triggerRef}
-                  aria-pressed={!!pinMenuAnchor}
-                  aria-label={`Pinned messages${pinnedEvents.length > 0 ? ` (${pinnedEvents.length} pinned)` : ''}`}
-                >
-                  {pinnedEvents.length > 0 && (
-                    <Badge
-                      style={{
-                        position: 'absolute',
-                        left: toRem(3),
-                        top: toRem(3),
-                      }}
-                      variant="Secondary"
-                      size="400"
-                      fill="Solid"
-                      radii="Pill"
-                    >
-                      <Text as="span" size="L400">
-                        {pinnedEvents.length}
-                      </Text>
-                    </Badge>
-                  )}
-                  <Icon size="400" src={Icons.Pin} filled={!!pinMenuAnchor} />
-                </IconButton>
-              )}
-            </TooltipProvider>
-          )}
-          {(!room.isCallRoom() || isChatOpen) && !isIssueBoard && (
-            <PopOut
-              anchor={pinMenuAnchor}
-              position="Bottom"
-              content={
-                <FocusTrap
-                  focusTrapOptions={{
-                    initialFocus: false,
-                    returnFocusOnDeactivate: false,
-                    onDeactivate: () => setPinMenuAnchor(undefined),
-                    clickOutsideDeactivates: true,
-                    isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
-                    isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
-                    escapeDeactivates: stopPropagation,
-                  }}
-                >
-                  <RoomPinMenu room={room} requestClose={() => setPinMenuAnchor(undefined)} />
-                </FocusTrap>
-              }
-            />
-          )}
+          {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
+              Wobble here (left side of group) is less noticeable than at the right. */}
 
-          {screenSize === ScreenSize.Desktop && (
+          {/* Call button — hidden when canCall is false AND no call is active/running.
+              Unified: "Start Call" before a call, "Show/Hide Call" toggle once active. */}
+          {(canCall || isActiveCall || room.isCallRoom()) && !isIssueBoard && (
             <TooltipProvider
               position="Bottom"
               offset={4}
               tooltip={
                 <Tooltip>
-                  <Text>{peopleDrawer ? 'Hide Members' : 'Show Members'}</Text>
+                  <Text>
+                    {(isActiveCall || room.isCallRoom())
+                      ? (isCallViewOpen ? 'Hide Call' : 'Show Call')
+                      : 'Start Call'}
+                  </Text>
                 </Tooltip>
               }
             >
@@ -543,24 +472,33 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
                 <IconButton
                   fill="None"
                   ref={triggerRef}
-                  onClick={() => setPeopleDrawer((drawer) => !drawer)}
-                  aria-label={peopleDrawer ? 'Hide members' : 'Show members'}
-                  aria-pressed={peopleDrawer}
+                  onClick={isActiveCall || room.isCallRoom() ? toggleCallView : handleStartCall}
+                  aria-label={
+                    (isActiveCall || room.isCallRoom())
+                      ? (isCallViewOpen ? 'Hide call' : 'Show call')
+                      : 'Start call'
+                  }
+                  aria-pressed={(isActiveCall || room.isCallRoom()) ? isCallViewOpen : undefined}
+                  aria-keyshortcuts={!isActiveCall && !room.isCallRoom() ? 'Alt+J' : undefined}
                 >
-                  <Icon size="400" src={Icons.User} />
+                  <Icon
+                    size="400"
+                    src={Icons.Phone}
+                    filled={(isActiveCall || room.isCallRoom()) && isCallViewOpen}
+                  />
                 </IconButton>
               )}
             </TooltipProvider>
           )}
 
-          {/* Threads drawer toggle — Desktop only */}
-          {screenSize === ScreenSize.Desktop && (
+          {/* Chat toggle — hidden when no call is active */}
+          {(isActiveCall || room.isCallRoom()) && !isIssueBoard && (
             <TooltipProvider
               position="Bottom"
               offset={4}
               tooltip={
                 <Tooltip>
-                  <Text>{isThreadsDrawer ? 'Hide Threads' : 'Show Threads'}</Text>
+                  <Text>{isChatOpen ? 'Hide Chat' : 'Show Chat'}</Text>
                 </Tooltip>
               }
             >
@@ -568,17 +506,17 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
                 <IconButton
                   fill="None"
                   ref={triggerRef}
-                  onClick={onToggleThreadsDrawer}
-                  aria-pressed={isThreadsDrawer}
-                  aria-label={isThreadsDrawer ? 'Hide threads panel' : 'Show threads panel'}
+                  onClick={toggleChat}
+                  aria-label={isChatOpen ? 'Hide chat' : 'Show chat'}
+                  aria-pressed={isChatOpen}
                 >
-                  <Icon size="400" src={Icons.Message} filled={isThreadsDrawer} />
+                  <Icon size="400" src={Icons.Message} filled={isChatOpen} />
                 </IconButton>
               )}
             </TooltipProvider>
           )}
 
-          {/* Issue board toggle — only when schema exists and user has rights */}
+          {/* Issue board toggle — hidden when schema absent or insufficient rights */}
           {showIssuesButton && (
             <TooltipProvider
               position="Bottom"
@@ -603,42 +541,140 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
             </TooltipProvider>
           )}
 
-          {/* When in a call: separate toggles for call view and chat view. */}
-          {(room.isCallRoom() || isActiveCall) && !isIssueBoard && (
-            <>
-              <TooltipProvider
-                position="Bottom"
-                offset={4}
-                tooltip={
-                  <Tooltip>
-                    <Text>{isCallViewOpen ? 'Hide Call' : 'Show Call'}</Text>
-                  </Tooltip>
-                }
-              >
-                {(triggerRef) => (
-                  <IconButton fill="None" ref={triggerRef} onClick={toggleCallView} aria-label={isCallViewOpen ? 'Hide call' : 'Show call'} aria-pressed={isCallViewOpen}>
-                    <Icon size="400" src={Icons.Phone} filled={isCallViewOpen} />
-                  </IconButton>
-                )}
-              </TooltipProvider>
-              <TooltipProvider
-                position="Bottom"
-                offset={4}
-                tooltip={
-                  <Tooltip>
-                    <Text>{isChatOpen ? 'Hide Chat' : 'Show Chat'}</Text>
-                  </Tooltip>
-                }
-              >
-                {(triggerRef) => (
-                  <IconButton fill="None" ref={triggerRef} onClick={toggleChat} aria-label={isChatOpen ? 'Hide chat' : 'Show chat'} aria-pressed={isChatOpen}>
-                    <Icon size="400" src={Icons.Message} filled={isChatOpen} />
-                  </IconButton>
-                )}
-              </TooltipProvider>
-            </>
+          {/* BACK: stable buttons — always visible, greyed when temporarily unavailable.
+              The … menu is always the rightmost button; its position never changes. */}
+
+          {/* Search — greyed when issue board covers the chat */}
+          {!ecryptedRoom && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Search</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton fill="None" ref={triggerRef} disabled={isIssueBoard} onClick={handleSearchClick} aria-label="Search room">
+                  <Icon size="400" src={Icons.Search} />
+                </IconButton>
+              )}
+            </TooltipProvider>
           )}
 
+          {/* Pinned messages — greyed when issue board covers the chat */}
+          <TooltipProvider
+            position="Bottom"
+            offset={4}
+            tooltip={
+              <Tooltip>
+                <Text>Pinned Messages</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton
+                fill="None"
+                style={{ position: 'relative' }}
+                disabled={isIssueBoard}
+                onClick={handleOpenPinMenu}
+                ref={triggerRef}
+                aria-pressed={!!pinMenuAnchor}
+                aria-label={`Pinned messages${pinnedEvents.length > 0 ? ` (${pinnedEvents.length} pinned)` : ''}`}
+              >
+                {pinnedEvents.length > 0 && (
+                  <Badge
+                    style={{
+                      position: 'absolute',
+                      left: toRem(3),
+                      top: toRem(3),
+                    }}
+                    variant="Secondary"
+                    size="400"
+                    fill="Solid"
+                    radii="Pill"
+                  >
+                    <Text as="span" size="L400">
+                      {pinnedEvents.length}
+                    </Text>
+                  </Badge>
+                )}
+                <Icon size="400" src={Icons.Pin} filled={!!pinMenuAnchor} />
+              </IconButton>
+            )}
+          </TooltipProvider>
+          <PopOut
+            anchor={pinMenuAnchor}
+            position="Bottom"
+            content={
+              <FocusTrap
+                focusTrapOptions={{
+                  initialFocus: false,
+                  returnFocusOnDeactivate: false,
+                  onDeactivate: () => setPinMenuAnchor(undefined),
+                  clickOutsideDeactivates: true,
+                  isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                  isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                  escapeDeactivates: stopPropagation,
+                }}
+              >
+                <RoomPinMenu room={room} requestClose={() => setPinMenuAnchor(undefined)} />
+              </FocusTrap>
+            }
+          />
+
+          {/* Members — Desktop, always enabled */}
+          {screenSize === ScreenSize.Desktop && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{peopleDrawer ? 'Hide Members' : 'Show Members'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={() => setPeopleDrawer((drawer) => !drawer)}
+                  aria-label={peopleDrawer ? 'Hide members' : 'Show members'}
+                  aria-pressed={peopleDrawer}
+                >
+                  <Icon size="400" src={Icons.User} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
+          {/* Threads — Desktop, always enabled */}
+          {screenSize === ScreenSize.Desktop && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{isThreadsDrawer ? 'Hide Threads' : 'Show Threads'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={onToggleThreadsDrawer}
+                  aria-pressed={isThreadsDrawer}
+                  aria-label={isThreadsDrawer ? 'Hide threads panel' : 'Show threads panel'}
+                >
+                  <Icon size="400" src={Icons.Message} filled={isThreadsDrawer} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
+          {/* More options — always rightmost */}
           <TooltipProvider
             position="Bottom"
             align="End"
@@ -681,26 +717,6 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
               </FocusTrap>
             }
           />
-
-          {/* Start Call — rightmost button, after "…" to prevent accidental presses */}
-          {!room.isCallRoom() && !isActiveCall && canCall && !isIssueBoard && (
-            <TooltipProvider
-              position="Bottom"
-              align="End"
-              offset={4}
-              tooltip={
-                <Tooltip>
-                  <Text>Start Call</Text>
-                </Tooltip>
-              }
-            >
-              {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleStartCall} aria-label="Start call" aria-keyshortcuts="Alt+J">
-                  <Icon size="400" src={Icons.Phone} />
-                </IconButton>
-              )}
-            </TooltipProvider>
-          )}
         </Box>
       </Box>
     </PageHeader>
