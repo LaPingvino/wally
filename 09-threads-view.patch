@@ -57,7 +57,7 @@ index 4df67cd0..a2a09dd6 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d06f165c..b6a8d2ea 100644
+index d06f165c..b463bfc2 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -22,6 +22,8 @@ import {
@@ -317,7 +317,7 @@ index d06f165c..b6a8d2ea 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,11 +741,24 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -678,11 +741,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      room,
      useCallback(() => {
        if (liveTimelineLinked) {
@@ -332,19 +332,20 @@ index d06f165c..b6a8d2ea 100644
 +  // by resetLiveTimeline after our initial render), re-initialize to the current live
 +  // timeline so messages can actually load. Without this, paginate(Forward) is a no-op
 +  // because it operates on the stale timeline and recalibratePagination keeps returning it.
++  // We do NOT guard on thread.initialEventsFetched here: even when pagination failed (404),
++  // the thread liveTimeline exists after resetLiveTimeline and is safe to render into.
 +  useEffect(() => {
 +    if (!threadId || liveTimelineLinked) return;
-+    const thread = room.getThread(threadId);
-+    if (!thread?.initialEventsFetched) return;
++    if (!room.getThread(threadId)) return; // Thread SDK object not yet registered
 +    const newTimeline = getInitialTimeline(room, threadId);
-+    if (newTimeline.linkedTimelines.length === 0) return; // thread still not ready
++    if (newTimeline.linkedTimelines.length === 0) return;
 +    setTimeline(newTimeline);
 +  }, [room, threadId, liveTimelineLinked]);
 +
    // Stay at bottom when room editor resize
    useResizeObserver(
      useMemo(() => {
-@@ -886,7 +962,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -886,7 +963,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
@@ -355,10 +356,10 @@ index d06f165c..b6a8d2ea 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..12aab5c2
+index 00000000..c538e70a
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,226 @@
+@@ -0,0 +1,254 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -495,18 +496,18 @@ index 00000000..12aab5c2
 +  const viewRef = useRef<HTMLDivElement>(null);
 +  const editor = useEditor();
 +
-+  // Wait for the thread's initial events to be fetched before rendering the timeline.
-+  // When a thread is first opened, the SDK calls paginateEventTimeline() asynchronously
-+  // (in Thread.updateThreadMetadata) to populate the liveTimeline. If we render
-+  // RoomTimeline before that completes, getInitialTimeline() sees 0 events and no
-+  // backward pagination token, so the timeline stays blank. Waiting for
-+  // thread.initialEventsFetched ensures the liveTimeline has events (or a pagination
-+  // token) before we render.
++  // Wait until the Thread SDK object exists and has been initialized before rendering
++  // the timeline. Notes on the two failure modes we guard against:
 +  //
-+  // IMPORTANT: !thread must map to false (not true). Rendering RoomTimeline before the
-+  // Thread SDK object exists causes getInitialTimeline() to return getEmptyTimeline()
-+  // (linkedTimelines=[]), which gives liveTimelineLinked=false → persistent front
-+  // loading placeholders that can never resolve.
++  // 1. !thread → false (not true).  Rendering RoomTimeline before the Thread SDK object
++  //    exists causes getInitialTimeline() to return getEmptyTimeline() (linkedTimelines=[]),
++  //    which gives liveTimelineLinked=false → persistent front loading placeholders.
++  //
++  // 2. paginateEventTimeline may return 404 (server doesn't support MSC3440 thread
++  //    pagination, e.g. Continuwuity).  In that case thread.initialEventsFetched stays
++  //    false AND ThreadEvent.Update has already fired.  We render anyway: the thread
++  //    liveTimeline still exists (resetLiveTimeline ran synchronously before the failed
++  //    fetch), so liveTimelineLinked=true and new replies will appear as they arrive.
 +  const [threadReady, setThreadReady] = useState(() => {
 +    const thread = room.getThread(threadRootId);
 +    if (!thread) return false;
@@ -521,26 +522,54 @@ index 00000000..12aab5c2
 +        setThreadReady(true);
 +        return;
 +      }
-+      const handleUpdate = () => {
-+        if (thread.initialEventsFetched) setThreadReady(true);
++
++      // goReady fires at most once — called by ThreadEvent.Update or by the
++      // fallback timeout below.
++      let readyCalled = false;
++      const goReady = () => {
++        if (readyCalled) return;
++        readyCalled = true;
++        setThreadReady(true);
 +      };
++
++      // Render when SDK async initialization completes, regardless of whether
++      // initialEventsFetched ended up true (success) or false (404/error).
++      // updateThreadMetadata always emits ThreadEvent.Update after the attempt.
++      const handleUpdate = () => goReady();
 +      thread.on(ThreadEvent.Update as any, handleUpdate);
-+      cleanup = () => thread.off(ThreadEvent.Update as any, handleUpdate);
++
++      // Safety net: if ThreadEvent.Update already fired before this component
++      // mounted (thread was initialized before the user opened it), the listener
++      // above will never fire.  Fall back after a short delay.
++      const fallbackTimer = setTimeout(goReady, 500);
++
++      cleanup = () => {
++        thread.off(ThreadEvent.Update as any, handleUpdate);
++        clearTimeout(fallbackTimer);
++      };
 +    };
 +
 +    const thread = room.getThread(threadRootId);
 +    if (thread) {
 +      attachToThread(thread);
 +    } else {
-+      // Thread SDK object not yet registered (e.g. fetchRoomThreads still in flight).
-+      // Wait for the room to emit ThreadEvent.New for this thread.
-+      const handleNewThread = (newThread: any) => {
-+        if (newThread.id !== threadRootId) return;
-+        room.off(ThreadEvent.New as any, handleNewThread);
++      // Thread SDK object not registered yet.  createThread() registers it and
++      // kicks off async initialization (updateThreadMetadata), which will
++      // eventually emit ThreadEvent.Update → goReady.
++      const rootEvt = room.findEventById(threadRootId) ?? undefined;
++      try {
++        const newThread = room.createThread(threadRootId, rootEvt, [], false);
 +        attachToThread(newThread);
-+      };
-+      room.on(ThreadEvent.New as any, handleNewThread);
-+      cleanup = () => room.off(ThreadEvent.New as any, handleNewThread);
++      } catch (_) {
++        // createThread failed; fall back to waiting for ThreadEvent.New.
++        const handleNewThread = (newThread: any) => {
++          if (newThread.id !== threadRootId) return;
++          room.off(ThreadEvent.New as any, handleNewThread);
++          attachToThread(newThread);
++        };
++        room.on(ThreadEvent.New as any, handleNewThread);
++        cleanup = () => room.off(ThreadEvent.New as any, handleNewThread);
++      }
 +    }
 +
 +    return () => cleanup?.();
