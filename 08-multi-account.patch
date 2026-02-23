@@ -434,14 +434,6 @@ index 498d4f75..2edc411a 100644
  
    mx.setMaxListeners(50);
  
-@@ -43,6 +60,7 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
- export const startClient = async (mx: MatrixClient) => {
-   await mx.startClient({
-     lazyLoadMembers: true,
-+    disablePresence: true,
-   });
- };
- 
 @@ -54,6 +72,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
  };
  
