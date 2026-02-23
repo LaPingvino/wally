@@ -57,19 +57,10 @@ index 4df67cd0..a2a09dd6 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d06f165c..b463bfc2 100644
+index d06f165c..dadf2701 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
-@@ -22,6 +22,8 @@ import {
-   Room,
-   RoomEvent,
-   RoomEventHandlerMap,
-+  Thread,
-+  ThreadEvent,
- } from 'matrix-js-sdk';
- import { HTMLReactParserOptions } from 'html-react-parser';
- import classNames from 'classnames';
-@@ -228,6 +230,7 @@ type RoomTimelineProps = {
+@@ -228,6 +228,7 @@ type RoomTimelineProps = {
    eventId?: string;
    roomInputRef: RefObject<HTMLElement>;
    editor: Editor;
@@ -77,7 +68,7 @@ index d06f165c..b463bfc2 100644
  };
  
  const PAGINATION_LIMIT = 80;
-@@ -272,7 +275,8 @@ const useTimelinePagination = (
+@@ -272,7 +273,8 @@ const useTimelinePagination = (
    mx: MatrixClient,
    timeline: Timeline,
    setTimeline: Dispatch<SetStateAction<Timeline>>,
@@ -87,7 +78,7 @@ index d06f165c..b463bfc2 100644
  ) => {
    const timelineRef = useRef(timeline);
    timelineRef.current = timeline;
-@@ -289,7 +293,9 @@ const useTimelinePagination = (
+@@ -289,7 +291,9 @@ const useTimelinePagination = (
        const topTimeline = linkedTimelines[0];
        const timelineMatch = (mt: EventTimeline) => (t: EventTimeline) => t === mt;
  
@@ -98,7 +89,7 @@ index d06f165c..b463bfc2 100644
        const topTmIndex = newLTimelines.findIndex(timelineMatch(topTimeline));
        const topAddedTm = topTmIndex === -1 ? [] : newLTimelines.slice(0, topTmIndex);
  
-@@ -297,16 +303,22 @@ const useTimelinePagination = (
+@@ -297,16 +301,22 @@ const useTimelinePagination = (
          timelineToEventsCount(newLTimelines[topTmIndex]) - timelinesEventsCount[0];
        const offsetRange = getTimelinesEventsCount(topAddedTm) + (backwards ? topTmAddedEvt : 0);
  
@@ -130,7 +121,7 @@ index d06f165c..b463bfc2 100644
      };
  
      return async (backwards: boolean) => {
-@@ -357,12 +369,29 @@ const useTimelinePagination = (
+@@ -357,12 +367,47 @@ const useTimelinePagination = (
          recalibratePagination(lTimelines, timelinesEventsCount, backwards);
        }
      };
@@ -147,22 +138,40 @@ index d06f165c..b463bfc2 100644
 +) => {
    useEffect(() => {
 +    if (threadId) {
-+      // Thread mode: listen for new replies on this thread
++      // Thread mode: listen on the room's live timeline and filter for this thread.
++      // When Thread.hasServerSideSupport=FeatureSupport.None (=0, falsy), the SDK
++      // does not auto-route sync events to the thread's own timelineSet, so
++      // ThreadEvent.NewReply is never emitted. Filtering RoomEvent.Timeline on the
++      // room itself is always reliable because /sync always adds events there.
 +      const thread = room.getThread(threadId);
 +      if (!thread) return;
-+      const handleNewReply = (_thread: Thread, mEvent: MatrixEvent) => {
++      const handleRoomTimeline: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
++        mEvent,
++        _eventRoom,
++        _toStartOfTimeline,
++        _removed,
++        data
++      ) => {
++        if (!data.liveEvent) return;
++        const rel = mEvent.getContent()?.['m.relates_to'];
++        if (rel?.rel_type !== 'm.thread' || rel?.event_id !== threadId) return;
++        if (mEvent.isRedacted()) return;
++        // Add to the thread's timeline if not already there (built-in duplicate check).
++        if (!thread.findEventById(mEvent.getId()!)) {
++          thread.addEventToTimeline(mEvent, false);
++        }
 +        onArrive(mEvent);
 +      };
-+      thread.on(ThreadEvent.NewReply as any, handleNewReply);
++      room.on(RoomEvent.Timeline, handleRoomTimeline);
 +      return () => {
-+        thread.off(ThreadEvent.NewReply as any, handleNewReply);
++        room.off(RoomEvent.Timeline, handleRoomTimeline);
 +      };
 +    }
 +    // Room mode: listen for live timeline events
      const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
        mEvent,
        eventRoom,
-@@ -384,7 +413,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
+@@ -384,7 +429,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
        room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
        room.removeListener(RoomEvent.Redaction, handleRedaction);
      };
@@ -171,7 +180,7 @@ index d06f165c..b463bfc2 100644
  };
  
  const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
-@@ -401,7 +430,21 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+@@ -401,7 +446,21 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
    }, [room, onRefresh]);
  };
  
@@ -194,7 +203,7 @@ index d06f165c..b463bfc2 100644
    const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
    const evLength = getTimelinesEventsCount(linkedTimelines);
    return {
-@@ -418,6 +461,19 @@ const getEmptyTimeline = () => ({
+@@ -418,6 +477,19 @@ const getEmptyTimeline = () => ({
    linkedTimelines: [],
  });
  
@@ -214,7 +223,7 @@ index d06f165c..b463bfc2 100644
  const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
    const readUptoEventId = room.getEventReadUpTo(room.client.getUserId() ?? '');
    if (!readUptoEventId) return undefined;
-@@ -430,7 +486,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+@@ -430,7 +502,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
    };
  };
  
@@ -223,7 +232,7 @@ index d06f165c..b463bfc2 100644
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-@@ -453,7 +509,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -453,7 +525,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const ignoredUsersList = useIgnoredUsers();
    const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
  
@@ -233,7 +242,7 @@ index d06f165c..b463bfc2 100644
    const powerLevels = usePowerLevelsContext();
    const creators = useRoomCreators(room);
  
-@@ -486,7 +543,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -486,7 +559,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
  
    const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
  
@@ -242,7 +251,7 @@ index d06f165c..b463bfc2 100644
    const readUptoEventIdRef = useRef<string>();
    if (unreadInfo) {
      readUptoEventIdRef.current = unreadInfo.readUptoEventId;
-@@ -535,11 +592,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -535,11 +608,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const parseMemberEvent = useMemberEventParser();
  
    const [timeline, setTimeline] = useState<Timeline>(() =>
@@ -260,7 +269,7 @@ index d06f165c..b463bfc2 100644
    const canPaginateBack =
      typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
    const rangeAtStart = timeline.range.start === 0;
-@@ -551,7 +612,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -551,7 +628,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      mx,
      timeline,
      setTimeline,
@@ -270,7 +279,7 @@ index d06f165c..b463bfc2 100644
    );
  
    const getScrollElement = useCallback(() => scrollRef.current, []);
-@@ -597,10 +659,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -597,10 +675,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      ),
      useCallback(() => {
        if (!alive()) return;
@@ -283,7 +292,7 @@ index d06f165c..b463bfc2 100644
    );
  
    useLiveEventArrive(
-@@ -612,14 +674,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -612,14 +690,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
          // otherwise we update timeline without paginating
          // so timeline can be updated with evt like: edits, reactions etc
          if (atBottomRef.current) {
@@ -300,7 +309,7 @@ index d06f165c..b463bfc2 100644
              setUnreadInfo(getRoomUnreadInfo(room));
            }
  
-@@ -636,12 +698,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -636,12 +714,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            return;
          }
          setTimeline((ct) => ({ ...ct }));
@@ -317,7 +326,7 @@ index d06f165c..b463bfc2 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,11 +741,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -678,11 +757,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      room,
      useCallback(() => {
        if (liveTimelineLinked) {
@@ -345,7 +354,7 @@ index d06f165c..b463bfc2 100644
    // Stay at bottom when room editor resize
    useResizeObserver(
      useMemo(() => {
-@@ -886,7 +963,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -886,7 +979,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
@@ -356,10 +365,10 @@ index d06f165c..b463bfc2 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..b1f74389
+index 00000000..bdfb71ae
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,289 @@
+@@ -0,0 +1,277 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -496,86 +505,74 @@ index 00000000..b1f74389
 +  const viewRef = useRef<HTMLDivElement>(null);
 +  const editor = useEditor();
 +
-+  // Wait until the Thread SDK object exists and has been initialized before rendering
-+  // the timeline. Notes on the two failure modes we guard against:
++  // Start as false — always go through useEffect to populate the thread timeline
++  // before rendering RoomTimeline.
 +  //
-+  // 1. !thread → false (not true).  Rendering RoomTimeline before the Thread SDK object
-+  //    exists causes getInitialTimeline() to return getEmptyTimeline() (linkedTimelines=[]),
-+  //    which gives liveTimelineLinked=false → persistent front loading placeholders.
-+  //
-+  // 2. paginateEventTimeline may return 404 (server doesn't support MSC3440 thread
-+  //    pagination, e.g. Continuwuity).  In that case thread.initialEventsFetched stays
-+  //    false AND ThreadEvent.Update has already fired.  We fall back to populating the
-+  //    thread timeline from the main room timeline, which always has thread reply events
-+  //    bundled in by /sync regardless of server MSC3440 support.
-+  const [threadReady, setThreadReady] = useState(() => {
-+    const thread = room.getThread(threadRootId);
-+    if (!thread) return false;
-+    return thread.initialEventsFetched;
-+  });
++  // Key insight: Thread.hasServerSideSupport = FeatureSupport.None = 0 (falsy), so
++  // thread.initialEventsFetched = !0 = true from the moment a Thread object is created.
++  // updateThreadMetadata() therefore never fetches from the server, and the thread
++  // timeline stays empty. We must populate it from the main room timeline ourselves,
++  // because /sync always puts thread reply events there regardless of MSC3440 support.
++  const [threadReady, setThreadReady] = useState(false);
 +
 +  useEffect(() => {
 +    let cleanup: (() => void) | undefined;
 +
++    // Fill the thread timeline from the main room timeline for events that arrived
++    // before this Thread SDK object was created.
++    // thread.addEventToTimeline has a built-in duplicate check, so safe to call always.
++    const populateFromMainTimeline = (thread: any) => {
++      const existingIds = new Set<string>(
++        (thread.liveTimeline.getEvents() as MatrixEvent[]).map((e: MatrixEvent) => e.getId()!)
++      );
++      const mainEvents = room
++        .getUnfilteredTimelineSet()
++        .getLiveTimeline()
++        .getEvents() as MatrixEvent[];
++      const replies = mainEvents.filter((e: MatrixEvent) => {
++        if (e.isRedacted() || existingIds.has(e.getId()!)) return false;
++        const rel = e.getContent()?.['m.relates_to'];
++        return rel?.rel_type === 'm.thread' && rel?.event_id === thread.id;
++      });
++      if (replies.length > 0) thread.addEvents(replies, false);
++    };
++
 +    const attachToThread = (thread: any) => {
++      // Always populate from main room timeline before rendering.
++      populateFromMainTimeline(thread);
++
 +      if (thread.initialEventsFetched) {
++        // No server-side fetch pending (server has no thread support, or it
++        // already completed). Thread timeline is now populated — ready to render.
 +        setThreadReady(true);
 +        return;
 +      }
 +
-+      // goReady fires at most once — called by ThreadEvent.Update or by the
-+      // fallback timeout below.
++      // Server supports MSC3440 and is still fetching initial events.
++      // Wait for ThreadEvent.Update (or fall back after timeout).
 +      let readyCalled = false;
 +      const goReady = () => {
 +        if (readyCalled) return;
 +        readyCalled = true;
 +
-+        // If server-side pagination failed (initialEventsFetched still false), the
-+        // thread timeline was cleared by resetLiveTimeline and never repopulated.
-+        // Recover by scanning the main room timeline for replies to this thread —
-+        // /sync bundles them there regardless of whether the server supports MSC3440.
++        // If server pagination failed (initialEventsFetched still false after
++        // ThreadEvent.Update), force the flag and replay buffered events.
 +        if (!thread.initialEventsFetched) {
-+          // Force the flag so future reactions/edits are added directly instead of
-+          // being buffered in the internal replayEvents array.
 +          thread.initialEventsFetched = true;
-+
-+          // Replay any annotation/edit events buffered during the failed fetch.
 +          const pending = (thread as any).replayEvents;
 +          if (Array.isArray(pending)) {
 +            (thread as any).replayEvents = null;
 +            thread.addEvents(pending, false);
 +          }
-+
-+          // Collect existing event IDs to avoid duplicates.
-+          const existingIds = new Set<string>(
-+            (thread.liveTimeline.getEvents() as MatrixEvent[]).map((e) => e.getId()!)
-+          );
-+
-+          // Find all m.thread reply events in the main room timeline.
-+          const mainEvents = room.getUnfilteredTimelineSet().getLiveTimeline().getEvents() as MatrixEvent[];
-+          const replies = mainEvents.filter((e) => {
-+            if (e.isRedacted() || existingIds.has(e.getId()!)) return false;
-+            const rel = e.getContent()?.['m.relates_to'];
-+            return rel?.rel_type === 'm.thread' && rel?.event_id === thread.id;
-+          });
-+
-+          if (replies.length > 0) {
-+            thread.addEvents(replies, false);
-+          }
++          populateFromMainTimeline(thread);
 +        }
 +
 +        setThreadReady(true);
 +      };
 +
-+      // Render when SDK async initialization completes, regardless of whether
-+      // initialEventsFetched ended up true (success) or false (404/error).
 +      // updateThreadMetadata always emits ThreadEvent.Update after the attempt.
 +      const handleUpdate = () => goReady();
 +      thread.on(ThreadEvent.Update as any, handleUpdate);
-+
-+      // Safety net: if ThreadEvent.Update already fired before this component
-+      // mounted (thread was initialized before the user opened it), the listener
-+      // above will never fire.  Fall back after a short delay.
 +      const fallbackTimer = setTimeout(goReady, 500);
 +
 +      cleanup = () => {
