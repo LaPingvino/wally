@@ -57,7 +57,7 @@ index 4df67cd0..a2a09dd6 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d06f165c..dadf2701 100644
+index d06f165c..ac40a5f4 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -228,6 +228,7 @@ type RoomTimelineProps = {
@@ -121,7 +121,7 @@ index d06f165c..dadf2701 100644
      };
  
      return async (backwards: boolean) => {
-@@ -357,12 +367,47 @@ const useTimelinePagination = (
+@@ -357,12 +367,64 @@ const useTimelinePagination = (
          recalibratePagination(lTimelines, timelinesEventsCount, backwards);
        }
      };
@@ -143,6 +143,12 @@ index d06f165c..dadf2701 100644
 +      // does not auto-route sync events to the thread's own timelineSet, so
 +      // ThreadEvent.NewReply is never emitted. Filtering RoomEvent.Timeline on the
 +      // room itself is always reliable because /sync always adds events there.
++      //
++      // We use thread.liveTimeline.addEvent() directly instead of
++      // thread.addEventToTimeline() because the latter calls
++      // EventTimelineSet.addEventToTimeline which runs a canContain() check. That
++      // check fails when THREAD_RELATION_TYPE prefers the unstable name
++      // 'io.element.thread' but events use the stable 'm.thread'.
 +      const thread = room.getThread(threadId);
 +      if (!thread) return;
 +      const handleRoomTimeline: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
@@ -156,9 +162,20 @@ index d06f165c..dadf2701 100644
 +        const rel = mEvent.getContent()?.['m.relates_to'];
 +        if (rel?.rel_type !== 'm.thread' || rel?.event_id !== threadId) return;
 +        if (mEvent.isRedacted()) return;
-+        // Add to the thread's timeline if not already there (built-in duplicate check).
-+        if (!thread.findEventById(mEvent.getId()!)) {
-+          thread.addEventToTimeline(mEvent, false);
++        const mEvtId = mEvent.getId();
++        if (!mEvtId) return;
++        // Bypass canContain: add directly to liveTimeline + update _eventIdToTimeline
++        if (!thread.findEventById(mEvtId)) {
++          thread.liveTimeline.addEvent(mEvent, {
++            toStartOfTimeline: false,
++            roomState: (thread as any).roomState,
++            timelineWasEmpty: (thread.liveTimeline.getEvents() as MatrixEvent[]).length === 0,
++            addToState: false,
++          });
++          ((thread as any).timelineSet as any)._eventIdToTimeline.set(
++            mEvtId,
++            thread.liveTimeline
++          );
 +        }
 +        onArrive(mEvent);
 +      };
@@ -171,7 +188,7 @@ index d06f165c..dadf2701 100644
      const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
        mEvent,
        eventRoom,
-@@ -384,7 +429,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
+@@ -384,7 +446,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
        room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
        room.removeListener(RoomEvent.Redaction, handleRedaction);
      };
@@ -180,7 +197,7 @@ index d06f165c..dadf2701 100644
  };
  
  const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
-@@ -401,7 +446,21 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+@@ -401,7 +463,21 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
    }, [room, onRefresh]);
  };
  
@@ -203,7 +220,7 @@ index d06f165c..dadf2701 100644
    const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
    const evLength = getTimelinesEventsCount(linkedTimelines);
    return {
-@@ -418,6 +477,19 @@ const getEmptyTimeline = () => ({
+@@ -418,6 +494,19 @@ const getEmptyTimeline = () => ({
    linkedTimelines: [],
  });
  
@@ -223,7 +240,7 @@ index d06f165c..dadf2701 100644
  const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
    const readUptoEventId = room.getEventReadUpTo(room.client.getUserId() ?? '');
    if (!readUptoEventId) return undefined;
-@@ -430,7 +502,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+@@ -430,7 +519,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
    };
  };
  
@@ -232,7 +249,7 @@ index d06f165c..dadf2701 100644
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-@@ -453,7 +525,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -453,7 +542,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const ignoredUsersList = useIgnoredUsers();
    const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
  
@@ -242,7 +259,7 @@ index d06f165c..dadf2701 100644
    const powerLevels = usePowerLevelsContext();
    const creators = useRoomCreators(room);
  
-@@ -486,7 +559,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -486,7 +576,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
  
    const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
  
@@ -251,7 +268,7 @@ index d06f165c..dadf2701 100644
    const readUptoEventIdRef = useRef<string>();
    if (unreadInfo) {
      readUptoEventIdRef.current = unreadInfo.readUptoEventId;
-@@ -535,11 +608,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -535,11 +625,15 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const parseMemberEvent = useMemberEventParser();
  
    const [timeline, setTimeline] = useState<Timeline>(() =>
@@ -269,7 +286,7 @@ index d06f165c..dadf2701 100644
    const canPaginateBack =
      typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
    const rangeAtStart = timeline.range.start === 0;
-@@ -551,7 +628,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -551,7 +645,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      mx,
      timeline,
      setTimeline,
@@ -279,7 +296,7 @@ index d06f165c..dadf2701 100644
    );
  
    const getScrollElement = useCallback(() => scrollRef.current, []);
-@@ -597,10 +675,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -597,10 +692,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      ),
      useCallback(() => {
        if (!alive()) return;
@@ -292,7 +309,7 @@ index d06f165c..dadf2701 100644
    );
  
    useLiveEventArrive(
-@@ -612,14 +690,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -612,14 +707,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
          // otherwise we update timeline without paginating
          // so timeline can be updated with evt like: edits, reactions etc
          if (atBottomRef.current) {
@@ -309,7 +326,7 @@ index d06f165c..dadf2701 100644
              setUnreadInfo(getRoomUnreadInfo(room));
            }
  
-@@ -636,12 +714,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -636,12 +731,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            return;
          }
          setTimeline((ct) => ({ ...ct }));
@@ -326,7 +343,7 @@ index d06f165c..dadf2701 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,11 +757,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -678,11 +774,25 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      room,
      useCallback(() => {
        if (liveTimelineLinked) {
@@ -354,7 +371,7 @@ index d06f165c..dadf2701 100644
    // Stay at bottom when room editor resize
    useResizeObserver(
      useMemo(() => {
-@@ -886,7 +979,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -886,7 +996,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
@@ -365,10 +382,10 @@ index d06f165c..dadf2701 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..bdfb71ae
+index 00000000..76425cab
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,300 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -509,32 +526,55 @@ index 00000000..bdfb71ae
 +  // before rendering RoomTimeline.
 +  //
 +  // Key insight: Thread.hasServerSideSupport = FeatureSupport.None = 0 (falsy), so
-+  // thread.initialEventsFetched = !0 = true from the moment a Thread object is created.
-+  // updateThreadMetadata() therefore never fetches from the server, and the thread
-+  // timeline stays empty. We must populate it from the main room timeline ourselves,
-+  // because /sync always puts thread reply events there regardless of MSC3440 support.
++  // thread.initialEventsFetched = !0 = true from construction, and updateThreadMetadata()
++  // never fetches from the server. Also, THREAD_RELATION_TYPE.setPreferUnstable(true) is
++  // called, making EventTimelineSet.canContain() reject events that use the stable
++  // 'm.thread' rel_type. So we must populate the thread timeline ourselves by directly
++  // calling thread.liveTimeline.addEvent() (bypassing canContain).
 +  const [threadReady, setThreadReady] = useState(false);
 +
 +  useEffect(() => {
 +    let cleanup: (() => void) | undefined;
 +
++    // Add a thread reply event directly to the thread's liveTimeline, bypassing
++    // EventTimelineSet.addEventToTimeline (which rejects the event via canContain
++    // because THREAD_RELATION_TYPE.name = 'io.element.thread' but our events use
++    // 'm.thread'). We also manually update _eventIdToTimeline so thread.findEventById
++    // continues to work for duplicate detection.
++    const directAdd = (thread: any, event: MatrixEvent) => {
++      const id = event.getId();
++      if (!id) return;
++      // Direct add bypasses canContain check
++      thread.liveTimeline.addEvent(event, {
++        toStartOfTimeline: false,
++        roomState: thread.roomState,
++        timelineWasEmpty: (thread.liveTimeline.getEvents() as MatrixEvent[]).length === 0,
++        addToState: false,
++      });
++      // Update _eventIdToTimeline so thread.findEventById() finds this event
++      (thread.timelineSet as any)._eventIdToTimeline.set(id, thread.liveTimeline);
++    };
++
 +    // Fill the thread timeline from the main room timeline for events that arrived
-+    // before this Thread SDK object was created.
-+    // thread.addEventToTimeline has a built-in duplicate check, so safe to call always.
++    // before this Thread SDK object was created. /sync always puts thread reply events
++    // in the main room timeline regardless of server MSC3440 support.
 +    const populateFromMainTimeline = (thread: any) => {
-+      const existingIds = new Set<string>(
-+        (thread.liveTimeline.getEvents() as MatrixEvent[]).map((e: MatrixEvent) => e.getId()!)
-+      );
 +      const mainEvents = room
 +        .getUnfilteredTimelineSet()
 +        .getLiveTimeline()
 +        .getEvents() as MatrixEvent[];
-+      const replies = mainEvents.filter((e: MatrixEvent) => {
-+        if (e.isRedacted() || existingIds.has(e.getId()!)) return false;
++      const existingIds = new Set<string>(
++        (thread.liveTimeline.getEvents() as MatrixEvent[]).map((e: MatrixEvent) => e.getId()!)
++      );
++      for (const e of mainEvents) {
++        if (e.isRedacted()) continue;
 +        const rel = e.getContent()?.['m.relates_to'];
-+        return rel?.rel_type === 'm.thread' && rel?.event_id === thread.id;
-+      });
-+      if (replies.length > 0) thread.addEvents(replies, false);
++        if (rel?.rel_type !== 'm.thread' || rel?.event_id !== thread.id) continue;
++        const id = e.getId();
++        if (!id || existingIds.has(id)) continue;
++        directAdd(thread, e);
++        existingIds.add(id);
++      }
 +    };
 +
 +    const attachToThread = (thread: any) => {
@@ -542,8 +582,8 @@ index 00000000..bdfb71ae
 +      populateFromMainTimeline(thread);
 +
 +      if (thread.initialEventsFetched) {
-+        // No server-side fetch pending (server has no thread support, or it
-+        // already completed). Thread timeline is now populated — ready to render.
++        // No server-side fetch pending (server has no thread support, or it already
++        // completed). Thread timeline is now populated — ready to render.
 +        setThreadReady(true);
 +        return;
 +      }
@@ -585,7 +625,7 @@ index 00000000..bdfb71ae
 +    if (thread) {
 +      attachToThread(thread);
 +    } else {
-+      // Thread SDK object not registered yet.  createThread() registers it and
++      // Thread SDK object not registered yet. createThread() registers it and
 +      // kicks off async initialization (updateThreadMetadata), which will
 +      // eventually emit ThreadEvent.Update → goReady.
 +      const rootEvt = room.findEventById(threadRootId) ?? undefined;
