@@ -506,5 +506,5 @@ index 00000000..ab44ae0c
 @@ -0,0 +1,4 @@
 +import { IndexedDBStoreWorker } from 'matrix-js-sdk/lib/indexeddb-worker.js';
 +
-+const worker = new IndexedDBStoreWorker(indexedDB);
++const worker = new IndexedDBStoreWorker(self.postMessage.bind(self));
 +self.onmessage = worker.onMessage.bind(worker);
