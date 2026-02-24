@@ -75,8 +75,10 @@ type RoomMenuProps = {
   room: Room;
   requestClose: () => void;
   onOpenIssueBoard?: () => void;
+  onToggleThreadsDrawer?: () => void;
+  isThreadsDrawer?: boolean;
 };
-const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard }, ref) => {
+const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard, onToggleThreadsDrawer, isThreadsDrawer }, ref) => {
   const mx = useMatrixClient();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [issueTrackerEnabled] = useSetting(settingsAtom, 'issueTracker');
@@ -124,6 +126,11 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const parentSpace = useSpaceOptionally();
   const handleOpenSettings = () => {
     openSettings(room.roomId, parentSpace?.roomId);
+    requestClose();
+  };
+
+  const handleToggleThreads = () => {
+    onToggleThreadsDrawer?.();
     requestClose();
   };
 
@@ -241,6 +248,19 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             </>
           )}
         </UseStateProvider>
+        {onToggleThreadsDrawer && (
+          <MenuItem
+            onClick={handleToggleThreads}
+            size="300"
+            after={<Icon size="100" src={Icons.Message} />}
+            radii="300"
+            aria-pressed={isThreadsDrawer}
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              {isThreadsDrawer ? 'Hide Threads' : 'Threads'}
+            </Text>
+          </MenuItem>
+        )}
       </Box>
       {/* Experimental: Issue Tracker setup (requires experimental setting + admin rights) */}
       {issueTrackerEnabled && canConfigSchema && !hasIssueSchema && (
@@ -713,7 +733,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
                   escapeDeactivates: stopPropagation,
                 }}
               >
-                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} onOpenIssueBoard={onToggleIssueBoard} />
+                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} onOpenIssueBoard={onToggleIssueBoard} onToggleThreadsDrawer={onToggleThreadsDrawer} isThreadsDrawer={isThreadsDrawer} />
               </FocusTrap>
             }
           />
