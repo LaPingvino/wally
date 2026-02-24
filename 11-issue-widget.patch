@@ -721,16 +721,20 @@ index 00000000..af481441
 +}
 diff --git a/src/widget.tsx b/src/widget.tsx
 new file mode 100644
-index 00000000..454256f7
+index 00000000..f72cc9d8
 --- /dev/null
 +++ b/src/widget.tsx
-@@ -0,0 +1,20 @@
+@@ -0,0 +1,24 @@
 +import React from 'react';
 +import { createRoot } from 'react-dom/client';
 +import { WidgetApi } from 'matrix-widget-api';
 +import { IssueBoardWidget } from './app/widget/IssueBoardWidget';
 +
-+const widgetApi = new WidgetApi();
++const params = new URLSearchParams(window.location.search);
++const widgetId = params.get('widgetId') ?? undefined;
++const parentUrl = params.get('parentUrl') ?? undefined;
++
++const widgetApi = new WidgetApi(widgetId, parentUrl);
 +
 +widgetApi.requestCapabilityToReceiveState('eu.kiefte.issue');
 +widgetApi.requestCapabilityToReceiveState('eu.kiefte.issues.schema');
