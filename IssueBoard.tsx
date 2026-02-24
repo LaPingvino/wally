@@ -1359,6 +1359,24 @@ export function IssueBoard({ room }: IssueBoardProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const issues = useMemo(() => getIssues(room), [room, tick]);
 
+  // Widget registration — check if the issue tracker widget is already in this room
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const widgetEnabled = useMemo(() => {
+    const state = room.getLiveTimeline().getState(EventTimeline.FORWARDS);
+    const ev = state?.getStateEvents('im.vector.modular.widgets' as any, 'eu.kiefte.issue-tracker');
+    return ev != null && !ev.isRedacted() && Object.keys(ev.getContent() as object).length > 0;
+  }, [room, tick]);
+
+  const enableWidget = useCallback(async () => {
+    const widgetUrl = `${window.location.origin}/widget.html?roomId=$matrix_room_id&userId=$matrix_user_id`;
+    await mx.sendStateEvent(room.roomId, 'im.vector.modular.widgets' as any, {
+      type: 'm.custom',
+      url: widgetUrl,
+      name: 'Issue Tracker',
+      id: 'eu.kiefte.issue-tracker',
+    }, 'eu.kiefte.issue-tracker');
+  }, [mx, room.roomId]);
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewMode(room.roomId, getIssueSchema(room)));
   const switchView = (mode: ViewMode) => { setViewMode(mode); saveViewMode(room.roomId, mode); };
 
@@ -1656,6 +1674,11 @@ export function IssueBoard({ room }: IssueBoardProps) {
             {canConfigSchema && (
               <Button ref={schemaTriggerRef} size="300" variant="Secondary" fill="Soft" onClick={() => setEditingSchema(true)} aria-label="Edit issue tracker schema">
                 <Icon src={Icons.Setting} size="100" aria-hidden="true" /><Text>Schema</Text>
+              </Button>
+            )}
+            {canConfigSchema && !widgetEnabled && (
+              <Button size="300" variant="Secondary" fill="Soft" onClick={enableWidget} aria-label="Register issue tracker as a widget for other Matrix clients">
+                <Icon src={Icons.Link} size="100" aria-hidden="true" /><Text>Enable widget</Text>
               </Button>
             )}
             {canWriteIssues && issues.length > 0 && (

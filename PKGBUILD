@@ -48,6 +48,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "08-multi-account.patch"
         "09-threads-view.patch"
         "10-idb-check-retry.patch"
+        "11-issue-widget.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -75,7 +76,7 @@ sha256sums=('SKIP'
             'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
             '4e23040bf54d3fbeec2bf1e3950ac8aa94087898178b10196caefade53a60fb5'
             'f7f70ae5125509b7e7b7a7a4b644805fb261c5220ef67d898dc65786321c67df'
-            '9625f07b9287de446079a2a18e4bfddbda4d6e0ab694a165435403ba510ecfd9'
+            '210312b9ee70a5f687f8a2895169d53c67d972861e74993df1f15fc28d1058d6'
             'b91a3c0f6a7ddbf1d1c03f698098d49a45513be555cc9e594b227bbb806b054b'
             '65dea5cdefd9de980c6e1142c89a8b0f375f4d001b844cb724265ff35468de83'
             # Patches
@@ -89,6 +90,7 @@ sha256sums=('SKIP'
             '12e0698b40a0eab79e28127114262072b2503a68c88cf006ef09fd63a992b91b'
             '3d66a3f0467225a50c4fa0507fa8da5831c1c88962ae257d9d33a5ae5d532885'
             '5e5d3afe189731acd6b4ed9e96ad9b4407404786ce37e66e8dd057e2bdcaf018'
+            'bbef1f1b1db07ec194ac82ba38810ad8940ddf7203a8f37b7a2d282456218eef'
             )
 
 prepare() {
@@ -164,6 +166,9 @@ prepare() {
 
   echo "Applying IndexedDB check retry patch..."
   patch -p1 -i "$srcdir/10-idb-check-retry.patch"
+
+  echo "Applying issue tracker widget patch..."
+  patch -p1 -i "$srcdir/11-issue-widget.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
