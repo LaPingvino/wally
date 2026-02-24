@@ -571,7 +571,7 @@ index 498d4f75..3a4fd94e 100644
  export const startClient = async (mx: MatrixClient) => {
    await mx.startClient({
      lazyLoadMembers: true,
-+    initialSyncLimit: 0,
++    initialSyncLimit: 1,
    });
  };
  
