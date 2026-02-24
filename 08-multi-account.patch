@@ -88,7 +88,7 @@ index d600c610..ea9ef1a0 100644
    });
  };
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index e1a5dc0c..560fb3b9 100644
+index e1a5dc0c..a5f1c18d 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
 @@ -127,8 +127,15 @@ const useLogoutListener = (mx?: MatrixClient) => {
@@ -109,6 +109,15 @@ index e1a5dc0c..560fb3b9 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
+@@ -176,7 +183,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+   useSyncState(
+     mx,
+     useCallback((state) => {
+-      if (state === 'PREPARED') {
++      if (state === 'PREPARED' || state === 'SYNCING') {
+         setLoading(false);
+       }
+     }, [])
 @@ -202,6 +209,15 @@ export function ClientRoot({ children }: ClientRootProps) {
                      Retry
                    </Text>
