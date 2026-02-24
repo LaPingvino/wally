@@ -1359,12 +1359,22 @@ export function IssueBoard({ room }: IssueBoardProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const issues = useMemo(() => getIssues(room), [room, tick]);
 
-  // Widget registration — check if the issue tracker widget is already in this room
+  // Widget registration
+  // Use direct PL check (not canConfigSchema) so the button appears for any room admin,
+  // even when isRoomCreator is ambiguous or the schema permission isn't explicitly set.
+  const myPowerLevel = room.getMember(mx.getSafeUserId())?.powerLevel ?? 0;
+  const plEvent = room.getLiveTimeline().getState(EventTimeline.FORWARDS)
+    ?.getStateEvents('m.room.power_levels', '');
+  const stateDefaultPL = (plEvent?.getContent()?.state_default as number | undefined) ?? 50;
+  const canRegisterWidget = myPowerLevel >= stateDefaultPL;
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const widgetEnabled = useMemo(() => {
     const state = room.getLiveTimeline().getState(EventTimeline.FORWARDS);
     const ev = state?.getStateEvents('im.vector.modular.widgets' as any, 'eu.kiefte.issue-tracker');
-    return ev != null && !ev.isRedacted() && Object.keys(ev.getContent() as object).length > 0;
+    if (!ev) return false;
+    const content = ev.getContent() as Record<string, unknown>;
+    return !ev.isRedacted() && Object.keys(content).length > 0;
   }, [room, tick]);
 
   const enableWidget = useCallback(async () => {
@@ -1676,7 +1686,7 @@ export function IssueBoard({ room }: IssueBoardProps) {
                 <Icon src={Icons.Setting} size="100" aria-hidden="true" /><Text>Schema</Text>
               </Button>
             )}
-            {canConfigSchema && !widgetEnabled && (
+            {canRegisterWidget && !widgetEnabled && (
               <Button size="300" variant="Secondary" fill="Soft" onClick={enableWidget} aria-label="Register issue tracker as a widget for other Matrix clients">
                 <Icon src={Icons.Link} size="100" aria-hidden="true" /><Text>Enable widget</Text>
               </Button>
