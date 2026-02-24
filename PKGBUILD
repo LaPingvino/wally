@@ -47,6 +47,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "07-issue-tracker.patch"
         "08-multi-account.patch"
         "09-threads-view.patch"
+        "10-idb-check-retry.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -85,8 +86,9 @@ sha256sums=('SKIP'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
             'c68d419b05a503233a6f3f792652ffcd0f6c30a4e3cf035f46361d5c3057089e'
             'd0faa8346cfca40c65ed03013a4e2af597fe09fdba7de61da9f6e026b7fb14e9'
-            '7de55aa3d0d4b37b303155d4fa2b4b50d53cb082dda35d1ffd2ea78b619e4f20'
+            '54809493335f1d4d71cb867f939ae999b73d77b2ace6fbf4c18ba27ea651d12d'
             '3d66a3f0467225a50c4fa0507fa8da5831c1c88962ae257d9d33a5ae5d532885'
+            '5e5d3afe189731acd6b4ed9e96ad9b4407404786ce37e66e8dd057e2bdcaf018'
             )
 
 prepare() {
@@ -159,6 +161,9 @@ prepare() {
 
   echo "Applying threads view patch..."
   patch -p1 -i "$srcdir/09-threads-view.patch"
+
+  echo "Applying IndexedDB check retry patch..."
+  patch -p1 -i "$srcdir/10-idb-check-retry.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
