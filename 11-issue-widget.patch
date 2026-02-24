@@ -1,9 +1,9 @@
 diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
 new file mode 100644
-index 00000000..af481441
+index 00000000..10e815b9
 --- /dev/null
 +++ b/src/app/widget/IssueBoardWidget.tsx
-@@ -0,0 +1,715 @@
+@@ -0,0 +1,898 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { IRoomEvent, WidgetApi, WidgetApiToWidgetAction } from 'matrix-widget-api';
 +
@@ -271,6 +271,170 @@ index 00000000..af481441
 +  return `issue-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 +}
 +
++// ── Schema editor ────────────────────────────────────────────────────────────
++
++interface DraftField extends SchemaField { _enumRaw: string; }
++
++function fieldToDraft(f: SchemaField): DraftField { return { ...f, _enumRaw: f.values?.join(', ') ?? '' }; }
++function draftToField(d: DraftField): SchemaField {
++  const { _enumRaw, ...field } = d;
++  if (field.type === 'enum') {
++    field.values = _enumRaw.split(',').map(v => v.trim()).filter(Boolean);
++  } else {
++    delete field.values;
++    delete field.kanban_group;
++  }
++  return field;
++}
++
++const TYPE_LABELS: Record<FieldType, string> = { text: 'Text', enum: 'Choice', user: 'User', date: 'Date', follow: 'Follow' };
++
++function SchemaEditor({ initial, onSave, onCancel }: {
++  initial: IssueSchema;
++  onSave: (schema: IssueSchema) => Promise<void>;
++  onCancel: () => void;
++}) {
++  const [fields, setFields] = React.useState<DraftField[]>(() => initial.fields.map(fieldToDraft));
++  const [selectedKey, setSelectedKey] = React.useState<string | null>(initial.fields[0]?.key ?? null);
++  const [saving, setSaving] = React.useState(false);
++  const [saveError, setSaveError] = React.useState<string | null>(null);
++
++  const selected = fields.find(f => f.key === selectedKey) ?? null;
++
++  const updateField = (key: string, patch: Partial<DraftField>) =>
++    setFields(fs => fs.map(f => f.key === key ? { ...f, ...patch } : f));
++
++  const removeField = (key: string) => {
++    setFields(fs => {
++      const next = fs.filter(f => f.key !== key);
++      if (selectedKey === key) setSelectedKey(next[0]?.key ?? null);
++      return next;
++    });
++  };
++
++  const addField = () => {
++    const newKey = newIssueKey();
++    setFields(fs => [...fs, { key: newKey, type: 'text', label: '', _enumRaw: '' }]);
++    setSelectedKey(newKey);
++  };
++
++  const handleSave = async (e: React.FormEvent) => {
++    e.preventDefault();
++    setSaving(true);
++    setSaveError(null);
++    try {
++      await onSave({ fields: fields.map(draftToField) });
++    } catch (err) {
++      setSaveError(err instanceof Error ? err.message : 'Failed to save');
++      setSaving(false);
++    }
++  };
++
++  const sidebarStyle: React.CSSProperties = {
++    width: 160, flexShrink: 0, borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column',
++    overflow: 'hidden',
++  };
++  const editorStyle: React.CSSProperties = {
++    flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', padding: 16, gap: 12,
++  };
++  const fieldBtnStyle = (active: boolean): React.CSSProperties => ({
++    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
++    padding: '6px 10px', border: '1px solid ' + (active ? '#1976d2' : 'transparent'),
++    background: active ? '#e3f0fd' : 'transparent', borderRadius: 4, cursor: 'pointer',
++    textAlign: 'left', width: '100%', fontFamily: 'inherit', fontSize: 13,
++    color: active ? '#1976d2' : 'inherit',
++  });
++
++  return (
++    <div style={s.overlay} role="dialog" aria-modal="true" aria-label="Edit issue tracker schema">
++      <div style={{ ...s.dialog, maxWidth: 580 }}>
++        <div style={s.dialogHeader}>
++          <strong>Configure Issue Tracker Schema</strong>
++          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Close">×</button>
++        </div>
++        <form onSubmit={handleSave} id="schema-editor-form" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
++          <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 280, maxHeight: '55vh' }}>
++            {/* Field list sidebar */}
++            <div style={sidebarStyle}>
++              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 4 }}>
++                {fields.map((f, idx) => (
++                  <button key={f.key} type="button" onClick={() => setSelectedKey(f.key)} style={fieldBtnStyle(f.key === selectedKey)}>
++                    <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
++                      {f.label || `Field ${idx + 1}`}
++                    </span>
++                    <span style={{ fontSize: 11, color: '#888' }}>{TYPE_LABELS[f.type] ?? f.type}</span>
++                  </button>
++                ))}
++              </div>
++              <div style={{ padding: '6px 8px', borderTop: '1px solid #e0e0e0' }}>
++                <button type="button" onClick={addField} style={{ ...s.btn, width: '100%', fontSize: 12 }}>+ Add Field</button>
++              </div>
++            </div>
++            {/* Field editor */}
++            {selected ? (
++              <div style={editorStyle}>
++                <div style={{ display: 'flex', gap: 10 }}>
++                  <div style={{ flex: 1 }}>
++                    <label style={s.label} htmlFor={`sf-label-${selected.key}`}>Label</label>
++                    <input id={`sf-label-${selected.key}`} type="text" required style={s.input} value={selected.label}
++                      placeholder="e.g. Status"
++                      onChange={e => updateField(selected.key, { label: e.target.value })} />
++                  </div>
++                  <div style={{ width: 110, flexShrink: 0 }}>
++                    <label style={s.label} htmlFor={`sf-type-${selected.key}`}>Type</label>
++                    <select id={`sf-type-${selected.key}`} style={s.input} value={selected.type}
++                      onChange={e => updateField(selected.key, { type: e.target.value as FieldType })}>
++                      <option value="text">Text</option>
++                      <option value="enum">Choice</option>
++                      <option value="user">User</option>
++                      <option value="date">Date</option>
++                      <option value="follow">Follow</option>
++                    </select>
++                  </div>
++                </div>
++                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
++                  <input type="checkbox" checked={!!selected.required}
++                    onChange={e => updateField(selected.key, { required: e.target.checked || undefined })} />
++                  Required
++                </label>
++                {selected.type === 'enum' && (
++                  <div>
++                    <label style={s.label} htmlFor={`sf-vals-${selected.key}`}>Choices (comma-separated)</label>
++                    <input id={`sf-vals-${selected.key}`} type="text" style={s.input} value={selected._enumRaw}
++                      placeholder="e.g. To Do, In Progress, Done"
++                      onChange={e => updateField(selected.key, { _enumRaw: e.target.value })} />
++                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginTop: 8 }}>
++                      <input type="checkbox" checked={!!selected.kanban_group}
++                        onChange={e => updateField(selected.key, { kanban_group: e.target.checked || undefined })} />
++                      Default kanban grouping field
++                    </label>
++                  </div>
++                )}
++                <div style={{ marginTop: 'auto', paddingTop: 8 }}>
++                  <button type="button" style={s.btnDanger} onClick={() => removeField(selected.key)}>
++                    Remove Field
++                  </button>
++                </div>
++              </div>
++            ) : (
++              <div style={{ ...editorStyle, alignItems: 'center', justifyContent: 'center', color: '#999' }}>
++                Add a field or select one to edit
++              </div>
++            )}
++          </div>
++        </form>
++        <div style={s.dialogFooter}>
++          {saveError && <span style={{ color: '#d32f2f', flex: 1, fontSize: 13 }}>{saveError}</span>}
++          <button type="button" style={s.btn} onClick={onCancel}>Cancel</button>
++          <button type="submit" form="schema-editor-form" style={s.btnPrimary} disabled={saving}>
++            {saving ? 'Saving…' : 'Save Schema'}
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
 +// ── Issue form ────────────────────────────────────────────────────────────────
 +
 +interface IssueFormProps {
@@ -532,6 +696,7 @@ index 00000000..af481441
 +  const [error, setError] = useState<string | null>(null);
 +  const [view, setView] = useState<'list' | 'kanban'>('list');
 +  const [editing, setEditing] = useState<WidgetIssue | 'new' | null>(null);
++  const [editingSchema, setEditingSchema] = useState(false);
 +
 +  const userId = useMemo(() => new URLSearchParams(window.location.search).get('userId') ?? '', []);
 +
@@ -625,6 +790,12 @@ index 00000000..af481441
 +    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, { _deleted: true });
 +  }, [widgetApi]);
 +
++  const doSaveSchema = useCallback(async (newSchema: IssueSchema) => {
++    setSchema(newSchema);
++    setEditingSchema(false);
++    await widgetApi.sendStateEvent('eu.kiefte.issues.schema', '', newSchema);
++  }, [widgetApi]);
++
 +  const effectiveSchema = schema ?? DEFAULT_ISSUE_SCHEMA;
 +  const kanbanField = effectiveSchema.fields.find(f => f.kanban_group && f.type === 'enum');
 +  const activeIssues = useMemo(
@@ -676,6 +847,11 @@ index 00000000..af481441
 +            </>
 +          )}
 +          {canWrite && (
++            <button onClick={() => setEditingSchema(true)} style={s.btn} aria-label="Edit issue tracker schema">
++              ⚙ Schema
++            </button>
++          )}
++          {canWrite && (
 +            <button onClick={() => setEditing('new')} style={s.btnPrimary} aria-label="New issue" aria-keyshortcuts="n">
 +              + New Issue
 +            </button>
@@ -716,15 +892,22 @@ index 00000000..af481441
 +          onCancel={() => setEditing(null)}
 +        />
 +      )}
++      {editingSchema && (
++        <SchemaEditor
++          initial={effectiveSchema}
++          onSave={doSaveSchema}
++          onCancel={() => setEditingSchema(false)}
++        />
++      )}
 +    </div>
 +  );
 +}
 diff --git a/src/widget.tsx b/src/widget.tsx
 new file mode 100644
-index 00000000..f72cc9d8
+index 00000000..e4d005c4
 --- /dev/null
 +++ b/src/widget.tsx
-@@ -0,0 +1,24 @@
+@@ -0,0 +1,50 @@
 +import React from 'react';
 +import { createRoot } from 'react-dom/client';
 +import { WidgetApi } from 'matrix-widget-api';
@@ -744,11 +927,37 @@ index 00000000..f72cc9d8
 +
 +widgetApi.start();
 +
++let rendered = false;
++
 +widgetApi.once('ready', () => {
-+  const domNode = document.getElementById('widget-root')!;
-+  const root = createRoot(domNode);
++  rendered = true;
++  const root = createRoot(document.getElementById('widget-root')!);
 +  root.render(<IssueBoardWidget widgetApi={widgetApi} />);
 +});
++
++// Fallback: if not embedded in a Matrix client, show a helpful message
++setTimeout(() => {
++  if (rendered) return;
++  const root = createRoot(document.getElementById('widget-root')!);
++  root.render(
++    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
++      height: '100vh', gap: 16, padding: 24, textAlign: 'center', fontFamily: 'system-ui, sans-serif',
++      color: '#444' }}>
++      <div style={{ fontSize: 32 }}>📋</div>
++      <div style={{ fontWeight: 600, fontSize: 18 }}>Matrix Issue Tracker Widget</div>
++      <div style={{ maxWidth: 420, color: '#666', lineHeight: 1.6 }}>
++        This widget is designed to be embedded in a Matrix client such as{' '}
++        <a href="https://github.com/neilalexander/gomuks" style={{ color: '#1976d2' }}>Gomuks</a> or{' '}
++        <a href="https://element.io" style={{ color: '#1976d2' }}>Element Web</a>.
++      </div>
++      <div style={{ maxWidth: 420, color: '#888', fontSize: 13, lineHeight: 1.6 }}>
++        To add it to a room, send an <code>im.vector.modular.widgets</code> state event,
++        or use the "Enable widget" button in the{' '}
++        <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>cinny fork</a> issue board.
++      </div>
++    </div>
++  );
++}, 4000);
 diff --git a/vite.config.js b/vite.config.js
 index 3cff0dbf..7e0f999d 100644
 --- a/vite.config.js
