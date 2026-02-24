@@ -904,10 +904,10 @@ index 00000000..10e815b9
 +}
 diff --git a/src/widget.tsx b/src/widget.tsx
 new file mode 100644
-index 00000000..e4d005c4
+index 00000000..3db8c393
 --- /dev/null
 +++ b/src/widget.tsx
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,81 @@
 +import React from 'react';
 +import { createRoot } from 'react-dom/client';
 +import { WidgetApi } from 'matrix-widget-api';
@@ -935,9 +935,15 @@ index 00000000..e4d005c4
 +  root.render(<IssueBoardWidget widgetApi={widgetApi} />);
 +});
 +
-+// Fallback: if not embedded in a Matrix client, show a helpful message
++// Fallback: if the Widget API hasn't started after 4s, show a helpful message.
++// Two cases:
++//   - window.parent === window: opened directly in browser, no Matrix host
++//   - window.parent !== window: embedded as plain iframe (e.g. Element Web "Custom widget" UI)
++//     but without the Matrix Widget API handshake (no parentUrl/widgetId params → ready never fires)
 +setTimeout(() => {
 +  if (rendered) return;
++  const isInIframe = window.parent !== window;
++  const hasParentUrl = !!parentUrl;
 +  const root = createRoot(document.getElementById('widget-root')!);
 +  root.render(
 +    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -945,15 +951,40 @@ index 00000000..e4d005c4
 +      color: '#444' }}>
 +      <div style={{ fontSize: 32 }}>📋</div>
 +      <div style={{ fontWeight: 600, fontSize: 18 }}>Matrix Issue Tracker Widget</div>
-+      <div style={{ maxWidth: 420, color: '#666', lineHeight: 1.6 }}>
-+        This widget is designed to be embedded in a Matrix client such as{' '}
-+        <a href="https://github.com/neilalexander/gomuks" style={{ color: '#1976d2' }}>Gomuks</a> or{' '}
-+        <a href="https://element.io" style={{ color: '#1976d2' }}>Element Web</a>.
-+      </div>
-+      <div style={{ maxWidth: 420, color: '#888', fontSize: 13, lineHeight: 1.6 }}>
-+        To add it to a room, send an <code>im.vector.modular.widgets</code> state event,
-+        or use the "Enable widget" button in the{' '}
-+        <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>cinny fork</a> issue board.
++      {isInIframe && !hasParentUrl && (
++        <div style={{ maxWidth: 520, color: '#c62828', lineHeight: 1.6, fontSize: 14 }}>
++          The widget API is not active. This widget was embedded as a plain iframe — it must be
++          registered as a room state event to work (see below).
++        </div>
++      )}
++      <div style={{ maxWidth: 520, color: '#555', fontSize: 13, lineHeight: 1.7, textAlign: 'left' }}>
++        <p style={{ marginBottom: 8 }}>
++          Send the following state event in the room where you want the widget. Any Matrix client with
++          developer tools works (Gomuks, Element Web, etc.).
++        </p>
++        <pre style={{ background: '#f5f5f5', padding: '10px 14px', borderRadius: 4,
++          fontSize: 12, overflowX: 'auto', margin: 0 }}>{
++`Event type:  im.vector.modular.widgets
++State key:   eu.kiefte.issue-tracker
++Content:
++{
++  "type": "m.custom",
++  "url": "${window.location.origin + window.location.pathname}?roomId=$matrix_room_id&userId=$matrix_user_id",
++  "name": "Issue Tracker",
++  "id": "eu.kiefte.issue-tracker"
++}`
++        }</pre>
++        <p style={{ marginTop: 10, color: '#777' }}>
++          <strong>Gomuks:</strong> open Developer Tools (⋮ menu → Developer tools), go to "Send custom event",
++          set type to <code>im.vector.modular.widgets</code>, state key to <code>eu.kiefte.issue-tracker</code>,
++          paste the content above.
++        </p>
++        <p style={{ marginTop: 6, color: '#777' }}>
++          <strong>Element Web:</strong> do <em>not</em> use the "Custom" widget panel — it bypasses the Widget API.
++          Use Room Settings → Developer Tools → Send custom state event, or use the{' '}
++          <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>cinny fork</a>'s
++          built-in "Enable widget" button in the issue board toolbar.
++        </p>
 +      </div>
 +    </div>
 +  );
