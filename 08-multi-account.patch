@@ -88,10 +88,63 @@ index d600c610..ea9ef1a0 100644
    });
  };
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index e1a5dc0c..a5f1c18d 100644
+index e1a5dc0c..e630f9fb 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -127,8 +127,15 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -13,7 +13,12 @@ import {
+   Spinner,
+   Text,
+ } from 'folds';
+-import { HttpApiEvent, HttpApiEventHandlerMap, MatrixClient } from 'matrix-js-sdk';
++import {
++  HttpApiEvent,
++  HttpApiEventHandlerMap,
++  MatrixClient,
++  validateAuthMetadata,
++} from 'matrix-js-sdk';
+ import FocusTrap from 'focus-trap-react';
+ import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
+ import {
+@@ -24,17 +29,36 @@ import {
+   startClient,
+ } from '../../../client/initMatrix';
+ import { SplashScreen } from '../../components/splash-screen';
+-import { ServerConfigsLoader } from '../../components/ServerConfigsLoader';
+ import { CapabilitiesProvider } from '../../hooks/useCapabilities';
+ import { MediaConfigProvider } from '../../hooks/useMediaConfig';
+ import { MatrixClientProvider } from '../../hooks/useMatrixClient';
+-import { SpecVersions } from './SpecVersions';
+ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+ import { useSyncState } from '../../hooks/useSyncState';
+ import { stopPropagation } from '../../utils/keyboard';
+ import { SyncStatus } from './SyncStatus';
+ import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
+ import { getFallbackSession } from '../../state/sessions';
++import { specVersions, SpecVersions as SpecVersionsData } from '../../cs-api';
++import { SpecVersionsProvider } from '../../hooks/useSpecVersions';
++import type { ServerConfigs } from '../../components/ServerConfigsLoader';
++
++async function prefetchServerConfigs(mx: MatrixClient): Promise<ServerConfigs> {
++  const [capsResult, mediaResult, authResult] = await Promise.allSettled([
++    mx.getCapabilities(),
++    mx.getMediaConfig(),
++    mx.getAuthMetadata(),
++  ]);
++  const capabilities = capsResult.status === 'fulfilled' ? capsResult.value : undefined;
++  const mediaConfig = mediaResult.status === 'fulfilled' ? mediaResult.value : undefined;
++  const authMetadataRaw = authResult.status === 'fulfilled' ? authResult.value : undefined;
++  let authMetadata;
++  try {
++    authMetadata = validateAuthMetadata(authMetadataRaw);
++  } catch {
++    // ignore — authMetadata stays undefined
++  }
++  return { capabilities, mediaConfig, authMetadata };
++}
+ 
+ function ClientRootLoading() {
+   return (
+@@ -127,8 +151,15 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -109,7 +162,41 @@ index e1a5dc0c..a5f1c18d 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -176,7 +183,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -145,6 +176,17 @@ export function ClientRoot({ children }: ClientRootProps) {
+   const [loading, setLoading] = useState(true);
+   const { baseUrl } = getFallbackSession() ?? {};
+ 
++  // Fetch spec versions in parallel with initClient — children use empty fallback until resolved
++  const [specVersionsData, setSpecVersionsData] = useState<SpecVersionsData>({ versions: [] });
++  useEffect(() => {
++    if (!baseUrl) return;
++    specVersions(fetch, baseUrl)
++      .then(setSpecVersionsData)
++      .catch(() => {
++        // keep empty fallback — features degrade gracefully, sync failure will surface if server is down
++      });
++  }, [baseUrl]);
++
+   const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
+     useCallback(() => {
+       const session = getFallbackSession();
+@@ -159,6 +201,15 @@ export function ClientRoot({ children }: ClientRootProps) {
+     useCallback((m) => startClient(m), [])
+   );
+ 
++  // Start server config fetches as soon as mx is available — before /sync completes
++  const [serverConfigs, setServerConfigs] = useState<ServerConfigs>({});
++  useEffect(() => {
++    if (!mx) return;
++    prefetchServerConfigs(mx).then(setServerConfigs).catch(() => {
++      // keep empty fallback
++    });
++  }, [mx]);
++
+   useLogoutListener(mx);
+ 
+   useEffect(() => {
+@@ -176,14 +227,14 @@ export function ClientRoot({ children }: ClientRootProps) {
    useSyncState(
      mx,
      useCallback((state) => {
@@ -118,7 +205,15 @@ index e1a5dc0c..a5f1c18d 100644
          setLoading(false);
        }
      }, [])
-@@ -202,6 +209,15 @@ export function ClientRoot({ children }: ClientRootProps) {
+   );
+ 
+   return (
+-    <SpecVersions baseUrl={baseUrl!}>
++    <SpecVersionsProvider value={specVersionsData}>
+       {mx && <SyncStatus mx={mx} />}
+       {loading && <ClientRootOptions mx={mx} />}
+       {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
+@@ -202,6 +253,15 @@ export function ClientRoot({ children }: ClientRootProps) {
                      Retry
                    </Text>
                  </Button>
@@ -134,6 +229,34 @@ index e1a5dc0c..a5f1c18d 100644
                </Box>
              </Dialog>
            </Box>
+@@ -211,19 +271,15 @@ export function ClientRoot({ children }: ClientRootProps) {
+         <ClientRootLoading />
+       ) : (
+         <MatrixClientProvider value={mx}>
+-          <ServerConfigsLoader>
+-            {(serverConfigs) => (
+-              <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
+-                <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
+-                  <AuthMetadataProvider value={serverConfigs.authMetadata}>
+-                    {children}
+-                  </AuthMetadataProvider>
+-                </MediaConfigProvider>
+-              </CapabilitiesProvider>
+-            )}
+-          </ServerConfigsLoader>
++          <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
++            <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
++              <AuthMetadataProvider value={serverConfigs.authMetadata}>
++                {children}
++              </AuthMetadataProvider>
++            </MediaConfigProvider>
++          </CapabilitiesProvider>
+         </MatrixClientProvider>
+       )}
+-    </SpecVersions>
++    </SpecVersionsProvider>
+   );
+ }
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
 index d24d5747..f2a19775 100644
 --- a/src/app/pages/client/SidebarNav.tsx
@@ -383,7 +506,7 @@ index 9365e5b3..a9e71a50 100644
  
  export const getSettings = () => {
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..c7665d11 100644
+index 498d4f75..3a4fd94e 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,37 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -426,7 +549,7 @@ index 498d4f75..c7665d11 100644
  
    const mx = createClient({
      baseUrl: session.baseUrl,
-@@ -28,12 +43,13 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
+@@ -28,12 +43,15 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
      cryptoStore: legacyCryptoStore,
      deviceId: session.deviceId,
      timelineSupport: true,
@@ -435,13 +558,24 @@ index 498d4f75..c7665d11 100644
      verificationMethods: ['m.sas.v1'],
    });
  
-   await indexedDBStore.startup();
+-  await indexedDBStore.startup();
 -  await mx.initRustCrypto();
-+  await mx.initRustCrypto(dbNames.rustCrypto ? { cryptoDatabasePrefix: dbNames.rustCrypto } : {});
++  await Promise.all([
++    indexedDBStore.startup(),
++    mx.initRustCrypto(dbNames.rustCrypto ? { cryptoDatabasePrefix: dbNames.rustCrypto } : {}),
++  ]);
  
    mx.setMaxListeners(50);
  
-@@ -54,6 +70,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
+@@ -43,6 +61,7 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
+ export const startClient = async (mx: MatrixClient) => {
+   await mx.startClient({
+     lazyLoadMembers: true,
++    initialSyncLimit: 0,
+   });
+ };
+ 
+@@ -54,6 +73,11 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
  };
  
  export const logoutClient = async (mx: MatrixClient) => {
@@ -453,7 +587,7 @@ index 498d4f75..c7665d11 100644
    pushSessionToSW();
    mx.stopClient();
    try {
-@@ -62,8 +83,20 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -62,8 +86,20 @@ export const logoutClient = async (mx: MatrixClient) => {
      // ignore if failed to logout
    }
    await mx.clearStores();
