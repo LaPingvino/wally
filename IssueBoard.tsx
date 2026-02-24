@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
-import { EventTimeline, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
+import { EventTimeline, MatrixClient, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
 import {
   Avatar,
   Box,
@@ -964,8 +964,9 @@ function IssueForm({ schema, initial, room, issueId, onSave, onCancel, canDelete
 
 // ── IssueCard (kanban) ─────────────────────────────────────────────────────────
 
-function IssueCard({ entry, schema, room, kanbanFieldKey, canWrite, onClick }: {
+function IssueCard({ entry, schema, room, kanbanFieldKey, canWrite, onClick, isSelected, onToggleSelect, showCheckbox }: {
   entry: IssueEntry; schema: IssueSchema; room: Room; kanbanFieldKey: string; canWrite: boolean; onClick: () => void;
+  isSelected?: boolean; onToggleSelect?: () => void; showCheckbox?: boolean;
 }) {
   const { content, redacted } = entry;
   const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
@@ -974,33 +975,50 @@ function IssueCard({ entry, schema, room, kanbanFieldKey, canWrite, onClick }: {
   const threadCount = ((content.threads as string[] | undefined) ?? []).length;
 
   return (
-    <button type="button" onClick={canWrite ? onClick : undefined}
-      aria-label={canWrite ? title + ' \u2014 click to edit' : title} disabled={!canWrite}
-      style={{ padding: config.space.S200, background: color.Surface.Container,
-        border: '1px solid ' + (redacted ? color.Warning.Main : color.Surface.ContainerLine),
-        borderRadius: config.radii.R300, textAlign: 'left', cursor: canWrite ? 'pointer' : 'default',
-        width: '100%', display: 'flex', flexDirection: 'column', gap: config.space.S100 }}>
-      <Box alignItems="Center" gap="100" style={{ justifyContent: 'space-between' }}>
-        <Text size="T300" truncate>{title}</Text>
-        <Box gap="100" alignItems="Center">
-          {threadCount > 0 && <Text size="T200" priority="300" style={{ flexShrink: 0 }}>{'\uD83D\uDCAC'} {threadCount}</Text>}
-          {redacted && <Text size="T200" style={{ color: color.Warning.Main, flexShrink: 0 }} title="Current state redacted">⚠️</Text>}
+    <div style={{ position: 'relative' }}>
+      {showCheckbox && (
+        <input
+          type="checkbox"
+          checked={!!isSelected}
+          onChange={() => onToggleSelect?.()}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={'Select: ' + title}
+          style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1, cursor: 'pointer' }}
+        />
+      )}
+      <button type="button"
+        onClick={showCheckbox ? () => onToggleSelect?.() : (canWrite ? onClick : undefined)}
+        aria-label={showCheckbox ? (isSelected ? 'Deselect: ' : 'Select: ') + title : (canWrite ? title + ' \u2014 click to edit' : title)}
+        aria-pressed={showCheckbox ? isSelected : undefined}
+        disabled={!showCheckbox && !canWrite}
+        style={{ padding: config.space.S200, paddingLeft: showCheckbox ? '28px' : config.space.S200,
+          background: isSelected ? color.Primary.Container : color.Surface.Container,
+          border: '1px solid ' + (isSelected ? color.Primary.Main : redacted ? color.Warning.Main : color.Surface.ContainerLine),
+          borderRadius: config.radii.R300, textAlign: 'left', cursor: canWrite || showCheckbox ? 'pointer' : 'default',
+          width: '100%', display: 'flex', flexDirection: 'column', gap: config.space.S100 }}>
+        <Box alignItems="Center" gap="100" style={{ justifyContent: 'space-between' }}>
+          <Text size="T300" truncate>{title}</Text>
+          <Box gap="100" alignItems="Center">
+            {threadCount > 0 && <Text size="T200" priority="300" style={{ flexShrink: 0 }}>{'\uD83D\uDCAC'} {threadCount}</Text>}
+            {redacted && <Text size="T200" style={{ color: color.Warning.Main, flexShrink: 0 }} title="Current state redacted">⚠️</Text>}
+          </Box>
         </Box>
-      </Box>
-      {secondaryFields.map((f) => (
-        <Box key={f.key} gap="100" alignItems="Center">
-          <Text size="T200" priority="300">{f.label}:</Text>
-          <FieldValue field={f} value={content[f.key]} room={room} />
-        </Box>
-      ))}
-    </button>
+        {secondaryFields.map((f) => (
+          <Box key={f.key} gap="100" alignItems="Center">
+            <Text size="T200" priority="300">{f.label}:</Text>
+            <FieldValue field={f} value={content[f.key]} room={room} />
+          </Box>
+        ))}
+      </button>
+    </div>
   );
 }
 
 // ── IssueListItem (list view) ─────────────────────────────────────────────────
 
-function IssueListItem({ entry, schema, room, canWrite, onEdit }: {
+function IssueListItem({ entry, schema, room, canWrite, onEdit, isSelected, onToggleSelect, showCheckbox }: {
   entry: IssueEntry; schema: IssueSchema; room: Room; canWrite: boolean; onEdit: () => void;
+  isSelected?: boolean; onToggleSelect?: () => void; showCheckbox?: boolean;
 }) {
   const { content, redacted } = entry;
   const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
@@ -1010,15 +1028,24 @@ function IssueListItem({ entry, schema, room, canWrite, onEdit }: {
 
   return (
     <Box direction="Column" gap="200"
-      style={{ border: '1px solid ' + (redacted ? color.Warning.Main : color.Surface.ContainerLine),
-        borderRadius: config.radii.R300, background: color.Surface.Container }}>
+      style={{ border: '1px solid ' + (isSelected ? color.Primary.Main : redacted ? color.Warning.Main : color.Surface.ContainerLine),
+        borderRadius: config.radii.R300, background: isSelected ? color.Primary.Container : color.Surface.Container }}>
       <Box alignItems="Center" gap="200" style={{ justifyContent: 'space-between', padding: config.space.S300 + ' ' + config.space.S300 + ' 0' }}>
         <Box alignItems="Center" gap="100">
+          {showCheckbox && (
+            <input
+              type="checkbox"
+              checked={!!isSelected}
+              onChange={() => onToggleSelect?.()}
+              aria-label={'Select: ' + title}
+              style={{ cursor: 'pointer', flexShrink: 0 }}
+            />
+          )}
           {redacted && <Text size="T200" style={{ color: color.Warning.Main }} title="Current state redacted — showing last known version">⚠️</Text>}
           <Text size="T300" as="h3" style={{ margin: 0, fontWeight: 'bold' }}>{title}</Text>
           {threadCount > 0 && <Text size="T200" priority="300">{'\uD83D\uDCAC'} {threadCount}</Text>}
         </Box>
-        {canWrite && (
+        {canWrite && !showCheckbox && (
           <Button size="300" variant="Secondary" fill="Soft" onClick={onEdit} aria-label={'Edit issue: ' + title}>
             <Icon src={Icons.Pencil} size="100" aria-hidden="true" /><Text>Edit</Text>
           </Button>
@@ -1040,6 +1067,268 @@ function IssueListItem({ entry, schema, room, canWrite, onEdit }: {
         return pats.length > 0 ? <FollowActivity key={f.key} label={f.label} room={room} patterns={pats} /> : null;
       })}
     </Box>
+  );
+}
+
+// ── Move issue helpers ─────────────────────────────────────────────────────────
+
+function canUserWriteIssuesInRoom(mx: MatrixClient, r: Room): boolean {
+  const userId = mx.getUserId()!;
+  const myPL = r.getMember(userId)?.powerLevel ?? 0;
+  const plEvent = r.getLiveTimeline().getState(EventTimeline.FORWARDS)
+    ?.getStateEvents('m.room.power_levels', '');
+  const stateDefault =
+    ((plEvent?.getContent() as Record<string, unknown>)?.state_default as number) ?? 50;
+  return myPL >= stateDefault;
+}
+
+function buildDefaultFieldMapping(source: IssueSchema, target: IssueSchema): Map<string, string | null> {
+  const map = new Map<string, string | null>();
+  for (const sf of source.fields) {
+    const byKey = target.fields.find((tf) => tf.key === sf.key && tf.type === sf.type);
+    if (byKey) { map.set(sf.key, byKey.key); continue; }
+    const byLabel = target.fields.find(
+      (tf) => tf.label.toLowerCase() === sf.label.toLowerCase() && tf.type === sf.type
+    );
+    map.set(sf.key, byLabel ? byLabel.key : null);
+  }
+  return map;
+}
+
+// ── MoveIssueDialog ────────────────────────────────────────────────────────────
+
+type MoveStep = 'pick-room' | 'map-fields';
+
+function MoveIssueDialog({
+  sourceRoom,
+  sourceSchema,
+  issuesToMove,
+  onClose,
+  onMoved,
+}: {
+  sourceRoom: Room;
+  sourceSchema: IssueSchema;
+  issuesToMove: IssueEntry[];
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const mx = useMatrixClient();
+  const titleId = 'move-issue-dialog-title';
+  const [step, setStep] = useState<MoveStep>('pick-room');
+  const [targetRoom, setTargetRoom] = useState<Room | null>(null);
+  const [targetSchema, setTargetSchema] = useState<IssueSchema | null>(null);
+  const [fieldMapping, setFieldMapping] = useState<Map<string, string | null>>(new Map());
+  const [moving, setMoving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const candidateRooms = useMemo(
+    () =>
+      mx.getRooms().filter((r) => {
+        if (r.roomId === sourceRoom.roomId) return false;
+        if (!getIssueSchema(r)) return false;
+        return canUserWriteIssuesInRoom(mx, r);
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mx, sourceRoom.roomId]
+  );
+
+  const handlePickRoom = (room: Room) => {
+    const schema = getIssueSchema(room)!;
+    setTargetRoom(room);
+    setTargetSchema(schema);
+    setFieldMapping(buildDefaultFieldMapping(sourceSchema, schema));
+    setStep('map-fields');
+  };
+
+  const handleMove = async () => {
+    if (!targetRoom || !targetSchema) return;
+    setMoving(true);
+    setError(null);
+    try {
+      // Merge enum values into target schema if needed
+      let updatedSchema = { ...targetSchema, fields: targetSchema.fields.map((f) => ({ ...f })) };
+      let schemaChanged = false;
+      for (const sf of sourceSchema.fields) {
+        if (sf.type !== 'enum' || !sf.values) continue;
+        const targetKey = fieldMapping.get(sf.key);
+        if (!targetKey) continue;
+        const tf = updatedSchema.fields.find((f) => f.key === targetKey);
+        if (!tf || tf.type !== 'enum') continue;
+        const existing = tf.values ?? [];
+        const newVals = sf.values.filter((v) => !existing.includes(v));
+        if (newVals.length > 0) {
+          tf.values = [...existing, ...newVals];
+          schemaChanged = true;
+        }
+      }
+      if (schemaChanged) {
+        await mx.sendStateEvent(targetRoom.roomId, 'eu.kiefte.issues.schema' as any, updatedSchema, '');
+      }
+
+      // Copy issues to target room
+      const titleField = sourceSchema.fields.find((f) => f.key === 'title') ?? sourceSchema.fields[0];
+      for (const entry of issuesToMove) {
+        const newContent: IssueContent = {};
+        for (const sf of sourceSchema.fields) {
+          const targetKey = fieldMapping.get(sf.key);
+          if (targetKey && entry.content[sf.key] !== undefined) {
+            newContent[targetKey] = entry.content[sf.key];
+          }
+        }
+        const newId = generateId();
+        await mx.sendStateEvent(targetRoom.roomId, 'eu.kiefte.issue' as any, newContent, newId);
+        const issueTitle = titleField ? ((newContent[titleField.key] as string) ?? '(untitled)') : '(untitled)';
+        try {
+          await mx.sendEvent(targetRoom.roomId, 'm.room.message' as any, {
+            msgtype: 'm.notice',
+            body: '\uD83D\uDCCB Issue moved from ' + (sourceRoom.name ?? sourceRoom.roomId) + ': "' + issueTitle + '"',
+            'eu.kiefte.issue_id': newId,
+          });
+        } catch { /* non-critical */ }
+      }
+
+      // Mark originals as deleted
+      for (const entry of issuesToMove) {
+        const stateKey = entry.event.getStateKey()!;
+        await mx.sendStateEvent(sourceRoom.roomId, 'eu.kiefte.issue' as any, { ...entry.content, _deleted: true }, stateKey);
+      }
+
+      // Tombstone notice in source room
+      const count = issuesToMove.length;
+      const targetName = targetRoom.name ?? targetRoom.roomId;
+      try {
+        await mx.sendEvent(sourceRoom.roomId, 'm.room.message' as any, {
+          msgtype: 'm.notice',
+          body: '\uD83D\uDCE6 ' + count + ' issue' + (count !== 1 ? 's' : '') + ' moved to ' + targetName,
+        });
+      } catch { /* non-critical */ }
+
+      onMoved();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Move failed');
+      setMoving(false);
+    }
+  };
+
+  if (step === 'pick-room') {
+    return (
+      <Dialog role="dialog" aria-modal="true" aria-labelledby={titleId} variant="Surface" style={{ width: '90vw', maxWidth: '480px' }}>
+        <Header style={{ padding: '0 ' + config.space.S200 + ' 0 ' + config.space.S400, borderBottomWidth: config.borderWidth.B300 }} variant="Surface" size="500">
+          <Box grow="Yes">
+            <Text id={titleId} size="H4">
+              {'Move ' + issuesToMove.length + ' Issue' + (issuesToMove.length !== 1 ? 's' : '') + ' To\u2026'}
+            </Text>
+          </Box>
+          <IconButton size="300" onClick={onClose} radii="300" aria-label="Close"><Icon src={Icons.Cross} /></IconButton>
+        </Header>
+        <Scroll style={{ maxHeight: '60vh' }}>
+          {candidateRooms.length === 0 ? (
+            <Box direction="Column" alignItems="Center" justifyContent="Center" gap="200" style={{ padding: config.space.S500, opacity: 0.7 }}>
+              <Text size="T300">No rooms with an issue tracker found where you have write access.</Text>
+            </Box>
+          ) : (
+            <Box direction="Column" gap="100" style={{ padding: config.space.S200 }}>
+              {candidateRooms.map((r) => {
+                const rSchema = getIssueSchema(r)!;
+                const allMatch = sourceSchema.fields.every((sf) =>
+                  rSchema.fields.some(
+                    (tf) => tf.type === sf.type && (tf.key === sf.key || tf.label.toLowerCase() === sf.label.toLowerCase())
+                  )
+                );
+                return (
+                  <button
+                    key={r.roomId}
+                    type="button"
+                    onClick={() => handlePickRoom(r)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: config.space.S200,
+                      padding: config.space.S200 + ' ' + config.space.S300,
+                      borderRadius: config.radii.R300,
+                      border: '1px solid ' + color.Surface.ContainerLine,
+                      background: color.Surface.Container,
+                      cursor: 'pointer', font: 'inherit', color: 'inherit', textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    <Box direction="Column" style={{ flexGrow: 1 }}>
+                      <Text size="T300">{r.name ?? r.roomId}</Text>
+                      <Text size="T200" priority="300">{rSchema.fields.length + ' fields'}</Text>
+                    </Box>
+                    <Text size="T200" style={{ color: allMatch ? color.Primary.Main : color.Warning.Main, flexShrink: 0 }}>
+                      {allMatch ? '\u2713 Compatible' : '\u26A0 Partial match'}
+                    </Text>
+                  </button>
+                );
+              })}
+            </Box>
+          )}
+        </Scroll>
+        <Box gap="200" style={{ padding: config.space.S300, borderTop: '1px solid ' + color.Surface.ContainerLine, justifyContent: 'flex-end' }}>
+          <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={onClose}><Text>Cancel</Text></Button>
+        </Box>
+      </Dialog>
+    );
+  }
+
+  // Step 2: field mapping
+  return (
+    <Dialog role="dialog" aria-modal="true" aria-labelledby={titleId} variant="Surface" style={{ width: '90vw', maxWidth: '520px' }}>
+      <Header style={{ padding: '0 ' + config.space.S200 + ' 0 ' + config.space.S400, borderBottomWidth: config.borderWidth.B300 }} variant="Surface" size="500">
+        <Box grow="Yes" alignItems="Center" gap="200">
+          <IconButton size="300" onClick={() => setStep('pick-room')} radii="300" aria-label="Back to room picker">
+            <Icon src={Icons.ArrowLeft} />
+          </IconButton>
+          <Text id={titleId} size="H4">Map Fields</Text>
+        </Box>
+        <IconButton size="300" onClick={onClose} radii="300" aria-label="Close"><Icon src={Icons.Cross} /></IconButton>
+      </Header>
+      <Scroll style={{ maxHeight: '60vh' }}>
+        <Box direction="Column" gap="300" style={{ padding: config.space.S400 }}>
+          <Text size="T300" priority="300">{'Moving to: ' + (targetRoom?.name ?? '')}</Text>
+          {sourceSchema.fields.map((sf) => {
+            const currentMapping = fieldMapping.get(sf.key) ?? null;
+            const compatibleTargets = (targetSchema?.fields ?? []).filter((tf) => tf.type === sf.type);
+            const mappedTarget = targetSchema?.fields.find((f) => f.key === currentMapping);
+            const hasNewEnumVals =
+              sf.type === 'enum' &&
+              currentMapping !== null &&
+              (sf.values ?? []).some((v) => !(mappedTarget?.values ?? []).includes(v));
+            return (
+              <Box key={sf.key} alignItems="Center" gap="200" style={{ flexWrap: 'wrap' }}>
+                <Text size="T300" style={{ width: '140px', flexShrink: 0 }}>{sf.label}</Text>
+                <Text size="T200" priority="300">{'\u2192'}</Text>
+                <select
+                  value={currentMapping ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    setFieldMapping((m) => { const n = new Map(m); n.set(sf.key, val); return n; });
+                  }}
+                  aria-label={'Map ' + sf.label + ' to target field'}
+                  style={{ ...inlineSelectStyle, flex: 1, minWidth: '120px' }}
+                >
+                  <option value="">(skip)</option>
+                  {compatibleTargets.map((tf) => (
+                    <option key={tf.key} value={tf.key}>{tf.label}</option>
+                  ))}
+                </select>
+                {sf.type === 'enum' && currentMapping && (
+                  <Text size="T200" style={{ color: hasNewEnumVals ? color.Warning.Main : color.Primary.Main, flexShrink: 0 }}>
+                    {hasNewEnumVals ? '\u26A0 Will merge' : '\u2713 Matches'}
+                  </Text>
+                )}
+              </Box>
+            );
+          })}
+          {error && <Text size="T300" style={{ color: color.Critical.Main }}>{error}</Text>}
+        </Box>
+      </Scroll>
+      <Box gap="200" style={{ padding: config.space.S300, borderTop: '1px solid ' + color.Surface.ContainerLine, justifyContent: 'flex-end' }}>
+        <Button type="button" variant="Secondary" fill="Soft" size="300" onClick={() => setStep('pick-room')}><Text>Back</Text></Button>
+        <Button type="button" variant="Primary" size="300" onClick={handleMove} aria-disabled={moving}>
+          <Text>{moving ? 'Moving\u2026' : 'Move ' + issuesToMove.length + ' Issue' + (issuesToMove.length !== 1 ? 's' : '')}</Text>
+        </Button>
+      </Box>
+    </Dialog>
   );
 }
 
@@ -1086,6 +1375,29 @@ export function IssueBoard({ room }: IssueBoardProps) {
   const lastEditTriggerRef = useRef<HTMLElement | null>(null);
   const [editing, setEditing] = useState<IssueEntry | 'new' | null>(null);
   const [editingSchema, setEditingSchema] = useState(false);
+
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIssueIds, setSelectedIssueIds] = useState<Set<string>>(new Set());
+  const [movingIssues, setMovingIssues] = useState(false);
+
+  const toggleSelect = useCallback((stateKey: string) => {
+    setSelectedIssueIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(stateKey)) next.delete(stateKey); else next.add(stateKey);
+      return next;
+    });
+  }, []);
+
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedIssueIds(new Set());
+  }, []);
+
+  const selectedEntries = useMemo(
+    () => issues.filter((e) => selectedIssueIds.has(e.event.getStateKey()!)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [issues, selectedIssueIds]
+  );
 
   const openEdit = useCallback((entry: IssueEntry | 'new') => {
     lastEditTriggerRef.current = document.activeElement as HTMLElement || null;
@@ -1248,11 +1560,21 @@ export function IssueBoard({ room }: IssueBoardProps) {
                   <Text size="T200" priority="300" aria-label={col.entries.length + ' issues'}>{col.entries.length}</Text>
                 </Box>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: config.space.S200 }}>
-                  {col.entries.map((entry) => (
-                    <li key={entry.event.getStateKey()}>
-                      <IssueCard entry={entry} schema={schema} room={room} kanbanFieldKey={kanbanFieldKey} canWrite={canWriteIssues} onClick={() => openEdit(entry)} />
-                    </li>
-                  ))}
+                  {col.entries.map((entry) => {
+                    const sk = entry.event.getStateKey()!;
+                    return (
+                      <li key={sk}>
+                        <IssueCard
+                          entry={entry} schema={schema} room={room}
+                          kanbanFieldKey={kanbanFieldKey} canWrite={canWriteIssues}
+                          onClick={() => openEdit(entry)}
+                          showCheckbox={selectionMode}
+                          isSelected={selectedIssueIds.has(sk)}
+                          onToggleSelect={() => toggleSelect(sk)}
+                        />
+                      </li>
+                    );
+                  })}
                   {col.entries.length === 0 && (
                     <li aria-live="polite">
                       <Text size="T200" priority="300" style={{ textAlign: 'center', padding: config.space.S200 }}>No issues</Text>
@@ -1275,11 +1597,20 @@ export function IssueBoard({ room }: IssueBoardProps) {
             {issues.length === 0 ? 'No issues yet.' : 'No issues match the current filter.'}
           </Text>
         )}
-        {displayedIssues.map((entry) => (
-          <Box key={entry.event.getStateKey()} role="listitem">
-            <IssueListItem entry={entry} schema={schema} room={room} canWrite={canWriteIssues} onEdit={() => openEdit(entry)} />
-          </Box>
-        ))}
+        {displayedIssues.map((entry) => {
+          const sk = entry.event.getStateKey()!;
+          return (
+            <Box key={sk} role="listitem">
+              <IssueListItem
+                entry={entry} schema={schema} room={room} canWrite={canWriteIssues}
+                onEdit={() => openEdit(entry)}
+                showCheckbox={selectionMode}
+                isSelected={selectedIssueIds.has(sk)}
+                onToggleSelect={() => toggleSelect(sk)}
+              />
+            </Box>
+          );
+        })}
       </Box>
     </Scroll>
   );
@@ -1291,31 +1622,53 @@ export function IssueBoard({ room }: IssueBoardProps) {
       {/* Main toolbar */}
       <Box shrink="No" alignItems="Center" gap="200" role="toolbar" aria-label="Issue tracker controls"
         style={{ padding: config.space.S200 + ' ' + config.space.S400, borderBottom: '1px solid ' + color.Surface.ContainerLine, flexWrap: 'wrap' }}>
-        <Text size="T300" style={{ flexGrow: 1 }} aria-live="polite">{issues.length} {issues.length === 1 ? 'issue' : 'issues'}</Text>
-        <Box gap="100" alignItems="Center">
-          {/* Kanban button — uses preferred field; when in kanban, group-by selector shown below */}
-          {enumFields.length > 0 && (
-            <Button size="300" variant="Secondary"
-              fill={effectiveViewMode.type === 'kanban' ? 'Solid' : 'Soft'}
-              onClick={() => { if (preferredKanbanField) switchView({ type: 'kanban', fieldKey: preferredKanbanField.key }); }}
-              aria-pressed={effectiveViewMode.type === 'kanban'}>
-              <Text>Kanban</Text>
+        {selectionMode ? (
+          <>
+            <Text size="T300" style={{ flexGrow: 1 }} aria-live="polite">{selectedIssueIds.size} selected</Text>
+            {selectedIssueIds.size > 0 && (
+              <Button size="300" variant="Secondary" fill="Soft" onClick={() => setMovingIssues(true)}>
+                <Icon src={Icons.ArrowRight} size="100" aria-hidden="true" />
+                <Text>{'Move ' + selectedIssueIds.size}</Text>
+              </Button>
+            )}
+            <Button size="300" variant="Secondary" fill="None" onClick={exitSelectionMode}>
+              <Text>Cancel</Text>
             </Button>
-          )}
-          <Button size="300" variant="Secondary" fill={effectiveViewMode.type === 'list' ? 'Solid' : 'Soft'}
-            onClick={() => switchView({ type: 'list' })} aria-pressed={effectiveViewMode.type === 'list'}>
-            <Text>List</Text>
-          </Button>
-        </Box>
-        {canConfigSchema && (
-          <Button ref={schemaTriggerRef} size="300" variant="Secondary" fill="Soft" onClick={() => setEditingSchema(true)} aria-label="Edit issue tracker schema">
-            <Icon src={Icons.Setting} size="100" aria-hidden="true" /><Text>Schema</Text>
-          </Button>
-        )}
-        {canWriteIssues && (
-          <Button ref={editTriggerRef} size="300" variant="Primary" onClick={() => openEdit('new')} aria-label="Create new issue" aria-keyshortcuts="n">
-            <Icon src={Icons.Plus} size="100" aria-hidden="true" /><Text>New Issue</Text>
-          </Button>
+          </>
+        ) : (
+          <>
+            <Text size="T300" style={{ flexGrow: 1 }} aria-live="polite">{issues.length} {issues.length === 1 ? 'issue' : 'issues'}</Text>
+            <Box gap="100" alignItems="Center">
+              {/* Kanban button — uses preferred field; when in kanban, group-by selector shown below */}
+              {enumFields.length > 0 && (
+                <Button size="300" variant="Secondary"
+                  fill={effectiveViewMode.type === 'kanban' ? 'Solid' : 'Soft'}
+                  onClick={() => { if (preferredKanbanField) switchView({ type: 'kanban', fieldKey: preferredKanbanField.key }); }}
+                  aria-pressed={effectiveViewMode.type === 'kanban'}>
+                  <Text>Kanban</Text>
+                </Button>
+              )}
+              <Button size="300" variant="Secondary" fill={effectiveViewMode.type === 'list' ? 'Solid' : 'Soft'}
+                onClick={() => switchView({ type: 'list' })} aria-pressed={effectiveViewMode.type === 'list'}>
+                <Text>List</Text>
+              </Button>
+            </Box>
+            {canConfigSchema && (
+              <Button ref={schemaTriggerRef} size="300" variant="Secondary" fill="Soft" onClick={() => setEditingSchema(true)} aria-label="Edit issue tracker schema">
+                <Icon src={Icons.Setting} size="100" aria-hidden="true" /><Text>Schema</Text>
+              </Button>
+            )}
+            {canWriteIssues && issues.length > 0 && (
+              <Button size="300" variant="Secondary" fill="Soft" onClick={() => setSelectionMode(true)} aria-label="Select issues to move">
+                <Text>Select</Text>
+              </Button>
+            )}
+            {canWriteIssues && (
+              <Button ref={editTriggerRef} size="300" variant="Primary" onClick={() => openEdit('new')} aria-label="Create new issue" aria-keyshortcuts="n">
+                <Icon src={Icons.Plus} size="100" aria-hidden="true" /><Text>New Issue</Text>
+              </Button>
+            )}
+          </>
         )}
       </Box>
 
@@ -1422,6 +1775,22 @@ export function IssueBoard({ room }: IssueBoardProps) {
           <FocusTrap focusTrapOptions={{ initialFocus: false, clickOutsideDeactivates: true, onDeactivate: closeSchema, escapeDeactivates: stopPropagation }}>
             {editingSchema && (
               <SchemaEditor initial={schema} titleText="Edit Schema" onSave={handleSaveSchema} onCancel={closeSchema} />
+            )}
+          </FocusTrap>
+        </OverlayCenter>
+      </Overlay>
+
+      <Overlay open={movingIssues} backdrop={<OverlayBackdrop />}>
+        <OverlayCenter>
+          <FocusTrap focusTrapOptions={{ initialFocus: false, clickOutsideDeactivates: true, onDeactivate: () => setMovingIssues(false), escapeDeactivates: stopPropagation }}>
+            {movingIssues && (
+              <MoveIssueDialog
+                sourceRoom={room}
+                sourceSchema={schema}
+                issuesToMove={selectedEntries}
+                onClose={() => setMovingIssues(false)}
+                onMoved={exitSelectionMode}
+              />
             )}
           </FocusTrap>
         </OverlayCenter>
