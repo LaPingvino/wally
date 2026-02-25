@@ -49,6 +49,7 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "09-threads-view.patch"
         "10-idb-check-retry.patch"
         "11-issue-widget.patch"
+        "12-ux-fixes.patch"
         )
 sha256sums=('SKIP'
             'cb65ec6cb5cef26190505347fc4c1ccc4084fe78eed46bd03bc2e18435073db6'
@@ -91,6 +92,7 @@ sha256sums=('SKIP'
             '3d66a3f0467225a50c4fa0507fa8da5831c1c88962ae257d9d33a5ae5d532885'
             '5e5d3afe189731acd6b4ed9e96ad9b4407404786ce37e66e8dd057e2bdcaf018'
             'a973a6498e1599d11c4d59afef592976ea59998963a60566853f4dc6526b5b99'
+            'a9b998d621af8da820d86ffa9738d8d68b22595ff40a7872ff915ffaeeef6663'
             )
 
 prepare() {
@@ -169,6 +171,9 @@ prepare() {
 
   echo "Applying issue tracker widget patch..."
   patch -p1 -i "$srcdir/11-issue-widget.patch"
+
+  echo "Applying UX fixes patch (room sort + inbox unread)..."
+  patch -p1 -i "$srcdir/12-ux-fixes.patch"
 
   # Copy Noto Emoji Bahá'í font to public font directory
   echo "Installing Noto Emoji Bahá'í font..."
