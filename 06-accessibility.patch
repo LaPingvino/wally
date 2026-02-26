@@ -895,30 +895,6 @@ index e1ff1052..edf9dbac 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
-diff --git a/src/app/hooks/useGetRoom.ts b/src/app/hooks/useGetRoom.ts
-index 05fcf8d3..6e368e88 100644
---- a/src/app/hooks/useGetRoom.ts
-+++ b/src/app/hooks/useGetRoom.ts
-@@ -1,11 +1,18 @@
- import { Room } from 'matrix-js-sdk';
- import { useAtomValue } from 'jotai';
-+import { selectAtom } from 'jotai/utils';
- import { useCallback, useMemo } from 'react';
- import { allRoomsAtom } from '../state/room-list/roomList';
-+import { compareRoomsEqual } from '../state/room-list/utils';
- import { useMatrixClient } from './useMatrixClient';
- 
-+// Stable derived atom: only notifies subscribers when room list contents change,
-+// not just when allRoomsAtom gets a new array reference (e.g. on every Matrix sync).
-+// Prevents the search modal from resetting on every incoming message.
-+const stableAllRoomsAtom = selectAtom(allRoomsAtom, (r) => r, compareRoomsEqual);
-+
- export const useAllJoinedRoomsSet = () => {
--  const allRooms = useAtomValue(allRoomsAtom);
-+  const allRooms = useAtomValue(stableAllRoomsAtom);
-   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
- 
-   return allJoinedRooms;
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
 index 00000000..de62d0da
@@ -1971,17 +1947,17 @@ index 00000000..f978ab4d
 +
 +export const keyboardShortcutsHelpAtom = atom<boolean>(false);
 diff --git a/src/app/state/room-list/utils.ts b/src/app/state/room-list/utils.ts
-index 1ca7e7de..72098685 100644
+index 1ca7e7de..795b484b 100644
 --- a/src/app/state/room-list/utils.ts
 +++ b/src/app/state/room-list/utils.ts
 @@ -1,5 +1,5 @@
  import { useSetAtom, WritableAtom } from 'jotai';
 -import { ClientEvent, MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
-+import { ClientEvent, ClientEventHandlerMap, MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
++import { ClientEvent, ClientEventHandlerMap, MatrixClient, Room, RoomEvent, SyncState } from 'matrix-js-sdk';
  import { useEffect } from 'react';
  import { Membership } from '../../../types/matrix/room';
  
-@@ -23,13 +23,19 @@ export const useBindRoomsWithMembershipsAtom = (
+@@ -23,13 +23,21 @@ export const useBindRoomsWithMembershipsAtom = (
    useEffect(() => {
      const satisfyMembership = (room: Room): boolean =>
        !!memberships.find((membership) => membership === room.getMyMembership());
@@ -2002,13 +1978,15 @@ index 1ca7e7de..72098685 100644
 +      });
 +    initRooms();
 +
-+    // Re-read rooms on every sync batch so the list fills in progressively
-+    // when there is no IndexedDB cache and the app shows before PREPARED fires.
-+    const handleSync: ClientEventHandlerMap[ClientEvent.Sync] = () => initRooms();
++    // Re-read rooms on initial sync completion and reconnect, not on every sync batch.
++    // Ongoing membership changes are handled by handleAddRoom / handleMembershipChange.
++    const handleSync: ClientEventHandlerMap[ClientEvent.Sync] = (state) => {
++      if (state === SyncState.Prepared || state === SyncState.CatchingUp) initRooms();
++    };
  
      const handleAddRoom = (room: Room) => {
        if (satisfyMembership(room)) {
-@@ -52,10 +58,12 @@ export const useBindRoomsWithMembershipsAtom = (
+@@ -52,10 +60,12 @@ export const useBindRoomsWithMembershipsAtom = (
      mx.on(ClientEvent.Room, handleAddRoom);
      mx.on(RoomEvent.MyMembership, handleMembershipChange);
      mx.on(ClientEvent.DeleteRoom, handleDeleteRoom);
