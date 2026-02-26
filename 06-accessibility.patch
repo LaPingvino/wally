@@ -895,6 +895,56 @@ index e1ff1052..edf9dbac 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
+diff --git a/src/app/hooks/useAsyncSearch.ts b/src/app/hooks/useAsyncSearch.ts
+index 3852d3b9..6c96e463 100644
+--- a/src/app/hooks/useAsyncSearch.ts
++++ b/src/app/hooks/useAsyncSearch.ts
+@@ -1,4 +1,4 @@
+-import { useCallback, useEffect, useMemo, useState } from 'react';
++import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ import {
+   MatchHandler,
+   AsyncSearch,
+@@ -110,10 +110,9 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
+   options?: UseAsyncSearchOptions
+ ): [UseAsyncSearchResult<TSearchItem> | undefined, AsyncSearchHandler, SearchResetHandler] => {
+   const [result, setResult] = useState<UseAsyncSearchResult<TSearchItem>>();
++  const activeQueryRef = useRef<string | undefined>();
+ 
+   const [searchCallback, terminateSearch] = useMemo(() => {
+-    setResult(undefined);
+-
+     const handleMatch: MatchHandler<TSearchItem> = (item, query) => {
+       const itemStr = getItemStr(item, query);
+ 
+@@ -130,8 +129,19 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
+     return AsyncSearch(list, handleMatch, handleResult, options);
+   }, [list, options, getItemStr]);
+ 
++  // When list/options/getItemStr change (searchCallback recreated), re-run the active
++  // query instead of resetting results to undefined. Keeps results visible while the
++  // room list updates (e.g. on incoming messages that change unread counts).
++  useEffect(() => {
++    if (activeQueryRef.current !== undefined) {
++      const normalizedQuery = normalize(activeQueryRef.current, options?.normalizeOptions);
++      searchCallback(normalizedQuery);
++    }
++  }, [searchCallback, options?.normalizeOptions]);
++
+   const searchHandler: AsyncSearchHandler = useCallback(
+     (query) => {
++      activeQueryRef.current = query;
+       const normalizedQuery = normalize(query, options?.normalizeOptions);
+       searchCallback(normalizedQuery);
+     },
+@@ -140,6 +150,7 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
+ 
+   const resetHandler: SearchResetHandler = useCallback(() => {
+     terminateSearch();
++    activeQueryRef.current = undefined;
+     setResult(undefined);
+   }, [terminateSearch]);
+ 
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
 index 00000000..de62d0da
