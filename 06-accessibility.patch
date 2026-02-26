@@ -895,6 +895,30 @@ index e1ff1052..edf9dbac 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
+diff --git a/src/app/hooks/useGetRoom.ts b/src/app/hooks/useGetRoom.ts
+index 05fcf8d3..6e368e88 100644
+--- a/src/app/hooks/useGetRoom.ts
++++ b/src/app/hooks/useGetRoom.ts
+@@ -1,11 +1,18 @@
+ import { Room } from 'matrix-js-sdk';
+ import { useAtomValue } from 'jotai';
++import { selectAtom } from 'jotai/utils';
+ import { useCallback, useMemo } from 'react';
+ import { allRoomsAtom } from '../state/room-list/roomList';
++import { compareRoomsEqual } from '../state/room-list/utils';
+ import { useMatrixClient } from './useMatrixClient';
+ 
++// Stable derived atom: only notifies subscribers when room list contents change,
++// not just when allRoomsAtom gets a new array reference (e.g. on every Matrix sync).
++// Prevents the search modal from resetting on every incoming message.
++const stableAllRoomsAtom = selectAtom(allRoomsAtom, (r) => r, compareRoomsEqual);
++
+ export const useAllJoinedRoomsSet = () => {
+-  const allRooms = useAtomValue(allRoomsAtom);
++  const allRooms = useAtomValue(stableAllRoomsAtom);
+   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
+ 
+   return allJoinedRooms;
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
 index 00000000..de62d0da
