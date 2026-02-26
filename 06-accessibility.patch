@@ -749,10 +749,64 @@ index 9324e1c2..b983000c 100644
                    >
                      <Icon src={Icons.VerticalDots} size="100" />
 diff --git a/src/app/features/search/Search.tsx b/src/app/features/search/Search.tsx
-index fcd6233a..34f618ff 100644
+index fcd6233a..68f7c1c0 100644
 --- a/src/app/features/search/Search.tsx
 +++ b/src/app/features/search/Search.tsx
-@@ -265,6 +265,11 @@ export function Search({ requestClose }: SearchProps) {
+@@ -44,13 +44,20 @@ import {
+   getDirectRoomAvatarUrl,
+   getRoomAvatarUrl,
+   guessPerfectParent,
++  getOrphanParents,
+ } from '../../utils/room';
+ import { highlightText, makeHighlightRegex } from '../../plugins/react-custom-html-parser';
+ import { factoryRoomIdByActivity } from '../../utils/sort';
+ import { nameInitials } from '../../utils/common';
+ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+ import { useListFocusIndex } from '../../hooks/useListFocusIndex';
+-import { getMxIdLocalPart, getMxIdServer, guessDmRoomUserId } from '../../utils/matrix';
++import { getMxIdLocalPart, getMxIdServer, guessDmRoomUserId, getCanonicalAliasOrRoomId } from '../../utils/matrix';
++import {
++  getHomeRoomPath,
++  getDirectRoomPath,
++  getSpacePath,
++  getSpaceRoomPath,
++} from '../../pages/pathUtils';
+ import { roomToParentsAtom } from '../../state/room/roomToParents';
+ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
+ import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
+@@ -154,6 +161,21 @@ export function Search({ requestClose }: SearchProps) {
+   const spaces = useSpaces(mx, allRoomsAtom);
+   const directs = useDirects(mx, allRoomsAtom, mDirects);
+ 
++  const getRoomPath = useCallback(
++    (roomId: string, isSpace: boolean): string => {
++      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++      if (isSpace) return getSpacePath(roomIdOrAlias);
++      if (mDirects.has(roomId)) return getDirectRoomPath(roomIdOrAlias);
++      const orphanParents = getOrphanParents(roomToParents, roomId);
++      if (orphanParents.length > 0) {
++        const bestParent = guessPerfectParent(mx, roomId, orphanParents) ?? orphanParents[0];
++        return getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, bestParent), roomIdOrAlias);
++      }
++      return getHomeRoomPath(roomIdOrAlias);
++    },
++    [mx, mDirects, roomToParents]
++  );
++
+   const topActiveRooms = useTopActiveRooms(searchRoomType, rooms, directs, spaces);
+   const targetRooms = useSearchTargetRooms(searchRoomType, rooms, directs, spaces);
+ 
+@@ -222,7 +244,8 @@ export function Search({ requestClose }: SearchProps) {
+     }
+   };
+ 
+-  const handleRoomClick: MouseEventHandler<HTMLButtonElement> = (evt) => {
++  const handleRoomClick: MouseEventHandler<HTMLAnchorElement> = (evt) => {
++    evt.preventDefault();
+     const target = evt.currentTarget;
+     const roomId = target.getAttribute('data-room-id');
+     const isSpace = target.getAttribute('data-space') === 'true';
+@@ -265,6 +288,11 @@ export function Search({ requestClose }: SearchProps) {
              >
                <Input
                  ref={inputRef}
@@ -764,7 +818,7 @@ index fcd6233a..34f618ff 100644
                  size="500"
                  variant="Background"
                  radii="400"
-@@ -297,7 +302,7 @@ export function Search({ requestClose }: SearchProps) {
+@@ -297,7 +325,7 @@ export function Search({ requestClose }: SearchProps) {
                )}
                {roomsToRender.length > 0 && (
                  <Scroll ref={scrollRef} size="300" hideTrack>
@@ -773,10 +827,13 @@ index fcd6233a..34f618ff 100644
                      {roomsToRender.map((roomId, index) => {
                        const room = getRoom(roomId);
                        if (!room) return null;
-@@ -323,12 +328,13 @@ export function Search({ requestClose }: SearchProps) {
+@@ -322,13 +350,15 @@ export function Search({ requestClose }: SearchProps) {
+                       return (
                          <MenuItem
                            key={roomId}
-                           as="button"
+-                          as="button"
++                          as="a"
++                          href={getRoomPath(roomId, room.isSpaceRoom())}
 +                          role="option"
                            data-focus-index={index}
                            data-room-id={roomId}
