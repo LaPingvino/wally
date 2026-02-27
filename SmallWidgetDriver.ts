@@ -126,6 +126,7 @@ export class SmallWidgetDriver extends WidgetDriver {
       EventType.Reaction,
       EventType.RoomRedaction,
       'io.element.call.reaction',
+      EventType.RoomMessage,
     ];
     // eslint-disable-next-line no-restricted-syntax
     for (const eventType of sendRecvRoomEvents) {

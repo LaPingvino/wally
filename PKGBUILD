@@ -35,6 +35,8 @@ source=("${_pkgname}::git+https://github.com/cinnyapp/cinny#branch=dev"
         "RoomCallNavStatus.tsx"
         "AddAccountDialog.tsx"
         "IssueBoard.tsx"
+        "IssueBoardWidget.tsx"
+        "widget.tsx"
         "KeyboardShortcutsHelp.tsx"
         "ThreadsDrawer.tsx"
         # Patches on upstream cinny files (allows security fixes to flow through)
@@ -74,10 +76,12 @@ sha256sums=('SKIP'
             '3df82820787b0c275214180b485647d7e336f0d90d93104db3c3b5ae61703c3e'
             'e94efb16081dfc874e21c41fbe3d7644e4e36ef19b418c9267b146f6bfbfb499'
             'b6b545d5827fc5d0dcb3a125f1dd0594e8607826a8576ac0d873bc0953aff113'
-            'c922f80a4d7f7c628130f09cba9a8a558041dd53600f47fdc2a0117ce991d2b7'
+            'c63884f8a5e742b7be2d29b918d75274d95ba91cdca79a7bb4b1f8d5d5198e18'
             '4e23040bf54d3fbeec2bf1e3950ac8aa94087898178b10196caefade53a60fb5'
             'f7f70ae5125509b7e7b7a7a4b644805fb261c5220ef67d898dc65786321c67df'
             'f397fb73c1ee359b23b182379a7dc40973d61f2ba910dc89c842900277e8f911'
+            'a2ca918d8a00199d92a38f870685997e493ba9c335b7cad466da0a4830889953'
+            '772ee7085689d65857f1d555815f66f04aff2b0a65e7b485dfb53c88c1f50852'
             'b91a3c0f6a7ddbf1d1c03f698098d49a45513be555cc9e594b227bbb806b054b'
             '65dea5cdefd9de980c6e1142c89a8b0f375f4d001b844cb724265ff35468de83'
             # Patches
@@ -171,6 +175,9 @@ prepare() {
 
   echo "Applying issue tracker widget patch..."
   patch -p1 -i "$srcdir/11-issue-widget.patch"
+  # Override with enhanced versions (comments, reactions, m.mentions) # 11-issue-widget.patch
+  cp "$srcdir/IssueBoardWidget.tsx" "src/app/widget/" # 11-issue-widget.patch
+  cp "$srcdir/widget.tsx" "src/" # 11-issue-widget.patch
 
   echo "Applying UX fixes patch (room sort + inbox unread)..."
   patch -p1 -i "$srcdir/12-ux-fixes.patch"
