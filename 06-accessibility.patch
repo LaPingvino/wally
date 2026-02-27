@@ -922,10 +922,10 @@ index be2f204e..a0f3bf39 100644
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e1ff1052..edf9dbac 100644
+index e1ff1052..b3c421da 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
-@@ -238,6 +238,10 @@ export function SystemNotification() {
+@@ -238,6 +238,14 @@ export function SystemNotification() {
      settingsAtom,
      'isNotificationSounds'
    );
@@ -933,10 +933,14 @@ index e1ff1052..edf9dbac 100644
 +    settingsAtom,
 +    'inRoomActivitySound'
 +  );
++  const [inboxUnreadNotifications, setInboxUnreadNotifications] = useSetting(
++    settingsAtom,
++    'inboxUnreadNotifications'
++  );
  
    const requestNotificationPermission = () => {
      window.Notification.requestPermission();
-@@ -288,9 +292,14 @@ export function SystemNotification() {
+@@ -288,9 +296,14 @@ export function SystemNotification() {
        >
          <SettingTile
            title="Notification Sound"
@@ -952,6 +956,31 @@ index e1ff1052..edf9dbac 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
+@@ -316,6 +329,24 @@ export function SystemNotification() {
+           after={<SelectCallRingScope />}
+         />
+       </SequenceCard>
++      <SequenceCard
++        className={SequenceCardStyle}
++        variant="SurfaceVariant"
++        direction="Column"
++        gap="400"
++      >
++        <SettingTile
++          title="Unread Inbox Notifications (Experimental)"
++          description="Send a system notification when new rooms appear in your Unread inbox. Requires Desktop Notifications to be granted."
++          after={
++            <Switch
++              disabled={notifPermission !== 'granted'}
++              value={inboxUnreadNotifications}
++              onChange={setInboxUnreadNotifications}
++            />
++          }
++        />
++      </SequenceCard>
+       <SequenceCard
+         className={SequenceCardStyle}
+         variant="SurfaceVariant"
 diff --git a/src/app/hooks/useAsyncSearch.ts b/src/app/hooks/useAsyncSearch.ts
 index 3852d3b9..6c96e463 100644
 --- a/src/app/hooks/useAsyncSearch.ts
@@ -1316,7 +1345,7 @@ index bea09a92..d600c610 100644
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index e0977d97..9ffc249b 100644
+index e0977d97..e5100623 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -1328,6 +1357,15 @@ index e0977d97..9ffc249b 100644
  import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
  import LogoSVG from '../../../../public/res/svg/cinny.svg';
  import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
+@@ -14,7 +14,7 @@ import { EmojiFont, settingsAtom } from '../../state/settings';
+ import { allInvitesAtom } from '../../state/room-list/inviteList';
+ import { usePreviousValue } from '../../hooks/usePreviousValue';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+-import { getInboxInvitesPath, getInboxNotificationsPath } from '../pathUtils';
++import { getInboxInvitesPath, getInboxNotificationsPath, getInboxUnreadPath } from '../pathUtils';
+ import {
+   getMemberDisplayName,
+   getNotificationType,
 @@ -26,6 +26,12 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
  import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
@@ -1473,6 +1511,65 @@ index e0977d97..9ffc249b 100644
      notificationSelected,
      showNotifications,
      playSound,
+@@ -260,6 +324,50 @@ function MessageNotifications() {
+   );
+ }
+ 
++function InboxUnreadNotifications() {
++  const mx = useMatrixClient();
++  const navigate = useNavigate();
++  const roomToUnread = useAtomValue(roomToUnreadAtom);
++  const [inboxUnreadNotifications] = useSetting(settingsAtom, 'inboxUnreadNotifications');
++  const notifRef = useRef<Notification>();
++
++  // Count rooms with direct unreads (u.from === null excludes space aggregate entries)
++  let unreadRoomCount = 0;
++  roomToUnread.forEach((u) => { if (u.total > 0 && u.from === null) unreadRoomCount++; });
++
++  const prevUnreadRoomCount = usePreviousValue(unreadRoomCount, 0);
++
++  useEffect(() => {
++    if (!inboxUnreadNotifications) return;
++    if (unreadRoomCount <= prevUnreadRoomCount) return;
++    if (mx.getSyncState() !== 'SYNCING') return;
++    if (!notificationPermission('granted')) return;
++    if (document.hasFocus()) return;
++
++    const newCount = unreadRoomCount - prevUnreadRoomCount;
++    const noti = new window.Notification(
++      newCount === 1 ? 'New unread message' : `${newCount} new unread rooms`,
++      {
++        icon: LogoSVG,
++        badge: LogoSVG,
++        body: 'New messages are waiting in your inbox.',
++        silent: true,
++      }
++    );
++
++    noti.onclick = () => {
++      if (!window.closed) navigate(getInboxUnreadPath());
++      noti.close();
++      notifRef.current = undefined;
++    };
++
++    notifRef.current?.close();
++    notifRef.current = noti;
++  }, [mx, navigate, unreadRoomCount, prevUnreadRoomCount, inboxUnreadNotifications]);
++
++  return null;
++}
++
+ type ClientNonUIFeaturesProps = {
+   children: ReactNode;
+ };
+@@ -272,6 +380,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
+       <FaviconUpdater />
+       <InviteNotifications />
+       <MessageNotifications />
++      <InboxUnreadNotifications />
+       {children}
+     </>
+   );
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
 index a2e1b682..d24d5747 100644
 --- a/src/app/pages/client/SidebarNav.tsx
@@ -2107,22 +2204,24 @@ index 1ca7e7de..795b484b 100644
    }, [mx, memberships, setRoomsAtom]);
  };
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 52679837..f4bff2e5 100644
+index 52679837..315cb4d4 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -42,6 +42,7 @@ export interface Settings {
+@@ -42,6 +42,8 @@ export interface Settings {
  
    showNotifications: boolean;
    isNotificationSounds: boolean;
 +  inRoomActivitySound: boolean;
++  inboxUnreadNotifications: boolean;
    callRingScope: 'dm' | 'nonVoice' | 'all';
    callRingtoneUrl: string | null;
  
-@@ -78,6 +79,7 @@ const defaultSettings: Settings = {
+@@ -78,6 +80,8 @@ const defaultSettings: Settings = {
  
    showNotifications: true,
    isNotificationSounds: true,
 +  inRoomActivitySound: true,
++  inboxUnreadNotifications: false,
    callRingScope: 'nonVoice',
    callRingtoneUrl: null,
  

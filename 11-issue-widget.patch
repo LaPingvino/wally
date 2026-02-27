@@ -927,10 +927,10 @@ index 00000000..a1ea0210
 +}
 diff --git a/src/widget.tsx b/src/widget.tsx
 new file mode 100644
-index 00000000..3db8c393
+index 00000000..8da01542
 --- /dev/null
 +++ b/src/widget.tsx
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,88 @@
 +import React from 'react';
 +import { createRoot } from 'react-dom/client';
 +import { WidgetApi } from 'matrix-widget-api';
@@ -1003,10 +1003,17 @@ index 00000000..3db8c393
 +          paste the content above.
 +        </p>
 +        <p style={{ marginTop: 6, color: '#777' }}>
-+          <strong>Element Web:</strong> do <em>not</em> use the "Custom" widget panel — it bypasses the Widget API.
-+          Use Room Settings → Developer Tools → Send custom state event, or use the{' '}
++          <strong>Element Web:</strong> use the <code>/addwidget</code> slash command in the room chat:
++        </p>
++        <pre style={{ background: '#f5f5f5', padding: '6px 14px', borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '4px 0' }}>{
++          `/addwidget ${window.location.origin + window.location.pathname}?roomId=$matrix_room_id&userId=$matrix_user_id`
++        }</pre>
++        <p style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
++          Or use the{' '}
 +          <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>cinny fork</a>'s
 +          built-in "Enable widget" button in the issue board toolbar.
++          Also see{' '}
++          <a href="https://github.com/lapingvino/matrix-issue-widget" style={{ color: '#1976d2' }}>matrix-issue-widget on GitHub</a>.
 +        </p>
 +      </div>
 +    </div>
