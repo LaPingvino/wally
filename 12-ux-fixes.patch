@@ -1,0 +1,1141 @@
+diff --git a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
+index 028cd560..1bc74540 100644
+--- a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
++++ b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
+@@ -1,13 +1,22 @@
+-import React from 'react';
+-import { Box, Icon, IconButton, Icons, Scroll, Text, toRem } from 'folds';
++import React, { useEffect, useMemo, useRef } from 'react';
++import { Box, Button, Icon, IconButton, Icons, Scroll, Text, toRem } from 'folds';
+ import { useAtomValue } from 'jotai';
++import { useNavigate } from 'react-router-dom';
+ import { RoomCard } from '../../components/room-card';
+ import { RoomTopicViewer } from '../../components/room-topic-viewer';
+ import { Page, PageHeader } from '../../components/page';
+ import { RoomSummaryLoader } from '../../components/RoomSummaryLoader';
+-import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+ import { allRoomsAtom } from '../../state/room-list/roomList';
++import { roomToParentsAtom } from '../../state/room/roomToParents';
++import { mDirectAtom } from '../../state/mDirectList';
++import { getCanonicalAliasOrRoomId } from '../../utils/matrix';
++import {
++  getDirectRoomPath,
++  getHomeRoomPath,
++  getSpacePath,
++  getSpaceRoomPath,
++} from '../../pages/pathUtils';
+ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
+ import { BackRouteHandler } from '../../components/BackRouteHandler';
+ 
+@@ -19,17 +28,59 @@ export function JoinBeforeNavigate({
+ }: JoinBeforeNavigateProps) {
+   const mx = useMatrixClient();
+   const allRooms = useAtomValue(allRoomsAtom);
+-  const { navigateRoom, navigateSpace } = useRoomNavigate();
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
++  const navigate = useNavigate();
+   const screenSize = useScreenSizeContext();
++  const autoNavDone = useRef(false);
+ 
+-  const handleView = (roomId: string) => {
+-    if (mx.getRoom(roomId)?.isSpaceRoom()) {
+-      navigateSpace(roomId);
++  const navigateTo = (roomId: string, evId?: string) => {
++    const room = mx.getRoom(roomId);
++    if (!room) return;
++    const rIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++    if (room.isSpaceRoom()) {
++      navigate(getSpacePath(rIdOrAlias));
+       return;
+     }
+-    navigateRoom(roomId, eventId);
++    if (mDirects.has(roomId)) {
++      navigate(getDirectRoomPath(rIdOrAlias, evId));
++      return;
++    }
++    const parents = roomToParents.get(roomId);
++    if (parents && parents.size > 0) {
++      const spaceId = Array.from(parents)[0];
++      navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), rIdOrAlias, evId));
++    } else {
++      navigate(getHomeRoomPath(rIdOrAlias, evId));
++    }
+   };
+ 
++  useEffect(() => {
++    if (autoNavDone.current) return;
++    // Redirect invalid IDs (e.g. "index.html" from the desktop app) to home
++    if (!roomIdOrAlias.startsWith('!') && !roomIdOrAlias.startsWith('#')) {
++      autoNavDone.current = true;
++      navigate('/');
++      return;
++    }
++    // Auto-navigate when the user is already a member (room ID only; aliases need resolution)
++    if (roomIdOrAlias.startsWith('!')) {
++      const room = mx.getRoom(roomIdOrAlias);
++      if (room && allRooms.includes(room.roomId)) {
++        autoNavDone.current = true;
++        navigateTo(room.roomId, eventId);
++      }
++    }
++  }, [mx, roomIdOrAlias, allRooms, mDirects, roomToParents, navigate, eventId]);
++
++  const handleView = (roomId: string) => navigateTo(roomId, eventId);
++
++  const alreadyJoinedRoomId = useMemo(() => {
++    if (!roomIdOrAlias.startsWith('!')) return undefined;
++    const room = mx.getRoom(roomIdOrAlias);
++    return room && allRooms.includes(room.roomId) ? room.roomId : undefined;
++  }, [mx, roomIdOrAlias, allRooms]);
++
+   return (
+     <Page>
+       <PageHeader balance>
+@@ -50,6 +101,13 @@ export function JoinBeforeNavigate({
+               {roomIdOrAlias}
+             </Text>
+           </Box>
++          {alreadyJoinedRoomId && (
++            <Box shrink="No">
++              <Button size="300" variant="Primary" radii="300" onClick={() => handleView(alreadyJoinedRoomId)}>
++                <Text size="B300">Show Timeline</Text>
++              </Button>
++            </Box>
++          )}
+         </Box>
+       </PageHeader>
+       <Box grow="Yes">
+diff --git a/src/app/hooks/router/useInbox.ts b/src/app/hooks/router/useInbox.ts
+index de8d3d69..08381e8d 100644
+--- a/src/app/hooks/router/useInbox.ts
++++ b/src/app/hooks/router/useInbox.ts
+@@ -3,6 +3,7 @@ import {
+   getInboxInvitesPath,
+   getInboxNotificationsPath,
+   getInboxPath,
++  getInboxUnreadPath,
+ } from '../../pages/pathUtils';
+ 
+ export const useInboxSelected = (): boolean => {
+@@ -34,3 +35,14 @@ export const useInboxInvitesSelected = (): boolean => {
+ 
+   return !!match;
+ };
++
++export const useInboxUnreadSelected = (): boolean => {
++  const match = useMatch({
++    path: getInboxUnreadPath(),
++    caseSensitive: true,
++    end: false,
++  });
++
++  return !!match;
++};
++
+diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
+index ea9ef1a0..69f52bc9 100644
+--- a/src/app/pages/Router.tsx
++++ b/src/app/pages/Router.tsx
+@@ -28,6 +28,7 @@ import {
+   _ROOM_PATH,
+   _SEARCH_PATH,
+   _SERVER_PATH,
++  _UNREAD_PATH,
+   CREATE_PATH,
+ } from './paths';
+ import {
+@@ -44,7 +45,7 @@ import { Home, HomeRouteRoomProvider, HomeSearch } from './client/home';
+ import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
+ import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
+ import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
+-import { Notifications, Inbox, Invites } from './client/inbox';
++import { Notifications, Inbox, Invites, Unread } from './client/inbox';
+ import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
+ import { Room } from '../features/room';
+ import { Lobby } from '../features/lobby';
+@@ -311,6 +312,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize,
+               element={<WelcomePage />}
+             />
+           )}
++          <Route path={_UNREAD_PATH} element={<Unread />} />
+           <Route path={_NOTIFICATIONS_PATH} element={<Notifications />} />
+           <Route path={_INVITES_PATH} element={<Invites />} />
+         </Route>
+diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
+index 039de0ee..623488a8 100644
+--- a/src/app/pages/client/direct/Direct.tsx
++++ b/src/app/pages/client/direct/Direct.tsx
+@@ -7,6 +7,7 @@ import {
+   Icon,
+   IconButton,
+   Icons,
++  Line,
+   Menu,
+   MenuItem,
+   PopOut,
+@@ -19,7 +20,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
+ import FocusTrap from 'focus-trap-react';
+ import { useNavigate } from 'react-router-dom';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+-import { factoryRoomIdByActivity } from '../../../utils/sort';
++import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst } from '../../../utils/sort';
+ import {
+   NavButton,
+   NavCategory,
+@@ -63,6 +64,7 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+   const orphanRooms = useDirectRooms();
+   const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
++  const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+ 
+   const handleMarkAsRead = () => {
+     if (!unread) return;
+@@ -73,6 +75,37 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+   return (
+     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++        <MenuItem
++          onClick={() => setRoomSortOrder('activity')}
++          size="300"
++          after={roomSortOrder === 'activity' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort by Activity
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('az')}
++          size="300"
++          after={roomSortOrder === 'az' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort A-Z
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('unread')}
++          size="300"
++          after={roomSortOrder === 'unread' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Unread First
++          </Text>
++        </MenuItem>
++        <Line variant="Surface" size="300" />
+         <MenuItem
+           onClick={handleMarkAsRead}
+           size="300"
+@@ -185,14 +218,27 @@ export function Direct() {
+   const selectedRoomId = useSelectedRoom();
+   const noRoomToDisplay = directs.length === 0;
+   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
++  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+ 
+   const sortedDirects = useMemo(() => {
+-    const items = Array.from(directs).sort(factoryRoomIdByActivity(mx));
++    let sortFn;
++    if (roomSortOrder === 'az') {
++      sortFn = factoryRoomIdByAtoZ(mx);
++    } else if (roomSortOrder === 'unread') {
++      sortFn = factoryRoomIdByUnreadFirst(
++        (id) => roomToUnread.get(id)?.highlight ?? 0,
++        (id) => roomToUnread.get(id)?.total ?? 0,
++        factoryRoomIdByActivity(mx)
++      );
++    } else {
++      sortFn = factoryRoomIdByActivity(mx);
++    }
++    const items = Array.from(directs).sort(sortFn);
+     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
+       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
+     }
+     return items;
+-  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
++  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId, roomSortOrder]);
+ 
+   const virtualizer = useVirtualizer({
+     count: sortedDirects.length,
+diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
+index a76a226b..cb9e4421 100644
+--- a/src/app/pages/client/home/Home.tsx
++++ b/src/app/pages/client/home/Home.tsx
+@@ -7,6 +7,7 @@ import {
+   Icon,
+   IconButton,
+   Icons,
++  Line,
+   Menu,
+   MenuItem,
+   PopOut,
+@@ -18,7 +19,7 @@ import {
+ import { useVirtualizer } from '@tanstack/react-virtual';
+ import { useAtom, useAtomValue } from 'jotai';
+ import FocusTrap from 'focus-trap-react';
+-import { factoryRoomIdByActivity, factoryRoomIdByAtoZ } from '../../../utils/sort';
++import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst } from '../../../utils/sort';
+ import {
+   NavButton,
+   NavCategory,
+@@ -77,6 +78,7 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+   const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+   const mx = useMatrixClient();
++  const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+ 
+   const handleMarkAsRead = () => {
+     if (!unread) return;
+@@ -87,6 +89,37 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
+   return (
+     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++        <MenuItem
++          onClick={() => setRoomSortOrder('activity')}
++          size="300"
++          after={roomSortOrder === 'activity' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort by Activity
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('az')}
++          size="300"
++          after={roomSortOrder === 'az' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort A-Z
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('unread')}
++          size="300"
++          after={roomSortOrder === 'unread' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Unread First
++          </Text>
++        </MenuItem>
++        <Line variant="Surface" size="300" />
+         <MenuItem
+           onClick={handleMarkAsRead}
+           size="300"
+@@ -211,18 +244,27 @@ export function Home() {
+   const searchSelected = useHomeSearchSelected();
+   const noRoomToDisplay = rooms.length === 0;
+   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
++  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+ 
+   const sortedRooms = useMemo(() => {
+-    const items = Array.from(rooms).sort(
+-      closedCategories.has(DEFAULT_CATEGORY_ID)
+-        ? factoryRoomIdByActivity(mx)
+-        : factoryRoomIdByAtoZ(mx)
+-    );
++    let sortFn;
++    if (roomSortOrder === 'az') {
++      sortFn = factoryRoomIdByAtoZ(mx);
++    } else if (roomSortOrder === 'unread') {
++      sortFn = factoryRoomIdByUnreadFirst(
++        (id) => roomToUnread.get(id)?.highlight ?? 0,
++        (id) => roomToUnread.get(id)?.total ?? 0,
++        factoryRoomIdByActivity(mx)
++      );
++    } else {
++      sortFn = factoryRoomIdByActivity(mx);
++    }
++    const items = Array.from(rooms).sort(sortFn);
+     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
+       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
+     }
+     return items;
+-  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
++  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId, roomSortOrder]);
+ 
+   const virtualizer = useVirtualizer({
+     count: sortedRooms.length,
+diff --git a/src/app/pages/client/inbox/Inbox.tsx b/src/app/pages/client/inbox/Inbox.tsx
+index 67d6021a..9b7c21a8 100644
+--- a/src/app/pages/client/inbox/Inbox.tsx
++++ b/src/app/pages/client/inbox/Inbox.tsx
+@@ -1,16 +1,36 @@
+-import React from 'react';
++import React, { useState, useEffect } from 'react';
+ import { Avatar, Box, Icon, Icons, Text } from 'folds';
+ import { useAtomValue } from 'jotai';
++import { INotificationsResponse, Method } from 'matrix-js-sdk';
+ import { NavCategory, NavItem, NavItemContent, NavLink } from '../../../components/nav';
+-import { getInboxInvitesPath, getInboxNotificationsPath } from '../../pathUtils';
++import { getInboxInvitesPath, getInboxNotificationsPath, getInboxUnreadPath } from '../../pathUtils';
+ import {
+   useInboxInvitesSelected,
+   useInboxNotificationsSelected,
++  useInboxUnreadSelected,
+ } from '../../../hooks/router/useInbox';
+ import { UnreadBadge } from '../../../components/unread-badge';
+ import { allInvitesAtom } from '../../../state/room-list/inviteList';
++import { allRoomsAtom } from '../../../state/room-list/roomList';
++import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
++import { useRoomsUnread } from '../../../state/hooks/unread';
+ import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
+ import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
++import { useMatrixClient } from '../../../hooks/useMatrixClient';
++
++function useNotificationsSupported(): boolean | null {
++  const mx = useMatrixClient();
++  const [supported, setSupported] = useState<boolean | null>(null);
++  useEffect(() => {
++    mx.http
++      .authedRequest<INotificationsResponse>(Method.Get, '/notifications', { limit: 1 })
++      .then(() => setSupported(true))
++      .catch((err: any) => {
++        setSupported(err?.httpStatus !== 404 && err?.errcode !== 'M_UNRECOGNIZED');
++      });
++  }, [mx]);
++  return supported;
++}
+ 
+ function InvitesNavItem() {
+   const invitesSelected = useInboxInvitesSelected();
+@@ -46,6 +66,16 @@ function InvitesNavItem() {
+ export function Inbox() {
+   useNavToActivePathMapper('inbox');
+   const notificationsSelected = useInboxNotificationsSelected();
++  const unreadSelected = useInboxUnreadSelected();
++  const notificationsSupported = useNotificationsSupported();
++  const allRooms = useAtomValue(allRoomsAtom);
++  const allUnread = useRoomsUnread(allRooms, roomToUnreadAtom);
++
++  const notificationsUnsupported = notificationsSupported === false;
++  const notificationsTo = notificationsUnsupported ? getInboxUnreadPath() : getInboxNotificationsPath();
++  const isNotificationsActive = notificationsUnsupported ? unreadSelected : notificationsSelected;
++  const notificationsHasHighlight = notificationsUnsupported && (allUnread?.highlight ?? 0) > 0;
++  const notificationsBadgeCount = notificationsUnsupported ? (allUnread?.total ?? 0) : 0;
+ 
+   return (
+     <PageNav>
+@@ -62,18 +92,26 @@ export function Inbox() {
+       <PageNavContent>
+         <Box direction="Column" gap="300">
+           <NavCategory>
+-            <NavItem variant="Background" radii="400" aria-selected={notificationsSelected}>
+-              <NavLink to={getInboxNotificationsPath()}>
++            <NavItem
++              variant="Background"
++              radii="400"
++              highlight={notificationsHasHighlight}
++              aria-selected={isNotificationsActive}
++            >
++              <NavLink to={notificationsTo}>
+                 <NavItemContent>
+                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
+                     <Avatar size="200" radii="400">
+-                      <Icon src={Icons.MessageUnread} size="100" filled={notificationsSelected} />
++                      <Icon src={Icons.BellRing} size="100" filled={isNotificationsActive} />
+                     </Avatar>
+                     <Box as="span" grow="Yes">
+                       <Text as="span" size="Inherit" truncate>
+                         Notifications
+                       </Text>
+                     </Box>
++                    {notificationsBadgeCount > 0 && (
++                      <UnreadBadge highlight={notificationsHasHighlight} count={notificationsBadgeCount} />
++                    )}
+                   </Box>
+                 </NavItemContent>
+               </NavLink>
+diff --git a/src/app/pages/client/inbox/Notifications.tsx b/src/app/pages/client/inbox/Notifications.tsx
+index 4cc94d91..50fd9d99 100644
+--- a/src/app/pages/client/inbox/Notifications.tsx
++++ b/src/app/pages/client/inbox/Notifications.tsx
+@@ -13,7 +13,7 @@ import {
+   config,
+   toRem,
+ } from 'folds';
+-import { useSearchParams } from 'react-router-dom';
++import { useNavigate, useSearchParams } from 'react-router-dom';
+ import {
+   INotification,
+   INotificationsResponse,
+@@ -31,6 +31,7 @@ import { Page, PageContent, PageContentCenter, PageHeader } from '../../../compo
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+ import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
+ import { InboxNotificationsPathSearchParams } from '../../paths';
++import { getInboxUnreadPath } from '../../pathUtils';
+ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+ import { SequenceCard } from '../../../components/sequence-card';
+ import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
+@@ -568,6 +569,7 @@ export function Notifications() {
+   const mDirects = useAtomValue(mDirectAtom);
+ 
+   const { navigateRoom } = useRoomNavigate();
++  const navigate = useNavigate();
+   const [searchParams, setSearchParams] = useSearchParams();
+   const notificationsSearchParams = useNotificationsSearchParams(searchParams);
+   const scrollRef = useRef<HTMLDivElement>(null);
+@@ -617,6 +619,16 @@ export function Notifications() {
+     loadTimeline();
+   }, [loadTimeline]);
+ 
++  useEffect(() => {
++    if (timelineState.status === AsyncStatus.Error) {
++      const err = timelineState.error as any;
++      if (err?.httpStatus === 404 || err?.errcode === 'M_UNRECOGNIZED') {
++        setRefreshIntervalTime(-1);
++        navigate(getInboxUnreadPath(), { replace: true });
++      }
++    }
++  }, [timelineState, navigate]);
++
+   const lastVItem = vItems[vItems.length - 1];
+   const lastVItemIndex: number | undefined = lastVItem?.index;
+   useEffect(() => {
+@@ -765,20 +777,41 @@ export function Notifications() {
+                     ))}
+                   </Box>
+                 )}
+-                {timelineState.status === AsyncStatus.Error && (
+-                  <Box
+-                    className={ContainerColor({ variant: 'Critical' })}
+-                    style={{
+-                      padding: config.space.S300,
+-                      borderRadius: config.radii.R400,
+-                    }}
+-                    direction="Column"
+-                    gap="200"
+-                  >
+-                    <Text size="L400">{(timelineState.error as Error).name}</Text>
+-                    <Text size="T300">{(timelineState.error as Error).message}</Text>
+-                  </Box>
+-                )}
++                {timelineState.status === AsyncStatus.Error &&
++                  (() => {
++                    const err = timelineState.error as any;
++                    const isUnsupported =
++                      err?.httpStatus === 404 || err?.errcode === 'M_UNRECOGNIZED';
++                    return isUnsupported ? (
++                      <Box
++                        className={ContainerColor({ variant: 'SurfaceVariant' })}
++                        style={{
++                          padding: config.space.S300,
++                          borderRadius: config.radii.R400,
++                        }}
++                        direction="Column"
++                        gap="200"
++                      >
++                        <Text>Not Available</Text>
++                        <Text size="T200">
++                          The notification timeline is not supported by your server.
++                        </Text>
++                      </Box>
++                    ) : (
++                      <Box
++                        className={ContainerColor({ variant: 'Critical' })}
++                        style={{
++                          padding: config.space.S300,
++                          borderRadius: config.radii.R400,
++                        }}
++                        direction="Column"
++                        gap="200"
++                      >
++                        <Text size="L400">{err.name}</Text>
++                        <Text size="T300">{err.message}</Text>
++                      </Box>
++                    );
++                  })()}
+               </Box>
+             </PageContentCenter>
+           </PageContent>
+diff --git a/src/app/pages/client/inbox/Unread.tsx b/src/app/pages/client/inbox/Unread.tsx
+new file mode 100644
+index 00000000..a5a29ec8
+--- /dev/null
++++ b/src/app/pages/client/inbox/Unread.tsx
+@@ -0,0 +1,340 @@
++import React, { useMemo } from 'react';
++import {
++  Avatar,
++  Box,
++  Chip,
++  Header,
++  Icon,
++  IconButton,
++  Icons,
++  Scroll,
++  Text,
++  config,
++} from 'folds';
++import { useAtomValue } from 'jotai';
++import { useNavigate } from 'react-router-dom';
++import { JoinRule, MatrixEvent, Room } from 'matrix-js-sdk';
++import {
++  Page,
++  PageContent,
++  PageContentCenter,
++  PageHeader,
++  PageHero,
++  PageHeroSection,
++} from '../../../components/page';
++import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { allRoomsAtom } from '../../../state/room-list/roomList';
++import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
++import { roomToParentsAtom } from '../../../state/room/roomToParents';
++import { mDirectAtom } from '../../../state/mDirectList';
++import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
++import { SequenceCard } from '../../../components/sequence-card';
++import { markAsRead } from '../../../utils/notifications';
++import { useSetting } from '../../../state/hooks/settings';
++import { settingsAtom } from '../../../state/settings';
++import { getCanonicalAliasOrRoomId, getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
++import { getMemberAvatarMxc, getMemberDisplayName, getRoomAvatarUrl } from '../../../utils/room';
++import { Time, Username, UsernameBold } from '../../../components/message';
++import { UserAvatar } from '../../../components/user-avatar';
++import { useRoomUnread } from '../../../state/hooks/unread';
++import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
++import {
++  getDirectRoomPath,
++  getHomeRoomPath,
++  getSpacePath,
++  getSpaceRoomPath,
++} from '../../pathUtils';
++
++const getUnreadMessages = (room: Room, userId: string, limit = 10): MatrixEvent[] => {
++  const readUpToId = room.getEventReadUpTo(userId);
++  const events = room.getLiveTimeline().getEvents();
++  let startIdx = 0;
++  if (readUpToId) {
++    const idx = events.findIndex((e) => e.getId() === readUpToId);
++    startIdx = idx >= 0 ? idx + 1 : 0;
++  }
++  return events
++    .slice(startIdx)
++    .filter(
++      (e) =>
++        !e.isRedacted() &&
++        !e.isState() &&
++        (e.getType() === 'm.room.message' ||
++          e.getType() === 'm.sticker' ||
++          e.getType() === 'm.room.encrypted')
++    )
++    .slice(-limit);
++};
++
++const getEventBody = (mEvent: MatrixEvent): string | null => {
++  const content = mEvent.getContent();
++  if (mEvent.getType() === 'm.room.message') return (content.body as string) ?? null;
++  if (mEvent.getType() === 'm.sticker')
++    return content.body ? `[Sticker] ${content.body}` : '[Sticker]';
++  if (mEvent.getType() === 'm.room.encrypted') return '[Encrypted message]';
++  return null;
++};
++
++type UnreadRoomGroupProps = {
++  room: Room;
++  messages: MatrixEvent[];
++  hideActivity: boolean;
++  hour24Clock: boolean;
++  dateFormatString: string;
++  onOpen: (roomId: string, eventId?: string) => void;
++};
++function UnreadRoomGroup({
++  room,
++  messages,
++  hideActivity,
++  hour24Clock,
++  dateFormatString,
++  onOpen,
++}: UnreadRoomGroupProps) {
++  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
++
++  const handleOpenClick: React.MouseEventHandler = (e) => {
++    const eventId = e.currentTarget.getAttribute('data-event-id');
++    if (!eventId) return;
++    onOpen(room.roomId, eventId);
++  };
++
++  return (
++    <Box direction="Column" gap="200">
++      <Header size="300">
++        <Box gap="200" grow="Yes">
++          <Avatar size="200" radii="300">
++            <RoomAvatar
++              roomId={room.roomId}
++              src={getRoomAvatarUrl(mx, room, 96, useAuthentication)}
++              alt={room.name}
++              renderFallback={() => (
++                <RoomIcon size="50" joinRule={room.getJoinRule() ?? JoinRule.Restricted} filled />
++              )}
++            />
++          </Avatar>
++          <Text size="H4" truncate>
++            {room.name}
++          </Text>
++        </Box>
++        <Box shrink="No">
++          {unread && (
++            <Chip
++              variant="Primary"
++              radii="Pill"
++              onClick={() => markAsRead(mx, room.roomId, hideActivity)}
++              before={<Icon size="100" src={Icons.CheckTwice} />}
++            >
++              <Text size="T200">Mark as Read</Text>
++            </Chip>
++          )}
++        </Box>
++      </Header>
++      {messages.length === 0 ? (
++        <SequenceCard
++          style={{ padding: config.space.S400 }}
++          variant="SurfaceVariant"
++          direction="Column"
++        >
++          <Box gap="300" justifyContent="SpaceBetween" alignItems="Center" grow="Yes">
++            <Text size="T300" priority="300">
++              {unread && unread.total > 0
++                ? `${unread.total} unread message${unread.total !== 1 ? 's' : ''}`
++                : 'Unread messages'}
++            </Text>
++            <Box shrink="No">
++              <Chip onClick={() => onOpen(room.roomId)} variant="Secondary" radii="400">
++                <Text size="T200">Open</Text>
++              </Chip>
++            </Box>
++          </Box>
++        </SequenceCard>
++      ) : <Box direction="Column" gap="100">
++        {messages.map((mEvent) => {
++          const senderId = mEvent.getSender() ?? '';
++          const displayName =
++            getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
++          const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
++          const body = getEventBody(mEvent);
++
++          return (
++            <SequenceCard
++              key={mEvent.getId()}
++              style={{ padding: config.space.S400 }}
++              variant="SurfaceVariant"
++              direction="Column"
++            >
++              <Box gap="300" justifyContent="SpaceBetween" alignItems="Center" grow="Yes">
++                <Box gap="200" alignItems="Center">
++                  <Avatar size="300">
++                    <UserAvatar
++                      userId={senderId}
++                      src={
++                        senderAvatarMxc
++                          ? mxcUrlToHttp(mx, senderAvatarMxc, useAuthentication, 48, 48, 'crop') ??
++                            undefined
++                          : undefined
++                      }
++                      alt={displayName}
++                      renderFallback={() => <Icon size="200" src={Icons.User} filled />}
++                    />
++                  </Avatar>
++                  <Box direction="Column">
++                    <Box gap="200" alignItems="Baseline">
++                      <Username>
++                        <Text as="span" truncate>
++                          <UsernameBold>{displayName}</UsernameBold>
++                        </Text>
++                      </Username>
++                      <Time
++                        ts={mEvent.getTs()}
++                        hour24Clock={hour24Clock}
++                        dateFormatString={dateFormatString}
++                      />
++                    </Box>
++                    {body && (
++                      <Text size="T300" priority="300">
++                        {body}
++                      </Text>
++                    )}
++                  </Box>
++                </Box>
++                <Box shrink="No">
++                  <Chip
++                    data-event-id={mEvent.getId()}
++                    onClick={handleOpenClick}
++                    variant="Secondary"
++                    radii="400"
++                  >
++                    <Text size="T200">Open</Text>
++                  </Chip>
++                </Box>
++              </Box>
++            </SequenceCard>
++          );
++        })}
++      </Box>}
++    </Box>
++  );
++}
++
++export function Unread() {
++  const mx = useMatrixClient();
++  const navigate = useNavigate();
++  const roomToUnread = useAtomValue(roomToUnreadAtom);
++  const allRooms = useAtomValue(allRoomsAtom);
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
++  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
++  const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
++  const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
++
++  const sortedUnreadRooms = useMemo(() => {
++    const entries = Array.from(roomToUnread.entries()).filter(
++      ([roomId, u]) =>
++        (u.total > 0 || u.highlight > 0) && u.from === null && allRooms.includes(roomId)
++    );
++    entries.sort(([aId, aU], [bId, bU]) => {
++      if (bU.highlight !== aU.highlight) return bU.highlight - aU.highlight;
++      if (bU.total !== aU.total) return bU.total - aU.total;
++      return (
++        (mx.getRoom(bId)?.getLastActiveTimestamp() ?? 0) -
++        (mx.getRoom(aId)?.getLastActiveTimestamp() ?? 0)
++      );
++    });
++    return entries;
++  }, [roomToUnread, allRooms, mx]);
++
++  const navigateToRoom = (roomId: string, eventId?: string) => {
++    const room = mx.getRoom(roomId);
++    if (!room) return;
++    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++    if (room.isSpaceRoom()) {
++      navigate(getSpacePath(roomIdOrAlias));
++      return;
++    }
++    if (mDirects.has(roomId)) {
++      navigate(getDirectRoomPath(roomIdOrAlias, eventId));
++      return;
++    }
++    const parents = roomToParents.get(roomId);
++    if (parents && parents.size > 0) {
++      const spaceId = Array.from(parents)[0];
++      navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias, eventId));
++    } else {
++      navigate(getHomeRoomPath(roomIdOrAlias, eventId));
++    }
++  };
++
++  const handleMarkAllAsRead = () => {
++    sortedUnreadRooms.forEach(([roomId]) => markAsRead(mx, roomId, hideActivity));
++  };
++
++  const unreadGroups = useMemo(
++    () =>
++      sortedUnreadRooms.flatMap(([roomId]) => {
++        const room = mx.getRoom(roomId);
++        if (!room) return [];
++        const messages = getUnreadMessages(room, mx.getUserId() ?? '', 10);
++        return [{ roomId, room, messages }];
++      }),
++    [sortedUnreadRooms, mx]
++  );
++
++  return (
++    <Page>
++      <PageHeader>
++        <Box grow="Yes" gap="300" alignItems="Center">
++          <Box grow="Yes">
++            <Text size="H4" truncate>
++              Unread
++            </Text>
++          </Box>
++          {sortedUnreadRooms.length > 0 && (
++            <IconButton
++              aria-label="Mark all as read"
++              title="Mark all as read"
++              size="300"
++              onClick={handleMarkAllAsRead}
++            >
++              <Icon src={Icons.CheckTwice} size="100" />
++            </IconButton>
++          )}
++        </Box>
++      </PageHeader>
++      <Box style={{ position: 'relative' }} grow="Yes">
++        <Scroll hideTrack visibility="Hover">
++          <PageContent>
++            <PageContentCenter>
++              {unreadGroups.length === 0 ? (
++                <PageHero
++                  icon={<Icon size="600" src={Icons.CheckTwice} />}
++                  title="All caught up!"
++                  subTitle="No unread messages."
++                />
++              ) : (
++                <PageHeroSection>
++                  <Box direction="Column" gap="200">
++                    {unreadGroups.map(({ roomId, room, messages }) => (
++                      <UnreadRoomGroup
++                        key={roomId}
++                        room={room}
++                        messages={messages}
++                        hideActivity={hideActivity}
++                        hour24Clock={hour24Clock}
++                        dateFormatString={dateFormatString}
++                        onOpen={navigateToRoom}
++                      />
++                    ))}
++                  </Box>
++                </PageHeroSection>
++              )}
++            </PageContentCenter>
++          </PageContent>
++        </Scroll>
++      </Box>
++    </Page>
++  );
++}
+diff --git a/src/app/pages/client/inbox/index.ts b/src/app/pages/client/inbox/index.ts
+index c8036b47..325a2e97 100644
+--- a/src/app/pages/client/inbox/index.ts
++++ b/src/app/pages/client/inbox/index.ts
+@@ -1,3 +1,4 @@
+ export * from './Inbox';
+ export * from './Notifications';
+ export * from './Invites';
++export * from './Unread';
+diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
+index fbe35241..325d1f7f 100644
+--- a/src/app/pages/client/sidebar/HomeTab.tsx
++++ b/src/app/pages/client/sidebar/HomeTab.tsx
+@@ -1,6 +1,6 @@
+ import React, { MouseEventHandler, forwardRef, useState } from 'react';
+ import { useNavigate } from 'react-router-dom';
+-import { Box, Icon, Icons, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
++import { Box, Icon, Icons, Line, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
+ import { useAtomValue } from 'jotai';
+ import FocusTrap from 'focus-trap-react';
+ import { useOrphanRooms } from '../../../state/hooks/roomList';
+@@ -35,6 +35,7 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+   const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+   const mx = useMatrixClient();
++  const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+ 
+   const handleMarkAsRead = () => {
+     if (!unread) return;
+@@ -45,6 +46,37 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
+   return (
+     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++        <MenuItem
++          onClick={() => setRoomSortOrder('activity')}
++          size="300"
++          after={roomSortOrder === 'activity' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort by Activity
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('az')}
++          size="300"
++          after={roomSortOrder === 'az' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort A-Z
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('unread')}
++          size="300"
++          after={roomSortOrder === 'unread' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Unread First
++          </Text>
++        </MenuItem>
++        <Line variant="Surface" size="300" />
+         <MenuItem
+           onClick={handleMarkAsRead}
+           size="300"
+diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
+index 553cf849..5f673ea5 100644
+--- a/src/app/pages/client/sidebar/InboxTab.tsx
++++ b/src/app/pages/client/sidebar/InboxTab.tsx
+@@ -9,10 +9,14 @@ import {
+   SidebarItemTooltip,
+ } from '../../../components/sidebar';
+ import { allInvitesAtom } from '../../../state/room-list/inviteList';
++import { allRoomsAtom } from '../../../state/room-list/roomList';
++import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
++import { useRoomsUnread } from '../../../state/hooks/unread';
+ import {
+   getInboxInvitesPath,
+   getInboxNotificationsPath,
+   getInboxPath,
++  getInboxUnreadPath,
+   joinPathComponent,
+ } from '../../pathUtils';
+ import { useInboxSelected } from '../../../hooks/router/useInbox';
+@@ -27,6 +31,10 @@ export function InboxTab() {
+   const inboxSelected = useInboxSelected();
+   const allInvites = useAtomValue(allInvitesAtom);
+   const inviteCount = allInvites.length;
++  const allRooms = useAtomValue(allRoomsAtom);
++  const allUnread = useRoomsUnread(allRooms, roomToUnreadAtom);
++  const hasHighlight = (allUnread?.highlight ?? 0) > 0;
++  const hasUnread = (allUnread?.total ?? 0) > 0;
+ 
+   const handleInboxClick = () => {
+     if (screenSize === ScreenSize.Mobile) {
+diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
+index eb010013..41b66138 100644
+--- a/src/app/pages/client/space/Space.tsx
++++ b/src/app/pages/client/space/Space.tsx
+@@ -53,7 +53,8 @@ import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
+ import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
+ import { useRoomName } from '../../../hooks/useRoomMeta';
+-import { useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
++import { HierarchyItem, useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
++import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst } from '../../../utils/sort';
+ import { allRoomsAtom } from '../../../state/room-list/roomList';
+ import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
+ import { usePowerLevels } from '../../../hooks/usePowerLevels';
+@@ -96,6 +97,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
+   const mx = useMatrixClient();
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+   const [developerTools] = useSetting(settingsAtom, 'developerTools');
++  const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+   const roomToParents = useAtomValue(roomToParentsAtom);
+   const powerLevels = usePowerLevels(room);
+   const creators = useRoomCreators(room);
+@@ -152,6 +154,37 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
+             }}
+           />
+         )}
++        <MenuItem
++          onClick={() => setRoomSortOrder('activity')}
++          size="300"
++          after={roomSortOrder === 'activity' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort by Activity
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('az')}
++          size="300"
++          after={roomSortOrder === 'az' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Sort A-Z
++          </Text>
++        </MenuItem>
++        <MenuItem
++          onClick={() => setRoomSortOrder('unread')}
++          size="300"
++          after={roomSortOrder === 'unread' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Unread First
++          </Text>
++        </MenuItem>
++        <Line variant="Surface" size="300" />
+         <MenuItem
+           onClick={handleMarkAsRead}
+           size="300"
+diff --git a/src/app/pages/pathUtils.ts b/src/app/pages/pathUtils.ts
+index 817d21d1..cc940960 100644
+--- a/src/app/pages/pathUtils.ts
++++ b/src/app/pages/pathUtils.ts
+@@ -14,6 +14,7 @@ import {
+   LOGIN_PATH,
+   INBOX_INVITES_PATH,
+   INBOX_NOTIFICATIONS_PATH,
++  INBOX_UNREAD_PATH,
+   INBOX_PATH,
+   REGISTER_PATH,
+   RESET_PASSWORD_PATH,
+@@ -158,3 +159,4 @@ export const getCreatePath = (): string => CREATE_PATH;
+ export const getInboxPath = (): string => INBOX_PATH;
+ export const getInboxNotificationsPath = (): string => INBOX_NOTIFICATIONS_PATH;
+ export const getInboxInvitesPath = (): string => INBOX_INVITES_PATH;
++export const getInboxUnreadPath = (): string => INBOX_UNREAD_PATH;
+diff --git a/src/app/pages/paths.ts b/src/app/pages/paths.ts
+index 9cf4bfb9..024e962a 100644
+--- a/src/app/pages/paths.ts
++++ b/src/app/pages/paths.ts
+@@ -78,12 +78,14 @@ export const CREATE_PATH = '/create';
+ 
+ export const _NOTIFICATIONS_PATH = 'notifications/';
+ export const _INVITES_PATH = 'invites/';
++export const _UNREAD_PATH = 'unread/';
+ export const INBOX_PATH = '/inbox/';
+ export type InboxNotificationsPathSearchParams = {
+   only?: string;
+ };
+ export const INBOX_NOTIFICATIONS_PATH = `/inbox/${_NOTIFICATIONS_PATH}`;
+ export const INBOX_INVITES_PATH = `/inbox/${_INVITES_PATH}`;
++export const INBOX_UNREAD_PATH = `/inbox/${_UNREAD_PATH}`;
+ 
+ export const SPACE_SETTINGS_PATH = '/space-settings/';
+ 
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 260db1c0..9759a997 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -53,6 +53,7 @@ export interface Settings {
+   developerTools: boolean;
+   issueTracker: boolean;
+   multiAccount: boolean;
++  roomSortOrder: 'activity' | 'az' | 'unread';
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -93,6 +94,7 @@ const defaultSettings: Settings = {
+   developerTools: false,
+   issueTracker: false,
+   multiAccount: false,
++  roomSortOrder: 'activity',
+ };
+ 
+ export const getSettings = () => {
+diff --git a/src/app/utils/sort.ts b/src/app/utils/sort.ts
+index 512c1998..b0534729 100644
+--- a/src/app/utils/sort.ts
++++ b/src/app/utils/sort.ts
+@@ -44,6 +44,22 @@ export const factoryRoomIdByUnreadCount =
+ 
+ export const byTsOldToNew: SortFunc<number> = (a, b) => a - b;
+ 
++export const factoryRoomIdByUnreadFirst =
++  (
++    getHighlight: (roomId: string) => number,
++    getTotal: (roomId: string) => number,
++    fallback: SortFunc<string>
++  ): SortFunc<string> =>
++  (a, b) => {
++    const aH = getHighlight(a);
++    const bH = getHighlight(b);
++    if (bH !== aH) return bH - aH;
++    const aT = getTotal(a);
++    const bT = getTotal(b);
++    if (bT !== aT) return bT - aT;
++    return fallback(a, b);
++  };
++
+ export const byOrderKey: SortFunc<string | undefined> = (a, b) => {
+   if (!a && !b) {
+     return 0;
