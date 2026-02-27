@@ -32,7 +32,7 @@ import FocusTrap from 'focus-trap-react';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useSetting } from '../../../state/hooks/settings';
-import { DateFormat, MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
+import { DateFormat, EmojiFont, MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
 import { SettingTile } from '../../../components/setting-tile';
 import { KeySymbol } from '../../../utils/key-symbol';
 import { isMacOS } from '../../../utils/user-agent';
@@ -259,6 +259,95 @@ function SystemThemePreferences() {
   );
 }
 
+type EmojiFontSelectorProps = {
+  emojiFonts: { id: EmojiFont; name: string }[];
+  selected: EmojiFont;
+  onSelect: (font: EmojiFont) => void;
+};
+const EmojiFontSelector = as<'div', EmojiFontSelectorProps>(
+  ({ emojiFonts, selected, onSelect, ...props }, ref) => (
+    <Menu role="menu" {...props} ref={ref}>
+      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+        {emojiFonts.map((font) => (
+          <MenuItem
+            key={font.id}
+            size="300"
+            variant={font.id === selected ? 'Primary' : 'Surface'}
+            radii="300"
+            onClick={() => onSelect(font.id)}
+          >
+            <Text size="T300">{font.name}</Text>
+          </MenuItem>
+        ))}
+      </Box>
+    </Menu>
+  )
+);
+
+function SelectEmojiFont() {
+  const [emojiFont, setEmojiFont] = useSetting(settingsAtom, 'emojiFont');
+  const [menuCords, setMenuCords] = useState<RectCords>();
+
+  const emojiFonts = [
+    { id: EmojiFont.System, name: 'System Default' },
+    { id: EmojiFont.Twemoji, name: 'Twitter Emoji' },
+    { id: EmojiFont.NotoColorEmojiBahai, name: 'Noto Emoji Bahá\'í' },
+  ];
+
+  const selectedFont = emojiFonts.find((font) => font.id === emojiFont) ?? emojiFonts[0];
+
+  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+    setMenuCords(evt.currentTarget.getBoundingClientRect());
+  };
+
+  const handleSelect = (font: EmojiFont) => {
+    setEmojiFont(font);
+    setMenuCords(undefined);
+  };
+
+  return (
+    <>
+      <Button
+        size="300"
+        variant="Primary"
+        outlined
+        fill="Soft"
+        radii="300"
+        after={<Icon size="300" src={Icons.ChevronBottom} />}
+        onClick={handleMenu}
+      >
+        <Text size="T300">{selectedFont.name}</Text>
+      </Button>
+      <PopOut
+        anchor={menuCords}
+        offset={5}
+        position="Bottom"
+        align="End"
+        content={
+          <FocusTrap
+            focusTrapOptions={{
+              initialFocus: false,
+              onDeactivate: () => setMenuCords(undefined),
+              clickOutsideDeactivates: true,
+              isKeyForward: (evt: KeyboardEvent) =>
+                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
+              isKeyBackward: (evt: KeyboardEvent) =>
+                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
+              escapeDeactivates: stopPropagation,
+            }}
+          >
+            <EmojiFontSelector
+              emojiFonts={emojiFonts}
+              selected={emojiFont}
+              onSelect={handleSelect}
+            />
+          </FocusTrap>
+        }
+      />
+    </>
+  );
+}
+
 function PageZoomInput() {
   const [pageZoom, setPageZoom] = useSetting(settingsAtom, 'pageZoom');
   const [currentZoom, setCurrentZoom] = useState(`${pageZoom}`);
@@ -306,7 +395,6 @@ function PageZoomInput() {
 function Appearance() {
   const [systemTheme, setSystemTheme] = useSetting(settingsAtom, 'useSystemTheme');
   const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
-  const [twitterEmoji, setTwitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
 
   return (
     <Box direction="Column" gap="100">
@@ -342,8 +430,9 @@ function Appearance() {
 
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Twitter Emoji"
-          after={<Switch variant="Primary" value={twitterEmoji} onChange={setTwitterEmoji} />}
+          title="Emoji Font"
+          description="Select which emoji font to use across the application."
+          after={<SelectEmojiFont />}
         />
       </SequenceCard>
 

@@ -10,7 +10,7 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
 import InviteSound from '../../../../public/sound/invite.ogg';
 import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
-import { settingsAtom } from '../../state/settings';
+import { EmojiFont, getSettings, settingsAtom } from '../../state/settings';
 import { allInvitesAtom } from '../../state/room-list/inviteList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -28,12 +28,19 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 
 function SystemEmojiFeature() {
-  const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
+  const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
 
-  if (twitterEmoji) {
-    document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
-  } else {
-    document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
+  switch (emojiFont) {
+    case EmojiFont.Twemoji:
+      document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
+      break;
+    case EmojiFont.NotoColorEmojiBahai:
+      document.documentElement.style.setProperty('--font-emoji', 'NotoColorEmojiBahai');
+      break;
+    case EmojiFont.System:
+    default:
+      document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
+      break;
   }
 
   return null;
