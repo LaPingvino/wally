@@ -28,9 +28,6 @@ index 0546686657..3584a2bc0a 100644
      }
    }
  }
-diff --git a/package-lock.json b/package-lock.json.orig
-copy from package-lock.json
-copy to package-lock.json.orig
 diff --git a/package.json b/package.json
 index 2dc0a4b103..3f100beade 100644
 --- a/package.json

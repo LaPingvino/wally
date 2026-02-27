@@ -18,9 +18,6 @@ index de8ee72da9..2dc0a4b103 100644
      "@esbuild-plugins/node-globals-polyfill": "0.2.3",
      "@rollup/plugin-inject": "5.0.3",
      "@rollup/plugin-wasm": "6.1.1",
-diff --git a/package.json b/package.json.orig
-copy from package.json
-copy to package.json.orig
 diff --git a/src/app/components/create-room/CreateRoomKindSelector.tsx b/src/app/components/create-room/CreateRoomKindSelector.tsx
 index 096954fbcb..ebc55e7ff6 100644
 --- a/src/app/components/create-room/CreateRoomKindSelector.tsx
@@ -237,9 +234,6 @@ index d0a45c3d96..467de37e48 100644
    };
  
    if (data.type === RoomType.Space) {
-diff --git a/src/app/components/create-room/utils.ts b/src/app/components/create-room/utils.ts.orig
-copy from src/app/components/create-room/utils.ts
-copy to src/app/components/create-room/utils.ts.orig
 diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
 index 23f3998d88..1ee72d4aa5 100644
 --- a/src/app/components/room-avatar/RoomAvatar.tsx
@@ -1112,9 +1106,6 @@ index f8647d1865..bea09a92b7 100644
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
                        <CreateRoomModalRenderer />
-diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx.orig
-copy from src/app/pages/Router.tsx
-copy to src/app/pages/Router.tsx.orig
 diff --git a/src/app/pages/auth/AuthFooter.tsx b/src/app/pages/auth/AuthFooter.tsx
 index 146f039bf9..9d972e6936 100644
 --- a/src/app/pages/auth/AuthFooter.tsx
