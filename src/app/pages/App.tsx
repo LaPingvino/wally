@@ -12,6 +12,24 @@ import { FeatureCheck } from './FeatureCheck';
 import { createRouter } from './Router';
 import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
+import { setSessionOverride, getSessionForSlot } from '../state/sessions';
+
+// Detect secondary account slot from URL (browser router) or sessionStorage (hash router)
+const _slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
+const _sessionSlot = (() => {
+  const s = sessionStorage.getItem('cinny-account-slot');
+  return s !== null ? parseInt(s, 10) : null;
+})();
+const _accountSlot = _slotMatch ? parseInt(_slotMatch[1], 10) : _sessionSlot;
+if (_accountSlot !== null) {
+  const _sess = getSessionForSlot(_accountSlot);
+  if (_sess) {
+    setSessionOverride(_sess);
+  } else {
+    sessionStorage.removeItem('cinny-account-slot');
+  }
+}
+const _basename = _slotMatch ? `/account/${_accountSlot}/` : undefined;
 
 const queryClient = new QueryClient();
 
@@ -37,7 +55,7 @@ function App() {
                   <ClientConfigProvider value={clientConfig}>
                     <QueryClientProvider client={queryClient}>
                       <JotaiProvider>
-                        <RouterProvider router={createRouter(clientConfig, screenSize)} />
+                        <RouterProvider router={createRouter(clientConfig, screenSize, _basename)} />
                       </JotaiProvider>
                       <ReactQueryDevtools initialIsOpen={false} />
                     </QueryClientProvider>

@@ -75,7 +75,7 @@ import { getFallbackSession } from '../state/sessions';
 import { CallStatusRenderer } from './CallStatusRenderer';
 import { CallEmbedProvider } from '../components/CallEmbedProvider';
 
-export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
+export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize, basePath?: string) => {
   const { hashRouter } = clientConfig;
   const mobile = screenSize === ScreenSize.Mobile;
 
@@ -325,6 +325,6 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
     return createHashRouter(routes, { basename: hashRouter.basename });
   }
   return createBrowserRouter(routes, {
-    basename: import.meta.env.BASE_URL,
+    basename: basePath ?? import.meta.env.BASE_URL,
   });
 };
