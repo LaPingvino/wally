@@ -922,7 +922,7 @@ index be2f204e..a0f3bf39 100644
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e1ff1052..b3c421da 100644
+index e1ff1052..171c730d 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -238,6 +238,14 @@ export function SystemNotification() {
@@ -956,7 +956,7 @@ index e1ff1052..b3c421da 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
-@@ -316,6 +329,24 @@ export function SystemNotification() {
+@@ -316,6 +329,27 @@ export function SystemNotification() {
            after={<SelectCallRingScope />}
          />
        </SequenceCard>
@@ -968,12 +968,15 @@ index e1ff1052..b3c421da 100644
 +      >
 +        <SettingTile
 +          title="Unread Inbox Notifications (Experimental)"
-+          description="Send a system notification when new rooms appear in your Unread inbox. Requires Desktop Notifications to be granted."
++          description="Send a system notification when new rooms appear in your Unread inbox."
 +          after={
 +            <Switch
-+              disabled={notifPermission !== 'granted'}
++              disabled={notifPermission === 'denied'}
 +              value={inboxUnreadNotifications}
-+              onChange={setInboxUnreadNotifications}
++              onChange={(v) => {
++                if (v && notifPermission === 'prompt') requestNotificationPermission();
++                setInboxUnreadNotifications(v);
++              }}
 +            />
 +          }
 +        />
