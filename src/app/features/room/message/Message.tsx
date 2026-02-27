@@ -79,6 +79,19 @@ import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
 import { PowerIcon } from '../../../components/power';
 import colorMXID from '../../../../util/colorMXID';
 import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
+import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
+
+function InlinePronouns({ userId }: { userId: string }) {
+  const [profile] = useExtendedProfile(userId);
+  const pronouns = profile?.['io.fsky.nyx.pronouns'];
+  if (!pronouns?.length) return null;
+  const summary = pronouns.map((p) => p.summary).join(', ');
+  return (
+    <span style={{ opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>
+      {' '}({summary})
+    </span>
+  );
+}
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -763,6 +776,7 @@ export const Message = as<'div', MessageProps>(
               truncate
             >
               <UsernameBold>{senderDisplayName}</UsernameBold>
+              <InlinePronouns userId={senderId} />
             </Text>
           </Username>
           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
