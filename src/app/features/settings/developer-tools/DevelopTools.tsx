@@ -48,6 +48,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
 
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+  const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
   const [globalExpand, setGlobalExpand] = useState(false);
   const [profileExpand, setProfileExpand] = useState(false);
@@ -132,6 +133,27 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
             <Scroll hideTrack visibility="Hover">
               <PageContent>
                 <Box direction="Column" gap="700">
+                  <Box direction="Column" gap="100">
+                    <Text size="L400">Experimental Features</Text>
+                    <SequenceCard
+                      className={SequenceCardStyle}
+                      variant="SurfaceVariant"
+                      direction="Column"
+                      gap="400"
+                    >
+                      <SettingTile
+                        title="Issue Tracker"
+                        description="Enable per-room issue tracker (experimental)."
+                        after={
+                          <Switch
+                            variant="Primary"
+                            value={issueTracker}
+                            onChange={setIssueTracker}
+                          />
+                        }
+                      />
+                    </SequenceCard>
+                  </Box>
                   <Box direction="Column" gap="100">
                     <Text size="L400">Options</Text>
                     <SequenceCard
