@@ -1,0 +1,234 @@
+diff --git a/index.html b/index.html
+index 2eefeee2cd..de257cedf1 100644
+--- a/index.html
++++ b/index.html
+@@ -4,8 +4,8 @@
+     <meta charset="UTF-8" />
+     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+-    <title>Cinny</title>
+-    <meta name="name" content="Cinny" />
++    <title>Wally</title>
++    <meta name="name" content="Wally" />
+     <meta name="author" content="Ajay Bura" />
+     <meta
+       name="description"
+@@ -16,7 +16,7 @@
+       content="cinny, cinnyapp, cinnychat, matrix, matrix client, matrix.org, element"
+     />
+ 
+-    <meta property="og:title" content="Cinny" />
++    <meta property="og:title" content="Wally" />
+     <meta property="og:url" content="https://cinny.in" />
+     <meta property="og:image" content="https://cinny.in/assets/favicon-48x48.png" />
+     <meta
+@@ -29,8 +29,8 @@
+ 
+     <link rel="manifest" href="/manifest.json" />
+     <meta name="mobile-web-app-capable" content="yes" />
+-    <meta name="application-name" content="Cinny" />
+-    <meta name="apple-mobile-web-app-title" content="Cinny" />
++    <meta name="application-name" content="Wally" />
++    <meta name="apple-mobile-web-app-title" content="Wally" />
+     <meta name="apple-mobile-web-app-capable" content="yes" />
+     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+ 
+diff --git a/public/manifest.json b/public/manifest.json
+index acdcd00424..3a029796b8 100644
+--- a/public/manifest.json
++++ b/public/manifest.json
+@@ -1,7 +1,7 @@
+ {
+-  "name": "Cinny",
+-  "short_name": "Cinny",
+-  "description": "Yet another matrix client",
++  "name": "Wally",
++  "short_name": "Wally",
++  "description": "A Cinny fork with Element Call, accessibility, and more",
+   "dir": "auto",
+   "lang": "en-US",
+   "display": "standalone",
+diff --git a/src/app/components/splash-screen/SplashScreen.tsx b/src/app/components/splash-screen/SplashScreen.tsx
+index 27adadbade..0d1e28774f 100644
+--- a/src/app/components/splash-screen/SplashScreen.tsx
++++ b/src/app/components/splash-screen/SplashScreen.tsx
+@@ -21,7 +21,7 @@
+         justifyContent="Center"
+       >
+         <Text size="H2" align="Center">
+-          Cinny
++          Wally
+         </Text>
+       </Box>
+     </Box>
+diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
+index 97aec97e00..f29cda39ad 100644
+--- a/src/app/features/settings/about/About.tsx
++++ b/src/app/features/settings/about/About.tsx
+@@ -39,22 +39,22 @@
+                   <img
+                     style={{ width: toRem(60), height: toRem(60) }}
+                     src={CinnySVG}
+-                    alt="Cinny logo"
++                    alt="Wally logo"
+                   />
+                 </Box>
+                 <Box direction="Column" gap="300">
+                   <Box direction="Column" gap="100">
+                     <Box gap="100" alignItems="End">
+-                      <Text size="H3">Cinny</Text>
++                      <Text size="H3">Wally</Text>
+                       <Text size="T200">v4.10.5</Text>
+                     </Box>
+-                    <Text>Yet another matrix client.</Text>
++                    <Text>A Cinny fork.</Text>
+                   </Box>
+ 
+                   <Box gap="200" wrap="Wrap">
+                     <Button
+                       as="a"
+-                      href="https://github.com/cinnyapp/cinny"
++                      href="https://codeberg.org/lapingvino/cinny"
+                       rel="noreferrer noopener"
+                       target="_blank"
+                       variant="Secondary"
+diff --git a/src/app/pages/auth/AuthLayout.tsx b/src/app/pages/auth/AuthLayout.tsx
+index bb747cfc48..63e29c3ae1 100644
+--- a/src/app/pages/auth/AuthLayout.tsx
++++ b/src/app/pages/auth/AuthLayout.tsx
+@@ -134,8 +134,8 @@
+         <Box direction="Column" className={css.AuthCard}>
+           <Header className={css.AuthHeader} size="600" variant="Surface">
+             <Box grow="Yes" direction="Row" gap="300" alignItems="Center">
+-              <img className={css.AuthLogo} src={CinnySVG} alt="Cinny Logo" />
+-              <Text size="H3">Cinny</Text>
++              <img className={css.AuthLogo} src={CinnySVG} alt="Wally Logo" />
++              <Text size="H3">Wally</Text>
+             </Box>
+           </Header>
+           <Box className={css.AuthCardContent} direction="Column">
+diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
+index 79630990e6..127a11ea22 100644
+--- a/src/app/pages/client/WelcomePage.tsx
++++ b/src/app/pages/client/WelcomePage.tsx
+@@ -3,6 +3,21 @@
+ import { Page, PageHero, PageHeroSection } from '../../components/page';
+ import CinnySVG from '../../../../public/res/svg/cinny.svg';
+ 
++const PATCHES: Array<{ name: string; desc: string }> = [
++  { name: 'emoji-font', desc: 'Custom emoji font with Bahá\'í symbols' },
++  { name: 'element-call', desc: 'Voice and video calling via Element Call' },
++  { name: 'pronouns', desc: 'Pronouns, timezone, and extended profile fields' },
++  { name: 'call-settings', desc: 'Configurable ringtone and call notification sounds' },
++  { name: 'login-a11y', desc: 'Screen-reader labels on all login forms' },
++  { name: 'accessibility', desc: 'ARIA roles, keyboard shortcuts, and notification sounds' },
++  { name: 'issue-tracker', desc: 'Schema-driven issue board stored in Matrix room state' },
++  { name: 'multi-account', desc: 'Multiple Matrix accounts open simultaneously' },
++  { name: 'threads', desc: 'Thread panel for viewing and replying to threads' },
++  { name: 'idb-retry', desc: 'Automatic retry when IndexedDB fails on startup' },
++  { name: 'issue-widget', desc: 'Issue tracker as an embeddable Matrix Widget API widget' },
++  { name: 'ux-fixes', desc: 'Room sort options, inbox unread view, and navigation improvements' },
++];
++
+ export function WelcomePage() {
+   return (
+     <Page>
+@@ -14,11 +29,11 @@
+       >
+         <PageHeroSection>
+           <PageHero
+-            icon={<img width="70" height="70" src={CinnySVG} alt="Cinny Logo" />}
+-            title="Welcome to Cinny"
++            icon={<img width="70" height="70" src={CinnySVG} alt="Wally Logo" />}
++            title="Welcome to Wally"
+             subTitle={
+               <span>
+-                Yet another matrix client.{' '}
++                A Cinny fork.{' '}
+                 <a
+                   href="https://github.com/cinnyapp/cinny/releases"
+                   target="_blank"
+@@ -29,31 +44,58 @@
+               </span>
+             }
+           >
+-            <Box justifyContent="Center">
+-              <Box grow="Yes" style={{ maxWidth: toRem(300) }} direction="Column" gap="300">
+-                <Button
+-                  as="a"
+-                  href="https://github.com/cinnyapp/cinny"
+-                  target="_blank"
+-                  rel="noreferrer noopener"
+-                  before={<Icon size="200" src={Icons.Code} />}
+-                >
+-                  <Text as="span" size="B400" truncate>
+-                    Source Code
+-                  </Text>
+-                </Button>
+-                <Button
+-                  as="a"
+-                  href="https://cinny.in/#sponsor"
+-                  target="_blank"
+-                  rel="noreferrer noopener"
+-                  fill="Soft"
+-                  before={<Icon size="200" src={Icons.Heart} />}
+-                >
+-                  <Text as="span" size="B400" truncate>
+-                    Support
+-                  </Text>
+-                </Button>
++            <Box direction="Column" gap="500" alignItems="Center">
++              <Box justifyContent="Center">
++                <Box grow="Yes" style={{ maxWidth: toRem(300) }} direction="Column" gap="300">
++                  <Button
++                    as="a"
++                    href="https://codeberg.org/lapingvino/cinny"
++                    target="_blank"
++                    rel="noreferrer noopener"
++                    before={<Icon size="200" src={Icons.Code} />}
++                  >
++                    <Text as="span" size="B400" truncate>
++                      Source Code
++                    </Text>
++                  </Button>
++                  <Button
++                    as="a"
++                    href="https://cinny.in/#sponsor"
++                    target="_blank"
++                    rel="noreferrer noopener"
++                    fill="Soft"
++                    before={<Icon size="200" src={Icons.Heart} />}
++                  >
++                    <Text as="span" size="B400" truncate>
++                      Support Cinny
++                    </Text>
++                  </Button>
++                </Box>
++              </Box>
++              <Box direction="Column" gap="200" style={{ maxWidth: toRem(480) }}>
++                <Text size="L400">Active patches</Text>
++                <Box
++                  as="ul"
++                  direction="Column"
++                  gap="100"
++                  style={{ margin: 0, paddingLeft: config.space.S400 }}
++                >
++                  {PATCHES.map(({ name, desc }) => (
++                    <li key={name}>
++                      <Text size="T300">
++                        <a
++                          href={`https://codeberg.org/lapingvino/cinny/src/branch/${name}`}
++                          target="_blank"
++                          rel="noreferrer noopener"
++                        >
++                          {name}
++                        </a>
++                        {' \u2014 '}
++                        {desc}
++                      </Text>
++                    </li>
++                  ))}
++                </Box>
+               </Box>
+             </Box>
+           </PageHero>
