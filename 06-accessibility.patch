@@ -922,10 +922,105 @@ index be2f204e..a0f3bf39 100644
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e1ff1052..171c730d 100644
+index e1ff1052..900806de 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
-@@ -238,6 +238,14 @@ export function SystemNotification() {
+@@ -172,6 +172,94 @@ function RingtoneUrlInput() {
+   );
+ }
+ 
++const BATCH_DELAY_OPTIONS: { value: number; label: string }[] = [
++  { value: 0, label: 'Immediately' },
++  { value: 30, label: '30 seconds' },
++  { value: 60, label: '1 minute' },
++  { value: 300, label: '5 minutes' },
++  { value: 600, label: '10 minutes' },
++];
++
++function BatchDelayMenu({
++  selected,
++  onSelect,
++}: {
++  selected: number;
++  onSelect: (v: number) => void;
++}) {
++  return (
++    <Menu>
++      {BATCH_DELAY_OPTIONS.map((opt) => (
++        <MenuItem
++          key={opt.value}
++          variant="Surface"
++          radii="300"
++          aria-selected={selected === opt.value}
++          onClick={() => onSelect(opt.value)}
++        >
++          <Text size="T300">{opt.label}</Text>
++        </MenuItem>
++      ))}
++    </Menu>
++  );
++}
++
++function SelectBatchDelay() {
++  const [batchDelay, setBatchDelay] = useSetting(settingsAtom, 'inboxNotifBatchDelay');
++  const [menuCords, setMenuCords] = useState<RectCords>();
++
++  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++
++  const handleSelect = (v: number) => {
++    setBatchDelay(v);
++    setMenuCords(undefined);
++  };
++
++  const currentLabel =
++    BATCH_DELAY_OPTIONS.find((o) => o.value === (batchDelay ?? 60))?.label ?? '1 minute';
++
++  return (
++    <>
++      <Button
++        size="300"
++        variant="Primary"
++        outlined
++        fill="Soft"
++        radii="300"
++        after={<Icon size="300" src={Icons.ChevronBottom} />}
++        onClick={handleMenu}
++      >
++        <Text size="T300">{currentLabel}</Text>
++      </Button>
++      <PopOut
++        anchor={menuCords}
++        offset={5}
++        position="Bottom"
++        align="End"
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: () => setMenuCords(undefined),
++              clickOutsideDeactivates: true,
++              isKeyForward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
++              isKeyBackward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
++              escapeDeactivates: stopPropagation,
++              tabbableOptions: { iFrameSelector: '' },
++            }}
++          >
++            <BatchDelayMenu selected={batchDelay ?? 60} onSelect={handleSelect} />
++          </FocusTrap>
++        }
++      />
++    </>
++  );
++}
++
+ function SelectCallRingScope() {
+   const [callRingScope, setCallRingScope] = useSetting(settingsAtom, 'callRingScope');
+   const [menuCords, setMenuCords] = useState<RectCords>();
+@@ -238,6 +326,14 @@ export function SystemNotification() {
      settingsAtom,
      'isNotificationSounds'
    );
@@ -940,7 +1035,7 @@ index e1ff1052..171c730d 100644
  
    const requestNotificationPermission = () => {
      window.Notification.requestPermission();
-@@ -288,9 +296,14 @@ export function SystemNotification() {
+@@ -288,9 +384,14 @@ export function SystemNotification() {
        >
          <SettingTile
            title="Notification Sound"
@@ -956,7 +1051,7 @@ index e1ff1052..171c730d 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
-@@ -316,6 +329,27 @@ export function SystemNotification() {
+@@ -316,6 +417,34 @@ export function SystemNotification() {
            after={<SelectCallRingScope />}
          />
        </SequenceCard>
@@ -980,6 +1075,13 @@ index e1ff1052..171c730d 100644
 +            />
 +          }
 +        />
++        {inboxUnreadNotifications && (
++          <SettingTile
++            title="Notification Batch Interval"
++            description="Minimum time between unread notifications. 'Immediately' fires within ~1 second."
++            after={<SelectBatchDelay />}
++          />
++        )}
 +      </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
@@ -1348,28 +1450,44 @@ index bea09a92..d600c610 100644
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index e0977d97..e5100623 100644
+index e0977d97..c6a30036 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
  import { useAtomValue } from 'jotai';
- import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
+-import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
++import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
  import { useNavigate } from 'react-router-dom';
 -import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
 +import { MatrixEvent, Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
  import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
  import LogoSVG from '../../../../public/res/svg/cinny.svg';
  import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
-@@ -14,7 +14,7 @@ import { EmojiFont, settingsAtom } from '../../state/settings';
+@@ -14,7 +14,15 @@ import { EmojiFont, settingsAtom } from '../../state/settings';
  import { allInvitesAtom } from '../../state/room-list/inviteList';
  import { usePreviousValue } from '../../hooks/usePreviousValue';
  import { useMatrixClient } from '../../hooks/useMatrixClient';
 -import { getInboxInvitesPath, getInboxNotificationsPath } from '../pathUtils';
-+import { getInboxInvitesPath, getInboxNotificationsPath, getInboxUnreadPath } from '../pathUtils';
++import {
++  getDirectRoomPath,
++  getHomeRoomPath,
++  getInboxInvitesPath,
++  getInboxNotificationsPath,
++  getInboxUnreadPath,
++  getSpacePath,
++  getSpaceRoomPath,
++} from '../pathUtils';
  import {
    getMemberDisplayName,
    getNotificationType,
-@@ -26,6 +26,12 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+@@ -22,10 +30,18 @@ import {
+   isNotificationEvent,
+ } from '../../utils/room';
+ import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
+-import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
++import { getCanonicalAliasOrRoomId, getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
++import { mDirectAtom } from '../../state/mDirectList';
++import { roomToParentsAtom } from '../../state/room/roomToParents';
  import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -1382,7 +1500,7 @@ index e0977d97..e5100623 100644
  
  function SystemEmojiFeature() {
    const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-@@ -139,10 +145,12 @@ function MessageNotifications() {
+@@ -139,10 +155,12 @@ function MessageNotifications() {
    const audioRef = useRef<HTMLAudioElement>(null);
    const notifRef = useRef<Notification>();
    const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
@@ -1395,7 +1513,7 @@ index e0977d97..e5100623 100644
  
    const navigate = useNavigate();
    const notificationSelected = useInboxNotificationsSelected();
-@@ -193,7 +201,6 @@ function MessageNotifications() {
+@@ -193,7 +211,6 @@ function MessageNotifications() {
        data
      ) => {
        if (mx.getSyncState() !== 'SYNCING') return;
@@ -1403,7 +1521,7 @@ index e0977d97..e5100623 100644
        if (
          !room ||
          !data.liveEvent ||
-@@ -206,7 +213,7 @@ function MessageNotifications() {
+@@ -206,7 +223,7 @@ function MessageNotifications() {
  
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
@@ -1412,7 +1530,7 @@ index e0977d97..e5100623 100644
        const unreadInfo = getUnreadInfo(room);
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
-@@ -219,31 +226,88 @@ function MessageNotifications() {
+@@ -219,31 +236,88 @@ function MessageNotifications() {
          return;
        }
  
@@ -1514,7 +1632,7 @@ index e0977d97..e5100623 100644
      notificationSelected,
      showNotifications,
      playSound,
-@@ -260,6 +324,50 @@ function MessageNotifications() {
+@@ -260,6 +334,166 @@ function MessageNotifications() {
    );
  }
  
@@ -1522,42 +1640,158 @@ index e0977d97..e5100623 100644
 +  const mx = useMatrixClient();
 +  const navigate = useNavigate();
 +  const roomToUnread = useAtomValue(roomToUnreadAtom);
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
 +  const [inboxUnreadNotifications] = useSetting(settingsAtom, 'inboxUnreadNotifications');
++  const [notifBatchDelay] = useSetting(settingsAtom, 'inboxNotifBatchDelay');
++
 +  const notifRef = useRef<Notification>();
++  const pendingRoomsRef = useRef<Set<string>>(new Set());
++  const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 +
-+  // Count rooms with direct unreads (u.from === null excludes space aggregate entries)
-+  let unreadRoomCount = 0;
-+  roomToUnread.forEach((u) => { if (u.total > 0 && u.from === null) unreadRoomCount++; });
++  // Stable ref to latest values — safe to read from inside setTimeout callbacks
++  const latestRef = useRef({ mx, navigate, mDirects, roomToParents, inboxUnreadNotifications, notifBatchDelay });
++  latestRef.current = { mx, navigate, mDirects, roomToParents, inboxUnreadNotifications, notifBatchDelay };
 +
-+  const prevUnreadRoomCount = usePreviousValue(unreadRoomCount, 0);
++  // fireNow: flush pending rooms → single notification, then start cooldown
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  const fireNow = useCallback(() => {
++    const rooms = Array.from(pendingRoomsRef.current);
++    pendingRoomsRef.current.clear();
++    if (rooms.length === 0) return;
++    if (!latestRef.current.inboxUnreadNotifications) return;
 +
-+  useEffect(() => {
-+    if (!inboxUnreadNotifications) return;
-+    if (unreadRoomCount <= prevUnreadRoomCount) return;
-+    if (mx.getSyncState() !== 'SYNCING') return;
-+    if (!notificationPermission('granted')) return;
-+    if (document.hasFocus()) return;
++    const { mx: m, navigate: nav, mDirects: dms, roomToParents: rtp } = latestRef.current;
++    const count = rooms.length;
++    const title =
++      count === 1
++        ? (m.getRoom(rooms[0])?.name ?? 'New unread message')
++        : `${count} new unread rooms`;
 +
-+    const newCount = unreadRoomCount - prevUnreadRoomCount;
-+    const noti = new window.Notification(
-+      newCount === 1 ? 'New unread message' : `${newCount} new unread rooms`,
-+      {
-+        icon: LogoSVG,
-+        badge: LogoSVG,
-+        body: 'New messages are waiting in your inbox.',
-+        silent: true,
++    // For single-room: show sender + message body; encrypted rooms show generic text
++    let body = count === 1 ? 'New unread message' : `${count} rooms have new messages.`;
++    if (count === 1) {
++      const room = m.getRoom(rooms[0]);
++      const events = room?.getLiveTimeline()?.getEvents() ?? [];
++      const lastMsg = [...events].reverse().find((ev) => ev.getType() === 'm.room.message');
++      if (lastMsg) {
++        const msgBody = lastMsg.getContent()?.body as string | undefined;
++        const sender = lastMsg.getSender();
++        const senderName = sender
++          ? (room ? (getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender)) : getMxIdLocalPart(sender)) ?? sender
++          : undefined;
++        if (msgBody) {
++          const trimmed = msgBody.length > 120 ? `${msgBody.slice(0, 120)}\u2026` : msgBody;
++          body = senderName ? `${senderName}: ${trimmed}` : trimmed;
++        }
 +      }
-+    );
++    }
 +
++    const noti = new window.Notification(title, {
++      icon: LogoSVG,
++      badge: LogoSVG,
++      body,
++      silent: true,
++    });
++
++    const capturedRooms = rooms;
 +    noti.onclick = () => {
-+      if (!window.closed) navigate(getInboxUnreadPath());
++      if (!window.closed) {
++        if (capturedRooms.length === 1) {
++          const roomId = capturedRooms[0];
++          const { mx: m2, navigate: nav2, mDirects: dms2, roomToParents: rtp2 } =
++            latestRef.current;
++          const room = m2.getRoom(roomId);
++          if (!room) {
++            nav2(getInboxUnreadPath());
++          } else {
++            const rIdOrAlias = getCanonicalAliasOrRoomId(m2, roomId);
++            if (room.isSpaceRoom()) {
++              nav2(getSpacePath(rIdOrAlias));
++            } else if (dms2.has(roomId)) {
++              nav2(getDirectRoomPath(rIdOrAlias));
++            } else {
++              const parents = rtp2.get(roomId);
++              if (parents && parents.size > 0) {
++                nav2(
++                  getSpaceRoomPath(
++                    getCanonicalAliasOrRoomId(m2, Array.from(parents)[0]),
++                    rIdOrAlias
++                  )
++                );
++              } else {
++                nav2(getHomeRoomPath(rIdOrAlias));
++              }
++            }
++          }
++        } else {
++          latestRef.current.navigate(getInboxUnreadPath());
++        }
++      }
 +      noti.close();
 +      notifRef.current = undefined;
 +    };
 +
 +    notifRef.current?.close();
 +    notifRef.current = noti;
-+  }, [mx, navigate, unreadRoomCount, prevUnreadRoomCount, inboxUnreadNotifications]);
++
++    // Start cooldown; when it ends, fire again if more rooms accumulated
++    const cooldownMs = Math.max((latestRef.current.notifBatchDelay ?? 60) * 1000, 1000);
++    cooldownRef.current = setTimeout(() => {
++      cooldownRef.current = null;
++      if (pendingRoomsRef.current.size > 0) fireNow();
++    }, cooldownMs);
++  }, []); // stable — reads only from refs
++
++  // Build list of rooms currently with direct unreads
++  const unreadRoomIds = useMemo(() => {
++    const ids: string[] = [];
++    roomToUnread.forEach((u, roomId) => {
++      if (u.total > 0 && u.from === null) ids.push(roomId);
++    });
++    return ids;
++  }, [roomToUnread]);
++
++  const prevUnreadRoomIds = usePreviousValue(unreadRoomIds, []);
++
++  // Close notification + cancel cooldown when setting is turned off
++  useEffect(() => {
++    if (!inboxUnreadNotifications) {
++      notifRef.current?.close();
++      notifRef.current = undefined;
++      if (cooldownRef.current !== null) {
++        clearTimeout(cooldownRef.current);
++        cooldownRef.current = null;
++      }
++      pendingRoomsRef.current.clear();
++    }
++  }, [inboxUnreadNotifications]);
++
++  useEffect(() => {
++    if (!inboxUnreadNotifications) return;
++    if (mx.getSyncState() !== 'SYNCING') return;
++    if (!notificationPermission('granted')) return;
++    if (document.hasFocus()) return;
++
++    // Find rooms newly unread since last render
++    const prevSet = new Set(prevUnreadRoomIds);
++    const newRoomIds = unreadRoomIds.filter((id) => !prevSet.has(id));
++    if (newRoomIds.length === 0) return;
++
++    newRoomIds.forEach((id) => pendingRoomsRef.current.add(id));
++
++    if (cooldownRef.current === null) {
++      // Not in cooldown: schedule initial notification.
++      // Use a short debounce to batch simultaneous messages, capped at configured delay.
++      const batchMs = (notifBatchDelay ?? 60) * 1000;
++      const debounceMs = batchMs === 0 ? 1_000 : Math.min(batchMs, 3_000);
++      cooldownRef.current = setTimeout(() => {
++        cooldownRef.current = null;
++        fireNow();
++      }, debounceMs);
++    }
++    // If in cooldown: rooms accumulate in pendingRoomsRef, fired when cooldown ends
++  }, [mx, unreadRoomIds, prevUnreadRoomIds, inboxUnreadNotifications, notifBatchDelay, fireNow]);
 +
 +  return null;
 +}
@@ -1565,7 +1799,7 @@ index e0977d97..e5100623 100644
  type ClientNonUIFeaturesProps = {
    children: ReactNode;
  };
-@@ -272,6 +380,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
+@@ -272,6 +506,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
        <FaviconUpdater />
        <InviteNotifications />
        <MessageNotifications />
@@ -2207,27 +2441,50 @@ index 1ca7e7de..795b484b 100644
    }, [mx, memberships, setRoomsAtom]);
  };
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 52679837..315cb4d4 100644
+index 52679837..95f3ec30 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -42,6 +42,8 @@ export interface Settings {
+@@ -42,6 +42,10 @@ export interface Settings {
  
    showNotifications: boolean;
    isNotificationSounds: boolean;
 +  inRoomActivitySound: boolean;
 +  inboxUnreadNotifications: boolean;
++  // Minimum seconds between inbox unread notifications (0 = ~1s debounce only)
++  inboxNotifBatchDelay: number;
    callRingScope: 'dm' | 'nonVoice' | 'all';
    callRingtoneUrl: string | null;
  
-@@ -78,6 +80,8 @@ const defaultSettings: Settings = {
+@@ -49,6 +53,9 @@ export interface Settings {
+   dateFormatString: string;
+ 
+   developerTools: boolean;
++  issueTracker: boolean;
++  multiAccount: boolean;
++  roomSortOrder: 'activity' | 'az' | 'unread';
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -78,6 +85,9 @@ const defaultSettings: Settings = {
  
    showNotifications: true,
    isNotificationSounds: true,
 +  inRoomActivitySound: true,
 +  inboxUnreadNotifications: false,
++  inboxNotifBatchDelay: 60,
    callRingScope: 'nonVoice',
    callRingtoneUrl: null,
  
+@@ -85,6 +95,9 @@ const defaultSettings: Settings = {
+   dateFormatString: 'D MMM YYYY',
+ 
+   developerTools: false,
++  issueTracker: false,
++  multiAccount: false,
++  roomSortOrder: 'activity',
+ };
+ 
+ export const getSettings = () => {
 diff --git a/src/app/utils/announce.ts b/src/app/utils/announce.ts
 new file mode 100644
 index 00000000..c854ce58

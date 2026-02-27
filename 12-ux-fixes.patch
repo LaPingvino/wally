@@ -1093,25 +1093,25 @@ index 9cf4bfb9..024e962a 100644
  export const SPACE_SETTINGS_PATH = '/space-settings/';
  
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 260db1c0..9759a997 100644
+index 5ac46b05..6c5f8f03 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -53,6 +53,7 @@ export interface Settings {
+   hour24Clock: boolean;
+   multiAccount: boolean;
+   dateFormatString: string;
++  roomSortOrder: 'activity' | 'az' | 'unread';
+ 
    developerTools: boolean;
    issueTracker: boolean;
-   multiAccount: boolean;
-+  roomSortOrder: 'activity' | 'az' | 'unread';
- }
- 
- const defaultSettings: Settings = {
 @@ -93,6 +94,7 @@ const defaultSettings: Settings = {
-   developerTools: false,
-   issueTracker: false,
    multiAccount: false,
+   inboxNotifBatchDelay: 60,
+   callRingScope: 'nonVoice',
 +  roomSortOrder: 'activity',
- };
+   callRingtoneUrl: null,
  
- export const getSettings = () => {
+   hour24Clock: false,
 diff --git a/src/app/utils/sort.ts b/src/app/utils/sort.ts
 index 512c1998..b0534729 100644
 --- a/src/app/utils/sort.ts
