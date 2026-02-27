@@ -123,9 +123,10 @@ interface RoomInputProps {
   fileDropContainerRef: RefObject<HTMLElement>;
   roomId: string;
   room: Room;
+  threadId?: string;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-  ({ editor, fileDropContainerRef, roomId, room }, ref) => {
+  ({ editor, fileDropContainerRef, roomId, room, threadId }, ref) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
@@ -139,8 +140,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const powerLevels = usePowerLevelsContext();
     const creators = useRoomCreators(room);
 
-    const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
-    const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(roomId));
+    const draftKey = threadId ? `${roomId}_thread_${threadId}` : roomId;
+    const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(draftKey));
+    const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(draftKey));
     const replyUserID = replyDraft?.userId;
 
     const powerLevelTags = usePowerLevelTags(room, powerLevels);
@@ -360,7 +362,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         content.format = 'org.matrix.custom.html';
         content.formatted_body = formattedBody;
       }
-      if (replyDraft) {
+      if (threadId) {
+        // Sending a thread reply (thread-native, no fallback to main timeline)
+        content['m.relates_to'] = {
+          rel_type: RelationType.Thread,
+          event_id: threadId,
+          ...(replyDraft
+            ? {
+                'm.in_reply_to': { event_id: replyDraft.eventId },
+                is_falling_back: false,
+              }
+            : {}),
+        };
+      } else if (replyDraft) {
         content['m.relates_to'] = {
           'm.in_reply_to': {
             event_id: replyDraft.eventId,
@@ -377,7 +391,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       resetEditorHistory(editor);
       setReplyDraft(undefined);
       sendTypingStatus(false);
-    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
+    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
 
     const handleKeyDown: KeyboardEventHandler = useCallback(
       (evt) => {

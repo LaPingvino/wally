@@ -229,6 +229,7 @@ type RoomTimelineProps = {
   eventId?: string;
   roomInputRef: RefObject<HTMLElement>;
   editor: Editor;
+  threadId?: string;
 };
 
 const PAGINATION_LIMIT = 80;
@@ -273,7 +274,8 @@ const useTimelinePagination = (
   mx: MatrixClient,
   timeline: Timeline,
   setTimeline: Dispatch<SetStateAction<Timeline>>,
-  limit: number
+  limit: number,
+  getTimelinesForTop?: (top: EventTimeline) => EventTimeline[]
 ) => {
   const timelineRef = useRef(timeline);
   timelineRef.current = timeline;
@@ -290,7 +292,9 @@ const useTimelinePagination = (
       const topTimeline = linkedTimelines[0];
       const timelineMatch = (mt: EventTimeline) => (t: EventTimeline) => t === mt;
 
-      const newLTimelines = getLinkedTimelines(topTimeline);
+      const newLTimelines = getTimelinesForTop
+        ? getTimelinesForTop(topTimeline)
+        : getLinkedTimelines(topTimeline);
       const topTmIndex = newLTimelines.findIndex(timelineMatch(topTimeline));
       const topAddedTm = topTmIndex === -1 ? [] : newLTimelines.slice(0, topTmIndex);
 
@@ -298,16 +302,22 @@ const useTimelinePagination = (
         timelineToEventsCount(newLTimelines[topTmIndex]) - timelinesEventsCount[0];
       const offsetRange = getTimelinesEventsCount(topAddedTm) + (backwards ? topTmAddedEvt : 0);
 
-      setTimeline((currentTimeline) => ({
-        linkedTimelines: newLTimelines,
-        range:
+      setTimeline((currentTimeline) => {
+        const newStart = currentTimeline.range.start + offsetRange;
+        const newEnd = currentTimeline.range.end + offsetRange;
+        const newRange =
           offsetRange > 0
-            ? {
-                start: currentTimeline.range.start + offsetRange,
-                end: currentTimeline.range.end + offsetRange,
-              }
-            : { ...currentTimeline.range },
-      }));
+            ? newStart === newEnd
+              ? (() => {
+                  // Zero-width range (happens on initial empty thread timeline):
+                  // show the most recent events instead of preserving an empty window.
+                  const total = getTimelinesEventsCount(newLTimelines);
+                  return { start: Math.max(total - limit, 0), end: total };
+                })()
+              : { start: newStart, end: newEnd }
+            : { ...currentTimeline.range };
+        return { linkedTimelines: newLTimelines, range: newRange };
+      });
     };
 
     return async (backwards: boolean) => {
@@ -358,12 +368,43 @@ const useTimelinePagination = (
         recalibratePagination(lTimelines, timelinesEventsCount, backwards);
       }
     };
-  }, [mx, alive, setTimeline, limit]);
+  }, [mx, alive, setTimeline, limit, getTimelinesForTop]);
   return handleTimelinePagination;
 };
 
-const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void) => {
+const useLiveEventArrive = (
+  room: Room,
+  onArrive: (mEvent: MatrixEvent) => void,
+  threadId?: string
+) => {
   useEffect(() => {
+    if (threadId) {
+      // Thread mode: listen on the room's live timeline and filter for this thread.
+      // We rely entirely on the main room timeline — no SDK Thread objects needed.
+      // Both stable ('m.thread') and unstable ('io.element.thread') rel_types are handled.
+      const handleRoomTimeline: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
+        mEvent,
+        _eventRoom,
+        _toStartOfTimeline,
+        _removed,
+        data
+      ) => {
+        if (!data.liveEvent) return;
+        const rel = mEvent.getContent()?.['m.relates_to'];
+        if (
+          rel?.rel_type !== 'm.thread' &&
+          rel?.rel_type !== 'io.element.thread'
+        ) return;
+        if (rel?.event_id !== threadId) return;
+        if (mEvent.isRedacted()) return;
+        onArrive(mEvent);
+      };
+      room.on(RoomEvent.Timeline, handleRoomTimeline);
+      return () => {
+        room.off(RoomEvent.Timeline, handleRoomTimeline);
+      };
+    }
+    // Room mode: listen for live timeline events
     const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
       mEvent,
       eventRoom,
@@ -385,7 +426,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
       room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
       room.removeListener(RoomEvent.Redaction, handleRedaction);
     };
-  }, [room, onArrive]);
+  }, [room, threadId, onArrive]);
 };
 
 const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
@@ -402,7 +443,39 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
   }, [room, onRefresh]);
 };
 
-const getInitialTimeline = (room: Room) => {
+const getInitialTimeline = (room: Room, threadId?: string) => {
+  if (threadId) {
+    // Thread mode: scan main room timeline directly for thread events.
+    // Does NOT use SDK Thread objects — they're unreliable when hasServerSideSupport=0
+    // (canContain rejects stable 'm.thread' rel_type, resetLiveTimeline can wipe data).
+    const mainTimeline = room.getUnfilteredTimelineSet().getLiveTimeline();
+    const threadEvents = mainTimeline.getEvents().filter((e) => {
+      if (e.isRedacted()) return false;
+      const rel = e.getContent()?.['m.relates_to'];
+      return (
+        (rel?.rel_type === 'm.thread' || rel?.rel_type === 'io.element.thread') &&
+        rel?.event_id === threadId
+      );
+    });
+    if (threadEvents.length === 0) return getEmptyTimeline();
+
+    // Create a synthetic EventTimelineSet (no filter → canContain returns true for all events,
+    // room arg sets correct roomId on events without registering in room.timelineSets).
+    const syntheticSet = new EventTimelineSet(room, {});
+    const syntheticTimeline = syntheticSet.getLiveTimeline();
+    for (const e of threadEvents) {
+      try {
+        syntheticSet.addEventToTimeline(e, syntheticTimeline, { toStartOfTimeline: false, addToState: false });
+      } catch (_) {
+        /* skip */
+      }
+    }
+    const evLen = syntheticTimeline.getEvents().length;
+    return {
+      linkedTimelines: [syntheticTimeline],
+      range: { start: 0, end: evLen },
+    };
+  }
   const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
   const evLength = getTimelinesEventsCount(linkedTimelines);
   return {
@@ -419,6 +492,19 @@ const getEmptyTimeline = () => ({
   linkedTimelines: [],
 });
 
+// Walk backward from liveTimeline staying within the same EventTimelineSet (thread-safe).
+// Prevents getLinkedTimelines() from crossing into the room's main timeline chain.
+const getThreadTimelines = (liveTimeline: EventTimeline): EventTimeline[] => {
+  const threadSet = liveTimeline.getTimelineSet();
+  const timelines: EventTimeline[] = [liveTimeline];
+  let cur = liveTimeline.getNeighbouringTimeline(Direction.Backward);
+  while (cur && cur.getTimelineSet() === threadSet) {
+    timelines.unshift(cur);
+    cur = cur.getNeighbouringTimeline(Direction.Backward);
+  }
+  return timelines;
+};
+
 const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
   const readUptoEventId = room.getEventReadUpTo(room.client.getUserId() ?? '');
   if (!readUptoEventId) return undefined;
@@ -431,7 +517,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
   };
 };
 
-export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimelineProps) {
+export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: RoomTimelineProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -454,7 +540,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const ignoredUsersList = useIgnoredUsers();
   const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
 
-  const setReplyDraft = useSetAtom(roomIdToReplyDraftAtomFamily(room.roomId));
+  const replyDraftKey = threadId ? `${room.roomId}_thread_${threadId}` : room.roomId;
+  const setReplyDraft = useSetAtom(roomIdToReplyDraftAtomFamily(replyDraftKey));
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
 
@@ -487,7 +574,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
 
   const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
 
-  const [unreadInfo, setUnreadInfo] = useState(() => getRoomUnreadInfo(room, true));
+  const [unreadInfo, setUnreadInfo] = useState(() => threadId ? undefined : getRoomUnreadInfo(room, true));
   const readUptoEventIdRef = useRef<string>();
   if (unreadInfo) {
     readUptoEventIdRef.current = unreadInfo.readUptoEventId;
@@ -536,11 +623,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   const parseMemberEvent = useMemberEventParser();
 
   const [timeline, setTimeline] = useState<Timeline>(() =>
-    eventId ? getEmptyTimeline() : getInitialTimeline(room)
+    eventId ? getEmptyTimeline() : getInitialTimeline(room, threadId)
   );
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
+  // Thread mode: the "live" end is always the last timeline in our synthetic linked list.
+  // This keeps liveTimelineLinked=true without depending on SDK Thread objects.
+  const currentLiveTimeline = threadId
+    ? timeline.linkedTimelines[timeline.linkedTimelines.length - 1]
+    : getLiveTimeline(room);
   const liveTimelineLinked =
-    timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === getLiveTimeline(room);
+    !!currentLiveTimeline &&
+    timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === currentLiveTimeline;
   const canPaginateBack =
     typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
   const rangeAtStart = timeline.range.start === 0;
@@ -552,7 +645,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     mx,
     timeline,
     setTimeline,
-    PAGINATION_LIMIT
+    PAGINATION_LIMIT,
+    threadId ? getThreadTimelines : undefined
   );
 
   const getScrollElement = useCallback(() => scrollRef.current, []);
@@ -598,10 +692,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     ),
     useCallback(() => {
       if (!alive()) return;
-      setTimeline(getInitialTimeline(room));
+      setTimeline(getInitialTimeline(room, threadId));
       scrollToBottomRef.current.count += 1;
       scrollToBottomRef.current.smooth = false;
-    }, [alive, room])
+    }, [alive, room, threadId])
   );
 
   useLiveEventArrive(
@@ -612,11 +706,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
         // keep paginating timeline and conditionally mark as read
         // otherwise we update timeline without paginating
         // so timeline can be updated with evt like: edits, reactions etc
+        if (threadId) {
+          // Thread mode: rebuild synthetic timeline from main room timeline
+          // (the new event is now in the main timeline, so getInitialTimeline picks it up).
+          setTimeline(getInitialTimeline(room, threadId));
+          if (atBottomRef.current) {
+            scrollToBottomRef.current.count += 1;
+            scrollToBottomRef.current.smooth = true;
+          }
+          return;
+        }
         if (atBottomRef.current) {
           if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
-            // Check if the document is in focus (user is actively viewing the app),
-            // and either there are no unread messages or the latest message is from the current user.
-            // If either condition is met, trigger the markAsRead function to send a read receipt.
             requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
           }
 
@@ -641,8 +742,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
           setUnreadInfo(getRoomUnreadInfo(room));
         }
       },
-      [mx, room, unreadInfo, hideActivity]
-    )
+      [mx, room, threadId, unreadInfo, hideActivity]
+    ),
+    threadId
   );
 
   const handleOpenEvent = useCallback(
@@ -678,11 +780,32 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
   useLiveTimelineRefresh(
     room,
     useCallback(() => {
-      if (liveTimelineLinked) {
-        setTimeline(getInitialTimeline(room));
-      }
-    }, [room, liveTimelineLinked])
+      // Always reinitialize: TimelineRefresh signals the SDK replaced the live
+      // timeline chain, so any stored range/indices against the old chain are
+      // invalid regardless of liveTimelineLinked state.
+      setTimeline(getInitialTimeline(room, threadId));
+      setAtBottom(true);
+      scrollToBottomRef.current.count += 1;
+      scrollToBottomRef.current.smooth = false;
+    }, [room, threadId])
   );
+
+  // Self-heal: if the range fell behind the live end while at the bottom
+  // (e.g. events arrived between a TimelineRefresh and re-render), snap back.
+  useEffect(() => {
+    if (liveTimelineLinked && !rangeAtEnd && atBottom) {
+      setTimeline(getInitialTimeline(room, threadId));
+    }
+  }, [liveTimelineLinked, rangeAtEnd, atBottom, room, threadId]);
+
+  // Thread mode: if liveTimelineLinked becomes false (synthetic timeline ref went stale),
+  // re-scan main room timeline to rebuild. No dependency on SDK Thread objects.
+  useEffect(() => {
+    if (!threadId || liveTimelineLinked) return;
+    const newTimeline = getInitialTimeline(room, threadId);
+    if (newTimeline.linkedTimelines.length === 0) return;
+    setTimeline(newTimeline);
+  }, [room, threadId, liveTimelineLinked]);
 
   // Stay at bottom when room editor resize
   useResizeObserver(
@@ -887,7 +1010,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
     if (eventId) {
       navigateRoom(room.roomId, undefined, { replace: true });
     }
-    setTimeline(getInitialTimeline(room));
+    setTimeline(getInitialTimeline(room, threadId));
     scrollToBottomRef.current.count += 1;
     scrollToBottomRef.current.smooth = false;
   };
