@@ -48,6 +48,13 @@ export interface Settings {
 
   showNotifications: boolean;
   isNotificationSounds: boolean;
+  inRoomActivitySound: boolean;
+  inboxUnreadNotifications: boolean;
+  // Minimum seconds between inbox unread notifications (0 = ~1s debounce only)
+  inboxNotifBatchDelay: number;
+  callRingScope: 'dm' | 'nonVoice' | 'all';
+  callRingtoneUrl: string | null;
+  callAutoJoin: boolean;
 
   hour24Clock: boolean;
   dateFormatString: string;
@@ -82,6 +89,12 @@ const defaultSettings: Settings = {
 
   showNotifications: true,
   isNotificationSounds: true,
+  inRoomActivitySound: true,
+  inboxUnreadNotifications: false,
+  inboxNotifBatchDelay: 60,
+  callRingScope: 'nonVoice',
+  callRingtoneUrl: null,
+  callAutoJoin: false,
 
   hour24Clock: false,
   dateFormatString: 'D MMM YYYY',

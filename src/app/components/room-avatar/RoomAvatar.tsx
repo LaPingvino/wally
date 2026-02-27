@@ -46,7 +46,8 @@ export const RoomIcon = forwardRef<
   Omit<ComponentProps<typeof Icon>, 'src'> & {
     joinRule?: JoinRule;
     roomType?: string;
+    locked?: boolean;
   }
->(({ joinRule, roomType, ...props }, ref) => (
-  <Icon src={getRoomIconSrc(Icons, roomType, joinRule)} {...props} ref={ref} />
+>(({ joinRule, roomType, locked, ...props }, ref) => (
+  <Icon src={getRoomIconSrc(Icons, roomType, joinRule, locked)} {...props} ref={ref} />
 ));

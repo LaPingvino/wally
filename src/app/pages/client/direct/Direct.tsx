@@ -51,6 +51,10 @@ import {
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
 import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
+import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
+import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
+import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
+import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 
 type DirectMenuProps = {
   requestClose: () => void;
@@ -196,6 +200,7 @@ export function Direct() {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 38,
     overscan: 10,
+    getItemKey: (index) => sortedDirects[index],
   });
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
@@ -253,7 +258,7 @@ export function Direct() {
                   return (
                     <VirtualTile
                       virtualItem={vItem}
-                      key={vItem.index}
+                      key={vItem.key}
                       ref={virtualizer.measureElement}
                     >
                       <RoomNavItem
@@ -275,6 +280,7 @@ export function Direct() {
           </Box>
         </PageNavContent>
       )}
+      <CallNavStatus />
     </PageNav>
   );
 }
