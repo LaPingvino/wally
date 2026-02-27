@@ -1,6 +1,8 @@
 /* eslint-disable jsx-a11y/media-has-caption */
 import React, { ReactNode, useCallback, useRef, useState } from 'react';
-import { Badge, Chip, Icon, IconButton, Icons, ProgressBar, Spinner, Text, toRem } from 'folds';
+import { Badge, Chip, Icon, IconButton, Icons, ProgressBar, Spinner, Text, Tooltip, TooltipProvider, toRem } from 'folds';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
 import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
 import { Range } from 'react-range';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -51,6 +53,8 @@ export function AudioContent({
 }: AudioContentProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
+  const [, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
+  const [ringtoneSet, setRingtoneSet] = useState(false);
 
   const [srcState, loadSrc] = useAsyncCallback(
     useCallback(async () => {
@@ -155,12 +159,37 @@ export function AudioContent({
     ),
     rightControl: (
       <>
+        {!encInfo && (
+          <TooltipProvider
+            position="Top"
+            offset={4}
+            tooltip={<Tooltip><Text>{ringtoneSet ? 'Ringtone set!' : 'Set as ringtone'}</Text></Tooltip>}
+          >
+            {(triggerRef) => (
+              <IconButton
+                ref={triggerRef}
+                variant={ringtoneSet ? "Success" : "SurfaceVariant"}
+                size="300"
+                radii="Pill"
+                onClick={() => {
+                  setCallRingtoneUrl(url);
+                  setRingtoneSet(true);
+                  setTimeout(() => setRingtoneSet(false), 2000);
+                }}
+                aria-label={ringtoneSet ? 'Ringtone set!' : 'Set as ringtone'}
+              >
+                <Icon src={ringtoneSet ? Icons.Check : Icons.Bell} size="50" />
+              </IconButton>
+            )}
+          </TooltipProvider>
+        )}
         <IconButton
           variant="SurfaceVariant"
           size="300"
           radii="Pill"
           onClick={() => setMute(!mute)}
           aria-pressed={mute}
+          aria-label={mute ? 'Unmute' : 'Mute'}
         >
           <Icon src={mute ? Icons.VolumeMute : Icons.VolumeHigh} size="50" />
         </IconButton>

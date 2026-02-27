@@ -23,8 +23,10 @@ import {
   Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import { Room } from 'matrix-js-sdk';
+import { EventTimeline, Room } from 'matrix-js-sdk';
+
 import { useStateEvent } from '../../hooks/useStateEvent';
+import { useRoomWidgets } from '../../hooks/useRoomWidgets';
 import { PageHeader } from '../../components/page';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -66,27 +68,61 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
+import { useCallState } from '../../pages/client/call/CallProvider';
 import { ContainerColor } from '../../styles/ContainerColor.css';
-import { RoomSettingsPage } from '../../state/roomSettings';
+import { useKeyDown } from '../../hooks/useKeyDown';
+import { isKeyHotkey } from 'is-hotkey';
+import { getIssueSchema } from '../issues/IssueBoard';
+import { useToolbarConfig } from '../../hooks/useToolbarConfig';
+import { ToolbarItemId } from '../../state/toolbarConfig';
+import { renderItemIcon } from './PanelIconPicker';
+import { activeWidgetIdAtom } from './WidgetsDrawer';
+import { useAtom } from 'jotai';
+
+type UnpinnedItem = {
+  id: ToolbarItemId;
+  label: string;
+  iconSrc?: (filled?: boolean) => React.JSX.Element;
+  active: boolean;
+  onToggle: () => void;
+};
 
 type RoomMenuProps = {
   room: Room;
   requestClose: () => void;
+  onOpenIssueBoard?: () => void;
+  onToggleThreadsDrawer?: () => void;
+  isThreadsDrawer?: boolean;
+  unpinnedItems?: UnpinnedItem[];
+  onPin?: (id: ToolbarItemId) => void;
 };
-const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
+const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard, onToggleThreadsDrawer, isThreadsDrawer, unpinnedItems, onPin }, ref) => {
   const mx = useMatrixClient();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const [issueTrackerEnabled] = useSetting(settingsAtom, 'issueTracker');
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
 
   const permissions = useRoomPermissions(creators, powerLevels);
   const canInvite = permissions.action('invite', mx.getSafeUserId());
+  // Check room creator directly from the create event (creatorsSupported returns false for
+  // room versions 1–11, which covers virtually all real rooms, breaking the creator bypass).
+  const roomCreateEvent = room
+    .getLiveTimeline()
+    .getState(EventTimeline.BACKWARDS)
+    ?.getStateEvents(StateEvent.RoomCreate, '');
+  const isRoomCreator = roomCreateEvent?.getSender() === mx.getSafeUserId();
+  const canConfigSchema =
+    isRoomCreator ||
+    permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
   const { navigateRoom } = useRoomNavigate();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
+
+  const hasIssueSchema = !!getIssueSchema(room);
 
   const handleMarkAsRead = () => {
     markAsRead(mx, room.roomId, hideActivity);
@@ -111,6 +147,17 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
     requestClose();
   };
 
+  const handleToggleThreads = () => {
+    onToggleThreadsDrawer?.();
+    requestClose();
+  };
+
+  const handleInitializeIssueTracker = () => {
+    // Open the issue board — when no schema exists, IssueBoard renders the schema editor inline.
+    onOpenIssueBoard?.();
+    requestClose();
+  };
+
   return (
     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
       {invitePrompt && (
@@ -121,6 +168,39 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             requestClose();
           }}
         />
+      )}
+      {unpinnedItems && unpinnedItems.length > 0 && (
+        <>
+          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+            {unpinnedItems.map((item) => (
+              <MenuItem
+                key={item.id}
+                size="300"
+                radii="300"
+                aria-pressed={item.active}
+                onClick={() => { item.onToggle(); requestClose(); }}
+                after={
+                  <Box gap="100" alignItems="Center">
+                    {item.iconSrc && <Icon size="100" src={item.iconSrc} />}
+                    <IconButton
+                      size="300"
+                      radii="300"
+                      onClick={(e) => { e.stopPropagation(); onPin?.(item.id); }}
+                      aria-label="Pin to toolbar"
+                    >
+                      <Icon src={Icons.Pin} size="100" />
+                    </IconButton>
+                  </Box>
+                }
+              >
+                <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                  {item.label}
+                </Text>
+              </MenuItem>
+            ))}
+          </Box>
+          <Line variant="Surface" size="300" />
+        </>
       )}
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
@@ -220,6 +300,26 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           )}
         </UseStateProvider>
       </Box>
+      {/* Experimental: Issue Tracker setup (requires experimental setting + admin rights) */}
+      {issueTrackerEnabled && canConfigSchema && !hasIssueSchema && (
+        <>
+          <Line variant="Surface" size="300" />
+          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+            <MenuItem
+              onClick={handleInitializeIssueTracker}
+              variant="Primary"
+              fill="None"
+              size="300"
+              after={<Icon size="100" src={Icons.CheckTwice} />}
+              radii="300"
+            >
+              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                Init Issue Tracker
+              </Text>
+            </MenuItem>
+          </Box>
+        </>
+      )}
       <Line variant="Surface" size="300" />
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <UseStateProvider initial={false}>
@@ -253,7 +353,17 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   );
 });
 
-export function RoomViewHeader({ callView }: { callView?: boolean }) {
+type RoomViewHeaderProps = {
+  isIssueBoard?: boolean;
+  onToggleIssueBoard?: () => void;
+  isThreadsDrawer?: boolean;
+  onToggleThreadsDrawer?: () => void;
+  isWidgetsDrawer?: boolean;
+  onToggleWidgetsDrawer?: () => void;
+  onTogglePeopleDrawer?: () => void;
+};
+
+export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDrawer, onToggleThreadsDrawer, isWidgetsDrawer, onToggleWidgetsDrawer, onTogglePeopleDrawer }: RoomViewHeaderProps) {
   const navigate = useNavigate();
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -264,17 +374,128 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const direct = useIsDirectRoom();
 
+  const { isChatOpen, isCallViewOpen, toggleChat, toggleCallView, setActiveCallRoomId, hangUp, activeCallRoomId } = useCallState();
+  // NOTE: isActiveCall hides the phone button and shows the chat toggle for active calls.
+  const isActiveCall = activeCallRoomId === room.roomId;
+
+  const powerLevels = usePowerLevelsContext();
+  const creators = useRoomCreators(room);
+  const permissions = useRoomPermissions(creators, powerLevels);
+  const canCall = permissions.stateEvent('org.matrix.msc3401.call.member', mx.getSafeUserId());
+  const roomWidgets = useRoomWidgets(room);
+  const canWriteIssues = permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
+  // Check room creator directly (creatorsSupported returns false for versions 1–11).
+  const headerCreateEvent = room
+    .getLiveTimeline()
+    .getState(EventTimeline.BACKWARDS)
+    ?.getStateEvents(StateEvent.RoomCreate, '');
+  const isHeaderRoomCreator = headerCreateEvent?.getSender() === mx.getSafeUserId();
+  const canConfigSchema =
+    isHeaderRoomCreator ||
+    permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
+
+  // Issues button is shown when schema exists AND user has rights to interact with issues.
+  const hasIssueSchema = !!getIssueSchema(room);
+  const showIssuesButton = hasIssueSchema && (canWriteIssues || canConfigSchema);
+
+  // NOTE: This handler is a new addition compared to the PR (hazre/cinny feat/element-call).
+  // The PR only adds a Chat toggle for voice rooms; this adds a Start Call button for
+  // regular and DM rooms so users can initiate Element Call from any room.
+  const handleStartCall = () => {
+    hangUp();
+    setActiveCallRoomId(room.roomId, true);
+  };
+
   const pinnedEvents = useRoomPinnedEvents(room);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
-  const encryptedRoom = !!encryptionEvent;
-  const avatarMxc = useRoomAvatar(room, direct);
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
+  const avatarMxc = useRoomAvatar(room);
   const avatarUrl = avatarMxc
     ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
     : undefined;
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+
+  // Toolbar config — pins, ordering, defaultMode, widget shortcuts
+  const { config: toolbarConfig, getEffective, setItem: setToolbarItem, removeItem: removeToolbarItem } = useToolbarConfig();
+  const [ctxMenu, setCtxMenu] = useState<{ anchor: RectCords; id: ToolbarItemId } | null>(null);
+  const [, setActiveWidgetId] = useAtom(activeWidgetIdAtom);
+
+  const handleContextMenu = (id: ToolbarItemId) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    setCtxMenu({ anchor: (e.currentTarget as HTMLElement).getBoundingClientRect(), id });
+  };
+
+  // Widget shortcut entries derived from config
+  type WidgetShortcutEntry = {
+    id: ToolbarItemId;
+    cfg: ReturnType<typeof getEffective>;
+    widget: (typeof roomWidgets)[number];
+  };
+  const widgetShortcutEntries: WidgetShortcutEntry[] = Object.entries(toolbarConfig)
+    .filter(([k]) => k.startsWith('widget:'))
+    .map(([id]) => {
+      const tid = id as ToolbarItemId;
+      return { id: tid, cfg: getEffective(tid), widget: roomWidgets.find((w) => `widget:${w.id}` === id) };
+    })
+    .filter((x): x is WidgetShortcutEntry => x.widget !== undefined)
+    .sort((a, b) => a.cfg.order - b.cfg.order);
+
+  // Unpinned panel items for overflow menu
+  const panelItems: UnpinnedItem[] = [
+    {
+      id: 'members' as ToolbarItemId,
+      label: peopleDrawer ? 'Hide Members' : 'Show Members',
+      iconSrc: Icons.User,
+      active: peopleDrawer,
+      onToggle: () => onTogglePeopleDrawer ? onTogglePeopleDrawer() : setPeopleDrawer((d) => !d),
+    },
+    {
+      id: 'threads' as ToolbarItemId,
+      label: isThreadsDrawer ? 'Hide Threads' : 'Show Threads',
+      iconSrc: Icons.Message,
+      active: isThreadsDrawer ?? false,
+      onToggle: () => onToggleThreadsDrawer?.(),
+    },
+    {
+      id: 'widgets' as ToolbarItemId,
+      label: isWidgetsDrawer ? 'Hide Widgets' : 'Show Widgets',
+      iconSrc: Icons.Category,
+      active: isWidgetsDrawer ?? false,
+      onToggle: () => onToggleWidgetsDrawer?.(),
+    },
+    {
+      id: 'issues' as ToolbarItemId,
+      label: isIssueBoard ? 'Show Chat' : 'Issue Tracker',
+      iconSrc: Icons.CheckTwice,
+      active: isIssueBoard ?? false,
+      onToggle: () => onToggleIssueBoard?.(),
+    },
+  ].filter((item) => {
+    if (screenSize !== ScreenSize.Desktop) return false;
+    if (getEffective(item.id).pinned) return false;
+    // Issues only appear if the room has a schema and user has rights
+    if (item.id === 'issues' && !showIssuesButton) return false;
+    // Threads/widgets need their toggle handlers
+    if (item.id === 'threads' && !onToggleThreadsDrawer) return false;
+    if (item.id === 'widgets' && !onToggleWidgetsDrawer) return false;
+    return true;
+  });
+
+  const unpinnedWidgetItems: UnpinnedItem[] = widgetShortcutEntries
+    .filter((x) => !x.cfg.pinned)
+    .map(({ id, cfg, widget }) => ({
+      id,
+      label: cfg.label ?? widget!.name,
+      active: isWidgetsDrawer ?? false,
+      onToggle: () => {
+        setActiveWidgetId(widget!.id);
+        onToggleWidgetsDrawer?.();
+      },
+    }));
+
+  const allUnpinnedItems = [...panelItems, ...unpinnedWidgetItems];
 
   const handleSearchClick = () => {
     const searchParams: _SearchPathSearchParams = {
@@ -314,7 +535,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
           <BackRouteHandler>
             {(onBack) => (
               <Box shrink="No" alignItems="Center">
-                <IconButton fill="None" onClick={onBack}>
+                <IconButton fill="None" onClick={onBack} aria-label="Go back">
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>
               </Box>
@@ -379,7 +600,105 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
         </Box>
 
         <Box shrink="No">
-          {!encryptedRoom && (
+          {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
+              Wobble here (left side of group) is less noticeable than at the right. */}
+
+          {/* Call button — hidden when canCall is false AND no call is active/running.
+              Unified: "Start Call" before a call, "Show/Hide Call" toggle once active. */}
+          {(canCall || isActiveCall || room.isCallRoom()) && !isIssueBoard && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>
+                    {(isActiveCall || room.isCallRoom())
+                      ? (isCallViewOpen ? 'Hide Call' : 'Show Call')
+                      : 'Start Call'}
+                  </Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={isActiveCall || room.isCallRoom() ? toggleCallView : handleStartCall}
+                  aria-label={
+                    (isActiveCall || room.isCallRoom())
+                      ? (isCallViewOpen ? 'Hide call' : 'Show call')
+                      : 'Start call'
+                  }
+                  aria-pressed={(isActiveCall || room.isCallRoom()) ? isCallViewOpen : undefined}
+                  aria-keyshortcuts={!isActiveCall && !room.isCallRoom() ? 'Alt+J' : undefined}
+                >
+                  <Icon
+                    size="400"
+                    src={Icons.Phone}
+                    filled={(isActiveCall || room.isCallRoom()) && isCallViewOpen}
+                  />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
+          {/* Chat toggle — hidden when no call is active */}
+          {(isActiveCall || room.isCallRoom()) && !isIssueBoard && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{isChatOpen ? 'Hide Chat' : 'Show Chat'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={toggleChat}
+                  aria-label={isChatOpen ? 'Hide chat' : 'Show chat'}
+                  aria-pressed={isChatOpen}
+                  aria-keyshortcuts="Alt+Shift+C"
+                >
+                  <Icon size="400" src={Icons.Message} filled={isChatOpen} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
+          {/* Issue board toggle — hidden when schema absent, insufficient rights, or unpinned */}
+          {showIssuesButton && getEffective('issues').pinned && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{isIssueBoard ? 'Show Chat' : 'Issue Tracker'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={onToggleIssueBoard}
+                  aria-pressed={isIssueBoard}
+                  aria-label={isIssueBoard ? 'Show chat' : 'Issue tracker'}
+                  onContextMenu={handleContextMenu('issues')}
+                >
+                  <Icon size="400" src={Icons.CheckTwice} filled={isIssueBoard} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
+          {/* BACK: stable buttons — always visible, greyed when temporarily unavailable.
+              The … menu is always the rightmost button; its position never changes. */}
+
+          {/* Search — greyed when issue board covers the chat */}
+          {!encryptionEvent && (
             <TooltipProvider
               position="Bottom"
               offset={4}
@@ -390,12 +709,14 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
               }
             >
               {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleSearchClick}>
+                <IconButton fill="None" ref={triggerRef} disabled={isIssueBoard} onClick={handleSearchClick} aria-label="Search room" aria-keyshortcuts="Alt+F">
                   <Icon size="400" src={Icons.Search} />
                 </IconButton>
               )}
             </TooltipProvider>
           )}
+
+          {/* Pinned messages — greyed when issue board covers the chat */}
           <TooltipProvider
             position="Bottom"
             offset={4}
@@ -409,9 +730,11 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
               <IconButton
                 fill="None"
                 style={{ position: 'relative' }}
+                disabled={isIssueBoard}
                 onClick={handleOpenPinMenu}
                 ref={triggerRef}
                 aria-pressed={!!pinMenuAnchor}
+                aria-label={`Pinned messages${pinnedEvents.length > 0 ? ` (${pinnedEvents.length} pinned)` : ''}`}
               >
                 {pinnedEvents.length > 0 && (
                   <Badge
@@ -454,13 +777,14 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
             }
           />
 
-          {screenSize === ScreenSize.Desktop && (
+          {/* Members — Desktop, pinnable */}
+          {screenSize === ScreenSize.Desktop && getEffective('members').pinned && (
             <TooltipProvider
               position="Bottom"
               offset={4}
               tooltip={
                 <Tooltip>
-                  {callView ? (
+                  {room.isCallRoom() ? (
                     <Text>Members</Text>
                   ) : (
                     <Text>{peopleDrawer ? 'Hide Members' : 'Show Members'}</Text>
@@ -469,13 +793,175 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
               }
             >
               {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleMemberToggle}>
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={onTogglePeopleDrawer ?? (() => setPeopleDrawer((d) => !d))}
+                  aria-label={peopleDrawer ? 'Hide members' : 'Show members'}
+                  aria-pressed={peopleDrawer}
+                  aria-keyshortcuts="Alt+P"
+                  onContextMenu={handleContextMenu('members')}
+                >
                   <Icon size="400" src={Icons.User} />
                 </IconButton>
               )}
             </TooltipProvider>
           )}
 
+          {/* Widgets — Desktop, pinnable */}
+          {screenSize === ScreenSize.Desktop && onToggleWidgetsDrawer && getEffective('widgets').pinned && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>
+                    {isWidgetsDrawer
+                      ? 'Hide Widgets'
+                      : roomWidgets.length > 0
+                      ? `Widgets (${roomWidgets.length})`
+                      : 'Widgets'}
+                  </Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={onToggleWidgetsDrawer}
+                  aria-pressed={isWidgetsDrawer}
+                  aria-label={isWidgetsDrawer ? 'Hide widgets panel' : 'Show widgets panel'}
+                  onContextMenu={handleContextMenu('widgets')}
+                >
+                  <Icon size="400" src={Icons.Category} filled={isWidgetsDrawer} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
+          {/* Threads — Desktop, pinnable */}
+          {screenSize === ScreenSize.Desktop && getEffective('threads').pinned && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{isThreadsDrawer ? 'Hide Threads' : 'Show Threads'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={onToggleThreadsDrawer}
+                  aria-pressed={isThreadsDrawer}
+                  aria-label={isThreadsDrawer ? 'Hide threads panel' : 'Show threads panel'}
+                  aria-keyshortcuts="Alt+Shift+T"
+                  onContextMenu={handleContextMenu('threads')}
+                >
+                  <Icon size="400" src={Icons.Message} filled={isThreadsDrawer} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
+
+          {/* Widget shortcut buttons — pinned individual widget shortcuts */}
+          {widgetShortcutEntries.filter((x) => x.cfg.pinned).map(({ id, cfg, widget }) => (
+            <TooltipProvider
+              key={id}
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{cfg.label ?? widget!.name}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  size="300"
+                  radii="300"
+                  aria-label={cfg.label ?? widget!.name}
+                  aria-pressed={isWidgetsDrawer}
+                  onClick={() => {
+                    setActiveWidgetId(widget!.id);
+                    if (!isWidgetsDrawer) onToggleWidgetsDrawer?.();
+                  }}
+                  onContextMenu={handleContextMenu(id)}
+                >
+                  {renderItemIcon(cfg.icon, widget!.name, mx, useAuthentication)}
+                </IconButton>
+              )}
+            </TooltipProvider>
+          ))}
+
+          {/* Context menu for panel/widget buttons */}
+          <PopOut
+            anchor={ctxMenu?.anchor}
+            position="Bottom"
+            align="Start"
+            content={
+              ctxMenu ? (
+                <FocusTrap
+                  focusTrapOptions={{
+                    clickOutsideDeactivates: true,
+                    returnFocusOnDeactivate: false,
+                    onDeactivate: () => setCtxMenu(null),
+                  }}
+                >
+                  <Menu style={{ minWidth: toRem(200) }}>
+                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+                      <MenuItem
+                        size="300"
+                        radii="300"
+                        onClick={() => {
+                          setToolbarItem(ctxMenu.id, { pinned: !getEffective(ctxMenu.id).pinned });
+                          setCtxMenu(null);
+                        }}
+                      >
+                        <Box grow="Yes">
+                          <Text size="T300">
+                            {getEffective(ctxMenu.id).pinned ? 'Remove from toolbar' : 'Pin to toolbar'}
+                          </Text>
+                        </Box>
+                      </MenuItem>
+                      <MenuItem
+                        size="300"
+                        radii="300"
+                        onClick={() => {
+                          const cur = getEffective(ctxMenu.id).defaultMode;
+                          setToolbarItem(ctxMenu.id, { defaultMode: cur === 'fullwidth' ? 'sidebar' : 'fullwidth' });
+                          setCtxMenu(null);
+                        }}
+                        after={getEffective(ctxMenu.id).defaultMode === 'fullwidth' ? <Icon src={Icons.CheckTwice} size="100" /> : undefined}
+                      >
+                        <Box grow="Yes">
+                          <Text size="T300">Open full-width by default</Text>
+                        </Box>
+                      </MenuItem>
+                      {ctxMenu.id.startsWith('widget:') && (
+                        <MenuItem
+                          size="300"
+                          radii="300"
+                          onClick={() => { removeToolbarItem(ctxMenu.id); setCtxMenu(null); }}
+                        >
+                          <Box grow="Yes">
+                            <Text size="T300">Remove shortcut</Text>
+                          </Box>
+                        </MenuItem>
+                      )}
+                    </Box>
+                  </Menu>
+                </FocusTrap>
+              ) : <div />
+            }
+          />
+
+          {/* More options — always rightmost */}
           <TooltipProvider
             position="Bottom"
             align="End"
@@ -492,6 +978,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                 onClick={handleOpenMenu}
                 ref={triggerRef}
                 aria-pressed={!!menuAnchor}
+                aria-label="More options"
               >
                 <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
               </IconButton>
@@ -513,7 +1000,15 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
                   escapeDeactivates: stopPropagation,
                 }}
               >
-                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} />
+                <RoomMenu
+                  room={room}
+                  requestClose={() => setMenuAnchor(undefined)}
+                  onOpenIssueBoard={onToggleIssueBoard}
+                  onToggleThreadsDrawer={onToggleThreadsDrawer}
+                  isThreadsDrawer={isThreadsDrawer}
+                  unpinnedItems={allUnpinnedItems}
+                  onPin={(id) => setToolbarItem(id, { pinned: true })}
+                />
               </FocusTrap>
             }
           />

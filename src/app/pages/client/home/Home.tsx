@@ -62,6 +62,10 @@ import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
+import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
+import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
+import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
+import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { JoinAddressPrompt } from '../../../components/join-address-prompt';
 import { _RoomSearchParams } from '../../paths';
@@ -226,6 +230,7 @@ export function Home() {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 38,
     overscan: 10,
+    getItemKey: (index) => sortedRooms[index],
   });
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
@@ -337,7 +342,7 @@ export function Home() {
                   return (
                     <VirtualTile
                       virtualItem={vItem}
-                      key={vItem.index}
+                      key={vItem.key}
                       ref={virtualizer.measureElement}
                     >
                       <RoomNavItem
@@ -357,6 +362,7 @@ export function Home() {
           </Box>
         </PageNavContent>
       )}
+      <CallNavStatus />
     </PageNav>
   );
 }

@@ -67,6 +67,10 @@ import { HomeCreateRoom } from './client/home/CreateRoom';
 import { Create } from './client/create';
 import { CreateSpaceModalRenderer } from '../features/create-space';
 import { SearchModalRenderer } from '../features/search';
+import { CallProvider } from './client/call/CallProvider';
+import { PersistentCallContainer } from './client/call/PersistentCallContainer';
+import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
+import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
 import { getFallbackSession } from '../state/sessions';
 import { CallStatusRenderer } from './CallStatusRenderer';
 import { CallEmbedProvider } from '../components/CallEmbedProvider';
@@ -126,7 +130,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                 <ClientRoomsNotificationPreferences>
                   <ClientBindAtoms>
                     <ClientNonUIFeatures>
-                      <CallEmbedProvider>
+                      <CallProvider>
                         <ClientLayout
                           nav={
                             <MobileFriendlyClientNav>
@@ -134,10 +138,27 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                             </MobileFriendlyClientNav>
                           }
                         >
-                          <Outlet />
+                          <PersistentCallContainer>
+                            <Outlet />
+                          </PersistentCallContainer>
                         </ClientLayout>
-                        <CallStatusRenderer />
-                      </CallEmbedProvider>
+                        <IncomingCallNotification />
+                        <GlobalKeyboardShortcuts />
+                        <div
+                          id="cinny-announcements"
+                          role="status"
+                          aria-live="polite"
+                          aria-atomic="true"
+                          style={{
+                            position: 'absolute',
+                            width: '1px',
+                            height: '1px',
+                            overflow: 'hidden',
+                            clip: 'rect(0,0,0,0)',
+                            whiteSpace: 'nowrap',
+                          }}
+                        />
+                      </CallProvider>
                       <SearchModalRenderer />
                       <UserRoomProfileRenderer />
                       <CreateRoomModalRenderer />

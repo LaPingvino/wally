@@ -39,7 +39,8 @@ import {
   useAdditionalCreators,
   CreateRoomType,
 } from '../../components/create-room';
-import { RoomType } from '../../../types/matrix/room';
+import { RoomType, StateEvent } from '../../../types/matrix/room';
+import { IPowerLevels } from '../../hooks/usePowerLevels';
 import { CreateRoomTypeSelector } from '../../components/create-room/CreateRoomTypeSelector';
 import { getRoomIconSrc } from '../../utils/room';
 
@@ -137,7 +138,13 @@ export function CreateRoomForm({
     }
 
     let roomType: RoomType | undefined;
-    if (type === CreateRoomType.VoiceRoom) roomType = RoomType.Call;
+    const powerOverrides: IPowerLevels = {
+      events: {},
+    };
+    if (type === CreateRoomType.VoiceRoom) {
+      roomType = RoomType.Call;
+      powerOverrides.events![StateEvent.GroupCallMemberPrefix] = 0;
+    }
 
     create({
       version: selectedRoomVersion,
@@ -151,6 +158,7 @@ export function CreateRoomForm({
       knock: roomKnock,
       allowFederation: federation,
       additionalCreators: allowAdditionalCreators ? additionalCreators : undefined,
+      powerLevelContentOverrides: powerOverrides,
     }).then((roomId) => {
       if (alive()) {
         onCreate?.(roomId);
