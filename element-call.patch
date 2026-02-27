@@ -1,0 +1,1559 @@
+diff --git a/package.json b/package.json
+index de8ee72da9..2dc0a4b103 100644
+--- a/package.json
++++ b/package.json
+@@ -55,6 +55,7 @@
+     "linkify-react": "4.3.2",
+     "linkifyjs": "4.3.2",
+     "matrix-js-sdk": "38.2.0",
++    "matrix-widget-api": "1.11.0",
+     "millify": "6.1.0",
+     "pdfjs-dist": "4.2.67",
+     "prismjs": "1.30.0",
+@@ -76,6 +77,7 @@
+     "ua-parser-js": "1.0.35"
+   },
+   "devDependencies": {
++    "@element-hq/element-call-embedded": "0.16.3",
+     "@esbuild-plugins/node-globals-polyfill": "0.2.3",
+     "@rollup/plugin-inject": "5.0.3",
+     "@rollup/plugin-wasm": "6.1.1",
+diff --git a/package.json b/package.json.orig
+copy from package.json
+copy to package.json.orig
+diff --git a/src/app/components/create-room/CreateRoomKindSelector.tsx b/src/app/components/create-room/CreateRoomKindSelector.tsx
+index 096954fbcb..ebc55e7ff6 100644
+--- a/src/app/components/create-room/CreateRoomKindSelector.tsx
++++ b/src/app/components/create-room/CreateRoomKindSelector.tsx
+@@ -2,12 +2,8 @@
+ import { Box, Text, Icon, Icons, config, IconSrc } from 'folds';
+ import { SequenceCard } from '../sequence-card';
+ import { SettingTile } from '../setting-tile';
++import { CreateRoomKind } from './types';
+ 
+-export enum CreateRoomKind {
+-  Private = 'private',
+-  Restricted = 'restricted',
+-  Public = 'public',
+-}
+ type CreateRoomKindSelectorProps = {
+   value?: CreateRoomKind;
+   onSelect: (value: CreateRoomKind) => void;
+diff --git a/src/app/components/create-room/CreateRoomVoiceSelector.tsx b/src/app/components/create-room/CreateRoomVoiceSelector.tsx
+new file mode 100644
+index 0000000000..f3862db297
+--- /dev/null
++++ b/src/app/components/create-room/CreateRoomVoiceSelector.tsx
+@@ -0,0 +1,65 @@
++import React from 'react';
++import { Box, Text, Icon, Icons, config, IconSrc } from 'folds';
++import { SequenceCard } from '../sequence-card';
++import { SettingTile } from '../setting-tile';
++import { CreateRoomVoice } from './types';
++
++type CreateRoomVoiceSelectorProps = {
++  value?: CreateRoomVoice;
++  onSelect: (value: CreateRoomVoice) => void;
++  disabled?: boolean;
++  getIcon: (kind: CreateRoomVoice) => IconSrc;
++};
++export function CreateRoomVoiceSelector({
++  value,
++  onSelect,
++  disabled,
++  getIcon,
++}: CreateRoomVoiceSelectorProps) {
++  return (
++    <Box shrink="No" direction="Column" gap="100">
++      <SequenceCard
++        style={{ padding: config.space.S300 }}
++        variant={value === CreateRoomVoice.TextRoom ? 'Primary' : 'SurfaceVariant'}
++        direction="Column"
++        gap="100"
++        as="button"
++        type="button"
++        aria-pressed={value === CreateRoomVoice.TextRoom}
++        onClick={() => onSelect(CreateRoomVoice.TextRoom)}
++        disabled={disabled}
++      >
++        <SettingTile
++          before={<Icon size="400" src={getIcon(CreateRoomVoice.TextRoom)} />}
++          after={value === CreateRoomVoice.TextRoom && <Icon src={Icons.Check} />}
++        >
++          <Text size="H6">Text</Text>
++          <Text size="T300" priority="300">
++            Send text messages, videos and GIFs.
++          </Text>
++        </SettingTile>
++      </SequenceCard>
++      <SequenceCard
++        style={{ padding: config.space.S300 }}
++        variant={value === CreateRoomVoice.VoiceRoom ? 'Primary' : 'SurfaceVariant'}
++        direction="Column"
++        gap="100"
++        as="button"
++        type="button"
++        aria-pressed={value === CreateRoomVoice.VoiceRoom}
++        onClick={() => onSelect(CreateRoomVoice.VoiceRoom)}
++        disabled={disabled}
++      >
++        <SettingTile
++          before={<Icon size="400" src={getIcon(CreateRoomVoice.VoiceRoom)} />}
++          after={value === CreateRoomVoice.VoiceRoom && <Icon src={Icons.Check} />}
++        >
++          <Text size="H6">Voice</Text>
++          <Text size="T300" priority="300">
++            A room optimized for voice calls.
++          </Text>
++        </SettingTile>
++      </SequenceCard>
++    </Box>
++  );
++}
+diff --git a/src/app/components/create-room/index.ts b/src/app/components/create-room/index.ts
+index ffd9cb3d33..a9c603b2f0 100644
+--- a/src/app/components/create-room/index.ts
++++ b/src/app/components/create-room/index.ts
+@@ -3,3 +3,4 @@
+ export * from './RoomVersionSelector';
+ export * from './utils';
+ export * from './AdditionalCreatorInput';
++export * from './types';
+diff --git a/src/app/components/create-room/types.ts b/src/app/components/create-room/types.ts
+new file mode 100644
+index 0000000000..e35af47aaf
+--- /dev/null
++++ b/src/app/components/create-room/types.ts
+@@ -0,0 +1,10 @@
++export enum CreateRoomVoice {
++  TextRoom = 'text',
++  VoiceRoom = 'voice',
++}
++
++export enum CreateRoomKind {
++  Private = 'private',
++  Restricted = 'restricted',
++  Public = 'public',
++}
+diff --git a/src/app/components/create-room/utils.ts b/src/app/components/create-room/utils.ts
+index d0a45c3d96..467de37e48 100644
+--- a/src/app/components/create-room/utils.ts
++++ b/src/app/components/create-room/utils.ts
+@@ -7,10 +7,11 @@
+   Room,
+ } from 'matrix-js-sdk';
+ import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
+-import { CreateRoomKind } from './CreateRoomKindSelector';
+ import { RoomType, StateEvent } from '../../../types/matrix/room';
+ import { getViaServers } from '../../plugins/via-servers';
+ import { getMxIdServer } from '../../utils/matrix';
++import { IPowerLevels } from '../../hooks/usePowerLevels';
++import { CreateRoomKind } from './types';
+ 
+ export const createRoomCreationContent = (
+   type: RoomType | undefined,
+@@ -86,6 +87,44 @@
+   },
+ });
+ 
++export const createRoomCallState = () => ({
++  type: 'org.matrix.msc3401.call',
++  state_key: '',
++  content: {},
++});
++
++export const createPowerLevelContentOverrides = (
++  base: IPowerLevels,
++  overrides: Partial<IPowerLevels>
++): IPowerLevels => ({
++  ...base,
++  ...overrides,
++  ...(base.events || overrides.events
++    ? {
++        events: {
++          ...base.events,
++          ...overrides.events,
++        },
++      }
++    : {}),
++  ...(base.users || overrides.users
++    ? {
++        users: {
++          ...base.users,
++          ...overrides.users,
++        },
++      }
++    : {}),
++  ...(base.notifications || overrides.notifications
++    ? {
++        notifications: {
++          ...base.notifications,
++          ...overrides.notifications,
++        },
++      }
++    : {}),
++});
++
+ export type CreateRoomData = {
+   version: string;
+   type?: RoomType;
+@@ -98,6 +137,7 @@
+   knock: boolean;
+   allowFederation: boolean;
+   additionalCreators?: string[];
++  powerLevelContentOverrides?: IPowerLevels;
+ };
+ export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promise<string> => {
+   const initialState: ICreateRoomStateEvent[] = [];
+@@ -110,8 +150,23 @@
+     initialState.push(createRoomParentState(data.parent));
+   }
+ 
++  if (data.type === RoomType.Call) {
++    initialState.push(createRoomCallState());
++  }
++
+   initialState.push(createRoomJoinRulesState(data.kind, data.parent, data.knock));
+ 
++  // For call rooms, set MSC3401 power levels at creation time (avoids a separate state event call)
++  const callPowerLevels: IPowerLevels | undefined =
++    data.type === RoomType.Call
++      ? createPowerLevelContentOverrides(data.powerLevelContentOverrides ?? {}, {
++          events: {
++            'org.matrix.msc3401.call': 100,
++            'org.matrix.msc3401.call.member': 0,
++          },
++        })
++      : data.powerLevelContentOverrides;
++
+   const options: ICreateRoomOpts = {
+     room_version: data.version,
+     name: data.name,
+@@ -123,6 +178,7 @@
+       data.additionalCreators
+     ),
+     initial_state: initialState,
++    ...(callPowerLevels ? { power_level_content_override: callPowerLevels } : {}),
+   };
+ 
+   if (data.type === RoomType.Space) {
+diff --git a/src/app/components/create-room/utils.ts b/src/app/components/create-room/utils.ts.orig
+copy from src/app/components/create-room/utils.ts
+copy to src/app/components/create-room/utils.ts.orig
+diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
+index 23f3998d88..1ee72d4aa5 100644
+--- a/src/app/components/room-avatar/RoomAvatar.tsx
++++ b/src/app/components/room-avatar/RoomAvatar.tsx
+@@ -2,7 +2,7 @@
+ import { AvatarFallback, AvatarImage, Icon, Icons, color } from 'folds';
+ import React, { ComponentProps, ReactEventHandler, ReactNode, forwardRef, useState } from 'react';
+ import * as css from './RoomAvatar.css';
+-import { joinRuleToIconSrc } from '../../utils/room';
++import { getRoomIconSrc } from '../../utils/room';
+ import colorMXID from '../../../util/colorMXID';
+ 
+ type RoomAvatarProps = {
+@@ -44,13 +44,10 @@
+ export const RoomIcon = forwardRef<
+   SVGSVGElement,
+   Omit<ComponentProps<typeof Icon>, 'src'> & {
+-    joinRule: JoinRule;
+-    space?: boolean;
++    joinRule?: JoinRule;
++    roomType?: string;
++    locked?: boolean;
+   }
+->(({ joinRule, space, ...props }, ref) => (
+-  <Icon
+-    src={joinRuleToIconSrc(Icons, joinRule, space || false) ?? Icons.Hash}
+-    {...props}
+-    ref={ref}
+-  />
++>(({ joinRule, roomType, locked, ...props }, ref) => (
++  <Icon src={getRoomIconSrc(Icons, roomType, joinRule, locked)} {...props} ref={ref} />
+ ));
+diff --git a/src/app/features/call/CallView.css.ts b/src/app/features/call/CallView.css.ts
+new file mode 100644
+index 0000000000..ef470ca518
+--- /dev/null
++++ b/src/app/features/call/CallView.css.ts
+@@ -0,0 +1,37 @@
++import { style } from '@vanilla-extract/css';
++import { DefaultReset, config } from 'folds';
++import { ContainerColor } from '../../styles/ContainerColor.css';
++
++export const CallViewUserGrid = style({
++  display: 'flex',
++  flexWrap: 'wrap',
++  justifyContent: 'center',
++  alignItems: 'center',
++  marginInline: '20px',
++  gap: config.space.S400,
++});
++
++export const CallViewUser = style([
++  DefaultReset,
++  ContainerColor({ variant: 'SurfaceVariant' }),
++  {
++    height: '90px',
++    width: '150px',
++    borderRadius: config.radii.R500,
++  },
++]);
++
++export const UserLink = style({
++  color: 'inherit',
++  minWidth: 0,
++  cursor: 'pointer',
++  flexGrow: 0,
++  transition: 'all ease-out 200ms',
++  ':hover': {
++    transform: 'translateY(-3px)',
++    textDecoration: 'unset',
++  },
++  ':focus': {
++    outline: 'none',
++  },
++});
+diff --git a/src/app/features/call/CallViewUser.tsx b/src/app/features/call/CallViewUser.tsx
+new file mode 100644
+index 0000000000..776fead601
+--- /dev/null
++++ b/src/app/features/call/CallViewUser.tsx
+@@ -0,0 +1,71 @@
++import { as, Avatar, Box, Icon, Icons, Text } from 'folds';
++import React from 'react';
++import classNames from 'classnames';
++import { Room } from 'matrix-js-sdk';
++import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
++import { UserAvatar } from '../../components/user-avatar';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { getMxIdLocalPart } from '../../utils/matrix';
++import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
++import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
++import { useSpaceOptionally } from '../../hooks/useSpace';
++import * as css from './CallView.css';
++
++type CallViewUserProps = {
++  room: Room;
++  callMembership: CallMembership;
++};
++
++export const UserProfileButton = as<'button'>(
++  ({ as: AsUserProfileButton = 'button', className, ...props }, ref) => (
++    <AsUserProfileButton className={classNames(css.UserLink, className)} {...props} ref={ref} />
++  )
++);
++
++export const CallViewUserBase = as<'div'>(({ className, ...props }, ref) => (
++  <Box
++    direction="Column"
++    gap="300"
++    className={classNames(css.CallViewUser, className)}
++    {...props}
++    ref={ref}
++  />
++));
++
++export function CallViewUser({ room, callMembership }: CallViewUserProps) {
++  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  const openProfile = useOpenUserRoomProfile();
++  const space = useSpaceOptionally();
++  const userId = callMembership.sender ?? '';
++  const avatarMxcUrl = getMemberAvatarMxc(room, userId);
++  const avatarUrl = avatarMxcUrl
++    ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
++    : undefined;
++  const getName = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
++
++  const handleUserClick: React.MouseEventHandler<HTMLButtonElement> = (evt) => {
++    openProfile(room.roomId, space?.roomId, userId, evt.currentTarget.getBoundingClientRect());
++  };
++
++  return (
++    <UserProfileButton onClick={handleUserClick} aria-label={getName}>
++      <CallViewUserBase>
++        <Box direction="Column" grow="Yes" alignItems="Center" gap="200" justifyContent="Center">
++          <Avatar size="200">
++            <UserAvatar
++              userId={userId}
++              src={avatarUrl ?? undefined}
++              alt={getName}
++              renderFallback={() => <Icon size="50" src={Icons.User} filled />}
++            />
++          </Avatar>
++          <Text size="B400" priority="300" truncate>
++            {getName}
++          </Text>
++        </Box>
++      </CallViewUserBase>
++    </UserProfileButton>
++  );
++}
+diff --git a/src/app/features/call/CinnyWidget.ts b/src/app/features/call/CinnyWidget.ts
+new file mode 100644
+index 0000000000..3894af8793
+--- /dev/null
++++ b/src/app/features/call/CinnyWidget.ts
+@@ -0,0 +1,9 @@
++import { Widget } from 'matrix-widget-api';
++import { IApp } from './SmallWidget';
++
++// Wrapper class for the widget definition
++export class CinnyWidget extends Widget {
++  public constructor(private rawDefinition: IApp) {
++    super(rawDefinition);
++  }
++}
+diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
+new file mode 100644
+index 0000000000..0f15b32108
+--- /dev/null
++++ b/src/app/features/call/SmallWidget.ts
+@@ -0,0 +1,398 @@
++/*
++ * Copyright 2024 New Vector Ltd.
++ * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
++ *
++ * SPDX-License-Identifier: AGPL-3.0-only OR GPL-3.0-only OR LicenseRef-Element-Commercial
++ * Please see LICENSE files in the repository root for full details.
++ */
++
++import EventEmitter from 'events';
++import {
++  ClientEvent,
++  Direction,
++  IEvent,
++  KnownMembership,
++  MatrixClient,
++  MatrixEvent,
++  MatrixEventEvent,
++} from 'matrix-js-sdk';
++import {
++  ClientWidgetApi,
++  IRoomEvent,
++  IStickyActionRequest,
++  IWidget,
++  IWidgetData,
++  MatrixCapabilities,
++  WidgetApiFromWidgetAction,
++  WidgetKind,
++} from 'matrix-widget-api';
++import { CinnyWidget } from './CinnyWidget';
++import { SmallWidgetDriver } from './SmallWidgetDriver';
++
++/**
++ * Generates the URL for the Element Call widget.
++ * @param mx - The MatrixClient instance.
++ * @param roomId - The ID of the room.
++ * @returns The generated URL object.
++ */
++export const getWidgetUrl = (
++  mx: MatrixClient,
++  roomId: string,
++  elementCallUrl: string,
++  widgetId: string,
++  setParams: any,
++): URL => {
++  const baseUrl = window.location.origin;
++  const url = elementCallUrl
++    ? new URL(`${elementCallUrl}/room`)
++    : new URL('/public/element-call/index.html#', baseUrl);
++
++  const params = new URLSearchParams({
++    embed: 'true',
++    widgetId,
++    appPrompt: 'false',
++    skipLobby: setParams.skipLobby ?? 'true', // TODO: skipLobby is deprecated, use intent instead (intent doesn't produce the same effect?)
++    returnToLobby: setParams.returnToLobby ?? 'true',
++    perParticipantE2EE: setParams.perParticipantE2EE ?? 'true',
++    callIntent: setParams.callIntent ?? 'video',
++    header: 'none',
++    confineToRoom: 'true',
++    theme: setParams.theme ?? 'dark',
++    userId: mx.getUserId()!,
++    deviceId: mx.getDeviceId()!,
++    roomId,
++    baseUrl: mx.baseUrl!,
++    parentUrl: window.location.origin,
++  });
++
++  const replacedParams = params.toString().replace(/%24/g, '$');
++  url.search = `?${replacedParams}`;
++
++  return url;
++};
++
++export interface IApp extends IWidget {
++  client: MatrixClient;
++  roomId: string;
++  eventId?: string;
++  avatar_url?: string;
++  sender: string;
++  'io.element.managed_hybrid'?: boolean;
++}
++
++export class SmallWidget extends EventEmitter {
++  private client: MatrixClient;
++
++  private messaging: ClientWidgetApi | null = null;
++
++  private mockWidget: CinnyWidget;
++
++  public roomId?: string;
++
++  public url?: string;
++
++  public iframe: HTMLIFrameElement | null = null;
++
++  private type: string; // Type of the widget (e.g., 'm.call')
++
++  private readUpToMap: { [roomId: string]: string } = {}; // room ID to event ID
++
++  private readonly eventsToFeed = new WeakSet<MatrixEvent>();
++
++  private stickyPromise?: () => Promise<void>;
++
++  constructor(private iapp: IApp) {
++    super();
++    this.client = iapp.client;
++    this.roomId = iapp.roomId;
++    this.url = iapp.url;
++    this.type = iapp.type;
++    this.mockWidget = new CinnyWidget(iapp);
++  }
++
++  /**
++   * Initializes the widget messaging API.
++   * @param iframe - The HTMLIFrameElement to bind to.
++   * @returns The initialized ClientWidgetApi instance.
++   */
++  startMessaging(iframe: HTMLIFrameElement): ClientWidgetApi {
++    // Ensure the driver is correctly instantiated
++    // The capabilities array might need adjustment based on required permissions
++    const driver = new SmallWidgetDriver(
++      this.client,
++      [],
++      this.mockWidget,
++      WidgetKind.Room,
++      true,
++      this.roomId,
++    );
++    this.iframe = iframe;
++    this.messaging = new ClientWidgetApi(this.mockWidget, iframe, driver);
++
++    // Emit events during the widget lifecycle
++    this.messaging.on('preparing', () => this.emit('preparing'));
++    this.messaging.on('error:preparing', (err: unknown) => this.emit('error:preparing', err));
++    this.messaging.once('ready', () => this.emit('ready'));
++    // this.messaging.on("capabilitiesNotified", () => this.emit("capabilitiesNotified")); // Uncomment if needed
++
++    // Populate the map of "read up to" events for this widget with the current event in every room.
++    // This is a bit inefficient, but should be okay. We do this for all rooms in case the widget
++    // requests timeline capabilities in other rooms down the road. It's just easier to manage here.
++    // eslint-disable-next-line no-restricted-syntax
++    for (const room of this.client.getRooms()) {
++      // Timelines are most recent last
++      const events = room.getLiveTimeline()?.getEvents() || [];
++      const roomEvent = events[events.length - 1];
++      // force later code to think the room is fresh
++      if (roomEvent) {
++        const eventId = roomEvent.getId();
++        if (eventId) this.readUpToMap[room.roomId] = eventId;
++      }
++    }
++
++    this.messaging.on('action:org.matrix.msc2876.read_events', (ev: CustomEvent) => {
++      const room = this.client.getRoom(this.roomId);
++      const events: Partial<IEvent>[] = [];
++      const { type } = ev.detail.data;
++
++      ev.preventDefault();
++      if (room === null) {
++        return this.messaging?.transport.reply(ev.detail, { events });
++      }
++      const state = room.getLiveTimeline().getState(Direction.Forward);
++      if (state === undefined) {
++        return this.messaging?.transport.reply(ev.detail, { events });
++      }
++
++      const stateEvents = state.events?.get(type);
++
++      Array.from(stateEvents?.values() ?? []).forEach((eventObject) => {
++        events.push(eventObject.event);
++      });
++
++      return this.messaging?.transport.reply(ev.detail, { events });
++    });
++
++    this.client.on(ClientEvent.Event, this.onEvent);
++    this.client.on(MatrixEventEvent.Decrypted, this.onEventDecrypted);
++    this.client.on(ClientEvent.ToDeviceEvent, this.onToDeviceEvent);
++    this.messaging.on(
++      `action:${WidgetApiFromWidgetAction.UpdateAlwaysOnScreen}`,
++      async (ev: CustomEvent<IStickyActionRequest>) => {
++        if (this.messaging?.hasCapability(MatrixCapabilities.AlwaysOnScreen)) {
++          ev.preventDefault();
++          if (ev.detail.data.value) {
++            // If the widget wants to become sticky we wait for the stickyPromise to resolve
++            if (this.stickyPromise) await this.stickyPromise();
++            this.messaging.transport.reply(ev.detail, {});
++          }
++          // Stop being persistent can be done instantly
++          // MAKE PERSISTENT HERE
++          // Send the ack after the widget actually has become sticky.
++        }
++      },
++    );
++
++    return this.messaging;
++  }
++
++  private onEvent = (ev: MatrixEvent): void => {
++    this.client.decryptEventIfNeeded(ev);
++    this.feedEvent(ev);
++  };
++
++  private onEventDecrypted = (ev: MatrixEvent): void => {
++    this.feedEvent(ev);
++  };
++
++  private onReadEvent = (ev: MatrixEvent): void => {
++    this.feedEvent(ev);
++  };
++
++  private onToDeviceEvent = async (ev: MatrixEvent): Promise<void> => {
++    await this.client.decryptEventIfNeeded(ev);
++    if (ev.isDecryptionFailure()) return;
++    await this.messaging?.feedToDevice(ev.getEffectiveEvent() as IRoomEvent, ev.isEncrypted());
++  };
++
++  /**
++   * Determines whether the event comes from a room that we've been invited to
++   * (in which case we likely don't have the full timeline).
++   */
++  private isFromInvite(ev: MatrixEvent): boolean {
++    const room = this.client.getRoom(ev.getRoomId());
++    return room?.getMyMembership() === KnownMembership.Invite;
++  }
++
++  /**
++   * Determines whether the event has a relation to an unknown parent.
++   */
++  private relatesToUnknown(ev: MatrixEvent): boolean {
++    // Replies to unknown events don't count
++    if (!ev.relationEventId || ev.replyEventId) return false;
++    const room = this.client.getRoom(ev.getRoomId());
++    return room === null || !room.findEventById(ev.relationEventId);
++  }
++
++  // eslint-disable-next-line class-methods-use-this
++  private arrayFastClone<T>(a: T[]): T[] {
++    return a.slice(0, a.length);
++  }
++
++  private advanceReadUpToMarker(ev: MatrixEvent): boolean {
++    const evId = ev.getId();
++    if (evId === undefined) return false;
++    const roomId = ev.getRoomId();
++    if (roomId === undefined) return false;
++    const room = this.client.getRoom(roomId);
++    if (room === null) return false;
++
++    const upToEventId = this.readUpToMap[ev.getRoomId()!];
++    if (!upToEventId) {
++      // There's no marker yet; start it at this event
++      this.readUpToMap[roomId] = evId;
++      return true;
++    }
++
++    // Small optimization for exact match (skip the search)
++    if (upToEventId === evId) return false;
++
++    // Timelines are most recent last, so reverse the order and limit ourselves to 100 events
++    // to avoid overusing the CPU.
++    const timeline = room.getLiveTimeline();
++    const events = this.arrayFastClone(timeline.getEvents()).reverse().slice(0, 100);
++
++    let advanced = false;
++
++    events.some((timelineEvent) => {
++      const id = timelineEvent.getId();
++
++      if (id === upToEventId) {
++        // The event must be somewhere before the "read up to" marker
++        return true;
++      }
++
++      if (id === evId) {
++        // The event is after the marker; advance it
++        this.readUpToMap[roomId] = evId;
++        advanced = true;
++        return true;
++      }
++      // We can't say for sure whether the widget has seen the event; let's
++      // just assume that it has
++      return false;
++    });
++
++    return advanced;
++  }
++
++  private feedEvent(ev: MatrixEvent): void {
++    if (this.messaging === null) return;
++
++    if (
++      // If we had decided earlier to feed this event to the widget, but
++      // it just wasn't ready, give it another try
++      this.eventsToFeed.delete(ev) ||
++      // Skip marker timeline check for events with relations to unknown parent because these
++      // events are not added to the timeline here and will be ignored otherwise:
++      // https://github.com/matrix-org/matrix-js-sdk/blob/d3dfcd924201d71b434af3d77343b5229b6ed75e/src/models/room.ts#L2207-L2213
++      this.relatesToUnknown(ev) ||
++      // Skip marker timeline check for rooms where membership is
++      // 'invite', otherwise the membership event from the invitation room
++      // will advance the marker and new state events will not be
++      // forwarded to the widget.
++      this.isFromInvite(ev) ||
++      // Check whether this event would be before or after our "read up to" marker. If it's
++      // before, or we can't decide, then we assume the widget will have already seen the event.
++      // If the event is after, or we don't have a marker for the room, then the marker will advance and we'll
++      // send it through.
++      // This approach of "read up to" prevents widgets receiving decryption spam from startup or
++      // receiving ancient events from backfill and such.
++      this.advanceReadUpToMarker(ev)
++    ) {
++      // If the event is still being decrypted, remember that we want to
++      // feed it to the widget (even if not strictly in the order given by
++      // the timeline) and get back to it later
++      if (ev.isBeingDecrypted() || ev.isDecryptionFailure()) {
++        this.eventsToFeed.add(ev);
++      } else {
++        const raw = ev.getEffectiveEvent();
++        this.messaging.feedEvent(raw as IRoomEvent, this.roomId ?? '').catch(() => null);
++      }
++    }
++  }
++
++  /**
++   * Stops the widget messaging and cleans up resources.
++   */
++  stopMessaging() {
++    if (this.messaging) {
++      this.messaging.stop(); // Example if a stop method exists
++      this.messaging.removeAllListeners(); // Remove listeners attached by SmallWidget
++      this.messaging = null;
++    }
++  }
++}
++
++/**
++ * Creates the data object for the widget.
++ * @param client - The MatrixClient instance.
++ * @param roomId - The ID of the room.
++ * @param currentData - Existing widget data.
++ * @param overwriteData - Data to merge or overwrite.
++ * @returns The final widget data object.
++ */
++export const getWidgetData = (
++  client: MatrixClient,
++  roomId: string,
++  currentData: object,
++  overwriteData: object,
++): IWidgetData => {
++  // Example: Determine E2EE based on room state if needed
++  const perParticipantE2EE = true; // Default or based on logic
++  // const roomEncryption = client.getRoom(roomId)?.currentState.getStateEvents(EventType.RoomEncryption, "");
++  // if (roomEncryption) perParticipantE2EE = true; // Simplified example
++
++  return {
++    ...currentData,
++    ...overwriteData,
++    perParticipantE2EE,
++  };
++};
++
++/**
++ * Creates a virtual widget definition (IApp).
++ * @param client - MatrixClient instance.
++ * @param id - Widget ID.
++ * @param creatorUserId - User ID of the creator.
++ * @param name - Widget display name.
++ * @param type - Widget type (e.g., 'm.call').
++ * @param url - Widget URL.
++ * @param waitForIframeLoad - Whether to wait for iframe load signal.
++ * @param data - Widget data.
++ * @param roomId - Room ID.
++ * @returns The IApp widget definition.
++ */
++export const createVirtualWidget = (
++  client: MatrixClient,
++  id: string,
++  creatorUserId: string,
++  name: string,
++  type: string,
++  url: URL,
++  waitForIframeLoad: boolean,
++  data: IWidgetData,
++  roomId: string,
++): IApp => ({
++  client,
++  id,
++  creatorUserId,
++  name,
++  type,
++  url: url.toString(), // Store URL as string in the definition
++  waitForIframeLoad,
++  data,
++  roomId,
++  // Add other required fields from IWidget if necessary
++  sender: creatorUserId, // Example: Assuming sender is the creator
++});
+diff --git a/src/app/features/create-room/CreateRoom.tsx b/src/app/features/create-room/CreateRoom.tsx
+index 05c5c2e385..b1f1fdf761 100644
+--- a/src/app/features/create-room/CreateRoom.tsx
++++ b/src/app/features/create-room/CreateRoom.tsx
+@@ -1,5 +1,5 @@
+ import React, { FormEventHandler, useCallback, useEffect, useState } from 'react';
+-import { MatrixError, Room } from 'matrix-js-sdk';
++import { MatrixError, Room, JoinRule } from 'matrix-js-sdk';
+ import {
+   Box,
+   Button,
+@@ -37,20 +37,40 @@
+   CreateRoomKindSelector,
+   RoomVersionSelector,
+   useAdditionalCreators,
++  CreateRoomVoice,
+ } from '../../components/create-room';
+-
+-const getCreateRoomKindToIcon = (kind: CreateRoomKind) => {
+-  if (kind === CreateRoomKind.Private) return Icons.HashLock;
+-  if (kind === CreateRoomKind.Restricted) return Icons.Hash;
+-  return Icons.HashGlobe;
++import { RoomType, StateEvent } from '../../../types/matrix/room';
++import { IPowerLevels } from '../../hooks/usePowerLevels';
++import { CreateRoomVoiceSelector } from '../../components/create-room/CreateRoomVoiceSelector';
++import { getRoomIconSrc } from '../../utils/room';
++
++const getCreateRoomKindToIcon = (kind: CreateRoomKind, voice?: CreateRoomVoice) => {
++  const isVoiceRoom = voice === CreateRoomVoice.VoiceRoom;
++
++  let joinRule: JoinRule = JoinRule.Public;
++  if (kind === CreateRoomKind.Restricted) joinRule = JoinRule.Restricted;
++  if (kind === CreateRoomKind.Private) joinRule = JoinRule.Knock;
++
++  return getRoomIconSrc(Icons, isVoiceRoom ? RoomType.Call : undefined, joinRule);
++};
++
++const getCreateRoomVoiceToIcon = (kind: CreateRoomVoice) => {
++  if (kind === CreateRoomVoice.VoiceRoom) return Icons.VolumeHigh;
++  return Icons.Hash;
+ };
+ 
+ type CreateRoomFormProps = {
+   defaultKind?: CreateRoomKind;
++  defaultVoice?: CreateRoomVoice;
+   space?: Room;
+   onCreate?: (roomId: string) => void;
+ };
+-export function CreateRoomForm({ defaultKind, space, onCreate }: CreateRoomFormProps) {
++export function CreateRoomForm({
++  defaultKind,
++  defaultVoice,
++  space,
++  onCreate,
++}: CreateRoomFormProps) {
+   const mx = useMatrixClient();
+   const alive = useAlive();
+ 
+@@ -64,6 +84,7 @@
+ 
+   const allowRestricted = space && restrictedSupported(selectedRoomVersion);
+ 
++  const [voice, setVoice] = useState(defaultVoice ?? CreateRoomVoice.TextRoom);
+   const [kind, setKind] = useState(
+     defaultKind ?? allowRestricted ? CreateRoomKind.Restricted : CreateRoomKind.Private
+   );
+@@ -116,8 +137,18 @@
+       roomKnock = knock;
+     }
+ 
++    let roomType;
++    const powerOverrides: IPowerLevels = {
++      events: {},
++    };
++    if (voice === CreateRoomVoice.VoiceRoom) {
++      roomType = RoomType.Call;
++      powerOverrides.events![StateEvent.GroupCallMemberPrefix] = 0;
++    }
++
+     create({
+       version: selectedRoomVersion,
++      type: roomType,
+       parent: space,
+       kind,
+       name: roomName,
+@@ -127,6 +158,7 @@
+       knock: roomKnock,
+       allowFederation: federation,
+       additionalCreators: allowAdditionalCreators ? additionalCreators : undefined,
++      powerLevelContentOverrides: powerOverrides,
+     }).then((roomId) => {
+       if (alive()) {
+         onCreate?.(roomId);
+@@ -137,20 +169,29 @@
+   return (
+     <Box as="form" onSubmit={handleSubmit} grow="Yes" direction="Column" gap="500">
+       <Box direction="Column" gap="100">
++        <Text size="L400">Type</Text>
++        <CreateRoomVoiceSelector
++          value={voice}
++          onSelect={setVoice}
++          disabled={disabled}
++          getIcon={getCreateRoomVoiceToIcon}
++        />
++      </Box>
++      <Box direction="Column" gap="100">
+         <Text size="L400">Access</Text>
+         <CreateRoomKindSelector
+           value={kind}
+           onSelect={setKind}
+           canRestrict={allowRestricted}
+           disabled={disabled}
+-          getIcon={getCreateRoomKindToIcon}
++          getIcon={(roomKind) => getCreateRoomKindToIcon(roomKind, voice)}
+         />
+       </Box>
+       <Box shrink="No" direction="Column" gap="100">
+         <Text size="L400">Name</Text>
+         <Input
+           required
+-          before={<Icon size="100" src={getCreateRoomKindToIcon(kind)} />}
++          before={<Icon size="100" src={getCreateRoomKindToIcon(kind, voice)} />}
+           name="nameInput"
+           autoFocus
+           size="500"
+diff --git a/src/app/features/message-search/SearchFilters.tsx b/src/app/features/message-search/SearchFilters.tsx
+index 929dd1e919..6883e3631f 100644
+--- a/src/app/features/message-search/SearchFilters.tsx
++++ b/src/app/features/message-search/SearchFilters.tsx
+@@ -29,7 +29,7 @@
+ import FocusTrap from 'focus-trap-react';
+ import { useVirtualizer } from '@tanstack/react-virtual';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+-import { joinRuleToIconSrc } from '../../utils/room';
++import { getRoomIconSrc } from '../../utils/room';
+ import { factoryRoomIdByAtoZ } from '../../utils/sort';
+ import {
+   SearchItemStrGetter,
+@@ -274,9 +274,7 @@
+                             before={
+                               <Icon
+                                 size="50"
+-                                src={
+-                                  joinRuleToIconSrc(Icons, room.getJoinRule(), false) ?? Icons.Hash
+-                                }
++                                src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())}
+                               />
+                             }
+                           >
+@@ -392,10 +390,7 @@
+               onClick={() => onSelectedRoomsChange(selectedRooms.filter((rId) => rId !== roomId))}
+               radii="Pill"
+               before={
+-                <Icon
+-                  size="50"
+-                  src={joinRuleToIconSrc(Icons, room.getJoinRule(), false) ?? Icons.Hash}
+-                />
++                <Icon size="50" src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())} />
+               }
+               after={<Icon size="50" src={Icons.Cross} />}
+             >
+diff --git a/src/app/features/room-nav/RoomCallNavStatus.css.ts b/src/app/features/room-nav/RoomCallNavStatus.css.ts
+new file mode 100644
+index 0000000000..059afd5add
+--- /dev/null
++++ b/src/app/features/room-nav/RoomCallNavStatus.css.ts
+@@ -0,0 +1,21 @@
++import { style } from '@vanilla-extract/css';
++import { config } from 'folds';
++
++export const Actions = style({
++  padding: config.space.S200,
++});
++
++export const RoomButtonWrap = style({
++  minWidth: 0,
++});
++
++export const RoomButton = style({
++  width: '100%',
++  minWidth: 0,
++  padding: `0 ${config.space.S200}`,
++});
++
++export const RoomName = style({
++  flexGrow: 1,
++  minWidth: 0,
++});
+diff --git a/src/app/features/room-nav/RoomNavUser.tsx b/src/app/features/room-nav/RoomNavUser.tsx
+new file mode 100644
+index 0000000000..967956474b
+--- /dev/null
++++ b/src/app/features/room-nav/RoomNavUser.tsx
+@@ -0,0 +1,63 @@
++import { Avatar, Box, Icon, Icons, Text } from 'folds';
++import React from 'react';
++import { Room } from 'matrix-js-sdk';
++import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
++import { NavButton, NavItem, NavItemContent } from '../../components/nav';
++import { UserAvatar } from '../../components/user-avatar';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { useCallState } from '../../pages/client/call/CallProvider';
++import { getMxIdLocalPart } from '../../utils/matrix';
++import { getMemberAvatarMxc, getMemberDisplayName } from '../../utils/room';
++import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { useOpenUserRoomProfile } from '../../state/hooks/userRoomProfile';
++import { useSpaceOptionally } from '../../hooks/useSpace';
++
++type RoomNavUserProps = {
++  room: Room;
++  callMembership: CallMembership;
++};
++export function RoomNavUser({ room, callMembership }: RoomNavUserProps) {
++  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  const openProfile = useOpenUserRoomProfile();
++  const space = useSpaceOptionally();
++  const { isActiveCallReady, activeCallRoomId } = useCallState();
++  const isActiveCall = isActiveCallReady && activeCallRoomId === room.roomId;
++  const userId = callMembership.sender ?? '';
++  const avatarMxcUrl = getMemberAvatarMxc(room, userId);
++  const avatarUrl = avatarMxcUrl
++    ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
++    : undefined;
++  const getName = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
++  const isCallParticipant = isActiveCall && userId !== mx.getUserId();
++
++  const handleNavUserClick: React.MouseEventHandler<HTMLButtonElement> = (evt) => {
++    openProfile(room.roomId, space?.roomId, userId, evt.currentTarget.getBoundingClientRect());
++  };
++
++  const ariaLabel = isCallParticipant ? `Call Participant: ${getName}` : getName;
++
++  return (
++    <NavItem variant="Background" radii="400">
++      <NavButton onClick={handleNavUserClick} aria-label={ariaLabel}>
++        <NavItemContent as="div">
++          <Box direction="Column" grow="Yes" gap="200" justifyContent="Stretch">
++            <Box alignItems="Center" gap="200">
++              <Avatar size="200">
++                <UserAvatar
++                  userId={userId}
++                  src={avatarUrl ?? undefined}
++                  alt={getName}
++                  renderFallback={() => <Icon size="50" src={Icons.User} filled />}
++                />
++              </Avatar>
++              <Text as="span" size="B400" priority="300" truncate>
++                {getName}
++              </Text>
++            </Box>
++          </Box>
++        </NavItemContent>
++      </NavButton>
++    </NavItem>
++  );
++}
+diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
+index f8647d1865..bea09a92b7 100644
+--- a/src/app/pages/Router.tsx
++++ b/src/app/pages/Router.tsx
+@@ -67,6 +67,9 @@
+ import { Create } from './client/create';
+ import { CreateSpaceModalRenderer } from '../features/create-space';
+ import { SearchModalRenderer } from '../features/search';
++import { CallProvider } from './client/call/CallProvider';
++import { PersistentCallContainer } from './client/call/PersistentCallContainer';
++import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
+ import { getFallbackSession } from '../state/sessions';
+ 
+ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
+@@ -124,15 +127,20 @@
+                 <ClientRoomsNotificationPreferences>
+                   <ClientBindAtoms>
+                     <ClientNonUIFeatures>
+-                      <ClientLayout
+-                        nav={
+-                          <MobileFriendlyClientNav>
+-                            <SidebarNav />
+-                          </MobileFriendlyClientNav>
+-                        }
+-                      >
+-                        <Outlet />
+-                      </ClientLayout>
++                      <CallProvider>
++                        <ClientLayout
++                          nav={
++                            <MobileFriendlyClientNav>
++                              <SidebarNav />
++                            </MobileFriendlyClientNav>
++                          }
++                        >
++                          <PersistentCallContainer>
++                            <Outlet />
++                          </PersistentCallContainer>
++                        </ClientLayout>
++                        <IncomingCallNotification />
++                      </CallProvider>
+                       <SearchModalRenderer />
+                       <UserRoomProfileRenderer />
+                       <CreateRoomModalRenderer />
+diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx.orig
+copy from src/app/pages/Router.tsx
+copy to src/app/pages/Router.tsx.orig
+diff --git a/src/app/pages/auth/AuthFooter.tsx b/src/app/pages/auth/AuthFooter.tsx
+index 146f039bf9..9d972e6936 100644
+--- a/src/app/pages/auth/AuthFooter.tsx
++++ b/src/app/pages/auth/AuthFooter.tsx
+@@ -23,6 +23,15 @@
+       <Text as="a" size="T300" href="https://matrix.org" target="_blank" rel="noreferrer">
+         Powered by Matrix
+       </Text>
++      <Text
++        as="a"
++        size="T300"
++        href="https://codeberg.org/lapingvino/cinny"
++        target="_blank"
++        rel="noreferrer"
++      >
++        Source Code
++      </Text>
+     </Box>
+   );
+ }
+diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
+new file mode 100644
+index 0000000000..3b5f8954f9
+--- /dev/null
++++ b/src/app/pages/client/call/PersistentCallContainer.tsx
+@@ -0,0 +1,187 @@
++import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
++import { ClientWidgetApi } from 'matrix-widget-api';
++import { Box } from 'folds';
++import { useCallState } from './CallProvider';
++import {
++  createVirtualWidget,
++  SmallWidget,
++  getWidgetData,
++  getWidgetUrl,
++} from '../../../features/call/SmallWidget';
++import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { useClientConfig } from '../../../hooks/useClientConfig';
++import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
++import { ThemeKind, useTheme } from '../../../hooks/useTheme';
++
++interface PersistentCallContainerProps {
++  children: ReactNode;
++}
++
++export const CallRefContext =
++  createContext<React.MutableRefObject<HTMLIFrameElement | null> | null>(null);
++
++export function PersistentCallContainer({ children }: PersistentCallContainerProps) {
++  const callIframeRef = useRef<HTMLIFrameElement | null>(null);
++  const callWidgetApiRef = useRef<ClientWidgetApi | null>(null);
++  const callSmallWidgetRef = useRef<SmallWidget | null>(null);
++
++  const {
++    activeCallRoomId,
++    viewedCallRoomId,
++    isChatOpen,
++    isActiveCallReady,
++    registerActiveClientWidgetApi,
++    activeClientWidget,
++  } = useCallState();
++  const mx = useMatrixClient();
++  const clientConfig = useClientConfig();
++  const screenSize = useScreenSizeContext();
++  const theme = useTheme();
++  const isMobile = screenSize === ScreenSize.Mobile;
++
++  /* eslint-disable no-param-reassign */
++
++  const setupWidget = useCallback(
++    (
++      widgetApiRef: React.MutableRefObject<ClientWidgetApi | null>,
++      smallWidgetRef: React.MutableRefObject<SmallWidget | null>,
++      iframeRef: React.MutableRefObject<HTMLIFrameElement | null>,
++      skipLobby: boolean,
++      themeKind: ThemeKind | null,
++    ) => {
++      if (mx?.getUserId()) {
++        if (activeCallRoomId && !isActiveCallReady) {
++          const roomIdToSet = activeCallRoomId;
++
++          const widgetId = `element-call-${roomIdToSet}-${Date.now()}`;
++          const newUrl = getWidgetUrl(
++            mx,
++            roomIdToSet,
++            clientConfig.elementCallUrl ?? '',
++            widgetId,
++            {
++              skipLobby: skipLobby.toString(),
++              returnToLobby: 'true',
++              perParticipantE2EE: 'true',
++              theme: themeKind,
++              callIntent: 'audio',
++            },
++          );
++
++          if (
++            callSmallWidgetRef.current?.roomId &&
++            activeClientWidget?.roomId &&
++            activeClientWidget.roomId === callSmallWidgetRef.current?.roomId
++          ) {
++            return;
++          }
++
++          if (
++            iframeRef.current &&
++            (!iframeRef.current.src || iframeRef.current.src !== newUrl.toString())
++          ) {
++            iframeRef.current.src = newUrl.toString();
++          }
++
++          const iframeElement = iframeRef.current;
++          if (!iframeElement) {
++            return;
++          }
++
++          const userId = mx.getUserId() ?? '';
++          const app = createVirtualWidget(
++            mx,
++            widgetId,
++            userId,
++            'Element Call',
++            'm.call',
++            newUrl,
++            true,
++            getWidgetData(mx, roomIdToSet, {}, { skipLobby: true, callIntent: 'audio' }),
++            roomIdToSet,
++          );
++
++          const smallWidget = new SmallWidget(app);
++          smallWidgetRef.current = smallWidget;
++
++          const widgetApiInstance = smallWidget.startMessaging(iframeElement);
++          widgetApiRef.current = widgetApiInstance;
++          registerActiveClientWidgetApi(
++            roomIdToSet,
++            widgetApiRef.current,
++            smallWidget,
++            iframeElement,
++          );
++        }
++      }
++    },
++    [
++      mx,
++      activeCallRoomId,
++      isActiveCallReady,
++      clientConfig.elementCallUrl,
++      activeClientWidget,
++      registerActiveClientWidgetApi,
++    ],
++  );
++
++  useEffect(() => {
++    if (activeCallRoomId) {
++      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, true, theme.kind);
++    }
++  }, [
++    theme,
++    setupWidget,
++    callWidgetApiRef,
++    callSmallWidgetRef,
++    callIframeRef,
++    registerActiveClientWidgetApi,
++    activeCallRoomId,
++    viewedCallRoomId,
++    isActiveCallReady,
++  ]);
++
++  const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
++
++  return (
++    <CallRefContext.Provider value={memoizedIframeRef}>
++      <Box grow="No">
++        <Box
++          direction="Column"
++          style={{
++            position: 'relative',
++            zIndex: 0,
++            display: isMobile && isChatOpen ? 'none' : 'flex',
++            width: isMobile && isChatOpen ? '0%' : '100%',
++            height: isMobile && isChatOpen ? '0%' : '100%',
++          }}
++        >
++          <Box
++            grow="Yes"
++            style={{
++              position: 'relative',
++            }}
++          >
++            <iframe
++              ref={callIframeRef}
++              style={{
++                position: 'absolute',
++                top: 0,
++                left: 0,
++                display: 'flex',
++                width: '100%',
++                height: '100%',
++                border: 'none',
++              }}
++              title="Persistent Element Call"
++              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads"
++              allow="microphone; camera; display-capture; autoplay; clipboard-write;"
++              src="about:blank"
++            />
++          </Box>
++        </Box>
++      </Box>
++      {children}
++    </CallRefContext.Provider>
++  );
++}
+diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
+index 04edf10906..4ffd3dc86e 100644
+--- a/src/app/pages/client/direct/Direct.tsx
++++ b/src/app/pages/client/direct/Direct.tsx
+@@ -51,6 +51,7 @@
+   useRoomsNotificationPreferencesContext,
+ } from '../../../hooks/useRoomsNotificationPreferences';
+ import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
++import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
+ 
+ type DirectMenuProps = {
+   requestClose: () => void;
+@@ -196,6 +197,7 @@
+     getScrollElement: () => scrollRef.current,
+     estimateSize: () => 38,
+     overscan: 10,
++    getItemKey: (index) => sortedDirects[index],
+   });
+ 
+   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
+@@ -253,7 +255,7 @@
+                   return (
+                     <VirtualTile
+                       virtualItem={vItem}
+-                      key={vItem.index}
++                      key={vItem.key}
+                       ref={virtualizer.measureElement}
+                     >
+                       <RoomNavItem
+@@ -275,6 +277,7 @@
+           </Box>
+         </PageNavContent>
+       )}
++      <CallNavStatus />
+     </PageNav>
+   );
+ }
+diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
+index d87db963df..721e55188a 100644
+--- a/src/app/pages/client/home/Home.tsx
++++ b/src/app/pages/client/home/Home.tsx
+@@ -62,6 +62,7 @@
+   getRoomNotificationMode,
+   useRoomsNotificationPreferencesContext,
+ } from '../../../hooks/useRoomsNotificationPreferences';
++import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
+ import { UseStateProvider } from '../../../components/UseStateProvider';
+ import { JoinAddressPrompt } from '../../../components/join-address-prompt';
+ import { _RoomSearchParams } from '../../paths';
+@@ -226,6 +227,7 @@
+     getScrollElement: () => scrollRef.current,
+     estimateSize: () => 38,
+     overscan: 10,
++    getItemKey: (index) => sortedRooms[index],
+   });
+ 
+   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
+@@ -337,7 +339,7 @@
+                   return (
+                     <VirtualTile
+                       virtualItem={vItem}
+-                      key={vItem.index}
++                      key={vItem.key}
+                       ref={virtualizer.measureElement}
+                     >
+                       <RoomNavItem
+@@ -357,6 +359,7 @@
+           </Box>
+         </PageNavContent>
+       )}
++      <CallNavStatus />
+     </PageNav>
+   );
+ }
+diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
+index 3f60d2a957..616b6fc09d 100644
+--- a/src/app/pages/client/space/Space.tsx
++++ b/src/app/pages/client/space/Space.tsx
+@@ -76,6 +76,7 @@
+   getRoomNotificationMode,
+   useRoomsNotificationPreferencesContext,
+ } from '../../../hooks/useRoomsNotificationPreferences';
++import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
+ import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
+ import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
+ import { useRoomCreators } from '../../../hooks/useRoomCreators';
+@@ -429,6 +430,7 @@
+     getScrollElement: () => scrollRef.current,
+     estimateSize: () => 0,
+     overscan: 10,
++    getItemKey: (index) => hierarchy[index]?.roomId ?? index,
+   });
+ 
+   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
+@@ -500,7 +502,7 @@
+                 return (
+                   <VirtualTile
+                     virtualItem={vItem}
+-                    key={vItem.index}
++                    key={vItem.key}
+                     ref={virtualizer.measureElement}
+                   >
+                     <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
+@@ -519,7 +521,7 @@
+               }
+ 
+               return (
+-                <VirtualTile virtualItem={vItem} key={vItem.index} ref={virtualizer.measureElement}>
++                <VirtualTile virtualItem={vItem} key={vItem.key} ref={virtualizer.measureElement}>
+                   <RoomNavItem
+                     room={room}
+                     selected={selectedRoomId === roomId}
+@@ -534,6 +536,7 @@
+           </NavCategory>
+         </Box>
+       </PageNavContent>
++      <CallNavStatus space={space} />
+     </PageNav>
+   );
+ }
+diff --git a/src/app/utils/room.ts b/src/app/utils/room.ts
+index c282a0a20c..02186a4c56 100644
+--- a/src/app/utils/room.ts
++++ b/src/app/utils/room.ts
+@@ -257,24 +257,60 @@
+   return unreadInfos;
+ };
+ 
+-export const joinRuleToIconSrc = (
++export const getRoomIconSrc = (
+   icons: Record<IconName, IconSrc>,
+-  joinRule: JoinRule,
+-  space: boolean
+-): IconSrc | undefined => {
+-  if (joinRule === JoinRule.Restricted) {
+-    return space ? icons.Space : icons.Hash;
+-  }
+-  if (joinRule === JoinRule.Knock) {
+-    return space ? icons.SpaceLock : icons.HashLock;
+-  }
+-  if (joinRule === JoinRule.Invite) {
+-    return space ? icons.SpaceLock : icons.HashLock;
+-  }
+-  if (joinRule === JoinRule.Public) {
+-    return space ? icons.SpaceGlobe : icons.HashGlobe;
+-  }
+-  return undefined;
++  roomType?: string,
++  joinRule?: JoinRule,
++  locked?: boolean
++): IconSrc => {
++  type RoomIcons = {
++    base: IconSrc;
++    locked: IconSrc;
++    public: IconSrc;
++  };
++
++  const roomTypeIcons: Record<string, RoomIcons> = {
++    [RoomType.Call]: {
++      base: icons.VolumeHigh,
++      locked: icons.Lock,
++      public: icons.VolumeHigh,
++    },
++    [RoomType.Space]: {
++      base: icons.Space,
++      locked: icons.SpaceLock,
++      public: icons.SpaceGlobe,
++    },
++    default: {
++      base: icons.Hash,
++      locked: icons.HashLock,
++      public: icons.HashGlobe,
++    },
++  };
++
++  const roomIcons = roomTypeIcons[roomType ?? 'default'] ?? roomTypeIcons.default;
++
++  let roomIcon = roomIcons.base;
++
++  if (locked) {
++    roomIcon = roomIcons.locked;
++  } else {
++    switch (joinRule) {
++      case JoinRule.Invite:
++      case JoinRule.Knock:
++        roomIcon = roomIcons.locked;
++        break;
++      case JoinRule.Restricted:
++        roomIcon = roomIcons.base;
++        break;
++      case JoinRule.Public:
++        roomIcon = roomIcons.public;
++        break;
++      default:
++        break;
++    }
++  }
++
++  return roomIcon;
+ };
+ 
+ export const getRoomAvatarUrl = (
+diff --git a/src/types/matrix/room.ts b/src/types/matrix/room.ts
+index b866fd77fc..c949b30763 100644
+--- a/src/types/matrix/room.ts
++++ b/src/types/matrix/room.ts
+@@ -50,6 +50,7 @@
+ 
+ export enum RoomType {
+   Space = 'm.space',
++  Call = 'org.matrix.msc3417.call',
+ }
+ 
+ export type MSpaceChildContent = {
+diff --git a/vite.config.js b/vite.config.js
+index dfa02fc4eb..3cff0dbf81 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -14,6 +14,10 @@
+ const copyFiles = {
+   targets: [
+     {
++      src: 'node_modules/@element-hq/element-call-embedded/dist/*',
++      dest: 'public/element-call',
++    },
++    {
+       src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
+       dest: '',
+       rename: 'pdf.worker.min.js',

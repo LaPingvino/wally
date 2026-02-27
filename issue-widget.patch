@@ -1,0 +1,1059 @@
+diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
+new file mode 100644
+index 0000000000..a1ea02108f
+--- /dev/null
++++ b/src/app/widget/IssueBoardWidget.tsx
+@@ -0,0 +1,921 @@
++import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import { IRoomEvent, WidgetApi, WidgetApiToWidgetAction } from 'matrix-widget-api';
++
++// ── Types (must match eu.kiefte schema format used in IssueBoard.tsx) ──────────
++
++type FieldType = 'text' | 'enum' | 'user' | 'date' | 'follow';
++
++interface SchemaField {
++  key: string;
++  type: FieldType;
++  label: string;
++  required?: boolean;
++  values?: string[];
++  kanban_group?: boolean;
++}
++
++interface IssueSchema {
++  fields: SchemaField[];
++}
++
++type IssueContent = Record<string, unknown> & { _deleted?: boolean; title?: string };
++
++interface WidgetIssue {
++  stateKey: string;
++  content: IssueContent;
++  sender: string;
++  ts: number;
++}
++
++export const DEFAULT_ISSUE_SCHEMA: IssueSchema = {
++  fields: [
++    { key: 'title', type: 'text', label: 'Title', required: true },
++    {
++      key: 'status',
++      type: 'enum',
++      label: 'Status',
++      values: ['Backlog', 'To Do', 'In Progress', 'Done'],
++      kanban_group: true,
++    },
++    { key: 'priority', type: 'enum', label: 'Priority', values: ['Low', 'Medium', 'High', 'Critical'] },
++    { key: 'assignee', type: 'user', label: 'Assignee' },
++    { key: 'due', type: 'date', label: 'Due Date' },
++    { key: 'description', type: 'text', label: 'Description' },
++  ],
++};
++
++// ── Styles ────────────────────────────────────────────────────────────────────
++
++const s = {
++  container: {
++    display: 'flex',
++    flexDirection: 'column' as const,
++    height: '100%',
++    overflow: 'hidden',
++  },
++  toolbar: {
++    display: 'flex',
++    alignItems: 'center',
++    gap: 8,
++    padding: '8px 12px',
++    borderBottom: '1px solid #e0e0e0',
++    background: '#fafafa',
++    flexShrink: 0,
++    flexWrap: 'wrap' as const,
++  },
++  content: {
++    flex: 1,
++    overflow: 'auto',
++    padding: '8px 0',
++  },
++  muted: { fontSize: 13, color: '#666' },
++  btn: {
++    padding: '4px 10px',
++    borderRadius: 4,
++    border: '1px solid #ccc',
++    background: '#fff',
++    cursor: 'pointer',
++    fontSize: 13,
++    lineHeight: '20px',
++  },
++  btnPrimary: {
++    padding: '4px 10px',
++    borderRadius: 4,
++    border: '1px solid #1976d2',
++    background: '#1976d2',
++    color: '#fff',
++    cursor: 'pointer',
++    fontSize: 13,
++    lineHeight: '20px',
++    fontWeight: 600,
++  },
++  btnActive: {
++    padding: '4px 10px',
++    borderRadius: 4,
++    border: '1px solid #1976d2',
++    background: '#e3f0fd',
++    color: '#1976d2',
++    cursor: 'pointer',
++    fontSize: 13,
++    lineHeight: '20px',
++  },
++  btnDanger: {
++    padding: '4px 10px',
++    borderRadius: 4,
++    border: '1px solid #d32f2f',
++    background: '#fff',
++    color: '#d32f2f',
++    cursor: 'pointer',
++    fontSize: 13,
++    lineHeight: '20px',
++  },
++  centered: {
++    display: 'flex',
++    alignItems: 'center',
++    justifyContent: 'center',
++    height: '100%',
++    color: '#666',
++  },
++  overlay: {
++    position: 'fixed' as const,
++    inset: 0,
++    background: 'rgba(0,0,0,0.4)',
++    display: 'flex',
++    alignItems: 'flex-start',
++    justifyContent: 'center',
++    zIndex: 1000,
++    overflowY: 'auto' as const,
++    padding: 24,
++  },
++  dialog: {
++    background: '#fff',
++    borderRadius: 6,
++    boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
++    width: '100%',
++    maxWidth: 520,
++    display: 'flex',
++    flexDirection: 'column' as const,
++    maxHeight: '90vh',
++  },
++  dialogHeader: {
++    display: 'flex',
++    alignItems: 'center',
++    justifyContent: 'space-between',
++    padding: '12px 16px',
++    borderBottom: '1px solid #e0e0e0',
++    flexShrink: 0,
++  },
++  dialogBody: {
++    padding: 16,
++    overflowY: 'auto' as const,
++    flex: 1,
++  },
++  dialogFooter: {
++    display: 'flex',
++    alignItems: 'center',
++    padding: '10px 16px',
++    borderTop: '1px solid #e0e0e0',
++    flexShrink: 0,
++    gap: 8,
++  },
++  input: {
++    width: '100%',
++    padding: '6px 8px',
++    border: '1px solid #ccc',
++    borderRadius: 4,
++    fontSize: 14,
++    fontFamily: 'inherit',
++  },
++  label: {
++    display: 'block',
++    fontWeight: 600,
++    marginBottom: 4,
++    fontSize: 13,
++  },
++  fieldGroup: { marginBottom: 12 },
++  // List view
++  table: {
++    width: '100%',
++    borderCollapse: 'collapse' as const,
++    fontSize: 13,
++  },
++  th: {
++    textAlign: 'left' as const,
++    padding: '6px 12px',
++    borderBottom: '1px solid #e0e0e0',
++    color: '#555',
++    fontWeight: 600,
++    whiteSpace: 'nowrap' as const,
++  },
++  td: {
++    padding: '6px 12px',
++    borderBottom: '1px solid #f0f0f0',
++    verticalAlign: 'top' as const,
++  },
++  trHover: {
++    cursor: 'pointer',
++  },
++  // Kanban
++  kanbanScroll: {
++    display: 'flex',
++    gap: 12,
++    padding: '0 12px 12px',
++    overflowX: 'auto' as const,
++    height: '100%',
++    alignItems: 'flex-start',
++  },
++  kanbanCol: {
++    flexShrink: 0,
++    width: 220,
++    background: '#f5f5f5',
++    borderRadius: 6,
++    display: 'flex',
++    flexDirection: 'column' as const,
++    maxHeight: '100%',
++  },
++  kanbanColHeader: {
++    padding: '8px 12px',
++    fontWeight: 600,
++    fontSize: 13,
++    borderBottom: '1px solid #e0e0e0',
++    display: 'flex',
++    alignItems: 'center',
++    justifyContent: 'space-between',
++  },
++  kanbanColBody: {
++    padding: 8,
++    overflowY: 'auto' as const,
++    flex: 1,
++    display: 'flex',
++    flexDirection: 'column' as const,
++    gap: 6,
++  },
++  kanbanCard: {
++    background: '#fff',
++    borderRadius: 4,
++    padding: '8px 10px',
++    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
++    cursor: 'pointer',
++    border: '1px solid #e8e8e8',
++    fontSize: 13,
++  },
++  kanbanTitle: {
++    fontWeight: 600,
++    marginBottom: 4,
++    wordBreak: 'break-word' as const,
++  },
++  kanbanMeta: {
++    color: '#777',
++    fontSize: 12,
++  },
++};
++
++// ── Utility helpers ───────────────────────────────────────────────────────────
++
++function formatFieldValue(field: SchemaField, value: unknown): string {
++  if (value === null || value === undefined || value === '') return '';
++  if (field.type === 'date') {
++    const d = new Date(String(value));
++    return isNaN(d.getTime()) ? String(value) : d.toLocaleDateString();
++  }
++  return String(value);
++}
++
++function newIssueKey(): string {
++  return `issue-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
++}
++
++// ── Schema editor ────────────────────────────────────────────────────────────
++
++interface DraftField extends SchemaField { _enumRaw: string; }
++
++function fieldToDraft(f: SchemaField): DraftField { return { ...f, _enumRaw: f.values?.join(', ') ?? '' }; }
++function draftToField(d: DraftField): SchemaField {
++  const { _enumRaw, ...field } = d;
++  if (field.type === 'enum') {
++    field.values = _enumRaw.split(',').map(v => v.trim()).filter(Boolean);
++  } else {
++    delete field.values;
++    delete field.kanban_group;
++  }
++  return field;
++}
++
++const TYPE_LABELS: Record<FieldType, string> = { text: 'Text', enum: 'Choice', user: 'User', date: 'Date', follow: 'Follow' };
++
++function SchemaEditor({ initial, onSave, onCancel, titleText }: {
++  initial: IssueSchema;
++  onSave: (schema: IssueSchema) => Promise<void>;
++  onCancel: () => void;
++  titleText?: string;
++}) {
++  const [fields, setFields] = React.useState<DraftField[]>(() => initial.fields.map(fieldToDraft));
++  const [selectedKey, setSelectedKey] = React.useState<string | null>(initial.fields[0]?.key ?? null);
++  const [saving, setSaving] = React.useState(false);
++  const [saveError, setSaveError] = React.useState<string | null>(null);
++
++  const selected = fields.find(f => f.key === selectedKey) ?? null;
++
++  const updateField = (key: string, patch: Partial<DraftField>) =>
++    setFields(fs => fs.map(f => f.key === key ? { ...f, ...patch } : f));
++
++  const removeField = (key: string) => {
++    setFields(fs => {
++      const next = fs.filter(f => f.key !== key);
++      if (selectedKey === key) setSelectedKey(next[0]?.key ?? null);
++      return next;
++    });
++  };
++
++  const addField = () => {
++    const newKey = newIssueKey();
++    setFields(fs => [...fs, { key: newKey, type: 'text', label: '', _enumRaw: '' }]);
++    setSelectedKey(newKey);
++  };
++
++  const handleSave = async (e: React.FormEvent) => {
++    e.preventDefault();
++    setSaving(true);
++    setSaveError(null);
++    try {
++      await onSave({ fields: fields.map(draftToField) });
++    } catch (err) {
++      setSaveError(err instanceof Error ? err.message : 'Failed to save');
++      setSaving(false);
++    }
++  };
++
++  const sidebarStyle: React.CSSProperties = {
++    width: 160, flexShrink: 0, borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column',
++    overflow: 'hidden',
++  };
++  const editorStyle: React.CSSProperties = {
++    flex: 1, display: 'flex', flexDirection: 'column', overflow: 'auto', padding: 16, gap: 12,
++  };
++  const fieldBtnStyle = (active: boolean): React.CSSProperties => ({
++    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
++    padding: '6px 10px', border: '1px solid ' + (active ? '#1976d2' : 'transparent'),
++    background: active ? '#e3f0fd' : 'transparent', borderRadius: 4, cursor: 'pointer',
++    textAlign: 'left', width: '100%', fontFamily: 'inherit', fontSize: 13,
++    color: active ? '#1976d2' : 'inherit',
++  });
++
++  return (
++    <div style={s.overlay} role="dialog" aria-modal="true" aria-label="Edit issue tracker schema">
++      <div style={{ ...s.dialog, maxWidth: 580 }}>
++        <div style={s.dialogHeader}>
++          <strong>{titleText ?? 'Configure Issue Tracker Schema'}</strong>
++          <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, lineHeight: 1 }} aria-label="Close">×</button>
++        </div>
++        <form onSubmit={handleSave} id="schema-editor-form" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
++          <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 280, maxHeight: '55vh' }}>
++            {/* Field list sidebar */}
++            <div style={sidebarStyle}>
++              <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 4 }}>
++                {fields.map((f, idx) => (
++                  <button key={f.key} type="button" onClick={() => setSelectedKey(f.key)} style={fieldBtnStyle(f.key === selectedKey)}>
++                    <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%' }}>
++                      {f.label || `Field ${idx + 1}`}
++                    </span>
++                    <span style={{ fontSize: 11, color: '#888' }}>{TYPE_LABELS[f.type] ?? f.type}</span>
++                  </button>
++                ))}
++              </div>
++              <div style={{ padding: '6px 8px', borderTop: '1px solid #e0e0e0' }}>
++                <button type="button" onClick={addField} style={{ ...s.btn, width: '100%', fontSize: 12 }}>+ Add Field</button>
++              </div>
++            </div>
++            {/* Field editor */}
++            {selected ? (
++              <div style={editorStyle}>
++                <div style={{ display: 'flex', gap: 10 }}>
++                  <div style={{ flex: 1 }}>
++                    <label style={s.label} htmlFor={`sf-label-${selected.key}`}>Label</label>
++                    <input id={`sf-label-${selected.key}`} type="text" required style={s.input} value={selected.label}
++                      placeholder="e.g. Status"
++                      onChange={e => updateField(selected.key, { label: e.target.value })} />
++                  </div>
++                  <div style={{ width: 110, flexShrink: 0 }}>
++                    <label style={s.label} htmlFor={`sf-type-${selected.key}`}>Type</label>
++                    <select id={`sf-type-${selected.key}`} style={s.input} value={selected.type}
++                      onChange={e => updateField(selected.key, { type: e.target.value as FieldType })}>
++                      <option value="text">Text</option>
++                      <option value="enum">Choice</option>
++                      <option value="user">User</option>
++                      <option value="date">Date</option>
++                      <option value="follow">Follow</option>
++                    </select>
++                  </div>
++                </div>
++                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
++                  <input type="checkbox" checked={!!selected.required}
++                    onChange={e => updateField(selected.key, { required: e.target.checked || undefined })} />
++                  Required
++                </label>
++                {selected.type === 'enum' && (
++                  <div>
++                    <label style={s.label} htmlFor={`sf-vals-${selected.key}`}>Choices (comma-separated)</label>
++                    <input id={`sf-vals-${selected.key}`} type="text" style={s.input} value={selected._enumRaw}
++                      placeholder="e.g. To Do, In Progress, Done"
++                      onChange={e => updateField(selected.key, { _enumRaw: e.target.value })} />
++                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, marginTop: 8 }}>
++                      <input type="checkbox" checked={!!selected.kanban_group}
++                        onChange={e => updateField(selected.key, { kanban_group: e.target.checked || undefined })} />
++                      Default kanban grouping field
++                    </label>
++                  </div>
++                )}
++                <div style={{ marginTop: 'auto', paddingTop: 8 }}>
++                  <button type="button" style={s.btnDanger} onClick={() => removeField(selected.key)}>
++                    Remove Field
++                  </button>
++                </div>
++              </div>
++            ) : (
++              <div style={{ ...editorStyle, alignItems: 'center', justifyContent: 'center', color: '#999' }}>
++                Add a field or select one to edit
++              </div>
++            )}
++          </div>
++        </form>
++        <div style={s.dialogFooter}>
++          {saveError && <span style={{ color: '#d32f2f', flex: 1, fontSize: 13 }}>{saveError}</span>}
++          <button type="button" style={s.btn} onClick={onCancel}>Cancel</button>
++          <button type="submit" form="schema-editor-form" style={s.btnPrimary} disabled={saving}>
++            {saving ? 'Saving…' : 'Save Schema'}
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++// ── Issue form ────────────────────────────────────────────────────────────────
++
++interface IssueFormProps {
++  schema: IssueSchema;
++  initial: IssueContent;
++  isNew: boolean;
++  canDelete: boolean;
++  onSave: (content: IssueContent) => Promise<void>;
++  onDelete: (() => Promise<void>) | undefined;
++  onCancel: () => void;
++}
++
++function IssueForm({ schema, initial, isNew, canDelete, onSave, onDelete, onCancel }: IssueFormProps) {
++  const [form, setForm] = useState<IssueContent>({ ...initial });
++  const [saving, setSaving] = useState(false);
++  const [err, setErr] = useState('');
++  const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null>(null);
++
++  useEffect(() => {
++    (firstInputRef.current as HTMLElement | null)?.focus();
++  }, []);
++
++  const handleSave = async () => {
++    setSaving(true);
++    setErr('');
++    try {
++      await onSave(form);
++    } catch (e) {
++      setErr(String(e));
++      setSaving(false);
++    }
++  };
++
++  const handleDelete = async () => {
++    if (!onDelete) return;
++    setSaving(true);
++    try {
++      await onDelete();
++    } catch (e) {
++      setErr(String(e));
++      setSaving(false);
++    }
++  };
++
++  const handleKeyDown = (e: React.KeyboardEvent) => {
++    if (e.key === 'Escape') onCancel();
++  };
++
++  return (
++    <div style={s.overlay} role="dialog" aria-modal="true" aria-label={isNew ? 'New issue' : 'Edit issue'} onKeyDown={handleKeyDown}>
++      <div style={s.dialog}>
++        <div style={s.dialogHeader}>
++          <strong style={{ fontSize: 15 }}>{isNew ? 'New Issue' : 'Edit Issue'}</strong>
++          <button onClick={onCancel} style={{ ...s.btn, border: 'none', background: 'none', fontSize: 18, padding: '0 4px' }} aria-label="Close">✕</button>
++        </div>
++        <div style={s.dialogBody}>
++          {schema.fields.map((field, idx) => {
++            const val = String(form[field.key] ?? '');
++            const commonProps = {
++              id: `wf-${field.key}`,
++              value: val,
++              onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
++                setForm(f => ({ ...f, [field.key]: e.target.value || undefined })),
++              style: s.input,
++              ref: idx === 0 ? (firstInputRef as React.RefObject<any>) : undefined,
++            };
++            return (
++              <div key={field.key} style={s.fieldGroup}>
++                <label htmlFor={`wf-${field.key}`} style={s.label}>
++                  {field.label}
++                  {field.required && <span style={{ color: '#d32f2f' }}> *</span>}
++                </label>
++                {field.type === 'enum' && field.values ? (
++                  <select {...commonProps}>
++                    <option value="">—</option>
++                    {field.values.map(v => <option key={v} value={v}>{v}</option>)}
++                  </select>
++                ) : field.type === 'date' ? (
++                  <input type="date" {...commonProps} />
++                ) : field.key === 'description' ? (
++                  <textarea {...commonProps} rows={4} style={{ ...s.input, resize: 'vertical', fontFamily: 'inherit' }} />
++                ) : (
++                  <input type={field.type === 'user' ? 'text' : 'text'} {...commonProps}
++                    placeholder={field.type === 'user' ? '@user:server' : ''} />
++                )}
++              </div>
++            );
++          })}
++          {err && <div style={{ color: '#d32f2f', marginTop: 8, fontSize: 13 }}>{err}</div>}
++        </div>
++        <div style={s.dialogFooter}>
++          {canDelete && onDelete && (
++            <button onClick={handleDelete} disabled={saving} style={s.btnDanger}>Delete</button>
++          )}
++          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
++            <button onClick={onCancel} disabled={saving} style={s.btn}>Cancel</button>
++            <button onClick={handleSave} disabled={saving} style={s.btnPrimary}>
++              {saving ? 'Saving…' : 'Save'}
++            </button>
++          </div>
++        </div>
++      </div>
++    </div>
++  );
++}
++
++// ── List view ─────────────────────────────────────────────────────────────────
++
++interface ListViewProps {
++  issues: WidgetIssue[];
++  schema: IssueSchema;
++  onEdit: ((issue: WidgetIssue) => void) | undefined;
++}
++
++function ListView({ issues, schema, onEdit }: ListViewProps) {
++  // Show title + up to 3 other fields
++  const displayFields = useMemo(() => {
++    const titleField = schema.fields.find(f => f.key === 'title') ?? schema.fields[0];
++    const rest = schema.fields.filter(f => f !== titleField).slice(0, 3);
++    return titleField ? [titleField, ...rest] : rest;
++  }, [schema]);
++
++  const [hovered, setHovered] = useState<string | null>(null);
++
++  if (issues.length === 0) {
++    return (
++      <div style={{ ...s.centered, flexDirection: 'column', gap: 8 }}>
++        <span style={{ fontSize: 32 }}>📋</span>
++        <span style={s.muted}>No issues yet</span>
++      </div>
++    );
++  }
++
++  return (
++    <table style={s.table}>
++      <thead>
++        <tr>
++          {displayFields.map(f => (
++            <th key={f.key} style={s.th}>{f.label}</th>
++          ))}
++        </tr>
++      </thead>
++      <tbody>
++        {issues.map(issue => (
++          <tr
++            key={issue.stateKey}
++            onClick={() => onEdit?.(issue)}
++            onMouseEnter={() => setHovered(issue.stateKey)}
++            onMouseLeave={() => setHovered(null)}
++            style={{
++              ...s.trHover,
++              background: hovered === issue.stateKey ? '#f5f8ff' : undefined,
++              cursor: onEdit ? 'pointer' : 'default',
++            }}
++          >
++            {displayFields.map(f => (
++              <td key={f.key} style={s.td}>
++                {formatFieldValue(f, issue.content[f.key]) || <span style={{ color: '#bbb' }}>—</span>}
++              </td>
++            ))}
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
++
++// ── Kanban view ───────────────────────────────────────────────────────────────
++
++interface KanbanViewProps {
++  issues: WidgetIssue[];
++  schema: IssueSchema;
++  kanbanField: SchemaField;
++  onEdit: ((issue: WidgetIssue) => void) | undefined;
++}
++
++function KanbanView({ issues, schema, kanbanField, onEdit }: KanbanViewProps) {
++  const titleField = schema.fields.find(f => f.key === 'title') ?? schema.fields[0];
++  const metaFields = schema.fields.filter(f => f !== titleField && f !== kanbanField).slice(0, 2);
++
++  const columns = useMemo(() => {
++    const values = kanbanField.values ?? [];
++    const withValue: Record<string, WidgetIssue[]> = Object.fromEntries(values.map(v => [v, []]));
++    const unset: WidgetIssue[] = [];
++    for (const issue of issues) {
++      const v = String(issue.content[kanbanField.key] ?? '');
++      if (v && withValue[v]) {
++        withValue[v].push(issue);
++      } else {
++        unset.push(issue);
++      }
++    }
++    const result: { label: string; issues: WidgetIssue[] }[] = values.map(v => ({ label: v, issues: withValue[v] }));
++    if (unset.length > 0) result.push({ label: '(Unset)', issues: unset });
++    return result;
++  }, [issues, kanbanField]);
++
++  if (issues.length === 0) {
++    return (
++      <div style={{ ...s.centered, flexDirection: 'column', gap: 8 }}>
++        <span style={{ fontSize: 32 }}>📋</span>
++        <span style={s.muted}>No issues yet</span>
++      </div>
++    );
++  }
++
++  return (
++    <div style={s.kanbanScroll}>
++      {columns.map(col => (
++        <div key={col.label} style={s.kanbanCol}>
++          <div style={s.kanbanColHeader}>
++            <span>{col.label}</span>
++            <span style={{ color: '#999', fontSize: 12 }}>{col.issues.length}</span>
++          </div>
++          <div style={s.kanbanColBody}>
++            {col.issues.map(issue => {
++              const title = titleField ? String(issue.content[titleField.key] ?? '') || '(untitled)' : issue.stateKey;
++              return (
++                <div
++                  key={issue.stateKey}
++                  style={s.kanbanCard}
++                  onClick={() => onEdit?.(issue)}
++                  role={onEdit ? 'button' : undefined}
++                  tabIndex={onEdit ? 0 : undefined}
++                  onKeyDown={onEdit ? (e) => { if (e.key === 'Enter' || e.key === ' ') onEdit(issue); } : undefined}
++                  aria-label={title}
++                >
++                  <div style={s.kanbanTitle}>{title}</div>
++                  {metaFields.map(f => {
++                    const v = formatFieldValue(f, issue.content[f.key]);
++                    if (!v) return null;
++                    return (
++                      <div key={f.key} style={s.kanbanMeta}>
++                        {f.label}: {v}
++                      </div>
++                    );
++                  })}
++                </div>
++              );
++            })}
++          </div>
++        </div>
++      ))}
++    </div>
++  );
++}
++
++// ── Main widget component ─────────────────────────────────────────────────────
++
++interface Props {
++  widgetApi: WidgetApi;
++}
++
++export function IssueBoardWidget({ widgetApi }: Props) {
++  const [schema, setSchema] = useState<IssueSchema | null>(null);
++  const [issues, setIssues] = useState<WidgetIssue[]>([]);
++  const [canWrite, setCanWrite] = useState(false);
++  const [loading, setLoading] = useState(true);
++  const [error, setError] = useState<string | null>(null);
++  const [view, setView] = useState<'list' | 'kanban'>('list');
++  const [editing, setEditing] = useState<WidgetIssue | 'new' | null>(null);
++  const [editingSchema, setEditingSchema] = useState(false);
++
++  const userId = useMemo(() => new URLSearchParams(window.location.search).get('userId') ?? '', []);
++
++  // Load initial state on mount
++  useEffect(() => {
++    let cancelled = false;
++    async function load() {
++      try {
++        const [schemaEvents, issueEvents, plEvents] = await Promise.all([
++          widgetApi.readStateEvents('eu.kiefte.issues.schema', 1),
++          widgetApi.readStateEvents('eu.kiefte.issue', 10000),
++          widgetApi.readStateEvents('m.room.power_levels', 1),
++        ]);
++        if (cancelled) return;
++
++        const rawSchema = (schemaEvents[0]?.content as any);
++        setSchema(rawSchema?.fields ? (rawSchema as IssueSchema) : null);
++
++        setIssues(
++          issueEvents
++            .filter(e => e.state_key && !(e.content as any)?._deleted)
++            .map(e => ({
++              stateKey: e.state_key!,
++              content: e.content as IssueContent,
++              sender: e.sender,
++              ts: e.origin_server_ts,
++            }))
++        );
++
++        const pl = plEvents[0]?.content as any;
++        if (pl && userId) {
++          const userPL = (pl.users?.[userId] ?? pl.users_default ?? 0) as number;
++          const stateDefault = (pl.state_default ?? 50) as number;
++          setCanWrite(userPL >= stateDefault);
++        } else {
++          // If we can't check, optimistically allow writes (errors surface on save)
++          setCanWrite(true);
++        }
++      } catch (e) {
++        if (!cancelled) setError(String(e));
++      } finally {
++        if (!cancelled) setLoading(false);
++      }
++    }
++    load();
++    return () => { cancelled = true; };
++  }, [widgetApi, userId]);
++
++  // Live event updates from the host client
++  useEffect(() => {
++    const eventName = `action:${WidgetApiToWidgetAction.SendEvent}`;
++    const handler = (actionEv: any) => {
++      const event: IRoomEvent = actionEv?.detail?.data ?? actionEv;
++      if (!event?.type) return;
++
++      if (event.type === 'eu.kiefte.issues.schema') {
++        const c = event.content as any;
++        if (c?.fields) setSchema(c as IssueSchema);
++      } else if (event.type === 'eu.kiefte.issue' && event.state_key) {
++        const c = event.content as IssueContent;
++        if (c?._deleted) {
++          setIssues(prev => prev.filter(i => i.stateKey !== event.state_key));
++        } else {
++          setIssues(prev => {
++            const rest = prev.filter(i => i.stateKey !== event.state_key!);
++            return [
++              ...rest,
++              { stateKey: event.state_key!, content: c, sender: event.sender, ts: event.origin_server_ts },
++            ];
++          });
++        }
++      }
++    };
++    widgetApi.on(eventName, handler);
++    return () => { widgetApi.off(eventName, handler); };
++  }, [widgetApi]);
++
++  const doSave = useCallback(async (stateKey: string, content: IssueContent) => {
++    // Optimistic update
++    setIssues(prev => {
++      const rest = prev.filter(i => i.stateKey !== stateKey);
++      return [...rest, { stateKey, content, sender: userId, ts: Date.now() }];
++    });
++    setEditing(null);
++    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, content);
++  }, [widgetApi, userId]);
++
++  const doDelete = useCallback(async (stateKey: string) => {
++    setIssues(prev => prev.filter(i => i.stateKey !== stateKey));
++    setEditing(null);
++    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, { _deleted: true });
++  }, [widgetApi]);
++
++  const doSaveSchema = useCallback(async (newSchema: IssueSchema) => {
++    setSchema(newSchema);
++    setEditingSchema(false);
++    await widgetApi.sendStateEvent('eu.kiefte.issues.schema', '', newSchema);
++  }, [widgetApi]);
++
++  const activeIssues = useMemo(
++    () => issues.filter(i => !i.content._deleted).sort((a, b) => b.ts - a.ts),
++    [issues]
++  );
++
++  const editingIssue = editing !== null && editing !== 'new' ? editing : null;
++  const editingContent = editingIssue?.content ?? ({} as IssueContent);
++  const editingKey = editingIssue?.stateKey ?? null;
++
++  if (loading) return <div style={s.centered}>Loading…</div>;
++  if (error) {
++    return (
++      <div style={{ ...s.centered, flexDirection: 'column', gap: 12, padding: 24, textAlign: 'center' }}>
++        <div style={{ color: '#d32f2f' }}>Failed to load issues</div>
++        <div style={{ ...s.muted, fontSize: 12, maxWidth: 320, wordBreak: 'break-all' }}>{error}</div>
++        <div style={s.muted}>
++          Make sure this client supports MSC2762 widget state event capabilities.
++        </div>
++      </div>
++    );
++  }
++
++  if (!schema) {
++    if (!canWrite) {
++      return (
++        <div style={{ ...s.centered, flexDirection: 'column', gap: 8, padding: 24, textAlign: 'center' }}>
++          <span style={{ fontSize: 32 }}>📋</span>
++          <div style={{ fontWeight: 600 }}>Issue Tracker Not Set Up</div>
++          <div style={s.muted}>Ask a room admin to initialize the issue tracker.</div>
++        </div>
++      );
++    }
++    return (
++      <SchemaEditor
++        initial={DEFAULT_ISSUE_SCHEMA}
++        titleText="Initialize Issue Tracker"
++        onSave={doSaveSchema}
++        onCancel={() => {}}
++      />
++    );
++  }
++
++  // schema is non-null past this point
++  const effectiveSchema = schema;
++  const kanbanField = effectiveSchema.fields.find(f => f.kanban_group && f.type === 'enum');
++
++  return (
++    <div style={s.container}>
++      {/* Toolbar */}
++      <div style={s.toolbar} role="toolbar" aria-label="Issue tracker controls">
++        <span style={s.muted}>
++          {activeIssues.length} {activeIssues.length === 1 ? 'issue' : 'issues'}
++        </span>
++        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' }}>
++          {kanbanField && (
++            <>
++              <button
++                onClick={() => setView('list')}
++                style={view === 'list' ? s.btnActive : s.btn}
++                aria-pressed={view === 'list'}
++              >
++                List
++              </button>
++              <button
++                onClick={() => setView('kanban')}
++                style={view === 'kanban' ? s.btnActive : s.btn}
++                aria-pressed={view === 'kanban'}
++              >
++                Kanban
++              </button>
++            </>
++          )}
++          {canWrite && (
++            <button onClick={() => setEditingSchema(true)} style={s.btn} aria-label="Edit issue tracker schema">
++              ⚙ Schema
++            </button>
++          )}
++          {canWrite && (
++            <button onClick={() => setEditing('new')} style={s.btnPrimary} aria-label="New issue" aria-keyshortcuts="n">
++              + New Issue
++            </button>
++          )}
++        </div>
++      </div>
++
++      {/* Main content */}
++      <div style={s.content}>
++        {view === 'kanban' && kanbanField ? (
++          <KanbanView
++            issues={activeIssues}
++            schema={effectiveSchema}
++            kanbanField={kanbanField}
++            onEdit={canWrite ? setEditing : undefined}
++          />
++        ) : (
++          <ListView
++            issues={activeIssues}
++            schema={effectiveSchema}
++            onEdit={canWrite ? setEditing : undefined}
++          />
++        )}
++      </div>
++
++      {/* Edit / create form */}
++      {editing !== null && (
++        <IssueForm
++          schema={effectiveSchema}
++          initial={editingContent}
++          isNew={editing === 'new'}
++          canDelete={canWrite && editing !== 'new'}
++          onSave={async (content) => {
++            const key = editingKey ?? newIssueKey();
++            await doSave(key, content);
++          }}
++          onDelete={editingKey ? () => doDelete(editingKey) : undefined}
++          onCancel={() => setEditing(null)}
++        />
++      )}
++      {editingSchema && (
++        <SchemaEditor
++          initial={effectiveSchema}
++          onSave={doSaveSchema}
++          onCancel={() => setEditingSchema(false)}
++        />
++      )}
++    </div>
++  );
++}
+diff --git a/src/widget.tsx b/src/widget.tsx
+new file mode 100644
+index 0000000000..8da0154226
+--- /dev/null
++++ b/src/widget.tsx
+@@ -0,0 +1,88 @@
++import React from 'react';
++import { createRoot } from 'react-dom/client';
++import { WidgetApi } from 'matrix-widget-api';
++import { IssueBoardWidget } from './app/widget/IssueBoardWidget';
++
++const params = new URLSearchParams(window.location.search);
++const widgetId = params.get('widgetId') ?? undefined;
++const parentUrl = params.get('parentUrl') ?? undefined;
++
++const widgetApi = new WidgetApi(widgetId, parentUrl);
++
++widgetApi.requestCapabilityToReceiveState('eu.kiefte.issue');
++widgetApi.requestCapabilityToReceiveState('eu.kiefte.issues.schema');
++widgetApi.requestCapabilityToSendState('eu.kiefte.issue');
++widgetApi.requestCapabilityToSendState('eu.kiefte.issues.schema');
++widgetApi.requestCapabilityToReceiveState('m.room.power_levels');
++
++widgetApi.start();
++
++let rendered = false;
++
++widgetApi.once('ready', () => {
++  rendered = true;
++  const root = createRoot(document.getElementById('widget-root')!);
++  root.render(<IssueBoardWidget widgetApi={widgetApi} />);
++});
++
++// Fallback: if the Widget API hasn't started after 4s, show a helpful message.
++// Two cases:
++//   - window.parent === window: opened directly in browser, no Matrix host
++//   - window.parent !== window: embedded as plain iframe (e.g. Element Web "Custom widget" UI)
++//     but without the Matrix Widget API handshake (no parentUrl/widgetId params → ready never fires)
++setTimeout(() => {
++  if (rendered) return;
++  const isInIframe = window.parent !== window;
++  const hasParentUrl = !!parentUrl;
++  const root = createRoot(document.getElementById('widget-root')!);
++  root.render(
++    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
++      height: '100vh', gap: 16, padding: 24, textAlign: 'center', fontFamily: 'system-ui, sans-serif',
++      color: '#444' }}>
++      <div style={{ fontSize: 32 }}>📋</div>
++      <div style={{ fontWeight: 600, fontSize: 18 }}>Matrix Issue Tracker Widget</div>
++      {isInIframe && !hasParentUrl && (
++        <div style={{ maxWidth: 520, color: '#c62828', lineHeight: 1.6, fontSize: 14 }}>
++          The widget API is not active. This widget was embedded as a plain iframe — it must be
++          registered as a room state event to work (see below).
++        </div>
++      )}
++      <div style={{ maxWidth: 520, color: '#555', fontSize: 13, lineHeight: 1.7, textAlign: 'left' }}>
++        <p style={{ marginBottom: 8 }}>
++          Send the following state event in the room where you want the widget. Any Matrix client with
++          developer tools works (Gomuks, Element Web, etc.).
++        </p>
++        <pre style={{ background: '#f5f5f5', padding: '10px 14px', borderRadius: 4,
++          fontSize: 12, overflowX: 'auto', margin: 0 }}>{
++`Event type:  im.vector.modular.widgets
++State key:   eu.kiefte.issue-tracker
++Content:
++{
++  "type": "m.custom",
++  "url": "${window.location.origin + window.location.pathname}?roomId=$matrix_room_id&userId=$matrix_user_id",
++  "name": "Issue Tracker",
++  "id": "eu.kiefte.issue-tracker"
++}`
++        }</pre>
++        <p style={{ marginTop: 10, color: '#777' }}>
++          <strong>Gomuks:</strong> open Developer Tools (⋮ menu → Developer tools), go to "Send custom event",
++          set type to <code>im.vector.modular.widgets</code>, state key to <code>eu.kiefte.issue-tracker</code>,
++          paste the content above.
++        </p>
++        <p style={{ marginTop: 6, color: '#777' }}>
++          <strong>Element Web:</strong> use the <code>/addwidget</code> slash command in the room chat:
++        </p>
++        <pre style={{ background: '#f5f5f5', padding: '6px 14px', borderRadius: 4, fontSize: 12, overflowX: 'auto', margin: '4px 0' }}>{
++          `/addwidget ${window.location.origin + window.location.pathname}?roomId=$matrix_room_id&userId=$matrix_user_id`
++        }</pre>
++        <p style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
++          Or use the{' '}
++          <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>cinny fork</a>'s
++          built-in "Enable widget" button in the issue board toolbar.
++          Also see{' '}
++          <a href="https://github.com/lapingvino/matrix-issue-widget" style={{ color: '#1976d2' }}>matrix-issue-widget on GitHub</a>.
++        </p>
++      </div>
++    </div>
++  );
++}, 4000);
+diff --git a/vite.config.js b/vite.config.js
+index 3cff0dbf81..7e0f999de4 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -130,6 +130,10 @@
+     copyPublicDir: false,
+     rollupOptions: {
+       plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],
++      input: {
++        main: path.resolve(__dirname, 'index.html'),
++        widget: path.resolve(__dirname, 'widget.html'),
++      },
+     },
+   },
+ });
+diff --git a/widget.html b/widget.html
+new file mode 100644
+index 0000000000..716ec27d0d
+--- /dev/null
++++ b/widget.html
+@@ -0,0 +1,17 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>Issue Tracker</title>
++    <style>
++      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
++      body { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; background: #fff; color: #111; }
++      #widget-root { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
++    </style>
++  </head>
++  <body>
++    <div id="widget-root"></div>
++    <script type="module" src="/src/widget.tsx"></script>
++  </body>
++</html>

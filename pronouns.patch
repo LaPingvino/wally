@@ -1,0 +1,3120 @@
+diff --git a/package-lock.json b/package-lock.json
+index 0546686657..3584a2bc0a 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -62,7 +62,8 @@
+         "slate-dom": "0.112.2",
+         "slate-history": "0.110.3",
+         "slate-react": "0.112.1",
+-        "ua-parser-js": "1.0.35"
++        "ua-parser-js": "1.0.35",
++        "zod": "4.1.8"
+       },
+       "devDependencies": {
+         "@esbuild-plugins/node-globals-polyfill": "0.2.3",
+@@ -12117,6 +12118,15 @@
+       "funding": {
+         "url": "https://github.com/sponsors/sindresorhus"
+       }
++    },
++    "node_modules/zod": {
++      "version": "4.1.8",
++      "resolved": "https://registry.npmjs.org/zod/-/zod-4.1.8.tgz",
++      "integrity": "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ==",
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/colinhacks"
++      }
+     }
+   }
+ }
+diff --git a/package-lock.json b/package-lock.json.orig
+copy from package-lock.json
+copy to package-lock.json.orig
+diff --git a/package.json b/package.json
+index 2dc0a4b103..3f100beade 100644
+--- a/package.json
++++ b/package.json
+@@ -74,7 +74,8 @@
+     "slate-dom": "0.112.2",
+     "slate-history": "0.110.3",
+     "slate-react": "0.112.1",
+-    "ua-parser-js": "1.0.35"
++    "ua-parser-js": "1.0.35",
++    "zod": "4.1.8"
+   },
+   "devDependencies": {
+     "@element-hq/element-call-embedded": "0.16.3",
+diff --git a/src/app/components/AccountDataEditor.tsx b/src/app/components/AccountDataEditor.tsx
+index 2dbaf1f1f2..ef8d01a149 100644
+--- a/src/app/components/AccountDataEditor.tsx
++++ b/src/app/components/AccountDataEditor.tsx
+@@ -27,6 +27,7 @@
+ const EDITOR_INTENT_SPACE_COUNT = 2;
+ 
+ export type AccountDataSubmitCallback = (type: string, content: object) => Promise<void>;
++export type AccountDataDeleteCallback = (type: string) => Promise<void>;
+ 
+ type AccountDataInfo = {
+   type: string;
+@@ -83,8 +84,7 @@
+ 
+     if (
+       !typeStr ||
+-      parsedContent === null ||
+-      defaultContent === JSON.stringify(parsedContent, null, EDITOR_INTENT_SPACE_COUNT)
++      parsedContent === null
+     ) {
+       return;
+     }
+@@ -121,7 +121,7 @@
+       aria-disabled={submitting}
+     >
+       <Box shrink="No" direction="Column" gap="100">
+-        <Text size="L400">Account Data</Text>
++        <Text size="L400">Field Name</Text>
+         <Box gap="300">
+           <Box grow="Yes" direction="Column">
+             <Input
+@@ -195,9 +195,22 @@
+ type AccountDataViewProps = {
+   type: string;
+   defaultContent: string;
+-  onEdit: () => void;
++  requestClose: () => void;
++  onEdit?: () => void;
++  submitDelete?: AccountDataDeleteCallback;
+ };
+-function AccountDataView({ type, defaultContent, onEdit }: AccountDataViewProps) {
++function AccountDataView({ type, defaultContent, onEdit, requestClose, submitDelete }: AccountDataViewProps) {
++  const [deleteState, deleteCallback] = useAsyncCallback<void, MatrixError, []>(useCallback(
++    async () => {
++      if (submitDelete !== undefined) {
++        await submitDelete(type);
++        requestClose();
++      }
++    },
++    [type, submitDelete, requestClose],
++  ));
++  const deleting = deleteState.status === AsyncStatus.Loading;
++
+   return (
+     <Box
+       direction="Column"
+@@ -208,7 +221,7 @@
+     >
+       <Box shrink="No" gap="300" alignItems="End">
+         <Box grow="Yes" direction="Column" gap="100">
+-          <Text size="L400">Account Data</Text>
++          <Text size="L400">Field Name</Text>
+           <Input
+             variant="SurfaceVariant"
+             size="400"
+@@ -218,9 +231,23 @@
+             required
+           />
+         </Box>
+-        <Button variant="Secondary" size="400" radii="300" onClick={onEdit}>
+-          <Text size="B400">Edit</Text>
+-        </Button>
++        {onEdit && (
++          <Button variant="Secondary" size="400" radii="300" onClick={onEdit}>
++            <Text size="B400">Edit</Text>
++          </Button>
++        )}
++        {submitDelete && (
++          <Button
++            variant="Critical"
++            size="400"
++            radii="300"
++            disabled={deleting}
++            before={deleting && <Spinner variant="Critical" fill="Solid" size="300" />}
++            onClick={deleteCallback}
++          >
++            <Text size="B400">Delete</Text>
++          </Button>
++        )}
+       </Box>
+       <Box grow="Yes" direction="Column" gap="100">
+         <Text size="L400">JSON Content</Text>
+@@ -243,8 +270,9 @@
+ 
+ export type AccountDataEditorProps = {
+   type?: string;
+-  content?: object;
+-  submitChange: AccountDataSubmitCallback;
++  content?: unknown;
++  submitChange?: AccountDataSubmitCallback;
++  submitDelete?: AccountDataDeleteCallback;
+   requestClose: () => void;
+ };
+ 
+@@ -252,6 +280,7 @@
+   type,
+   content,
+   submitChange,
++  submitDelete,
+   requestClose,
+ }: AccountDataEditorProps) {
+   const [data, setData] = useState<AccountDataInfo>({
+@@ -301,7 +330,7 @@
+         </Box>
+       </PageHeader>
+       <Box grow="Yes" direction="Column">
+-        {edit ? (
++        {(edit && submitChange) ? (
+           <AccountDataEdit
+             type={data.type}
+             defaultContent={contentJSONStr}
+@@ -313,7 +342,9 @@
+           <AccountDataView
+             type={data.type}
+             defaultContent={contentJSONStr}
+-            onEdit={() => setEdit(true)}
++            requestClose={requestClose}
++            onEdit={submitChange ? () => setEdit(true) : undefined}
++            submitDelete={submitDelete}
+           />
+         )}
+       </Box>
+diff --git a/src/app/components/CollapsibleCard.tsx b/src/app/components/CollapsibleCard.tsx
+new file mode 100644
+index 0000000000..95c0296455
+--- /dev/null
++++ b/src/app/components/CollapsibleCard.tsx
+@@ -0,0 +1,54 @@
++import React, { ReactNode } from 'react';
++import { Button, Icon, Icons, Text } from 'folds';
++import { SequenceCard } from './sequence-card';
++import { SequenceCardStyle } from '../features/settings/styles.css';
++import { SettingTile } from './setting-tile';
++
++type CollapsibleCardProps = {
++  expand: boolean;
++  setExpand: (expand: boolean) => void;
++  title?: ReactNode;
++  description?: ReactNode;
++  before?: ReactNode;
++  children?: ReactNode;
++};
++
++export function CollapsibleCard({
++  expand,
++  setExpand,
++  title,
++  description,
++  before,
++  children,
++}: CollapsibleCardProps) {
++  return (
++    <SequenceCard
++      className={SequenceCardStyle}
++      variant="SurfaceVariant"
++      direction="Column"
++      gap="400"
++    >
++      <SettingTile
++        title={title}
++        description={description}
++        before={before}
++        after={
++          <Button
++            onClick={() => setExpand(!expand)}
++            variant="Secondary"
++            fill="Soft"
++            size="300"
++            radii="300"
++            outlined
++            before={
++              <Icon src={expand ? Icons.ChevronTop : Icons.ChevronBottom} size="100" filled />
++            }
++          >
++            <Text size="B300">{expand ? 'Collapse' : 'Expand'}</Text>
++          </Button>
++        }
++      />
++      {expand && children}
++    </SequenceCard>
++  );
++}
+diff --git a/src/app/components/user-profile/UserChips.tsx b/src/app/components/user-profile/UserChips.tsx
+index 53e6618b5a..d65006bdeb 100644
+--- a/src/app/components/user-profile/UserChips.tsx
++++ b/src/app/components/user-profile/UserChips.tsx
+@@ -1,4 +1,4 @@
+-import React, { MouseEventHandler, useCallback, useMemo, useState } from 'react';
++import React, { MouseEventHandler, useCallback, useEffect, useMemo, useState } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import FocusTrap from 'focus-trap-react';
+ import { isKeyHotkey } from 'is-hotkey';
+@@ -19,6 +19,13 @@
+   Box,
+   Scroll,
+   Avatar,
++  TooltipProvider,
++  Tooltip,
++  Badge,
++  Overlay,
++  OverlayBackdrop,
++  OverlayCenter,
++  Modal,
+ } from 'folds';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+ import { getMxIdServer } from '../../utils/matrix';
+@@ -41,6 +48,11 @@
+ import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
+ import { CutoutCard } from '../cutout-card';
+ import { SettingTile } from '../setting-tile';
++import { useInterval } from '../../hooks/useInterval';
++import { TextViewer } from '../text-viewer';
++import { ExtendedProfile } from '../../hooks/useExtendedProfile';
++import { settingsAtom } from '../../state/settings';
++import { useSetting } from '../../state/hooks/settings';
+ 
+ export function ServerChip({ server }: { server: string }) {
+   const mx = useMatrixClient();
+@@ -436,15 +448,24 @@
+   );
+ }
+ 
+-export function OptionsChip({ userId }: { userId: string }) {
++export function OptionsChip({
++  userId,
++  extendedProfile,
++}: {
++  userId: string;
++  extendedProfile: ExtendedProfile | null;
++}) {
+   const mx = useMatrixClient();
+-  const [cords, setCords] = useState<RectCords>();
+-
+-  const open: MouseEventHandler<HTMLButtonElement> = (evt) => {
+-    setCords(evt.currentTarget.getBoundingClientRect());
++  const [developerToolsEnabled] = useSetting(settingsAtom, 'developerTools');
++
++  const [profileFieldsOpen, setProfileFieldsOpen] = useState(false);
++  const [menuCoords, setMenuCoords] = useState<RectCords>();
++
++  const openMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
++    setMenuCoords(evt.currentTarget.getBoundingClientRect());
+   };
+ 
+-  const close = () => setCords(undefined);
++  const closeMenu = () => setMenuCoords(undefined);
+ 
+   const ignoredUsers = useIgnoredUsers();
+   const ignored = ignoredUsers.includes(userId);
+@@ -459,56 +480,163 @@
+   const ignoring = ignoreState.status === AsyncStatus.Loading;
+ 
+   return (
+-    <PopOut
+-      anchor={cords}
+-      position="Bottom"
+-      align="Start"
+-      offset={4}
+-      content={
+-        <FocusTrap
+-          focusTrapOptions={{
+-            initialFocus: false,
+-            onDeactivate: close,
+-            clickOutsideDeactivates: true,
+-            escapeDeactivates: stopPropagation,
+-            isKeyForward: (evt: KeyboardEvent) => isKeyHotkey('arrowdown', evt),
+-            isKeyBackward: (evt: KeyboardEvent) => isKeyHotkey('arrowup', evt),
+-          }}
+-        >
+-          <Menu>
+-            <div style={{ padding: config.space.S100 }}>
+-              <MenuItem
+-                variant="Critical"
+-                fill="None"
+-                size="300"
+-                radii="300"
+-                onClick={() => {
+-                  toggleIgnore();
+-                  close();
+-                }}
+-                before={
+-                  ignoring ? (
+-                    <Spinner variant="Critical" size="50" />
+-                  ) : (
+-                    <Icon size="50" src={Icons.Prohibited} />
+-                  )
+-                }
+-                disabled={ignoring}
+-              >
+-                <Text size="B300">{ignored ? 'Unblock User' : 'Block User'}</Text>
+-              </MenuItem>
+-            </div>
+-          </Menu>
+-        </FocusTrap>
++    <>
++      {extendedProfile && (
++        <Overlay open={profileFieldsOpen} backdrop={<OverlayBackdrop />}>
++          <OverlayCenter>
++            <FocusTrap
++              focusTrapOptions={{
++                clickOutsideDeactivates: true,
++                onDeactivate: () => setProfileFieldsOpen(false),
++                escapeDeactivates: stopPropagation,
++              }}
++            >
++              <Modal variant="Surface" size="500">
++                <TextViewer
++                  name="Profile Fields"
++                  langName="json"
++                  text={JSON.stringify(extendedProfile, null, 2)}
++                  requestClose={() => setProfileFieldsOpen(false)}
++                />
++              </Modal>
++            </FocusTrap>
++          </OverlayCenter>
++        </Overlay>
++      )}
++      <PopOut
++        anchor={menuCoords}
++        position="Bottom"
++        align="Start"
++        offset={4}
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: closeMenu,
++              clickOutsideDeactivates: true,
++              escapeDeactivates: stopPropagation,
++              isKeyForward: (evt: KeyboardEvent) => isKeyHotkey('arrowdown', evt),
++              isKeyBackward: (evt: KeyboardEvent) => isKeyHotkey('arrowup', evt),
++            }}
++          >
++            <Menu>
++              <div style={{ padding: config.space.S100 }}>
++                <MenuItem
++                  variant="Critical"
++                  fill="None"
++                  size="300"
++                  radii="300"
++                  onClick={() => {
++                    toggleIgnore();
++                    closeMenu();
++                  }}
++                  before={
++                    ignoring ? (
++                      <Spinner variant="Critical" size="50" />
++                    ) : (
++                      <Icon size="50" src={Icons.Prohibited} />
++                    )
++                  }
++                  disabled={ignoring}
++                >
++                  <Text size="B300">{ignored ? 'Unblock User' : 'Block User'}</Text>
++                </MenuItem>
++                {extendedProfile && developerToolsEnabled && (
++                  <MenuItem
++                    variant="Surface"
++                    fill="None"
++                    size="300"
++                    radii="300"
++                    onClick={() => {
++                      setProfileFieldsOpen(true);
++                      closeMenu();
++                    }}
++                    before={<Icon size="50" src={Icons.BlockCode} />}
++                  >
++                    <Text size="B300">View Profile Fields</Text>
++                  </MenuItem>
++                )}
++              </div>
++            </Menu>
++          </FocusTrap>
++        }
++      >
++        <Chip variant="SurfaceVariant" radii="Pill" onClick={openMenu} aria-pressed={!!menuCoords}>
++          {ignoring ? (
++            <Spinner variant="Secondary" size="50" />
++          ) : (
++            <Icon size="50" src={Icons.HorizontalDots} />
++          )}
++        </Chip>
++      </PopOut>
++    </>
++  );
++}
++
++export function TimezoneChip({ timezone }: { timezone: string }) {
++  const shortFormat = useMemo(
++    () =>
++      new Intl.DateTimeFormat(undefined, {
++        dateStyle: undefined,
++        timeStyle: 'short',
++        timeZone: timezone,
++      }),
++    [timezone]
++  );
++  const longFormat = useMemo(
++    () =>
++      new Intl.DateTimeFormat(undefined, {
++        dateStyle: 'long',
++        timeStyle: 'short',
++        timeZone: timezone,
++      }),
++    [timezone]
++  );
++  const [shortTime, setShortTime] = useState(shortFormat.format());
++  const [longTime, setLongTime] = useState(longFormat.format());
++  const updateTime = useCallback(() => {
++    setShortTime(shortFormat.format());
++    setLongTime(longFormat.format());
++  }, [setShortTime, setLongTime, shortFormat, longFormat]);
++
++  useEffect(() => {
++    updateTime();
++  }, [timezone, updateTime]);
++
++  useInterval(updateTime, 1000);
++
++  return (
++    <TooltipProvider
++      position="Top"
++      offset={5}
++      align="Center"
++      tooltip={
++        <Tooltip variant="SurfaceVariant" style={{ maxWidth: toRem(280) }}>
++          <Box direction="Column" alignItems="Start" gap="100">
++            <Box gap="100">
++              <Text size="L400">Timezone:</Text>
++              <Badge size="400" variant="Primary">
++                <Text size="T200">{timezone}</Text>
++              </Badge>
++            </Box>
++            <Text size="T200">{longTime}</Text>
++          </Box>
++        </Tooltip>
+       }
+     >
+-      <Chip variant="SurfaceVariant" radii="Pill" onClick={open} aria-pressed={!!cords}>
+-        {ignoring ? (
+-          <Spinner variant="Secondary" size="50" />
+-        ) : (
+-          <Icon size="50" src={Icons.HorizontalDots} />
+-        )}
+-      </Chip>
+-    </PopOut>
++      {(triggerRef) => (
++        <Chip
++          ref={triggerRef}
++          variant="SurfaceVariant"
++          radii="Pill"
++          style={{ cursor: 'initial' }}
++          before={<Icon size="50" src={Icons.RecentClock} />}
++        >
++          <Text size="B300" truncate>
++            {shortTime}
++          </Text>
++        </Chip>
++      )}
++    </TooltipProvider>
+   );
+ }
+diff --git a/src/app/components/user-profile/UserHero.tsx b/src/app/components/user-profile/UserHero.tsx
+index 0e7fb74850..54e40402db 100644
+--- a/src/app/components/user-profile/UserHero.tsx
++++ b/src/app/components/user-profile/UserHero.tsx
+@@ -21,6 +21,7 @@
+ import { AvatarPresence, PresenceBadge } from '../presence';
+ import { ImageViewer } from '../image-viewer';
+ import { stopPropagation } from '../../utils/keyboard';
++import { ExtendedProfile } from '../../hooks/useExtendedProfile';
+ 
+ type UserHeroProps = {
+   userId: string;
+@@ -95,9 +96,11 @@
+ type UserHeroNameProps = {
+   displayName?: string;
+   userId: string;
++  extendedProfile?: ExtendedProfile;
+ };
+-export function UserHeroName({ displayName, userId }: UserHeroNameProps) {
++export function UserHeroName({ displayName, userId, extendedProfile }: UserHeroNameProps) {
+   const username = getMxIdLocalPart(userId);
++  const pronouns = extendedProfile?.["io.fsky.nyx.pronouns"];
+ 
+   return (
+     <Box grow="Yes" direction="Column" gap="0">
+@@ -110,9 +113,10 @@
+           {displayName ?? username ?? userId}
+         </Text>
+       </Box>
+-      <Box alignItems="Center" gap="100" wrap="Wrap">
++      <Box alignItems="Start" gap="100" wrap="Wrap" direction='Column'>
+         <Text size="T200" className={classNames(BreakWord, LineClamp3)} title={username}>
+           @{username}
++          {pronouns && <span> · {pronouns.map(({ summary }) => summary).join(", ")}</span>}
+         </Text>
+       </Box>
+     </Box>
+diff --git a/src/app/components/user-profile/UserRoomProfile.tsx b/src/app/components/user-profile/UserRoomProfile.tsx
+index 78d201ec69..cb54083e10 100644
+--- a/src/app/components/user-profile/UserRoomProfile.tsx
++++ b/src/app/components/user-profile/UserRoomProfile.tsx
+@@ -1,5 +1,5 @@
+ import { Box, Button, config, Icon, Icons, Text } from 'folds';
+-import React from 'react';
++import React, { useEffect, useMemo } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import { UserHero, UserHeroName } from './UserHero';
+ import { getMxIdServer, mxcUrlToHttp } from '../../utils/matrix';
+@@ -9,7 +9,7 @@
+ import { usePowerLevels } from '../../hooks/usePowerLevels';
+ import { useRoom } from '../../hooks/useRoom';
+ import { useUserPresence } from '../../hooks/useUserPresence';
+-import { IgnoredUserAlert, MutualRoomsChip, OptionsChip, ServerChip, ShareChip } from './UserChips';
++import { IgnoredUserAlert, MutualRoomsChip, OptionsChip, ServerChip, ShareChip, TimezoneChip } from './UserChips';
+ import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
+ import { PowerChip } from './PowerChip';
+ import { UserInviteAlert, UserBanAlert, UserModeration, UserKickAlert } from './UserModeration';
+@@ -22,6 +22,7 @@
+ import { CreatorChip } from './CreatorChip';
+ import { getDirectCreatePath, withSearchParam } from '../../pages/pathUtils';
+ import { DirectCreateSearchParams } from '../../pages/paths';
++import { useExtendedProfile } from '../../hooks/useExtendedProfile';
+ 
+ type UserRoomProfileProps = {
+   userId: string;
+@@ -56,9 +57,24 @@
+   const displayName = getMemberDisplayName(room, userId);
+   const avatarMxc = getMemberAvatarMxc(room, userId);
+   const avatarUrl = (avatarMxc && mxcUrlToHttp(mx, avatarMxc, useAuthentication)) ?? undefined;
++  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
++  const timezone = useMemo(() => {
++    // @ts-expect-error Intl.supportedValuesOf isn't in the types yet
++    const supportedTimezones = Intl.supportedValuesOf('timeZone') as string[];
++    const profileTimezone = extendedProfile?.['us.cloke.msc4175.tz'];
++    if (profileTimezone && supportedTimezones.includes(profileTimezone)) {
++      return profileTimezone;
++    } 
++      return undefined;
++    
++  }, [extendedProfile]);
+ 
+   const presence = useUserPresence(userId);
+ 
++  useEffect(() => {
++    refreshExtendedProfile();
++  }, [refreshExtendedProfile]);
++
+   const handleMessage = () => {
+     closeUserRoomProfile();
+     const directSearchParam: DirectCreateSearchParams = {
+@@ -77,7 +93,7 @@
+       <Box direction="Column" gap="500" style={{ padding: config.space.S400 }}>
+         <Box direction="Column" gap="400">
+           <Box gap="400" alignItems="Start">
+-            <UserHeroName displayName={displayName} userId={userId} />
++            <UserHeroName displayName={displayName} userId={userId} extendedProfile={extendedProfile ?? undefined} />
+             {userId !== myUserId && (
+               <Box shrink="No">
+                 <Button
+@@ -96,9 +112,10 @@
+           <Box alignItems="Center" gap="200" wrap="Wrap">
+             {server && <ServerChip server={server} />}
+             <ShareChip userId={userId} />
++            {timezone && <TimezoneChip timezone={timezone} />}
+             {creator ? <CreatorChip /> : <PowerChip userId={userId} />}
+             {userId !== myUserId && <MutualRoomsChip userId={userId} />}
+-            {userId !== myUserId && <OptionsChip userId={userId} />}
++            {userId !== myUserId && <OptionsChip userId={userId} extendedProfile={extendedProfile ?? null} />}
+           </Box>
+         </Box>
+         {ignored && <IgnoredUserAlert />}
+diff --git a/src/app/features/common-settings/developer-tools/DevelopTools.tsx b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
+index 29b6aa51cc..4125f6d2b1 100644
+--- a/src/app/features/common-settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
+@@ -30,6 +30,7 @@
+   AccountDataSubmitCallback,
+ } from '../../../components/AccountDataEditor';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { CollapsibleCard } from '../../../components/CollapsibleCard';
+ 
+ type DeveloperToolsProps = {
+   requestClose: () => void;
+@@ -175,216 +176,166 @@
+                       }
+                     />
+                   </SequenceCard>
+-                  <SequenceCard
+-                    className={SequenceCardStyle}
+-                    variant="SurfaceVariant"
+-                    direction="Column"
+-                    gap="400"
++                  <CollapsibleCard
++                    expand={expandState}
++                    setExpand={setExpandState}
++                    title="Room State"
++                    description="State events of the room."
+                   >
+-                    <SettingTile
+-                      title="Room State"
+-                      description="State events of the room."
+-                      after={
+-                        <Button
+-                          onClick={() => setExpandState(!expandState)}
+-                          variant="Secondary"
+-                          fill="Soft"
++                    <Box direction="Column" gap="100">
++                      <Box justifyContent="SpaceBetween">
++                        <Text size="L400">Events</Text>
++                        <Text size="L400">Total: {roomState.size}</Text>
++                      </Box>
++                      <CutoutCard>
++                        <MenuItem
++                          onClick={() => setComposeEvent({ stateKey: '' })}
++                          variant="Surface"
++                          fill="None"
+                           size="300"
+-                          radii="300"
+-                          outlined
+-                          before={
+-                            <Icon
+-                              src={expandState ? Icons.ChevronTop : Icons.ChevronBottom}
+-                              size="100"
+-                              filled
+-                            />
+-                          }
++                          radii="0"
++                          before={<Icon size="50" src={Icons.Plus} />}
+                         >
+-                          <Text size="B300">{expandState ? 'Collapse' : 'Expand'}</Text>
+-                        </Button>
+-                      }
+-                    />
+-                    {expandState && (
+-                      <Box direction="Column" gap="100">
+-                        <Box justifyContent="SpaceBetween">
+-                          <Text size="L400">Events</Text>
+-                          <Text size="L400">Total: {roomState.size}</Text>
+-                        </Box>
+-                        <CutoutCard>
+-                          <MenuItem
+-                            onClick={() => setComposeEvent({ stateKey: '' })}
+-                            variant="Surface"
+-                            fill="None"
+-                            size="300"
+-                            radii="0"
+-                            before={<Icon size="50" src={Icons.Plus} />}
+-                          >
+-                            <Box grow="Yes">
+-                              <Text size="T200" truncate>
+-                                Add New
+-                              </Text>
+-                            </Box>
+-                          </MenuItem>
+-                          {Array.from(roomState.keys())
+-                            .sort()
+-                            .map((eventType) => {
+-                              const expanded = eventType === expandStateType;
+-                              const stateKeyToEvents = roomState.get(eventType);
+-                              if (!stateKeyToEvents) return null;
++                          <Box grow="Yes">
++                            <Text size="T200" truncate>
++                              Add New
++                            </Text>
++                          </Box>
++                        </MenuItem>
++                        {Array.from(roomState.keys())
++                          .sort()
++                          .map((eventType) => {
++                            const expanded = eventType === expandStateType;
++                            const stateKeyToEvents = roomState.get(eventType);
++                            if (!stateKeyToEvents) return null;
+ 
+-                              return (
+-                                <Box id={eventType} key={eventType} direction="Column" gap="100">
+-                                  <MenuItem
+-                                    onClick={() =>
+-                                      setExpandStateType(expanded ? undefined : eventType)
+-                                    }
+-                                    variant="Surface"
+-                                    fill="None"
+-                                    size="300"
+-                                    radii="0"
+-                                    before={
+-                                      <Icon
+-                                        size="50"
+-                                        src={expanded ? Icons.ChevronBottom : Icons.ChevronRight}
+-                                      />
+-                                    }
+-                                    after={<Text size="L400">{stateKeyToEvents.size}</Text>}
++                            return (
++                              <Box id={eventType} key={eventType} direction="Column" gap="100">
++                                <MenuItem
++                                  onClick={() =>
++                                    setExpandStateType(expanded ? undefined : eventType)
++                                  }
++                                  variant="Surface"
++                                  fill="None"
++                                  size="300"
++                                  radii="0"
++                                  before={
++                                    <Icon
++                                      size="50"
++                                      src={expanded ? Icons.ChevronBottom : Icons.ChevronRight}
++                                    />
++                                  }
++                                  after={<Text size="L400">{stateKeyToEvents.size}</Text>}
++                                >
++                                  <Box grow="Yes">
++                                    <Text size="T200" truncate>
++                                      {eventType}
++                                    </Text>
++                                  </Box>
++                                </MenuItem>
++                                {expanded && (
++                                  <div
++                                    style={{
++                                      marginLeft: config.space.S400,
++                                      borderLeft: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
++                                    }}
+                                   >
+-                                    <Box grow="Yes">
+-                                      <Text size="T200" truncate>
+-                                        {eventType}
+-                                      </Text>
+-                                    </Box>
+-                                  </MenuItem>
+-                                  {expanded && (
+-                                    <div
+-                                      style={{
+-                                        marginLeft: config.space.S400,
+-                                        borderLeft: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
+-                                      }}
++                                    <MenuItem
++                                      onClick={() =>
++                                        setComposeEvent({ type: eventType, stateKey: '' })
++                                      }
++                                      variant="Surface"
++                                      fill="None"
++                                      size="300"
++                                      radii="0"
++                                      before={<Icon size="50" src={Icons.Plus} />}
+                                     >
+-                                      <MenuItem
+-                                        onClick={() =>
+-                                          setComposeEvent({ type: eventType, stateKey: '' })
+-                                        }
+-                                        variant="Surface"
+-                                        fill="None"
+-                                        size="300"
+-                                        radii="0"
+-                                        before={<Icon size="50" src={Icons.Plus} />}
+-                                      >
+-                                        <Box grow="Yes">
+-                                          <Text size="T200" truncate>
+-                                            Add New
+-                                          </Text>
+-                                        </Box>
+-                                      </MenuItem>
+-                                      {Array.from(stateKeyToEvents.keys())
+-                                        .sort()
+-                                        .map((stateKey) => (
+-                                          <MenuItem
+-                                            onClick={() => {
+-                                              setOpenStateEvent({
+-                                                type: eventType,
+-                                                stateKey,
+-                                              });
+-                                            }}
+-                                            key={stateKey}
+-                                            variant="Surface"
+-                                            fill="None"
+-                                            size="300"
+-                                            radii="0"
+-                                            after={<Icon size="50" src={Icons.ChevronRight} />}
+-                                          >
+-                                            <Box grow="Yes">
+-                                              <Text size="T200" truncate>
+-                                                {stateKey ? `"${stateKey}"` : 'Default'}
+-                                              </Text>
+-                                            </Box>
+-                                          </MenuItem>
+-                                        ))}
+-                                    </div>
+-                                  )}
+-                                </Box>
+-                              );
+-                            })}
+-                        </CutoutCard>
+-                      </Box>
+-                    )}
+-                  </SequenceCard>
+-                  <SequenceCard
+-                    className={SequenceCardStyle}
+-                    variant="SurfaceVariant"
+-                    direction="Column"
+-                    gap="400"
++                                      <Box grow="Yes">
++                                        <Text size="T200" truncate>
++                                          Add New
++                                        </Text>
++                                      </Box>
++                                    </MenuItem>
++                                    {Array.from(stateKeyToEvents.keys())
++                                      .sort()
++                                      .map((stateKey) => (
++                                        <MenuItem
++                                          onClick={() => {
++                                            setOpenStateEvent({
++                                              type: eventType,
++                                              stateKey,
++                                            });
++                                          }}
++                                          key={stateKey}
++                                          variant="Surface"
++                                          fill="None"
++                                          size="300"
++                                          radii="0"
++                                          after={<Icon size="50" src={Icons.ChevronRight} />}
++                                        >
++                                          <Box grow="Yes">
++                                            <Text size="T200" truncate>
++                                              {stateKey ? `"${stateKey}"` : 'Default'}
++                                            </Text>
++                                          </Box>
++                                        </MenuItem>
++                                      ))}
++                                  </div>
++                                )}
++                              </Box>
++                            );
++                          })}
++                      </CutoutCard>
++                    </Box>
++                  </CollapsibleCard>
++                  <CollapsibleCard
++                    expand={expandAccountData}
++                    setExpand={setExpandAccountData}
++                    title="Account Data"
++                    description="Private personalization data stored within room"
+                   >
+-                    <SettingTile
+-                      title="Account Data"
+-                      description="Private personalization data stored within room."
+-                      after={
+-                        <Button
+-                          onClick={() => setExpandAccountData(!expandAccountData)}
+-                          variant="Secondary"
+-                          fill="Soft"
++                    <Box direction="Column" gap="100">
++                      <Box justifyContent="SpaceBetween">
++                        <Text size="L400">Events</Text>
++                        <Text size="L400">Total: {accountData.size}</Text>
++                      </Box>
++                      <CutoutCard>
++                        <MenuItem
++                          variant="Surface"
++                          fill="None"
+                           size="300"
+-                          radii="300"
+-                          outlined
+-                          before={
+-                            <Icon
+-                              src={expandAccountData ? Icons.ChevronTop : Icons.ChevronBottom}
+-                              size="100"
+-                              filled
+-                            />
+-                          }
++                          radii="0"
++                          before={<Icon size="50" src={Icons.Plus} />}
++                          onClick={() => setAccountDataType(null)}
+                         >
+-                          <Text size="B300">{expandAccountData ? 'Collapse' : 'Expand'}</Text>
+-                        </Button>
+-                      }
+-                    />
+-                    {expandAccountData && (
+-                      <Box direction="Column" gap="100">
+-                        <Box justifyContent="SpaceBetween">
+-                          <Text size="L400">Events</Text>
+-                          <Text size="L400">Total: {accountData.size}</Text>
+-                        </Box>
+-                        <CutoutCard>
+-                          <MenuItem
+-                            variant="Surface"
+-                            fill="None"
+-                            size="300"
+-                            radii="0"
+-                            before={<Icon size="50" src={Icons.Plus} />}
+-                            onClick={() => setAccountDataType(null)}
+-                          >
+-                            <Box grow="Yes">
+-                              <Text size="T200" truncate>
+-                                Add New
+-                              </Text>
+-                            </Box>
+-                          </MenuItem>
+-                          {Array.from(accountData.keys())
+-                            .sort()
+-                            .map((type) => (
+-                              <MenuItem
+-                                key={type}
+-                                variant="Surface"
+-                                fill="None"
+-                                size="300"
+-                                radii="0"
+-                                after={<Icon size="50" src={Icons.ChevronRight} />}
+-                                onClick={() => setAccountDataType(type)}
+-                              >
+-                                <Box grow="Yes">
+-                                  <Text size="T200" truncate>
+-                                    {type}
+-                                  </Text>
+-                                </Box>
+-                              </MenuItem>
+-                            ))}
+-                        </CutoutCard>
+-                      </Box>
+-                    )}
+-                  </SequenceCard>
++                          <Box grow="Yes">
++                            <Text size="T200" truncate>
++                              Add New
++                            </Text>
++                          </Box>
++                        </MenuItem>
++                        {Array.from(accountData.keys())
++                          .sort()
++                          .map((type) => (
++                            <MenuItem
++                              key={type}
++                              variant="Surface"
++                              fill="None"
++                              size="300"
++                              radii="0"
++                              after={<Icon size="50" src={Icons.ChevronRight} />}
++                              onClick={() => setAccountDataType(type)}
++                            >
++                              <Box grow="Yes">
++                                <Text size="T200" truncate>
++                                  {type}
++                                </Text>
++                              </Box>
++                            </MenuItem>
++                          ))}
++                      </CutoutCard>
++                    </Box>
++                  </CollapsibleCard>
+                 </Box>
+               )}
+             </Box>
+diff --git a/src/app/features/common-settings/general/RoomAddress.tsx b/src/app/features/common-settings/general/RoomAddress.tsx
+index 767a967ee4..1a618a68ef 100644
+--- a/src/app/features/common-settings/general/RoomAddress.tsx
++++ b/src/app/features/common-settings/general/RoomAddress.tsx
+@@ -7,8 +7,6 @@
+   Chip,
+   color,
+   config,
+-  Icon,
+-  Icons,
+   Input,
+   Spinner,
+   Text,
+@@ -33,6 +31,7 @@
+ import { StateEvent } from '../../../../types/matrix/room';
+ import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
+ import { getMxIdServer } from '../../../utils/matrix';
++import { CollapsibleCard } from '../../../components/CollapsibleCard';
+ 
+ type RoomPublishedAddressesProps = {
+   permissions: RoomPermissionsAPI;
+@@ -373,64 +372,40 @@
+   const { localAliasesState, addLocalAlias, removeLocalAlias } = useLocalAliases(room.roomId);
+ 
+   return (
+-    <SequenceCard
+-      className={SequenceCardStyle}
+-      variant="SurfaceVariant"
+-      direction="Column"
+-      gap="400"
++    <CollapsibleCard
++      expand={expand}
++      setExpand={setExpand}
++      title="Local Addresses"
++      description="Set local address so users can join through your homeserver."
+     >
+-      <SettingTile
+-        title="Local Addresses"
+-        description="Set local address so users can join through your homeserver."
+-        after={
+-          <Button
+-            type="button"
+-            onClick={() => setExpand(!expand)}
+-            size="300"
+-            variant="Secondary"
+-            fill="Soft"
+-            outlined
+-            radii="300"
+-            before={
+-              <Icon size="100" src={expand ? Icons.ChevronTop : Icons.ChevronBottom} filled />
+-            }
+-          >
+-            <Text as="span" size="B300" truncate>
+-              {expand ? 'Collapse' : 'Expand'}
++      <CutoutCard variant="Surface" style={{ padding: config.space.S300 }}>
++        {localAliasesState.status === AsyncStatus.Loading && (
++          <Box gap="100">
++            <Spinner variant="Secondary" size="100" />
++            <Text size="T200">Loading...</Text>
++          </Box>
++        )}
++        {localAliasesState.status === AsyncStatus.Success &&
++          (localAliasesState.data.length === 0 ? (
++            <Box direction="Column" gap="100">
++              <Text size="L400">No Addresses</Text>
++            </Box>
++          ) : (
++            <LocalAddressesList
++              localAliases={localAliasesState.data}
++              removeLocalAlias={removeLocalAlias}
++              canEditCanonical={canEditCanonical}
++            />
++          ))}
++        {localAliasesState.status === AsyncStatus.Error && (
++          <Box gap="100">
++            <Text size="T200" style={{ color: color.Critical.Main }}>
++              {localAliasesState.error.message}
+             </Text>
+-          </Button>
+-        }
+-      />
+-      {expand && (
+-        <CutoutCard variant="Surface" style={{ padding: config.space.S300 }}>
+-          {localAliasesState.status === AsyncStatus.Loading && (
+-            <Box gap="100">
+-              <Spinner variant="Secondary" size="100" />
+-              <Text size="T200">Loading...</Text>
+-            </Box>
+-          )}
+-          {localAliasesState.status === AsyncStatus.Success &&
+-            (localAliasesState.data.length === 0 ? (
+-              <Box direction="Column" gap="100">
+-                <Text size="L400">No Addresses</Text>
+-              </Box>
+-            ) : (
+-              <LocalAddressesList
+-                localAliases={localAliasesState.data}
+-                removeLocalAlias={removeLocalAlias}
+-                canEditCanonical={canEditCanonical}
+-              />
+-            ))}
+-          {localAliasesState.status === AsyncStatus.Error && (
+-            <Box gap="100">
+-              <Text size="T200" style={{ color: color.Critical.Main }}>
+-                {localAliasesState.error.message}
+-              </Text>
+-            </Box>
+-          )}
+-        </CutoutCard>
+-      )}
++          </Box>
++        )}
++      </CutoutCard>
+       {expand && <LocalAddressInput addLocalAlias={addLocalAlias} />}
+-    </SequenceCard>
++    </CollapsibleCard>
+   );
+ }
+diff --git a/src/app/features/settings/Settings.tsx b/src/app/features/settings/Settings.tsx
+index 5e1a20f4ac..fc8e1a7ffc 100644
+--- a/src/app/features/settings/Settings.tsx
++++ b/src/app/features/settings/Settings.tsx
+@@ -21,10 +21,9 @@
+ import { Account } from './account';
+ import { useUserProfile } from '../../hooks/useUserProfile';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+-import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
++import { mxcUrlToHttp } from '../../utils/matrix';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+ import { UserAvatar } from '../../components/user-avatar';
+-import { nameInitials } from '../../utils/common';
+ import { Notifications } from './notifications';
+ import { Devices } from './devices';
+ import { EmojisStickers } from './emojis-stickers';
+@@ -99,9 +98,8 @@
+ export function Settings({ initialPage, requestClose }: SettingsProps) {
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
+-  const userId = mx.getUserId()!;
++  const userId = mx.getUserId() as string;
+   const profile = useUserProfile(userId);
+-  const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
+   const avatarUrl = profile.avatarUrl
+     ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 96, 96, 'crop') ?? undefined
+     : undefined;
+@@ -132,7 +130,7 @@
+                   <UserAvatar
+                     userId={userId}
+                     src={avatarUrl}
+-                    renderFallback={() => <Text size="H6">{nameInitials(displayName)}</Text>}
++                    renderFallback={() => <Icon size="100" src={Icons.User} filled />}
+                   />
+                 </Avatar>
+                 <Text size="H4" truncate>
+diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
+index e982a79921..71f5773f30 100644
+--- a/src/app/features/settings/account/Profile.tsx
++++ b/src/app/features/settings/account/Profile.tsx
+@@ -1,324 +1,283 @@
+-import React, {
+-  ChangeEventHandler,
+-  FormEventHandler,
+-  useCallback,
+-  useEffect,
+-  useMemo,
+-  useState,
+-} from 'react';
+-import {
+-  Box,
+-  Text,
+-  IconButton,
+-  Icon,
+-  Icons,
+-  Input,
+-  Avatar,
+-  Button,
+-  Overlay,
+-  OverlayBackdrop,
+-  OverlayCenter,
+-  Modal,
+-  Dialog,
+-  Header,
+-  config,
+-  Spinner,
+-} from 'folds';
+-import FocusTrap from 'focus-trap-react';
++import React, { useCallback, useLayoutEffect, useMemo, useState } from 'react';
++import { Box, Text, Button, config, Spinner, Line } from 'folds';
++import { UserEvent, ValidatedAuthMetadata } from 'matrix-js-sdk';
+ import { SequenceCard } from '../../../components/sequence-card';
+-import { SequenceCardStyle } from '../styles.css';
+ import { SettingTile } from '../../../components/setting-tile';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+-import { UserProfile, useUserProfile } from '../../../hooks/useUserProfile';
+-import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
+-import { UserAvatar } from '../../../components/user-avatar';
++import { getMxIdServer, mxcUrlToHttp } from '../../../utils/matrix';
+ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
+-import { nameInitials } from '../../../utils/common';
++import { UserHero, UserHeroName } from '../../../components/user-profile/UserHero';
++import {
++  ExtendedProfile,
++  profileEditsAllowed,
++  useExtendedProfile,
++} from '../../../hooks/useExtendedProfile';
++import { ProfileFieldContext, ProfileFieldElementProps } from './fields/ProfileFieldContext';
+ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+-import { useFilePicker } from '../../../hooks/useFilePicker';
+-import { useObjectURL } from '../../../hooks/useObjectURL';
+-import { stopPropagation } from '../../../utils/keyboard';
+-import { ImageEditor } from '../../../components/image-editor';
+-import { ModalWide } from '../../../styles/Modal.css';
+-import { createUploadAtom, UploadSuccess } from '../../../state/upload';
+-import { CompactUploadCardRenderer } from '../../../components/upload-card';
++import { CutoutCard } from '../../../components/cutout-card';
++import { ServerChip, ShareChip, TimezoneChip } from '../../../components/user-profile/UserChips';
++import { SequenceCardStyle } from '../styles.css';
++import { useUserProfile } from '../../../hooks/useUserProfile';
++import { useAuthMetadata } from '../../../hooks/useAuthMetadata';
++import { useAccountManagementActions } from '../../../hooks/useAccountManagement';
++import { withSearchParam } from '../../../pages/pathUtils';
+ import { useCapabilities } from '../../../hooks/useCapabilities';
+-
+-type ProfileProps = {
+-  profile: UserProfile;
+-  userId: string;
+-};
+-function ProfileAvatar({ profile, userId }: ProfileProps) {
+-  const mx = useMatrixClient();
+-  const useAuthentication = useMediaAuthentication();
+-  const capabilities = useCapabilities();
+-  const [alertRemove, setAlertRemove] = useState(false);
+-  const disableSetAvatar = capabilities['m.set_avatar_url']?.enabled === false;
+-
+-  const defaultDisplayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
+-  const avatarUrl = profile.avatarUrl
+-    ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 96, 96, 'crop') ?? undefined
+-    : undefined;
+-
+-  const [imageFile, setImageFile] = useState<File>();
+-  const imageFileURL = useObjectURL(imageFile);
+-  const uploadAtom = useMemo(() => {
+-    if (imageFile) return createUploadAtom(imageFile);
+-    return undefined;
+-  }, [imageFile]);
+-
+-  const pickFile = useFilePicker(setImageFile, false);
+-
+-  const handleRemoveUpload = useCallback(() => {
+-    setImageFile(undefined);
+-  }, []);
+-
+-  const handleUploaded = useCallback(
+-    (upload: UploadSuccess) => {
+-      const { mxc } = upload;
+-      mx.setAvatarUrl(mxc);
+-      handleRemoveUpload();
+-    },
+-    [mx, handleRemoveUpload]
+-  );
+-
+-  const handleRemoveAvatar = () => {
+-    mx.setAvatarUrl('');
+-    setAlertRemove(false);
+-  };
++import { ProfileAvatar } from './fields/ProfileAvatar';
++import { ProfileTextField } from './fields/ProfileTextField';
++import { ProfilePronouns } from './fields/ProfilePronouns';
++import { ProfileTimezone } from './fields/ProfileTimezone';
++
++function IdentityProviderSettings({ authMetadata }: { authMetadata: ValidatedAuthMetadata }) {
++  const accountManagementActions = useAccountManagementActions();
++
++  const openProviderProfileSettings = useCallback(() => {
++    const authUrl = authMetadata?.account_management_uri ?? authMetadata?.issuer;
++    if (!authUrl) return;
++
++    window.open(
++      withSearchParam(authUrl, {
++        action: accountManagementActions.profile,
++      }),
++      '_blank'
++    );
++  }, [authMetadata, accountManagementActions]);
+ 
+   return (
+-    <SettingTile
+-      title={
+-        <Text as="span" size="L400">
+-          Avatar
+-        </Text>
+-      }
+-      after={
+-        <Avatar size="500" radii="300">
+-          <UserAvatar
+-            userId={userId}
+-            src={avatarUrl}
+-            renderFallback={() => <Text size="H4">{nameInitials(defaultDisplayName)}</Text>}
+-          />
+-        </Avatar>
+-      }
+-    >
+-      {uploadAtom ? (
+-        <Box gap="200" direction="Column">
+-          <CompactUploadCardRenderer
+-            uploadAtom={uploadAtom}
+-            onRemove={handleRemoveUpload}
+-            onComplete={handleUploaded}
+-          />
+-        </Box>
+-      ) : (
+-        <Box gap="200">
++    <CutoutCard style={{ padding: config.space.S200 }} variant="Surface">
++      <SettingTile
++        after={
+           <Button
+-            onClick={() => pickFile('image/*')}
+             size="300"
+             variant="Secondary"
+             fill="Soft"
++            radii="300"
+             outlined
+-            radii="300"
+-            disabled={disableSetAvatar}
++            onClick={openProviderProfileSettings}
+           >
+-            <Text size="B300">Upload</Text>
++            <Text size="B300">Open</Text>
+           </Button>
+-          {avatarUrl && (
+-            <Button
+-              size="300"
+-              variant="Critical"
+-              fill="None"
+-              radii="300"
+-              disabled={disableSetAvatar}
+-              onClick={() => setAlertRemove(true)}
+-            >
+-              <Text size="B300">Remove</Text>
+-            </Button>
+-          )}
+-        </Box>
+-      )}
+-
+-      {imageFileURL && (
+-        <Overlay open={false} backdrop={<OverlayBackdrop />}>
+-          <OverlayCenter>
+-            <FocusTrap
+-              focusTrapOptions={{
+-                initialFocus: false,
+-                onDeactivate: handleRemoveUpload,
+-                clickOutsideDeactivates: true,
+-                escapeDeactivates: stopPropagation,
+-              }}
+-            >
+-              <Modal className={ModalWide} variant="Surface" size="500">
+-                <ImageEditor
+-                  name={imageFile?.name ?? 'Unnamed'}
+-                  url={imageFileURL}
+-                  requestClose={handleRemoveUpload}
+-                />
+-              </Modal>
+-            </FocusTrap>
+-          </OverlayCenter>
+-        </Overlay>
+-      )}
+-
+-      <Overlay open={alertRemove} backdrop={<OverlayBackdrop />}>
+-        <OverlayCenter>
+-          <FocusTrap
+-            focusTrapOptions={{
+-              initialFocus: false,
+-              onDeactivate: () => setAlertRemove(false),
+-              clickOutsideDeactivates: true,
+-              escapeDeactivates: stopPropagation,
+-            }}
+-          >
+-            <Dialog variant="Surface">
+-              <Header
+-                style={{
+-                  padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
+-                  borderBottomWidth: config.borderWidth.B300,
+-                }}
+-                variant="Surface"
+-                size="500"
+-              >
+-                <Box grow="Yes">
+-                  <Text size="H4">Remove Avatar</Text>
+-                </Box>
+-                <IconButton size="300" onClick={() => setAlertRemove(false)} radii="300">
+-                  <Icon src={Icons.Cross} />
+-                </IconButton>
+-              </Header>
+-              <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
+-                <Box direction="Column" gap="200">
+-                  <Text priority="400">Are you sure you want to remove profile avatar?</Text>
+-                </Box>
+-                <Button variant="Critical" onClick={handleRemoveAvatar}>
+-                  <Text size="B400">Remove</Text>
+-                </Button>
+-              </Box>
+-            </Dialog>
+-          </FocusTrap>
+-        </OverlayCenter>
+-      </Overlay>
+-    </SettingTile>
++        }
++      >
++        <Text size="T200">Change profile settings in your homeserver&apos;s account dashboard.</Text>
++      </SettingTile>
++    </CutoutCard>
+   );
+ }
+ 
+-function ProfileDisplayName({ profile, userId }: ProfileProps) {
++/// Context props which are passed to every field element.
++/// Right now this is only a flag for if the profile is being saved.
++export type FieldContext = { busy: boolean };
++
++/// Field editor elements for the pre-MSC4133 profile fields. This should only
++/// ever contain keys for `displayname` and `avatar_url`.
++const LEGACY_FIELD_ELEMENTS = {
++  avatar_url: ProfileAvatar,
++  displayname: (props: ProfileFieldElementProps<'displayname', FieldContext>) => (
++    <ProfileTextField label="Display Name" {...props} />
++  ),
++};
++
++/// Field editor elements for MSC4133 extended profile fields.
++/// These will appear in the UI in the order they are defined in this map.
++const EXTENDED_FIELD_ELEMENTS = {
++  'io.fsky.nyx.pronouns': ProfilePronouns,
++  'us.cloke.msc4175.tz': ProfileTimezone,
++};
++
++export function Profile() {
+   const mx = useMatrixClient();
++  const userId = mx.getUserId() as string;
++  const server = getMxIdServer(userId);
++  const authMetadata = useAuthMetadata();
++  const accountManagementActions = useAccountManagementActions();
++  const useAuthentication = useMediaAuthentication();
+   const capabilities = useCapabilities();
+-  const disableSetDisplayname = capabilities['m.set_displayname']?.enabled === false;
+-
+-  const defaultDisplayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
+-  const [displayName, setDisplayName] = useState<string>(defaultDisplayName);
+-
+-  const [changeState, changeDisplayName] = useAsyncCallback(
+-    useCallback((name: string) => mx.setDisplayName(name), [mx])
+-  );
+-  const changingDisplayName = changeState.status === AsyncStatus.Loading;
+-
+-  useEffect(() => {
+-    setDisplayName(defaultDisplayName);
+-  }, [defaultDisplayName]);
+-
+-  const handleChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
+-    const name = evt.currentTarget.value;
+-    setDisplayName(name);
+-  };
+-
+-  const handleReset = () => {
+-    setDisplayName(defaultDisplayName);
+-  };
+-
+-  const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
+-    evt.preventDefault();
+-    if (changingDisplayName) return;
+-
+-    const target = evt.target as HTMLFormElement | undefined;
+-    const displayNameInput = target?.displayNameInput as HTMLInputElement | undefined;
+-    const name = displayNameInput?.value;
+-    if (!name) return;
+-
+-    changeDisplayName(name);
+-  };
+-
+-  const hasChanges = displayName !== defaultDisplayName;
+-  return (
+-    <SettingTile
+-      title={
+-        <Text as="span" size="L400">
+-          Display Name
+-        </Text>
+-      }
+-    >
+-      <Box direction="Column" grow="Yes" gap="100">
+-        <Box
+-          as="form"
+-          onSubmit={handleSubmit}
+-          gap="200"
+-          aria-disabled={changingDisplayName || disableSetDisplayname}
+-        >
+-          <Box grow="Yes" direction="Column">
+-            <Input
+-              required
+-              name="displayNameInput"
+-              value={displayName}
+-              onChange={handleChange}
+-              variant="Secondary"
+-              radii="300"
+-              style={{ paddingRight: config.space.S200 }}
+-              readOnly={changingDisplayName || disableSetDisplayname}
+-              after={
+-                hasChanges &&
+-                !changingDisplayName && (
+-                  <IconButton
+-                    type="reset"
+-                    onClick={handleReset}
+-                    size="300"
+-                    radii="300"
+-                    variant="Secondary"
+-                  >
+-                    <Icon src={Icons.Cross} size="100" />
+-                  </IconButton>
+-                )
++
++  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
++  const extendedProfileSupported = extendedProfile !== null;
++  const legacyProfile = useUserProfile(userId);
++
++  // next-gen auth identity providers may provide profile settings if they want
++  const profileEditableThroughIDP =
++    authMetadata !== undefined &&
++    authMetadata.account_management_actions_supported?.includes(accountManagementActions.profile);
++
++  const [fieldElementConstructors, profileEditableThroughClient] = useMemo(() => {
++    const entries = Object.entries({
++      ...LEGACY_FIELD_ELEMENTS,
++      // don't show the MSC4133 elements if the HS doesn't support them
++      ...(extendedProfileSupported ? EXTENDED_FIELD_ELEMENTS : {}),
++    }).filter(([key]) => 
++      // don't show fields if the HS blocks them with capabilities
++      profileEditsAllowed(key, capabilities, extendedProfileSupported)
++    );
++    return [Object.fromEntries(entries), entries.length > 0];
++  }, [capabilities, extendedProfileSupported]);
++
++  const [fieldDefaults, setFieldDefaults] = useState<ExtendedProfile>({
++    displayname: legacyProfile.displayName,
++    avatar_url: legacyProfile.avatarUrl,
++  });
++
++  // this updates the field defaults when the extended profile data is (re)loaded.
++  // it has to be a layout effect to prevent flickering on saves.
++  // if MSC4133 isn't supported by the HS this does nothing
++  useLayoutEffect(() => {
++    // `extendedProfile` includes the old dn/av fields, so
++    // we don't have to add those here
++    if (extendedProfile) {
++      setFieldDefaults(extendedProfile);
++    }
++  }, [setFieldDefaults, extendedProfile]);
++
++  const [saveState, handleSave] = useAsyncCallback(
++    useCallback(
++      async (fields: ExtendedProfile) => {
++        if (extendedProfileSupported) {
++          await Promise.all(
++            Object.entries(fields).map(async ([key, value]) => {
++              if (value === undefined) {
++                await mx.deleteExtendedProfileProperty(key);
++              } else {
++                await mx.setExtendedProfileProperty(key, value);
+               }
+-            />
+-          </Box>
+-          <Button
+-            size="400"
+-            variant={hasChanges ? 'Success' : 'Secondary'}
+-            fill={hasChanges ? 'Solid' : 'Soft'}
+-            outlined
+-            radii="300"
+-            disabled={!hasChanges || changingDisplayName}
+-            type="submit"
+-          >
+-            {changingDisplayName && <Spinner variant="Success" fill="Solid" size="300" />}
+-            <Text size="B400">Save</Text>
+-          </Button>
+-        </Box>
+-      </Box>
+-    </SettingTile>
++            })
++          );
++          
++          // calling this will trigger the layout effect to update the defaults
++          // once the profile request completes
++          await refreshExtendedProfile();
++
++          // synthesize a profile update for ourselves to update our name and avatar in the rest
++          // of the UI. code copied from matrix-js-sdk
++          const user = mx.getUser(userId);
++          if (user) {
++            user.displayName = fields.displayname;
++            user.avatarUrl = fields.avatar_url;
++            user.emit(UserEvent.DisplayName, user.events.presence, user);
++            user.emit(UserEvent.AvatarUrl, user.events.presence, user);
++          }
++        } else {
++          await mx.setDisplayName(fields.displayname ?? '');
++          await mx.setAvatarUrl(fields.avatar_url ?? '');
++          // layout effect does nothing because `extendedProfile` is undefined
++          // so we have to update the defaults explicitly here
++          setFieldDefaults(fields);
++        }
++      },
++      [mx, userId, refreshExtendedProfile, extendedProfileSupported, setFieldDefaults]
++    )
+   );
+-}
+ 
+-export function Profile() {
+-  const mx = useMatrixClient();
+-  const userId = mx.getUserId()!;
+-  const profile = useUserProfile(userId);
++  const saving = saveState.status === AsyncStatus.Loading;
++  const loadingExtendedProfile = extendedProfile === undefined;
++  const busy = saving || loadingExtendedProfile;
+ 
+   return (
+     <Box direction="Column" gap="100">
+       <Text size="L400">Profile</Text>
+       <SequenceCard
+-        className={SequenceCardStyle}
+-        variant="SurfaceVariant"
++        variant="Surface"
++        outlined
+         direction="Column"
+-        gap="400"
++        style={{
++          overflow: 'hidden',
++        }}
+       >
+-        <ProfileAvatar userId={userId} profile={profile} />
+-        <ProfileDisplayName userId={userId} profile={profile} />
++        <ProfileFieldContext
++          fieldDefaults={fieldDefaults}
++          fieldElements={fieldElementConstructors}
++          context={{ busy }}
++        >
++          {(reset, hasChanges, fields, fieldElements) => {
++            const heroAvatarUrl =
++              (fields.avatar_url && mxcUrlToHttp(mx, fields.avatar_url, useAuthentication)) ??
++              undefined;
++            return (
++              <>
++                <UserHero userId={userId} avatarUrl={heroAvatarUrl} />
++                <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
++                  <Box gap="400" alignItems="Start">
++                    <UserHeroName
++                      userId={userId}
++                      displayName={fields.displayname as string}
++                      extendedProfile={fields}
++                    />
++                  </Box>
++                  <Box alignItems="Center" gap="200" wrap="Wrap">
++                    {server && <ServerChip server={server} />}
++                    <ShareChip userId={userId} />
++                    {fields['us.cloke.msc4175.tz'] && (
++                      <TimezoneChip timezone={fields['us.cloke.msc4175.tz']} />
++                    )}
++                  </Box>
++                </Box>
++                <Line />
++                <SequenceCard
++                  className={SequenceCardStyle}
++                  variant="SurfaceVariant"
++                  direction="Column"
++                  gap="400"
++                  radii="0"
++                >
++                  {profileEditableThroughIDP && (
++                    <IdentityProviderSettings authMetadata={authMetadata} />
++                  )}
++                  {profileEditableThroughClient && (
++                    <>
++                      <Box gap="300" direction="Column">
++                        {fieldElements}
++                      </Box>
++                      <Box gap="300" alignItems="Center">
++                        <Button
++                          type="submit"
++                          size="300"
++                          variant={!busy && hasChanges ? 'Success' : 'Secondary'}
++                          fill={!busy && hasChanges ? 'Solid' : 'Soft'}
++                          outlined
++                          radii="300"
++                          disabled={!hasChanges || busy}
++                          onClick={() => handleSave(fields)}
++                        >
++                          <Text size="B300">Save</Text>
++                        </Button>
++                        <Button
++                          type="reset"
++                          size="300"
++                          variant="Secondary"
++                          fill="Soft"
++                          outlined
++                          radii="300"
++                          onClick={reset}
++                          disabled={!hasChanges || busy}
++                        >
++                          <Text size="B300">Cancel</Text>
++                        </Button>
++                        {saving && <Spinner size="300" />}
++                      </Box>
++                    </>
++                  )}
++                  {!(profileEditableThroughClient || profileEditableThroughIDP) && (
++                    <CutoutCard style={{ padding: config.space.S200 }} variant="Critical">
++                      <SettingTile>
++                        <Box direction="Column" gap="200">
++                          <Box gap="200" justifyContent="SpaceBetween">
++                            <Text size="L400">Profile Editing Disabled</Text>
++                          </Box>
++                          <Box direction="Column">
++                            <Text size="T200">
++                              Your homeserver does not allow you to edit your profile.
++                            </Text>
++                          </Box>
++                        </Box>
++                      </SettingTile>
++                    </CutoutCard>
++                  )}
++                </SequenceCard>
++              </>
++            );
++          }}
++        </ProfileFieldContext>
+       </SequenceCard>
+     </Box>
+   );
+diff --git a/src/app/features/settings/account/fields/ProfileAvatar.tsx b/src/app/features/settings/account/fields/ProfileAvatar.tsx
+new file mode 100644
+index 0000000000..5c668c56c3
+--- /dev/null
++++ b/src/app/features/settings/account/fields/ProfileAvatar.tsx
+@@ -0,0 +1,118 @@
++import FocusTrap from 'focus-trap-react';
++import { Text, Box, Button, Overlay, OverlayBackdrop, OverlayCenter, Modal } from 'folds';
++import React, { useState, useMemo, useCallback } from 'react';
++import { ImageEditor } from '../../../../components/image-editor';
++import { SettingTile } from '../../../../components/setting-tile';
++import { CompactUploadCardRenderer } from '../../../../components/upload-card';
++import { useFilePicker } from '../../../../hooks/useFilePicker';
++import { useMatrixClient } from '../../../../hooks/useMatrixClient';
++import { useMediaAuthentication } from '../../../../hooks/useMediaAuthentication';
++import { useObjectURL } from '../../../../hooks/useObjectURL';
++import { createUploadAtom, UploadSuccess } from '../../../../state/upload';
++import { stopPropagation } from '../../../../utils/keyboard';
++import { mxcUrlToHttp } from '../../../../utils/matrix';
++import { FieldContext } from '../Profile';
++import { ProfileFieldElementProps } from './ProfileFieldContext';
++import { ModalWide } from '../../../../styles/Modal.css';
++
++export function ProfileAvatar({
++  busy, value, setValue,
++}: ProfileFieldElementProps<'avatar_url', FieldContext>) {
++  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  const avatarUrl = value
++    ? mxcUrlToHttp(mx, value, useAuthentication, 96, 96, 'crop') ?? undefined
++    : undefined;
++  const disabled = busy;
++
++  const [imageFile, setImageFile] = useState<File>();
++  const imageFileURL = useObjectURL(imageFile);
++  const uploadAtom = useMemo(() => {
++    if (imageFile) return createUploadAtom(imageFile);
++    return undefined;
++  }, [imageFile]);
++
++  const pickFile = useFilePicker(setImageFile, false);
++
++  const handleRemoveUpload = useCallback(() => {
++    setImageFile(undefined);
++  }, []);
++
++  const handleUploaded = useCallback(
++    (upload: UploadSuccess) => {
++      const { mxc } = upload;
++      setValue(mxc);
++      handleRemoveUpload();
++    },
++    [setValue, handleRemoveUpload]
++  );
++
++  const handleRemoveAvatar = () => {
++    setValue('');
++  };
++
++  return (
++    <SettingTile
++      title={<Text as="span" size="L400">
++        Avatar
++      </Text>}
++    >
++      {uploadAtom ? (
++        <Box gap="200" direction="Column">
++          <CompactUploadCardRenderer
++            uploadAtom={uploadAtom}
++            onRemove={handleRemoveUpload}
++            onComplete={handleUploaded} />
++        </Box>
++      ) : (
++        <Box gap="200">
++          <Button
++            onClick={() => pickFile('image/*')}
++            size="300"
++            variant="Secondary"
++            fill="Soft"
++            outlined
++            radii="300"
++            disabled={disabled}
++          >
++            <Text size="B300">Upload Avatar</Text>
++          </Button>
++          {avatarUrl && (
++            <Button
++              size="300"
++              variant="Critical"
++              fill="None"
++              radii="300"
++              disabled={disabled}
++              onClick={handleRemoveAvatar}
++            >
++              <Text size="B300">Remove Avatar</Text>
++            </Button>
++          )}
++        </Box>
++      )}
++
++      {imageFileURL && (
++        <Overlay open={false} backdrop={<OverlayBackdrop />}>
++          <OverlayCenter>
++            <FocusTrap
++              focusTrapOptions={{
++                initialFocus: false,
++                onDeactivate: handleRemoveUpload,
++                clickOutsideDeactivates: true,
++                escapeDeactivates: stopPropagation,
++              }}
++            >
++              <Modal className={ModalWide} variant="Surface" size="500">
++                <ImageEditor
++                  name={imageFile?.name ?? 'Unnamed'}
++                  url={imageFileURL}
++                  requestClose={handleRemoveUpload} />
++              </Modal>
++            </FocusTrap>
++          </OverlayCenter>
++        </Overlay>
++      )}
++    </SettingTile>
++  );
++}
+diff --git a/src/app/features/settings/account/fields/ProfileFieldContext.tsx b/src/app/features/settings/account/fields/ProfileFieldContext.tsx
+new file mode 100644
+index 0000000000..18f786271c
+--- /dev/null
++++ b/src/app/features/settings/account/fields/ProfileFieldContext.tsx
+@@ -0,0 +1,127 @@
++import React, {
++  FunctionComponent,
++  ReactNode,
++  useCallback,
++  useEffect,
++  useMemo,
++  useState,
++} from 'react';
++import { deepCompare } from 'matrix-js-sdk/lib/utils';
++import { ExtendedProfile } from '../../../../hooks/useExtendedProfile';
++
++/// These types ensure the element functions are actually able to manipulate
++/// the profile fields they're mapped to. The <C> generic parameter represents
++/// extra "context" props which are passed to every element.
++
++// strip the index signature from ExtendedProfile using mapped type magic.
++// keeping the index signature causes weird typechecking issues further down the line
++// plus there should never be field elements passed with keys which don't exist in ExtendedProfile.
++type ExtendedProfileKeys = keyof {
++  [Property in keyof ExtendedProfile as string extends Property
++    ? never
++    : Property]: ExtendedProfile[Property];
++};
++
++// these are the props which all field elements must accept.
++// this is split into `RawProps` and `Props` so we can type `V` instead of
++// spraying `ExtendedProfile[K]` all over the place.
++// don't use this directly, use the `ProfileFieldElementProps` type instead
++type ProfileFieldElementRawProps<V, C> = {
++  defaultValue: V;
++  value: V;
++  setValue: (value: V) => void;
++} & C;
++
++export type ProfileFieldElementProps<
++  K extends ExtendedProfileKeys,
++  C
++> = ProfileFieldElementRawProps<ExtendedProfile[K], C>;
++
++// the map of extended profile keys to field element functions
++type ProfileFieldElements<C> = {
++  [Property in ExtendedProfileKeys]?: FunctionComponent<ProfileFieldElementProps<Property, C>>;
++};
++
++type ProfileFieldContextProps<C> = {
++  fieldDefaults: ExtendedProfile;
++  fieldElements: ProfileFieldElements<C>;
++  children: (
++    reset: () => void,
++    hasChanges: boolean,
++    fields: ExtendedProfile,
++    fieldElements: ReactNode
++  ) => ReactNode;
++  context: C;
++};
++
++/// This element manages the pending state of the profile field widgets.
++/// It takes the default values of each field, as well as a map associating a profile field key
++/// with an element _function_ (not a rendered element!) that will be used to edit that field.
++/// It renders the editor elements internally using React.createElement and passes the rendered
++/// elements into the child UI. This allows it to handle the pending state entirely by itself,
++/// and provides strong typechecking.
++export function ProfileFieldContext<C>({
++  fieldDefaults,
++  fieldElements: fieldElementConstructors,
++  children,
++  context,
++}: ProfileFieldContextProps<C>): ReactNode {
++  const [fields, setFields] = useState<ExtendedProfile>(fieldDefaults);
++  
++  // this callback also runs when fieldDefaults changes,
++  // which happens when the profile is saved and the pending fields become the new defaults
++  const reset = useCallback(() => {
++    setFields(fieldDefaults);
++  }, [fieldDefaults]);
++
++  // set the pending values to the defaults on the first render
++  useEffect(() => {
++    reset();
++  }, [reset]);
++
++  const setField = useCallback(
++    (key: string, value: unknown) => {
++      setFields({
++        ...fields,
++        [key]: value,
++      });
++    },
++    [fields]
++  );
++
++  const hasChanges = useMemo(
++    () =>
++      Object.entries(fields).find(
++        ([key, value]) =>
++          // deep comparison is necessary here because field values can be any JSON type
++          !deepCompare(fieldDefaults[key as keyof ExtendedProfile], value)
++      ) !== undefined,
++    [fields, fieldDefaults]
++  );
++
++  const createElement = useCallback(
++    <K extends ExtendedProfileKeys>(key: K, element: ProfileFieldElements<C>[K]) => {
++      const props: ProfileFieldElementRawProps<ExtendedProfile[K], C> = {
++        ...context,
++        defaultValue: fieldDefaults[key],
++        value: fields[key],
++        setValue: (value) => setField(key, value),
++        key,
++      };
++      // element can be undefined if the field defaults didn't include its key,
++      // which means the HS doesn't support setting that field
++      if (element !== undefined) {
++        return React.createElement(element, props);
++      }
++      return undefined;
++    },
++    [context, fieldDefaults, fields, setField]
++  );
++
++  const fieldElements = Object.entries(fieldElementConstructors).map(([key, element]) =>
++    // @ts-expect-error TypeScript doesn't quite understand the magic going on here
++    createElement(key, element)
++  );
++
++  return children(reset, hasChanges, fields, fieldElements);
++}
+diff --git a/src/app/features/settings/account/fields/ProfilePronouns.tsx b/src/app/features/settings/account/fields/ProfilePronouns.tsx
+new file mode 100644
+index 0000000000..963a7a949e
+--- /dev/null
++++ b/src/app/features/settings/account/fields/ProfilePronouns.tsx
+@@ -0,0 +1,125 @@
++import FocusTrap from 'focus-trap-react';
++import { RectCords, Text, Box, Chip, Icon, Icons, PopOut, Menu, config, Input, Button } from 'folds';
++import { isKeyHotkey } from 'is-hotkey';
++import React, { useState, FormEventHandler, KeyboardEventHandler, MouseEventHandler } from 'react';
++import { SettingTile } from '../../../../components/setting-tile';
++import { stopPropagation } from '../../../../utils/keyboard';
++import { FieldContext } from '../Profile';
++import { ProfileFieldElementProps } from './ProfileFieldContext';
++
++export function ProfilePronouns({
++  value, setValue, busy,
++}: ProfileFieldElementProps<'io.fsky.nyx.pronouns', FieldContext>) {
++  const disabled = busy;
++
++  const [menuCords, setMenuCords] = useState<RectCords>();
++  const [pendingPronoun, setPendingPronoun] = useState('');
++
++  const handleRemovePronoun = (index: number) => {
++    const newPronouns = [...(value ?? [])];
++    newPronouns.splice(index, 1);
++    if (newPronouns.length > 0) {
++      setValue(newPronouns);
++    } else {
++      setValue(undefined);
++    }
++  };
++
++  const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
++    evt.preventDefault();
++    setMenuCords(undefined);
++    if (pendingPronoun.length > 0) {
++      setValue([...(value ?? []), { language: 'en', summary: pendingPronoun }]);
++    }
++  };
++
++  const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (evt) => {
++    if (isKeyHotkey('escape', evt)) {
++      evt.stopPropagation();
++      setMenuCords(undefined);
++    }
++  };
++
++  const handleOpenMenu: MouseEventHandler<HTMLSpanElement> = (evt) => {
++    setPendingPronoun('');
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++
++  return (
++    <SettingTile
++      title={<Text as="span" size="L400">
++        Pronouns
++      </Text>}
++    >
++      <Box alignItems="Center" gap="200" wrap="Wrap">
++        {value?.map(({ summary }, index) => (
++          <Chip
++            // eslint-disable-next-line react/no-array-index-key
++            key={index}
++            variant="Secondary"
++            radii="Pill"
++            after={<Icon src={Icons.Cross} size="100" />}
++            onClick={() => handleRemovePronoun(index)}
++            disabled={disabled}
++          >
++            <Text size="T200" truncate>
++              {summary}
++            </Text>
++          </Chip>
++        ))}
++        <Chip
++          variant="Secondary"
++          radii="Pill"
++          disabled={disabled}
++          after={<Icon src={menuCords ? Icons.ChevronRight : Icons.Plus} size="100" />}
++          onClick={handleOpenMenu}
++        >
++          <Text size="T200">Add</Text>
++        </Chip>
++      </Box>
++      <PopOut
++        anchor={menuCords}
++        offset={5}
++        position="Right"
++        align="Center"
++        content={<FocusTrap
++          focusTrapOptions={{
++            onDeactivate: () => setMenuCords(undefined),
++            clickOutsideDeactivates: true,
++            isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
++            isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
++            escapeDeactivates: stopPropagation,
++          }}
++        >
++          <Menu
++            variant="SurfaceVariant"
++            style={{
++              padding: config.space.S200,
++            }}
++          >
++            <Box as="form" onSubmit={handleSubmit} direction="Row" gap="200">
++              <Input
++                variant="Secondary"
++                placeholder="they/them"
++                inputSize={10}
++                radii="300"
++                size="300"
++                outlined
++                value={pendingPronoun}
++                onChange={(evt) => setPendingPronoun(evt.currentTarget.value)}
++                onKeyDown={handleKeyDown} />
++              <Button
++                type="submit"
++                size="300"
++                variant="Success"
++                radii="300"
++                before={<Icon size="100" src={Icons.Plus} />}
++              >
++                <Text size="B300">Add</Text>
++              </Button>
++            </Box>
++          </Menu>
++        </FocusTrap>} />
++    </SettingTile>
++  );
++}
+diff --git a/src/app/features/settings/account/fields/ProfileTextField.tsx b/src/app/features/settings/account/fields/ProfileTextField.tsx
+new file mode 100644
+index 0000000000..fc96cb69c7
+--- /dev/null
++++ b/src/app/features/settings/account/fields/ProfileTextField.tsx
+@@ -0,0 +1,63 @@
++import { Text, Box, Input, IconButton, Icon, Icons } from 'folds';
++import React, { ChangeEventHandler } from 'react';
++import { FilterByValues } from '../../../../../types/utils';
++import { SettingTile } from '../../../../components/setting-tile';
++import { ExtendedProfile } from '../../../../hooks/useExtendedProfile';
++import { FieldContext } from '../Profile';
++import { ProfileFieldElementProps } from './ProfileFieldContext';
++
++export function ProfileTextField<K extends keyof FilterByValues<ExtendedProfile, string | undefined>>({
++  label, defaultValue, value, setValue, busy,
++}: ProfileFieldElementProps<K, FieldContext> & { label: string; }) {
++  const disabled = busy;
++  const hasChanges = defaultValue !== value;
++
++  const handleChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
++    const content = evt.currentTarget.value;
++    if (content.length > 0) {
++      setValue(evt.currentTarget.value);
++    } else {
++      setValue(undefined);
++    }
++  };
++
++  const handleReset = () => {
++    setValue(defaultValue);
++  };
++
++  return (
++    <SettingTile
++      title={<Text as="span" size="L400">
++        {label}
++      </Text>}
++    >
++      <Box direction="Column" grow="Yes" gap="100">
++        <Box gap="200" aria-disabled={disabled}>
++          <Box grow="Yes" direction="Column">
++            <Input
++              required
++              name="displayNameInput"
++              value={value ?? ''}
++              onChange={handleChange}
++              variant="Secondary"
++              radii="300"
++              disabled={disabled}
++              readOnly={disabled}
++              after={hasChanges &&
++                !busy && (
++                  <IconButton
++                    type="reset"
++                    onClick={handleReset}
++                    size="300"
++                    radii="300"
++                    variant="Secondary"
++                  >
++                    <Icon src={Icons.Cross} size="100" />
++                  </IconButton>
++                )} />
++          </Box>
++        </Box>
++      </Box>
++    </SettingTile>
++  );
++}
+diff --git a/src/app/features/settings/account/fields/ProfileTimezone.tsx b/src/app/features/settings/account/fields/ProfileTimezone.tsx
+new file mode 100644
+index 0000000000..6ebea2aca9
+--- /dev/null
++++ b/src/app/features/settings/account/fields/ProfileTimezone.tsx
+@@ -0,0 +1,160 @@
++import FocusTrap from 'focus-trap-react';
++import { Text, Overlay, OverlayBackdrop, OverlayCenter, Dialog, Header, config, Box, IconButton, Icon, Icons, Input, toRem, MenuItem, Button } from 'folds';
++import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
++import { CutoutCard } from '../../../../components/cutout-card';
++import { SettingTile } from '../../../../components/setting-tile';
++import { FieldContext } from '../Profile';
++import { ProfileFieldElementProps } from './ProfileFieldContext';
++
++export function ProfileTimezone({
++  value, setValue, busy,
++}: ProfileFieldElementProps<'us.cloke.msc4175.tz', FieldContext>) {
++  const disabled = busy;
++
++  const inputRef = useRef<HTMLInputElement>(null);
++  const scrollRef = useRef<HTMLDivElement>(null);
++  const [overlayOpen, setOverlayOpen] = useState(false);
++  const [query, setQuery] = useState('');
++
++  // @ts-expect-error Intl.supportedValuesOf isn't in the types yet
++  const timezones = useMemo(() => Intl.supportedValuesOf('timeZone') as string[], []);
++  const filteredTimezones = timezones.filter(
++    (timezone) => query.length === 0 || timezone.toLowerCase().replace('_', ' ').includes(query.toLowerCase())
++  );
++
++  const handleSelect = useCallback(
++    (timezone: string) => {
++      setOverlayOpen(false);
++      setValue(timezone);
++    },
++    [setOverlayOpen, setValue]
++  );
++
++  useEffect(() => {
++    if (overlayOpen) {
++      const scrollView = scrollRef.current;
++      const focusedItem = scrollView?.querySelector(`[data-tz="${value}"]`);
++
++      if (value && focusedItem && scrollView) {
++        focusedItem.scrollIntoView({
++          block: 'center',
++        });
++      }
++    }
++  }, [scrollRef, value, overlayOpen]);
++
++  return (
++    <SettingTile
++      title={<Text as="span" size="L400">
++        Timezone
++      </Text>}
++    >
++      <Overlay open={overlayOpen} backdrop={<OverlayBackdrop />}>
++        <OverlayCenter>
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: () => inputRef.current,
++              allowOutsideClick: true,
++              clickOutsideDeactivates: true,
++              onDeactivate: () => setOverlayOpen(false),
++              escapeDeactivates: (evt) => {
++                evt.stopPropagation();
++                return true;
++              },
++            }}
++          >
++            <Dialog variant="Surface">
++              <Header
++                style={{
++                  padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
++                  borderBottomWidth: config.borderWidth.B300,
++                }}
++                variant="Surface"
++                size="500"
++              >
++                <Box grow="Yes">
++                  <Text size="H4">Choose a Timezone</Text>
++                </Box>
++                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300">
++                  <Icon src={Icons.Cross} />
++                </IconButton>
++              </Header>
++              <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
++                <Input
++                  ref={inputRef}
++                  size="500"
++                  variant="Background"
++                  radii="400"
++                  outlined
++                  placeholder="Search"
++                  before={<Icon size="200" src={Icons.Search} />}
++                  value={query}
++                  onChange={(evt) => setQuery(evt.currentTarget.value)} />
++                <CutoutCard ref={scrollRef} style={{ overflowY: 'scroll', height: toRem(300) }}>
++                  {filteredTimezones.length === 0 && (
++                    <Box
++                      style={{ paddingTop: config.space.S700 }}
++                      grow="Yes"
++                      alignItems="Center"
++                      justifyContent="Center"
++                      direction="Column"
++                      gap="100"
++                    >
++                      <Text size="H6" align="Center">
++                        No Results
++                      </Text>
++                    </Box>
++                  )}
++                  {filteredTimezones.map((timezone) => (
++                    <MenuItem
++                      key={timezone}
++                      data-tz={timezone}
++                      variant={timezone === value ? 'Success' : 'Surface'}
++                      fill={timezone === value ? 'Soft' : 'None'}
++                      size="300"
++                      radii="0"
++                      after={<Icon size="50" src={Icons.ChevronRight} />}
++                      onClick={() => handleSelect(timezone)}
++                    >
++                      <Box grow="Yes">
++                        <Text size="T200" truncate>
++                          {timezone}
++                        </Text>
++                      </Box>
++                    </MenuItem>
++                  ))}
++                </CutoutCard>
++              </Box>
++            </Dialog>
++          </FocusTrap>
++        </OverlayCenter>
++      </Overlay>
++      <Box gap="200">
++        <Button
++          variant="Secondary"
++          fill="Soft"
++          size="300"
++          radii="300"
++          outlined
++          disabled={disabled}
++          onClick={() => setOverlayOpen(true)}
++          after={<Icon size="100" src={Icons.ChevronRight} />}
++        >
++          <Text size="B300">{value ?? 'Set Timezone'}</Text>
++        </Button>
++        {value && (
++          <Button
++            size="300"
++            variant="Critical"
++            fill="None"
++            radii="300"
++            disabled={disabled}
++            onClick={() => setValue(undefined)}
++          >
++            <Text size="B300">Remove Timezone</Text>
++          </Button>
++        )}
++      </Box>
++    </SettingTile>
++  );
++}
+diff --git a/src/app/features/settings/developer-tools/AccountData.tsx b/src/app/features/settings/developer-tools/AccountData.tsx
+deleted file mode 100644
+index 8bccb62ec7..0000000000
+--- a/src/app/features/settings/developer-tools/AccountData.tsx
++++ /dev/null
+@@ -1,100 +0,0 @@
+-import React, { useCallback, useState } from 'react';
+-import { Box, Text, Icon, Icons, Button, MenuItem } from 'folds';
+-import { SequenceCard } from '../../../components/sequence-card';
+-import { SequenceCardStyle } from '../styles.css';
+-import { SettingTile } from '../../../components/setting-tile';
+-import { useMatrixClient } from '../../../hooks/useMatrixClient';
+-import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
+-import { CutoutCard } from '../../../components/cutout-card';
+-
+-type AccountDataProps = {
+-  expand: boolean;
+-  onExpandToggle: (expand: boolean) => void;
+-  onSelect: (type: string | null) => void;
+-};
+-export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataProps) {
+-  const mx = useMatrixClient();
+-  const [accountDataTypes, setAccountDataKeys] = useState(() =>
+-    Array.from(mx.store.accountData.keys())
+-  );
+-
+-  useAccountDataCallback(
+-    mx,
+-    useCallback(() => {
+-      setAccountDataKeys(Array.from(mx.store.accountData.keys()));
+-    }, [mx])
+-  );
+-
+-  return (
+-    <Box direction="Column" gap="100">
+-      <Text size="L400">Account Data</Text>
+-      <SequenceCard
+-        className={SequenceCardStyle}
+-        variant="SurfaceVariant"
+-        direction="Column"
+-        gap="400"
+-      >
+-        <SettingTile
+-          title="Global"
+-          description="Data stored in your global account data."
+-          after={
+-            <Button
+-              onClick={() => onExpandToggle(!expand)}
+-              variant="Secondary"
+-              fill="Soft"
+-              size="300"
+-              radii="300"
+-              outlined
+-              before={
+-                <Icon src={expand ? Icons.ChevronTop : Icons.ChevronBottom} size="100" filled />
+-              }
+-            >
+-              <Text size="B300">{expand ? 'Collapse' : 'Expand'}</Text>
+-            </Button>
+-          }
+-        />
+-        {expand && (
+-          <Box direction="Column" gap="100">
+-            <Box justifyContent="SpaceBetween">
+-              <Text size="L400">Events</Text>
+-              <Text size="L400">Total: {accountDataTypes.length}</Text>
+-            </Box>
+-            <CutoutCard>
+-              <MenuItem
+-                variant="Surface"
+-                fill="None"
+-                size="300"
+-                radii="0"
+-                before={<Icon size="50" src={Icons.Plus} />}
+-                onClick={() => onSelect(null)}
+-              >
+-                <Box grow="Yes">
+-                  <Text size="T200" truncate>
+-                    Add New
+-                  </Text>
+-                </Box>
+-              </MenuItem>
+-              {accountDataTypes.sort().map((type) => (
+-                <MenuItem
+-                  key={type}
+-                  variant="Surface"
+-                  fill="None"
+-                  size="300"
+-                  radii="0"
+-                  after={<Icon size="50" src={Icons.ChevronRight} />}
+-                  onClick={() => onSelect(type)}
+-                >
+-                  <Box grow="Yes">
+-                    <Text size="T200" truncate>
+-                      {type}
+-                    </Text>
+-                  </Box>
+-                </MenuItem>
+-              ))}
+-            </CutoutCard>
+-          </Box>
+-        )}
+-      </SequenceCard>
+-    </Box>
+-  );
+-}
+diff --git a/src/app/features/settings/developer-tools/AccountDataList.tsx b/src/app/features/settings/developer-tools/AccountDataList.tsx
+new file mode 100644
+index 0000000000..9c9cbe6ad1
+--- /dev/null
++++ b/src/app/features/settings/developer-tools/AccountDataList.tsx
+@@ -0,0 +1,54 @@
++import React from 'react';
++import { Box, Text, Icon, Icons, MenuItem } from 'folds';
++import { CutoutCard } from '../../../components/cutout-card';
++
++type AccountDataListProps = {
++  types: string[];
++  onSelect: (type: string | null) => void;
++};
++export function AccountDataList({
++  types,
++  onSelect,
++}: AccountDataListProps) {
++  return (
++    <Box direction="Column" gap="100">
++      <Box justifyContent="SpaceBetween">
++        <Text size="L400">Fields</Text>
++        <Text size="L400">Total: {types.length}</Text>
++      </Box>
++      <CutoutCard>
++        <MenuItem
++          variant="Surface"
++          fill="None"
++          size="300"
++          radii="0"
++          before={<Icon size="50" src={Icons.Plus} />}
++          onClick={() => onSelect(null)}
++        >
++          <Box grow="Yes">
++            <Text size="T200" truncate>
++              Add New
++            </Text>
++          </Box>
++        </MenuItem>
++        {types.sort().map((type) => (
++          <MenuItem
++            key={type}
++            variant="Surface"
++            fill="None"
++            size="300"
++            radii="0"
++            after={<Icon size="50" src={Icons.ChevronRight} />}
++            onClick={() => onSelect(type)}
++          >
++            <Box grow="Yes">
++              <Text size="T200" truncate>
++                {type}
++              </Text>
++            </Box>
++          </MenuItem>
++        ))}
++      </CutoutCard>
++    </Box>
++  );
++}
+diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
+index a3f04567b6..01e6e6a43c 100644
+--- a/src/app/features/settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
+@@ -1,5 +1,7 @@
+ import React, { useCallback, useState } from 'react';
+ import { Box, Text, IconButton, Icon, Icons, Scroll, Switch, Button } from 'folds';
++import { AccountDataEvents } from 'matrix-js-sdk';
++import { Feature, ServerSupport } from 'matrix-js-sdk/lib/feature';
+ import { Page, PageContent, PageHeader } from '../../../components/page';
+ import { SequenceCard } from '../../../components/sequence-card';
+ import { SequenceCardStyle } from '../styles.css';
+@@ -8,117 +10,209 @@
+ import { settingsAtom } from '../../../state/settings';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+ import {
++  AccountDataDeleteCallback,
+   AccountDataEditor,
+   AccountDataSubmitCallback,
+ } from '../../../components/AccountDataEditor';
+ import { copyToClipboard } from '../../../utils/dom';
+-import { AccountData } from './AccountData';
++import { AccountDataList } from './AccountDataList';
++import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
++import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
++import { CollapsibleCard } from '../../../components/CollapsibleCard';
++
++type DeveloperToolsPage =
++  | { name: 'index' }
++  | { name: 'account-data'; type: string | null }
++  | { name: 'profile-field'; type: string | null };
+ 
+ type DeveloperToolsProps = {
+   requestClose: () => void;
+ };
+ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+   const mx = useMatrixClient();
++  const userId = mx.getUserId() as string;
++
++  const [accountDataTypes, setAccountDataKeys] = useState(() =>
++    Array.from(mx.store.accountData.keys())
++  );
++  const accountDataDeletionSupported =
++    (mx.canSupport.get(Feature.AccountDataDeletion) ?? ServerSupport.Unsupported) !==
++    ServerSupport.Unsupported;
++  useAccountDataCallback(
++    mx,
++    useCallback(() => {
++      setAccountDataKeys(Array.from(mx.store.accountData.keys()));
++    }, [mx])
++  );
++
++  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
++
+   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+-  const [expand, setExpend] = useState(false);
+-  const [accountDataType, setAccountDataType] = useState<string | null>();
++  const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
++  const [globalExpand, setGlobalExpand] = useState(false);
++  const [profileExpand, setProfileExpand] = useState(false);
+ 
+   const submitAccountData: AccountDataSubmitCallback = useCallback(
+     async (type, content) => {
+-      await mx.setAccountData(type, content);
+-    },
+-    [mx]
+-  );
+-
+-  if (accountDataType !== undefined) {
+-    return (
+-      <AccountDataEditor
+-        type={accountDataType ?? undefined}
+-        content={accountDataType ? mx.getAccountData(accountDataType)?.getContent() : undefined}
+-        submitChange={submitAccountData}
+-        requestClose={() => setAccountDataType(undefined)}
+-      />
+-    );
+-  }
+-
+-  return (
+-    <Page>
+-      <PageHeader outlined={false}>
+-        <Box grow="Yes" gap="200">
+-          <Box grow="Yes" alignItems="Center" gap="200">
+-            <Text size="H3" truncate>
+-              Developer Tools
+-            </Text>
+-          </Box>
+-          <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
+-              <Icon src={Icons.Cross} />
+-            </IconButton>
+-          </Box>
+-        </Box>
+-      </PageHeader>
+-      <Box grow="Yes">
+-        <Scroll hideTrack visibility="Hover">
+-          <PageContent>
+-            <Box direction="Column" gap="700">
+-              <Box direction="Column" gap="100">
+-                <Text size="L400">Options</Text>
+-                <SequenceCard
+-                  className={SequenceCardStyle}
+-                  variant="SurfaceVariant"
+-                  direction="Column"
+-                  gap="400"
+-                >
+-                  <SettingTile
+-                    title="Enable Developer Tools"
+-                    after={
+-                      <Switch
+-                        variant="Primary"
+-                        value={developerTools}
+-                        onChange={setDeveloperTools}
++      await mx.setAccountData(type as keyof AccountDataEvents, content);
++    },
++    [mx]
++  );
++
++  const deleteAccountData: AccountDataDeleteCallback = useCallback(
++    async (type) => {
++      await mx.deleteAccountData(type as keyof AccountDataEvents);
++    },
++    [mx]
++  );
++
++  const submitProfileField: AccountDataSubmitCallback = useCallback(
++    async (type, content) => {
++      await mx.setExtendedProfileProperty(type, content);
++      await refreshExtendedProfile();
++    },
++    [mx, refreshExtendedProfile]
++  );
++
++  const deleteProfileField: AccountDataDeleteCallback = useCallback(
++    async (type) => {
++      await mx.deleteExtendedProfileProperty(type);
++      await refreshExtendedProfile();
++    },
++    [mx, refreshExtendedProfile]
++  );
++
++  const handleClose = useCallback(() => setPage({ name: 'index' }), [setPage]);
++
++  switch (page.name) {
++    case 'account-data':
++      return (
++        <AccountDataEditor
++          type={page.type ?? undefined}
++          content={
++            page.type
++              ? mx.getAccountData(page.type as keyof AccountDataEvents)?.getContent()
++              : undefined
++          }
++          submitChange={submitAccountData}
++          submitDelete={accountDataDeletionSupported ? deleteAccountData : undefined}
++          requestClose={handleClose}
++        />
++      );
++
++    case 'profile-field':
++      return (
++        <AccountDataEditor
++          type={page.type ?? undefined}
++          content={page.type ? extendedProfile?.[page.type] : undefined}
++          submitChange={submitProfileField}
++          submitDelete={deleteProfileField}
++          requestClose={handleClose}
++        />
++      );
++
++    default:
++      return (
++        <Page>
++          <PageHeader outlined={false}>
++            <Box grow="Yes" gap="200">
++              <Box grow="Yes" alignItems="Center" gap="200">
++                <Text size="H3" truncate>
++                  Developer Tools
++                </Text>
++              </Box>
++              <Box shrink="No">
++                <IconButton onClick={requestClose} variant="Surface">
++                  <Icon src={Icons.Cross} />
++                </IconButton>
++              </Box>
++            </Box>
++          </PageHeader>
++          <Box grow="Yes">
++            <Scroll hideTrack visibility="Hover">
++              <PageContent>
++                <Box direction="Column" gap="700">
++                  <Box direction="Column" gap="100">
++                    <Text size="L400">Options</Text>
++                    <SequenceCard
++                      className={SequenceCardStyle}
++                      variant="SurfaceVariant"
++                      direction="Column"
++                      gap="400"
++                    >
++                      <SettingTile
++                        title="Enable Developer Tools"
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={developerTools}
++                            onChange={setDeveloperTools}
++                          />
++                        }
+                       />
+-                    }
+-                  />
+-                </SequenceCard>
+-                {developerTools && (
+-                  <SequenceCard
+-                    className={SequenceCardStyle}
+-                    variant="SurfaceVariant"
+-                    direction="Column"
+-                    gap="400"
+-                  >
+-                    <SettingTile
+-                      title="Access Token"
+-                      description="Copy access token to clipboard."
+-                      after={
+-                        <Button
+-                          onClick={() =>
+-                            copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
++                    </SequenceCard>
++                    {developerTools && (
++                      <SequenceCard
++                        className={SequenceCardStyle}
++                        variant="SurfaceVariant"
++                        direction="Column"
++                        gap="400"
++                      >
++                        <SettingTile
++                          title="Access Token"
++                          description="Copy access token to clipboard."
++                          after={
++                            <Button
++                              onClick={() =>
++                                copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
++                              }
++                              variant="Secondary"
++                              fill="Soft"
++                              size="300"
++                              radii="300"
++                              outlined
++                            >
++                              <Text size="B300">Copy</Text>
++                            </Button>
+                           }
+-                          variant="Secondary"
+-                          fill="Soft"
+-                          size="300"
+-                          radii="300"
+-                          outlined
++                        />
++                      </SequenceCard>
++                    )}
++                  </Box>
++                  {developerTools && (
++                    <Box direction="Column" gap="100">
++                      <Text size="L400">Account Data</Text>
++                      <CollapsibleCard
++                        expand={globalExpand}
++                        setExpand={setGlobalExpand}
++                        title="Account"
++                        description="Private data stored in your account."
++                      >
++                        <AccountDataList
++                          types={accountDataTypes}
++                          onSelect={(type) => setPage({ name: 'account-data', type })}
++                        />
++                      </CollapsibleCard>
++                      {extendedProfile && (
++                        <CollapsibleCard
++                          expand={profileExpand}
++                          setExpand={setProfileExpand}
++                          title="Profile"
++                          description="Public data attached to your Matrix profile."
+                         >
+-                          <Text size="B300">Copy</Text>
+-                        </Button>
+-                      }
+-                    />
+-                  </SequenceCard>
+-                )}
+-              </Box>
+-              {developerTools && (
+-                <AccountData
+-                  expand={expand}
+-                  onExpandToggle={setExpend}
+-                  onSelect={setAccountDataType}
+-                />
+-              )}
+-            </Box>
+-          </PageContent>
+-        </Scroll>
+-      </Box>
+-    </Page>
+-  );
++                          <AccountDataList
++                            types={Object.keys(extendedProfile)}
++                            onSelect={(type) => setPage({ name: 'profile-field', type })}
++                          />
++                        </CollapsibleCard>
++                      )}
++                    </Box>
++                  )}
++                </Box>
++              </PageContent>
++            </Scroll>
++          </Box>
++        </Page>
++      );
++  }
+ }
+diff --git a/src/app/features/settings/devices/LocalBackup.tsx b/src/app/features/settings/devices/LocalBackup.tsx
+index 00128c8fe1..35baa9cb16 100644
+--- a/src/app/features/settings/devices/LocalBackup.tsx
++++ b/src/app/features/settings/devices/LocalBackup.tsx
+@@ -11,6 +11,7 @@
+ import { decryptMegolmKeyFile, encryptMegolmKeyFile } from '../../../../util/cryptE2ERoomKeys';
+ import { useAlive } from '../../../hooks/useAlive';
+ import { useFilePicker } from '../../../hooks/useFilePicker';
++import { CollapsibleCard } from '../../../components/CollapsibleCard';
+ 
+ function ExportKeys() {
+   const mx = useMatrixClient();
+@@ -121,37 +122,18 @@
+   );
+ }
+ 
+-function ExportKeysTile() {
++function ExportKeysCard() {
+   const [expand, setExpand] = useState(false);
+ 
+   return (
+-    <>
+-      <SettingTile
+-        title="Export Messages Data"
+-        description="Save password protected copy of encryption data on your device to decrypt messages later."
+-        after={
+-          <Box>
+-            <Button
+-              type="button"
+-              onClick={() => setExpand(!expand)}
+-              size="300"
+-              variant="Secondary"
+-              fill="Soft"
+-              outlined
+-              radii="300"
+-              before={
+-                <Icon size="100" src={expand ? Icons.ChevronTop : Icons.ChevronBottom} filled />
+-              }
+-            >
+-              <Text as="span" size="B300" truncate>
+-                {expand ? 'Collapse' : 'Expand'}
+-              </Text>
+-            </Button>
+-          </Box>
+-        }
+-      />
+-      {expand && <ExportKeys />}
+-    </>
++    <CollapsibleCard
++      expand={expand}
++      setExpand={setExpand}
++      title="Export Messages Data"
++      description="Save password protected copy of encryption data on your device to decrypt messages later."
++    >
++      <ExportKeys />
++    </CollapsibleCard>
+   );
+ }
+ 
+@@ -304,14 +286,7 @@
+   return (
+     <Box direction="Column" gap="100">
+       <Text size="L400">Local Backup</Text>
+-      <SequenceCard
+-        className={SequenceCardStyle}
+-        variant="SurfaceVariant"
+-        direction="Column"
+-        gap="400"
+-      >
+-        <ExportKeysTile />
+-      </SequenceCard>
++      <ExportKeysCard />
+       <SequenceCard
+         className={SequenceCardStyle}
+         variant="SurfaceVariant"
+diff --git a/src/app/hooks/useExtendedProfile.ts b/src/app/hooks/useExtendedProfile.ts
+new file mode 100644
+index 0000000000..9ef05fa3ee
+--- /dev/null
++++ b/src/app/hooks/useExtendedProfile.ts
+@@ -0,0 +1,112 @@
++import { useCallback } from 'react';
++import z from 'zod';
++import { useQuery } from '@tanstack/react-query';
++import { Capabilities } from 'matrix-js-sdk';
++import { useMatrixClient } from './useMatrixClient';
++import { useSpecVersions } from './useSpecVersions';
++import { IProfileFieldsCapability } from '../../types/matrix/common';
++
++const extendedProfile = z.looseObject({
++  displayname: z.string().optional(),
++  avatar_url: z.string().optional(),
++  'io.fsky.nyx.pronouns': z
++    .object({
++      language: z.string(),
++      summary: z.string(),
++    })
++    .array()
++    .optional()
++    .catch(undefined),
++  'us.cloke.msc4175.tz': z.string().optional().catch(undefined),
++});
++
++export type ExtendedProfile = z.infer<typeof extendedProfile>;
++
++export function useExtendedProfileSupported(): boolean {
++  const { versions, unstable_features: unstableFeatures } = useSpecVersions();
++
++  return unstableFeatures?.['uk.tcpip.msc4133'] || versions.includes('v1.15');
++}
++
++/// Returns the user's MSC4133 extended profile, if our homeserver supports it.
++/// This will return `undefined` while the request is in flight and `null` if the HS lacks support.
++export function useExtendedProfile(
++  userId: string
++): [ExtendedProfile | undefined | null, () => Promise<void>] {
++  const mx = useMatrixClient();
++  const extendedProfileSupported = useExtendedProfileSupported();
++  const { data, refetch } = useQuery({
++    queryKey: ['extended-profile', userId],
++    queryFn: useCallback(async () => {
++      if (extendedProfileSupported) {
++        return extendedProfile.parse(await mx.getExtendedProfile(userId));
++      }
++      return null;
++    }, [mx, userId, extendedProfileSupported]),
++    refetchOnMount: false,
++  });
++
++  return [
++    data,
++    async () => {
++      await refetch();
++    },
++  ];
++}
++
++const LEGACY_FIELDS = ['displayname', 'avatar_url'];
++
++/// Returns whether the given profile field may be edited by the user.
++export function profileEditsAllowed(
++  field: string,
++  capabilities: Capabilities,
++  extendedProfileSupported: boolean
++): boolean {
++  if (LEGACY_FIELDS.includes(field)) {
++    // this field might have a pre-msc4133 capability. check that first
++    if (capabilities[`m.set_${field}`]?.enabled === false) {
++      return false;
++    }
++
++    if (!extendedProfileSupported) {
++      // the homeserver only supports legacy fields
++      return true;
++    }
++  }
++
++  if (extendedProfileSupported) {
++    // the homeserver has msc4133 support
++    const extendedProfileCapability = capabilities[
++      'uk.tcpip.msc4133.profile_fields'
++    ] as IProfileFieldsCapability;
++
++    if (extendedProfileCapability === undefined) {
++      // the capability is missing, assume modification is allowed
++      return true;
++    }
++
++    if (!extendedProfileCapability.enabled) {
++      // the capability is set to disable profile modifications
++      return false;
++    }
++
++    if (
++      extendedProfileCapability.allowed !== undefined &&
++      !extendedProfileCapability.allowed.includes(field)
++    ) {
++      // the capability includes an allowlist and `field` isn't in it
++      return false;
++    }
++
++    if (extendedProfileCapability.disallowed?.includes(field)) {
++      // the capability includes an blocklist and `field` is in it
++      return false;
++    }
++
++    // the capability is enabled and `field` isn't blocked
++    return true;
++  }
++
++  // `field` is an extended profile key and the homeserver lacks msc4133 support
++  return false;
++}
+diff --git a/src/app/pages/client/sidebar/SettingsTab.tsx b/src/app/pages/client/sidebar/SettingsTab.tsx
+index bb2121846b..df0515a257 100644
+--- a/src/app/pages/client/sidebar/SettingsTab.tsx
++++ b/src/app/pages/client/sidebar/SettingsTab.tsx
+@@ -1,10 +1,9 @@
+ import React, { useState } from 'react';
+-import { Text } from 'folds';
++import { Icon, Icons } from 'folds';
+ import { SidebarItem, SidebarItemTooltip, SidebarAvatar } from '../../../components/sidebar';
+ import { UserAvatar } from '../../../components/user-avatar';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+-import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
+-import { nameInitials } from '../../../utils/common';
++import { mxcUrlToHttp } from '../../../utils/matrix';
+ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
+ import { Settings } from '../../../features/settings';
+ import { useUserProfile } from '../../../hooks/useUserProfile';
+@@ -13,12 +12,11 @@
+ export function SettingsTab() {
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
+-  const userId = mx.getUserId()!;
++  const userId = mx.getUserId() as string;
+   const profile = useUserProfile(userId);
+ 
+   const [settings, setSettings] = useState(false);
+ 
+-  const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
+   const avatarUrl = profile.avatarUrl
+     ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 96, 96, 'crop') ?? undefined
+     : undefined;
+@@ -34,7 +32,7 @@
+             <UserAvatar
+               userId={userId}
+               src={avatarUrl}
+-              renderFallback={() => <Text size="H4">{nameInitials(displayName)}</Text>}
++              renderFallback={() => <Icon size="400" src={Icons.User} filled />}
+             />
+           </SidebarAvatar>
+         )}
+diff --git a/src/types/matrix/common.ts b/src/types/matrix/common.ts
+index 210c711f4b..2764d6c309 100644
+--- a/src/types/matrix/common.ts
++++ b/src/types/matrix/common.ts
+@@ -3,7 +3,8 @@
+ 
+ export const MATRIX_BLUR_HASH_PROPERTY_NAME = 'xyz.amorgan.blurhash';
+ export const MATRIX_SPOILER_PROPERTY_NAME = 'page.codeberg.everypizza.msc4193.spoiler';
+-export const MATRIX_SPOILER_REASON_PROPERTY_NAME = 'page.codeberg.everypizza.msc4193.spoiler.reason';
++export const MATRIX_SPOILER_REASON_PROPERTY_NAME =
++  'page.codeberg.everypizza.msc4193.spoiler.reason';
+ 
+ export type IImageInfo = {
+   w?: number;
+@@ -88,3 +89,9 @@
+   geo_uri?: string;
+   info?: IThumbnailContent;
+ };
++
++export type IProfileFieldsCapability = {
++  enabled?: boolean;
++  allowed?: string[];
++  disallowed?: string[];
++};
+diff --git a/src/types/utils.ts b/src/types/utils.ts
+index 353ace6eb4..84632c995d 100644
+--- a/src/types/utils.ts
++++ b/src/types/utils.ts
+@@ -1,3 +1,8 @@
+ export type WithRequiredProp<Type extends object, Key extends keyof Type> = Type & {
+   [Property in Key]-?: Type[Property];
+ };
++
++// Represents a subset of T containing only the keys whose values extend V
++export type FilterByValues<T extends object, V> = {
++  [Property in keyof T as T[Property] extends V ? Property : never]: T[Property];
++};
