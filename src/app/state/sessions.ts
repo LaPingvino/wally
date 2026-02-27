@@ -46,7 +46,14 @@ export const removeFallbackSession = () => {
   localStorage.removeItem('cinny_device_id');
   localStorage.removeItem('cinny_access_token');
 };
+let sessionOverride: Session | undefined;
+export const setSessionOverride = (session: Session) => {
+  sessionOverride = session;
+};
+
 export const getFallbackSession = (): Session | undefined => {
+  if (sessionOverride) return sessionOverride;
+
   const baseUrl = localStorage.getItem('cinny_hs_base_url');
   const userId = localStorage.getItem('cinny_user_id');
   const deviceId = localStorage.getItem('cinny_device_id');
@@ -69,6 +76,47 @@ export const getFallbackSession = (): Session | undefined => {
 /**
  * End of migration code for old session
  */
+
+const SECONDARY_SESSIONS_KEY = 'cinny_sessions';
+
+export const getSecondarySessions = (): Array<{ slot: number; session: Session }> => {
+  try {
+    return JSON.parse(localStorage.getItem(SECONDARY_SESSIONS_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+};
+
+export const addSecondarySession = (session: Session): number => {
+  const sessions = getSecondarySessions();
+  // If this userId already has a secondary session (e.g. stale from a previous logout
+  // that wasn't fully cleaned up), reuse its slot and update the credentials.
+  const existing = sessions.find((s) => s.session.userId === session.userId);
+  if (existing) {
+    existing.session = session;
+    localStorage.setItem(SECONDARY_SESSIONS_KEY, JSON.stringify(sessions));
+    return existing.slot;
+  }
+  const usedSlots = new Set(sessions.map((s) => s.slot));
+  let slot = 1;
+  while (usedSlots.has(slot)) slot++;
+  sessions.push({ slot, session });
+  localStorage.setItem(SECONDARY_SESSIONS_KEY, JSON.stringify(sessions));
+  return slot;
+};
+
+export const removeSecondarySession = (slot: number) => {
+  const sessions = getSecondarySessions().filter((s) => s.slot !== slot);
+  localStorage.setItem(SECONDARY_SESSIONS_KEY, JSON.stringify(sessions));
+};
+
+export const getSessionForSlot = (slot: number): Session | undefined => {
+  const entry = getSecondarySessions().find((s) => s.slot === slot);
+  if (!entry) return undefined;
+  // Strip fallbackSdkStores so secondary accounts always use per-user IndexedDB names
+  const { fallbackSdkStores: _ignored, ...rest } = entry.session;
+  return rest;
+};
 
 // export const getSessionStoreName = (session: Session): SessionStoreName => {
 //   if (session.fallbackSdkStores) {

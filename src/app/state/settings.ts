@@ -61,6 +61,7 @@ export interface Settings {
 
   developerTools: boolean;
   issueTracker: boolean;
+  multiAccount: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -102,6 +103,7 @@ const defaultSettings: Settings = {
 
   developerTools: false,
   issueTracker: false,
+  multiAccount: false,
 };
 
 export const getSettings = () => {

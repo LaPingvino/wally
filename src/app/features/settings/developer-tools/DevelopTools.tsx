@@ -49,6 +49,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
 
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
   const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
+  const [multiAccount, setMultiAccount] = useSetting(settingsAtom, 'multiAccount');
   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
   const [globalExpand, setGlobalExpand] = useState(false);
   const [profileExpand, setProfileExpand] = useState(false);
@@ -149,6 +150,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                             variant="Primary"
                             value={issueTracker}
                             onChange={setIssueTracker}
+                          />
+                        }
+                      />
+                      <SettingTile
+                        title="Multi-Account"
+                        description="Show account switcher in sidebar (experimental)."
+                        after={
+                          <Switch
+                            variant="Primary"
+                            value={multiAccount}
+                            onChange={setMultiAccount}
                           />
                         }
                       />
