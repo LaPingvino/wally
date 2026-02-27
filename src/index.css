@@ -5,6 +5,12 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: NotoColorEmojiBahai;
+  src: url('../public/font/NotoColorEmoji.Bahai.v0.0.1.ttf');
+  font-display: swap;
+}
+
 :root {
   --tc-link: hsl(213deg 100% 45%);
 

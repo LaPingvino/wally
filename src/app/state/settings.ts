@@ -14,6 +14,11 @@ export enum MessageLayout {
   Compact = 1,
   Bubble = 2,
 }
+export enum EmojiFont {
+  System = 'system',
+  Twemoji = 'twemoji',
+  NotoColorEmojiBahai = 'noto-bahai',
+}
 
 export interface Settings {
   themeId?: string;
@@ -23,7 +28,8 @@ export interface Settings {
   monochromeMode?: boolean;
   isMarkdown: boolean;
   editorToolbar: boolean;
-  twitterEmoji: boolean;
+  emojiFont: EmojiFont;
+  twitterEmoji?: boolean; // deprecated, kept for migration
   pageZoom: number;
   hideActivity: boolean;
 
@@ -57,7 +63,7 @@ const defaultSettings: Settings = {
   monochromeMode: false,
   isMarkdown: true,
   editorToolbar: false,
-  twitterEmoji: false,
+  emojiFont: EmojiFont.System,
   pageZoom: 100,
   hideActivity: false,
 
@@ -86,9 +92,17 @@ const defaultSettings: Settings = {
 export const getSettings = () => {
   const settings = localStorage.getItem(STORAGE_KEY);
   if (settings === null) return defaultSettings;
+  const parsed = JSON.parse(settings) as Settings;
+
+  // Migrate old twitterEmoji boolean to new emojiFont enum
+  if (parsed.twitterEmoji !== undefined && parsed.emojiFont === undefined) {
+    parsed.emojiFont = parsed.twitterEmoji ? EmojiFont.Twemoji : EmojiFont.System;
+    delete parsed.twitterEmoji;
+  }
+
   return {
     ...defaultSettings,
-    ...(JSON.parse(settings) as Settings),
+    ...parsed,
   };
 };
 
