@@ -486,25 +486,25 @@ index a9c34ce9..a2b3b3e2 100644
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 8962168c..5ac46b05 100644
+index 5b913aac..e7afeda4 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -51,6 +51,7 @@ export interface Settings {
- 
-   issueTracker: boolean;
-   hour24Clock: boolean;
-+  multiAccount: boolean;
-   dateFormatString: string;
+@@ -54,6 +54,7 @@ export interface Settings {
  
    developerTools: boolean;
-@@ -89,6 +90,7 @@ const defaultSettings: Settings = {
+   issueTracker: boolean;
++  multiAccount: boolean;
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -94,6 +95,7 @@ const defaultSettings: Settings = {
+ 
+   developerTools: false,
    issueTracker: false,
-   inRoomActivitySound: true,
-   inboxUnreadNotifications: false,
 +  multiAccount: false,
-   inboxNotifBatchDelay: 60,
-   callRingScope: 'nonVoice',
-   callRingtoneUrl: null,
+ };
+ 
+ export const getSettings = () => {
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
 index 498d4f75..c07be2fb 100644
 --- a/src/client/initMatrix.ts

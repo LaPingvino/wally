@@ -86,13 +86,13 @@ sha256sums=('SKIP'
             '7c767ec55a9845b1513a7441c22dc8a47f71b16236871b3de077a80fdd8b1046'
             'ad484df2baf841eba1b95c7943fcafaecc6e9196bb42c780e2742d5a209b52d3'
             '29c67a170a5b1b65654ba50a28d02a2867168da4c8ab00aca2e51df6f2b54298'
-            '8ab5c47051fcbea3d34a5b443847c95394cd2667827b9c3e46834d2e50c4ccdd'
-            '5571886c2a73dee0547e3d801b464490635ee35079f636d1b61e87ce9cf6960f'
-            'fb09d05737492e2fe6889ad8f6a7791b22b5a1d30106f94b3ab4569295a80c29'
+            '754c4bc704db9324bdd37d5eff17bc809ac5c15b137223ef26248b5961bd9b67'
+            'cd43034d2276126b5a4fbfdc1cd61ca6f7c618f2f9d8745a3326cd01cb6e1630'
+            '9f744c38275d9850b83c857d25ade6dbb7d8e7f01acded5080bd94735d62f815'
             '3d66a3f0467225a50c4fa0507fa8da5831c1c88962ae257d9d33a5ae5d532885'
             '5e5d3afe189731acd6b4ed9e96ad9b4407404786ce37e66e8dd057e2bdcaf018'
             'bc67db1aad49478fd69c3027cb8844ee6ca97ee6f01a52218b683a7f7b5b79cf'
-            '7c5e2589aeb9013c5aa9559e287026ae2653c6df880b5d30524bcfffe8e9cfc1'
+            '1dd8fbd4ea25acf5a06944f4c8daf7768da81a8fa5fec4e55139135c388ad633'
             )
 
 prepare() {
@@ -149,10 +149,10 @@ prepare() {
   echo "Applying login form accessibility patch..."
   patch -p1 -i "$srcdir/05-login-accessibility.patch"
 
-  echo "Applying accessibility improvements patch..."
+  echo "Applying accessibility improvements patch..." # 06-accessibility.patch
   patch -p1 -i "$srcdir/06-accessibility.patch"
   # Override with accessible version (role=dialog, aria-modal, aria-labelledby, kbd elements)
-  cp "$srcdir/KeyboardShortcutsHelp.tsx" "src/app/components/keyboard-shortcuts-help/"
+  cp "$srcdir/KeyboardShortcutsHelp.tsx" "src/app/components/keyboard-shortcuts-help/" # 06-accessibility.patch
 
   echo "Applying issue tracker patch..."
   mkdir -p "src/app/features/issues"

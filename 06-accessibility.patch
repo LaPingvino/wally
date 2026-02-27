@@ -1450,7 +1450,7 @@ index bea09a92..d600c610 100644
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index e0977d97..c6a30036 100644
+index e0977d97..c8882956 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -1463,7 +1463,12 @@ index e0977d97..c6a30036 100644
  import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
  import LogoSVG from '../../../../public/res/svg/cinny.svg';
  import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
-@@ -14,7 +14,15 @@ import { EmojiFont, settingsAtom } from '../../state/settings';
+@@ -10,11 +10,19 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
+ import InviteSound from '../../../../public/sound/invite.ogg';
+ import { notificationPermission, setFavicon } from '../../utils/dom';
+ import { useSetting } from '../../state/hooks/settings';
+-import { EmojiFont, settingsAtom } from '../../state/settings';
++import { EmojiFont, getSettings, settingsAtom } from '../../state/settings';
  import { allInvitesAtom } from '../../state/room-list/inviteList';
  import { usePreviousValue } from '../../hooks/usePreviousValue';
  import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -1659,7 +1664,7 @@ index e0977d97..c6a30036 100644
 +    const rooms = Array.from(pendingRoomsRef.current);
 +    pendingRoomsRef.current.clear();
 +    if (rooms.length === 0) return;
-+    if (!latestRef.current.inboxUnreadNotifications) return;
++    if (!getSettings().inboxUnreadNotifications) return;
 +
 +    const { mx: m, navigate: nav, mDirects: dms, roomToParents: rtp } = latestRef.current;
 +    const count = rooms.length;
@@ -2441,7 +2446,7 @@ index 1ca7e7de..795b484b 100644
    }, [mx, memberships, setRoomsAtom]);
  };
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 52679837..95f3ec30 100644
+index 52679837..d52f70a4 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -42,6 +42,10 @@ export interface Settings {
@@ -2455,17 +2460,7 @@ index 52679837..95f3ec30 100644
    callRingScope: 'dm' | 'nonVoice' | 'all';
    callRingtoneUrl: string | null;
  
-@@ -49,6 +53,9 @@ export interface Settings {
-   dateFormatString: string;
- 
-   developerTools: boolean;
-+  issueTracker: boolean;
-+  multiAccount: boolean;
-+  roomSortOrder: 'activity' | 'az' | 'unread';
- }
- 
- const defaultSettings: Settings = {
-@@ -78,6 +85,9 @@ const defaultSettings: Settings = {
+@@ -78,6 +82,9 @@ const defaultSettings: Settings = {
  
    showNotifications: true,
    isNotificationSounds: true,
@@ -2475,16 +2470,6 @@ index 52679837..95f3ec30 100644
    callRingScope: 'nonVoice',
    callRingtoneUrl: null,
  
-@@ -85,6 +95,9 @@ const defaultSettings: Settings = {
-   dateFormatString: 'D MMM YYYY',
- 
-   developerTools: false,
-+  issueTracker: false,
-+  multiAccount: false,
-+  roomSortOrder: 'activity',
- };
- 
- export const getSettings = () => {
 diff --git a/src/app/utils/announce.ts b/src/app/utils/announce.ts
 new file mode 100644
 index 00000000..c854ce58

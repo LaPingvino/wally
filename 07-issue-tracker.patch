@@ -39,22 +39,22 @@ index 01e6e6a4..37c6be1e 100644
                      <Text size="L400">Options</Text>
                      <SequenceCard
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 95f3ec30..8962168c 100644
+index d52f70a4..5b913aac 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -49,6 +49,7 @@ export interface Settings {
-   callRingScope: 'dm' | 'nonVoice' | 'all';
-   callRingtoneUrl: string | null;
- 
-+  issueTracker: boolean;
-   hour24Clock: boolean;
+@@ -53,6 +53,7 @@ export interface Settings {
    dateFormatString: string;
  
-@@ -85,6 +86,7 @@ const defaultSettings: Settings = {
+   developerTools: boolean;
++  issueTracker: boolean;
+ }
  
-   showNotifications: true,
-   isNotificationSounds: true,
+ const defaultSettings: Settings = {
+@@ -92,6 +93,7 @@ const defaultSettings: Settings = {
+   dateFormatString: 'D MMM YYYY',
+ 
+   developerTools: false,
 +  issueTracker: false,
-   inRoomActivitySound: true,
-   inboxUnreadNotifications: false,
-   inboxNotifBatchDelay: 60,
+ };
+ 
+ export const getSettings = () => {
