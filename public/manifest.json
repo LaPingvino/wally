@@ -1,7 +1,7 @@
 {
-  "name": "Cinny",
-  "short_name": "Cinny",
-  "description": "Yet another matrix client",
+  "name": "Wally",
+  "short_name": "Wally",
+  "description": "A Cinny fork with Element Call, accessibility, and more",
   "dir": "auto",
   "lang": "en-US",
   "display": "standalone",
