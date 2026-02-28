@@ -309,6 +309,310 @@ index 0000000000..ef470ca518
 +    outline: 'none',
 +  },
 +});
+diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
+new file mode 100644
+index 0000000000..5a89a0dadc
+--- /dev/null
++++ b/src/app/features/call/CallView.tsx
+@@ -0,0 +1,298 @@
++import { EventType, Room } from 'matrix-js-sdk';
++import React, {
++  useContext,
++  useCallback,
++  useEffect,
++  useRef,
++  MouseEventHandler,
++  useState,
++  ReactNode,
++} from 'react';
++import { Box, Button, config, Spinner, Text } from 'folds';
++import { useCallState } from '../../pages/client/call/CallProvider';
++import { useCallMembers } from '../../hooks/useCallMemberships';
++
++import { CallRefContext } from '../../pages/client/call/PersistentCallContainer';
++import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
++import { useDebounce } from '../../hooks/useDebounce';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { CallViewUser } from './CallViewUser';
++import { useRoomNavigate } from '../../hooks/useRoomNavigate';
++import { getMemberDisplayName } from '../../utils/room';
++import { getMxIdLocalPart } from '../../utils/matrix';
++import * as css from './CallView.css';
++import { useRoomPermissions } from '../../hooks/useRoomPermissions';
++import { useRoomCreators } from '../../hooks/useRoomCreators';
++import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
++import { useRoomName } from '../../hooks/useRoomMeta';
++
++type OriginalStyles = {
++  position?: string;
++  top?: string;
++  left?: string;
++  width?: string;
++  height?: string;
++  zIndex?: string;
++  display?: string;
++  visibility?: string;
++  pointerEvents?: string;
++  border?: string;
++};
++
++export function CallViewUserGrid({ children }: { children: ReactNode }) {
++  return (
++    <Box
++      className={css.CallViewUserGrid}
++      style={{
++        maxWidth: React.Children.count(children) === 4 ? '336px' : '503px',
++      }}
++    >
++      {children}
++    </Box>
++  );
++}
++
++export function CallView({ room }: { room: Room }) {
++  const callIframeRef = useContext(CallRefContext);
++  const iframeHostRef = useRef<HTMLDivElement>(null);
++
++  const originalIframeStylesRef = useRef<OriginalStyles | null>(null);
++  const mx = useMatrixClient();
++
++  const [visibleCallNames, setVisibleCallNames] = useState('');
++
++  const powerLevels = usePowerLevelsContext();
++  const creators = useRoomCreators(room);
++
++  const roomName = useRoomName(room);
++  const permissions = useRoomPermissions(creators, powerLevels);
++  const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
++
++  const {
++    isActiveCallReady,
++    activeCallRoomId,
++    isCallViewOpen,
++    setActiveCallRoomId,
++    hangUp,
++    setViewedCallRoomId,
++  } = useCallState();
++
++  const isActiveCallRoom = activeCallRoomId === room.roomId;
++  const callIsCurrentAndReady = isActiveCallRoom && isActiveCallReady;
++  const callMembers = useCallMembers(mx, room.roomId);
++
++  const getName = (userId: string) =>
++    getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
++
++  const memberDisplayNames = callMembers.map((callMembership) =>
++    getName(callMembership.sender ?? '')
++  );
++
++  const { navigateRoom } = useRoomNavigate();
++  const screenSize = useScreenSizeContext();
++  const isMobile = screenSize === ScreenSize.Mobile;
++
++  const activeIframeDisplayRef = callIframeRef;
++
++  // When no call is active, signal Element Call to stop its tracks, then navigate away.
++  // Sending the Widget API terminate action first gives EC a chance to call track.stop()
++  // on its own MediaStreamTracks — needed on Firefox which doesn't release them on src change.
++  useEffect(() => {
++    if (!activeCallRoomId && activeIframeDisplayRef?.current) {
++      const iframe = activeIframeDisplayRef.current;
++      try {
++        iframe.contentWindow?.postMessage(
++          JSON.stringify({ api: 'toWidget', action: 'terminate', requestId: `hangup-${Date.now()}`, widgetId: 'element-call' }),
++          '*'
++        );
++      } catch {
++        // ignore — contentWindow access itself is safe cross-origin for postMessage
++      }
++      // Give EC ~300ms to stop its own tracks before we navigate the iframe away
++      const timer = setTimeout(() => {
++        if (activeIframeDisplayRef.current) {
++          activeIframeDisplayRef.current.src = 'about:blank';
++        }
++      }, 300);
++      return () => clearTimeout(timer);
++    }
++    return undefined;
++  }, [activeCallRoomId, activeIframeDisplayRef]);
++
++  const applyFixedPositioningToIframe = useCallback(() => {
++    const iframeElement = activeIframeDisplayRef?.current;
++    const hostElement = iframeHostRef?.current;
++
++    if (iframeElement && hostElement) {
++      if (!originalIframeStylesRef.current) {
++        const computed = window.getComputedStyle(iframeElement);
++        originalIframeStylesRef.current = {
++          position: iframeElement.style.position || computed.position,
++          top: iframeElement.style.top || computed.top,
++          left: iframeElement.style.left || computed.left,
++          width: iframeElement.style.width || computed.width,
++          height: iframeElement.style.height || computed.height,
++          zIndex: iframeElement.style.zIndex || computed.zIndex,
++          display: iframeElement.style.display || computed.display,
++          visibility: iframeElement.style.visibility || computed.visibility,
++          pointerEvents: iframeElement.style.pointerEvents || computed.pointerEvents,
++          border: iframeElement.style.border || computed.border,
++        };
++      }
++
++      const hostRect = hostElement.getBoundingClientRect();
++
++      iframeElement.style.position = 'fixed';
++      iframeElement.style.top = `${hostRect.top}px`;
++      iframeElement.style.left = `${hostRect.left}px`;
++      iframeElement.style.width = `${hostRect.width}px`;
++      iframeElement.style.height = `${hostRect.height}px`;
++      iframeElement.style.border = 'none';
++      iframeElement.style.zIndex = '1000';
++      iframeElement.style.display = (room.isCallRoom() || isActiveCallRoom) && isCallViewOpen ? 'block' : 'none';
++      iframeElement.style.visibility = 'visible';
++      iframeElement.style.pointerEvents = 'auto';
++    }
++  }, [activeIframeDisplayRef, room, isActiveCallRoom, isCallViewOpen]);
++
++  const debouncedApplyFixedPositioning = useDebounce(applyFixedPositioningToIframe, {
++    wait: 50,
++    immediate: false,
++  });
++  useEffect(() => {
++    const iframeElement = activeIframeDisplayRef?.current;
++    const hostElement = iframeHostRef?.current;
++
++    if (room.isCallRoom() || (callIsCurrentAndReady && iframeElement && hostElement)) {
++      applyFixedPositioningToIframe();
++
++      const resizeObserver = new ResizeObserver(debouncedApplyFixedPositioning);
++      if (hostElement) resizeObserver.observe(hostElement);
++      window.addEventListener('scroll', debouncedApplyFixedPositioning, true);
++
++      return () => {
++        resizeObserver.disconnect();
++        window.removeEventListener('scroll', debouncedApplyFixedPositioning, true);
++
++        if (iframeElement && originalIframeStylesRef.current) {
++          const originalStyles = originalIframeStylesRef.current;
++          (Object.keys(originalStyles) as Array<keyof OriginalStyles>).forEach((key) => {
++            if (key in iframeElement.style) {
++              iframeElement.style[key as any] = originalStyles[key] || '';
++            }
++          });
++        }
++        originalIframeStylesRef.current = null;
++      };
++    }
++
++    return undefined;
++  }, [
++    activeIframeDisplayRef,
++    applyFixedPositioningToIframe,
++    debouncedApplyFixedPositioning,
++    callIsCurrentAndReady,
++    room,
++  ]);
++
++  const handleJoinVCClick: MouseEventHandler<HTMLElement> = (evt) => {
++    if (!canJoin) return;
++
++    if (isMobile) {
++      evt.stopPropagation();
++      setViewedCallRoomId(room.roomId);
++      navigateRoom(room.roomId);
++    }
++    if (!callIsCurrentAndReady) {
++      hangUp();
++      setActiveCallRoomId(room.roomId, true);
++    }
++  };
++
++  // NOTE: Visibility is driven by isCallViewOpen (set in CallProvider when call starts).
++  // For voice rooms isCallViewOpen=true by default; for regular rooms isCallViewOpen=false.
++  const isCallViewVisible = (room.isCallRoom() || isActiveCallRoom) && isCallViewOpen;
++
++  useEffect(() => {
++    if (memberDisplayNames.length <= 2) {
++      setVisibleCallNames(memberDisplayNames.join(' and '));
++    } else {
++      const visible = memberDisplayNames.slice(0, 2);
++      const remaining = memberDisplayNames.length - 2;
++
++      setVisibleCallNames(
++        `${visible.join(', ')}, and ${remaining} other${remaining > 1 ? 's' : ''}`
++      );
++    }
++  }, [memberDisplayNames]);
++
++  return (
++    <Box
++      grow="Yes"
++      direction="Column"
++      style={{ display: isCallViewVisible ? 'flex' : 'none' }}
++    >
++      <div
++        ref={iframeHostRef}
++        style={{
++          width: '100%',
++          height: '100%',
++          position: 'relative',
++          pointerEvents: 'none',
++          display: callIsCurrentAndReady ? 'flex' : 'none',
++        }}
++      />
++      <Box
++        grow="Yes"
++        justifyContent="Center"
++        alignItems="Center"
++        direction="Column"
++        gap="300"
++        style={{
++          display: callIsCurrentAndReady ? 'none' : 'flex',
++        }}
++      >
++        <CallViewUserGrid>
++          {callMembers.slice(0, 6).map((callMember) => (
++            <CallViewUser key={callMember.membershipID} room={room} callMembership={callMember} />
++          ))}
++        </CallViewUserGrid>
++
++        <Box
++          direction="Column"
++          alignItems="Center"
++          style={{
++            paddingBlock: config.space.S200,
++          }}
++        >
++          <Text
++            size="H1"
++            style={{
++              paddingBottom: config.space.S300,
++            }}
++          >
++            {roomName}
++          </Text>
++          <Text size="T200">
++            {visibleCallNames !== '' ? visibleCallNames : 'No one'}{' '}
++            {memberDisplayNames.length > 1 ? 'are' : 'is'} currently in voice
++          </Text>
++        </Box>
++        <Button
++          variant="Secondary"
++          disabled={!canJoin || isActiveCallRoom}
++          onClick={handleJoinVCClick}
++        >
++          {isActiveCallRoom ? (
++            <Box justifyContent="Center" alignItems="Center" gap="200">
++              <Spinner />
++              <Text size="B500">{activeCallRoomId === room.roomId ? `Joining` : 'Join Voice'}</Text>
++            </Box>
++          ) : (
++            <Text size="B500">{canJoin ? 'Join Voice' : 'Channel Locked'}</Text>
++          )}
++        </Button>
++      </Box>
++    </Box>
++  );
++}
 diff --git a/src/app/features/call/CallViewUser.tsx b/src/app/features/call/CallViewUser.tsx
 new file mode 100644
 index 0000000000..776fead601
@@ -400,6 +704,17 @@ index 0000000000..3894af8793
 +  public constructor(private rawDefinition: IApp) {
 +    super(rawDefinition);
 +  }
++}
+diff --git a/src/app/features/call/IncomingCallNotification.tsx b/src/app/features/call/IncomingCallNotification.tsx
+new file mode 100644
+index 0000000000..6594d3c600
+--- /dev/null
++++ b/src/app/features/call/IncomingCallNotification.tsx
+@@ -0,0 +1,5 @@
++// Incoming call handling has moved to CallNavStatus (RoomCallNavStatus.tsx).
++// This stub keeps the Router.tsx import working without further patch changes.
++export function IncomingCallNotification() {
++  return null;
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
@@ -805,6 +1120,590 @@ index 0000000000..0f15b32108
 +  // Add other required fields from IWidget if necessary
 +  sender: creatorUserId, // Example: Assuming sender is the creator
 +});
+diff --git a/src/app/features/call/SmallWidgetDriver.ts b/src/app/features/call/SmallWidgetDriver.ts
+new file mode 100644
+index 0000000000..6f179ef11a
+--- /dev/null
++++ b/src/app/features/call/SmallWidgetDriver.ts
+@@ -0,0 +1,578 @@
++/* eslint-disable no-return-await */
++/* eslint-disable no-param-reassign */
++/* eslint-disable no-continue */
++/* eslint-disable class-methods-use-this */
++/* eslint-disable no-dupe-class-members */
++/*
++ * Copyright 2024 New Vector Ltd.
++ * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
++ *
++ * SPDX-License-Identifier: AGPL-3.0-only OR GPL-3.0-only OR LicenseRef-Element-Commercial
++ * Please see LICENSE files in the repository root for full details.
++ */
++import {
++  type Capability,
++  EventDirection,
++  type ISendDelayedEventDetails,
++  type ISendEventDetails,
++  type IReadEventRelationsResult,
++  type IRoomEvent,
++  MatrixCapabilities,
++  type Widget,
++  WidgetDriver,
++  WidgetEventCapability,
++  WidgetKind,
++  type IWidgetApiErrorResponseDataDetails,
++  type ISearchUserDirectoryResult,
++  type IGetMediaConfigResult,
++  type UpdateDelayedEventAction,
++  OpenIDRequestState,
++  SimpleObservable,
++  IOpenIDUpdate,
++} from 'matrix-widget-api';
++import {
++  EventType,
++  type IContent,
++  MatrixError,
++  type MatrixEvent,
++  Direction,
++  type SendDelayedEventResponse,
++  type StateEvents,
++  type TimelineEvents,
++  MatrixClient,
++} from 'matrix-js-sdk';
++
++export class SmallWidgetDriver extends WidgetDriver {
++  private allowedCapabilities: Set<Capability>;
++
++  private readonly mxClient: MatrixClient; // Store the client instance
++
++  public constructor(
++    mx: MatrixClient,
++    allowedCapabilities: Capability[],
++    private forWidget: Widget,
++    private forWidgetKind: WidgetKind,
++    virtual: boolean, // Assuming 'virtual' might be needed later, kept for consistency
++    private inRoomId?: string
++  ) {
++    super();
++    this.mxClient = mx; // Store the passed instance
++
++    this.allowedCapabilities = new Set([
++      ...allowedCapabilities,
++      MatrixCapabilities.Screenshots,
++      // Add other base capabilities as needed, e.g., ElementWidgetCapabilities.RequiresClient
++    ]);
++
++    // --- Capabilities specific to Element Call (or similar trusted widgets) ---
++    // This is a trusted Element Call widget that we control (adjust if not Element Call)
++    this.allowedCapabilities.add(MatrixCapabilities.AlwaysOnScreen);
++    this.allowedCapabilities.add(MatrixCapabilities.MSC3846TurnServers);
++    this.allowedCapabilities.add(MatrixCapabilities.MSC4157SendDelayedEvent);
++    this.allowedCapabilities.add(MatrixCapabilities.MSC4157UpdateDelayedEvent);
++    // Capability to access the room timeline (MSC2762)
++    this.allowedCapabilities.add(`org.matrix.msc2762.timeline:${inRoomId}`);
++    // Capability to read room state (MSC2762)
++    this.allowedCapabilities.add(`org.matrix.msc2762.state:${inRoomId}`);
++    this.allowedCapabilities.add(
++      WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomMember).raw
++    );
++    this.allowedCapabilities.add(
++      WidgetEventCapability.forStateEvent(EventDirection.Receive, 'org.matrix.msc3401.call').raw
++    );
++    this.allowedCapabilities.add(
++      WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomEncryption).raw
++    );
++    const clientUserId = this.mxClient.getSafeUserId();
++    // For the legacy membership type
++    this.allowedCapabilities.add(
++      WidgetEventCapability.forStateEvent(
++        EventDirection.Send,
++        'org.matrix.msc3401.call.member',
++        clientUserId
++      ).raw
++    );
++    const clientDeviceId = this.mxClient.getDeviceId();
++    if (clientDeviceId !== null) {
++      // For the session membership type compliant with MSC4143
++      this.allowedCapabilities.add(
++        WidgetEventCapability.forStateEvent(
++          EventDirection.Send,
++          'org.matrix.msc3401.call.member',
++          `_${clientUserId}_${clientDeviceId}`
++        ).raw
++      );
++      // Version with no leading underscore, for room versions whose auth rules allow it
++      this.allowedCapabilities.add(
++        WidgetEventCapability.forStateEvent(
++          EventDirection.Send,
++          'org.matrix.msc3401.call.member',
++          `${clientUserId}_${clientDeviceId}`
++        ).raw
++      );
++    }
++    this.allowedCapabilities.add(
++      WidgetEventCapability.forStateEvent(EventDirection.Receive, 'org.matrix.msc3401.call.member')
++        .raw
++    );
++    // for determining auth rules specific to the room version
++    this.allowedCapabilities.add(
++      WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomCreate).raw
++    );
++
++    const sendRecvRoomEvents = [
++      'io.element.call.encryption_keys',
++      'org.matrix.rageshake_request',
++      EventType.Reaction,
++      EventType.RoomRedaction,
++      'io.element.call.reaction',
++      EventType.RoomMessage,
++    ];
++    // eslint-disable-next-line no-restricted-syntax
++    for (const eventType of sendRecvRoomEvents) {
++      this.allowedCapabilities.add(
++        WidgetEventCapability.forRoomEvent(EventDirection.Send, eventType).raw
++      );
++      this.allowedCapabilities.add(
++        WidgetEventCapability.forRoomEvent(EventDirection.Receive, eventType).raw
++      );
++    }
++
++    const sendRecvToDevice = [
++      EventType.CallInvite,
++      EventType.CallCandidates,
++      EventType.CallAnswer,
++      EventType.CallHangup,
++      EventType.CallReject,
++      EventType.CallSelectAnswer,
++      EventType.CallNegotiate,
++      EventType.CallSDPStreamMetadataChanged,
++      EventType.CallSDPStreamMetadataChangedPrefix,
++      EventType.CallReplaces,
++      EventType.CallEncryptionKeysPrefix,
++    ];
++    // eslint-disable-next-line no-restricted-syntax
++    for (const eventType of sendRecvToDevice) {
++      this.allowedCapabilities.add(
++        WidgetEventCapability.forToDeviceEvent(EventDirection.Send, eventType).raw
++      );
++      this.allowedCapabilities.add(
++        WidgetEventCapability.forToDeviceEvent(EventDirection.Receive, eventType).raw
++      );
++    }
++  }
++
++  // Cache the result so we only call getVersions() once per driver instance
++  private delayedEventsSupported: boolean | undefined;
++
++  private async checkDelayedEventSupport(): Promise<boolean> {
++    if (this.delayedEventsSupported !== undefined) return this.delayedEventsSupported;
++    try {
++      const info = await this.mxClient.getVersions();
++      // MSC4157 revised the original MSC4140 proposal; check both flag names
++      this.delayedEventsSupported =
++        info.unstable_features?.['org.matrix.msc4157'] === true ||
++        info.unstable_features?.['org.matrix.msc4140'] === true;
++    } catch {
++      this.delayedEventsSupported = false;
++    }
++    return this.delayedEventsSupported;
++  }
++
++  public async validateCapabilities(requested: Set<Capability>): Promise<Set<Capability>> {
++    const granted = new Set(requested);
++    // Only grant delayed-event capabilities when the server actually supports them.
++    // If we grant them on a server that doesn't (e.g. Continuwuity), Element Call will
++    // try to use delayed events, hit a server error, and may not fall back correctly —
++    // leaving no membership events sent and other clients unable to see the call.
++    const supportsDelayed = await this.checkDelayedEventSupport();
++    if (!supportsDelayed) {
++      granted.delete(MatrixCapabilities.MSC4157SendDelayedEvent);
++      granted.delete(MatrixCapabilities.MSC4157UpdateDelayedEvent);
++    }
++    return granted;
++  }
++
++  public async sendEvent<K extends keyof StateEvents>(
++    eventType: K,
++    content: StateEvents[K],
++    stateKey: string | null,
++    targetRoomId: string | null
++  ): Promise<ISendEventDetails>;
++
++  public async sendEvent<K extends keyof TimelineEvents>(
++    eventType: K,
++    content: TimelineEvents[K],
++    stateKey: null,
++    targetRoomId: string | null
++  ): Promise<ISendEventDetails>;
++
++  public async sendEvent(
++    eventType: string,
++    content: IContent,
++    stateKey: string | null = null,
++    targetRoomId: string | null = null
++  ): Promise<ISendEventDetails> {
++    const client = this.mxClient;
++    const roomId = targetRoomId || this.inRoomId;
++
++    if (!client || !roomId) throw new Error('Not in a room or not attached to a client');
++
++    let r: { event_id: string } | null;
++    if (stateKey !== null) {
++      // state event
++      r = await client.sendStateEvent(
++        roomId,
++        eventType as keyof StateEvents,
++        content as StateEvents[keyof StateEvents],
++        stateKey
++      );
++    } else if (eventType === EventType.RoomRedaction) {
++      // special case: extract the `redacts` property and call redact
++      r = await client.redactEvent(roomId, content.redacts);
++    } else {
++      // message event
++      r = await client.sendEvent(
++        roomId,
++        eventType as keyof TimelineEvents,
++        content as TimelineEvents[keyof TimelineEvents]
++      );
++    }
++
++    return { roomId, eventId: r.event_id };
++  }
++
++  /**
++   * @experimental Part of MSC4140 & MSC4157
++   * @see {@link WidgetDriver#sendDelayedEvent}
++   */
++  public async sendDelayedEvent<K extends keyof StateEvents>(
++    delay: number | null,
++    parentDelayId: string | null,
++    eventType: K,
++    content: StateEvents[K],
++    stateKey: string | null,
++    targetRoomId: string | null
++  ): Promise<ISendDelayedEventDetails>;
++
++  /**
++   * @experimental Part of MSC4140 & MSC4157
++   */
++  public async sendDelayedEvent<K extends keyof TimelineEvents>(
++    delay: number | null,
++    parentDelayId: string | null,
++    eventType: K,
++    content: TimelineEvents[K],
++    stateKey: null,
++    targetRoomId: string | null
++  ): Promise<ISendDelayedEventDetails>;
++
++  public async sendDelayedEvent(
++    delay: number | null,
++    parentDelayId: string | null,
++    eventType: string,
++    content: IContent,
++    stateKey: string | null = null,
++    targetRoomId: string | null = null
++  ): Promise<ISendDelayedEventDetails> {
++    const client = this.mxClient;
++    const roomId = targetRoomId || this.inRoomId;
++
++    if (!client || !roomId) throw new Error('Not in a room or not attached to a client');
++
++    let delayOpts;
++    if (delay !== null) {
++      delayOpts = {
++        delay,
++        ...(parentDelayId !== null && { parent_delay_id: parentDelayId }),
++      };
++    } else if (parentDelayId !== null) {
++      delayOpts = {
++        parent_delay_id: parentDelayId,
++      };
++    } else {
++      throw new Error('Must provide at least one of delay or parentDelayId');
++    }
++
++    let r: SendDelayedEventResponse | null;
++    if (stateKey !== null) {
++      // state event
++      r = await client._unstable_sendDelayedStateEvent(
++        roomId,
++        delayOpts,
++        eventType as keyof StateEvents,
++        content as StateEvents[keyof StateEvents],
++        stateKey
++      );
++    } else {
++      // message event
++      r = await client._unstable_sendDelayedEvent(
++        roomId,
++        delayOpts,
++        null,
++        eventType as keyof TimelineEvents,
++        content as TimelineEvents[keyof TimelineEvents]
++      );
++    }
++
++    return {
++      roomId,
++      delayId: r.delay_id,
++    };
++  }
++
++  /**
++   * @experimental Part of MSC4140 & MSC4157
++   */
++  public async updateDelayedEvent(
++    delayId: string,
++    action: UpdateDelayedEventAction
++  ): Promise<void> {
++    const client = this.mxClient;
++
++    if (!client) throw new Error('Not in a room or not attached to a client');
++
++    await client._unstable_updateDelayedEvent(delayId, action);
++  }
++
++  /**
++   * Implements {@link WidgetDriver#sendToDevice}
++   */
++  public async sendToDevice(
++    eventType: string,
++    encrypted: boolean,
++    contentMap: { [userId: string]: { [deviceId: string]: object } }
++  ): Promise<void> {
++    const client = this.mxClient;
++
++    if (encrypted) {
++      const crypto = client.getCrypto();
++      if (!crypto) throw new Error('E2EE not enabled');
++
++      // attempt to re-batch these up into a single request
++      const invertedContentMap: { [content: string]: { userId: string; deviceId: string }[] } = {};
++
++      // eslint-disable-next-line no-restricted-syntax
++      for (const userId of Object.keys(contentMap)) {
++        const userContentMap = contentMap[userId];
++        // eslint-disable-next-line no-restricted-syntax
++        for (const deviceId of Object.keys(userContentMap)) {
++          const content = userContentMap[deviceId];
++          const stringifiedContent = JSON.stringify(content);
++          invertedContentMap[stringifiedContent] = invertedContentMap[stringifiedContent] || [];
++          invertedContentMap[stringifiedContent].push({ userId, deviceId });
++        }
++      }
++
++      await Promise.all(
++        Object.entries(invertedContentMap).map(async ([stringifiedContent, recipients]) => {
++          const batch = await crypto.encryptToDeviceMessages(
++            eventType,
++            recipients,
++            JSON.parse(stringifiedContent)
++          );
++
++          await client.queueToDevice(batch);
++        })
++      );
++    } else {
++      await client.queueToDevice({
++        eventType,
++        batch: Object.entries(contentMap).flatMap(([userId, userContentMap]) =>
++          Object.entries(userContentMap).map(([deviceId, content]) => ({
++            userId,
++            deviceId,
++            payload: content,
++          }))
++        ),
++      });
++    }
++  }
++
++  /**
++   * Reads all events of the given type, and optionally `msgtype` (if applicable/defined),
++   * the user has access to. The widget API will have already verified that the widget is
++   * capable of receiving the events. Less events than the limit are allowed to be returned,
++   * but not more.
++   * @param roomId The ID of the room to look within.
++   * @param eventType The event type to be read.
++   * @param msgtype The msgtype of the events to be read, if applicable/defined.
++   * @param stateKey The state key of the events to be read, if applicable/defined.
++   * @param limit The maximum number of events to retrieve. Will be zero to denote "as many as
++   * possible".
++   * @param since When null, retrieves the number of events specified by the "limit" parameter.
++   * Otherwise, the event ID at which only subsequent events will be returned, as many as specified
++   * in "limit".
++   * @returns {Promise<IRoomEvent[]>} Resolves to the room events, or an empty array.
++   */
++  public async readRoomTimeline(
++    roomId: string,
++    eventType: string,
++    msgtype: string | undefined,
++    stateKey: string | undefined,
++    limit: number,
++    since: string | undefined
++  ): Promise<IRoomEvent[]> {
++    limit = limit > 0 ? Math.min(limit, Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER; // relatively arbitrary
++
++    const room = this.mxClient.getRoom(roomId);
++    if (room === null) return [];
++    const results: MatrixEvent[] = [];
++    const events = room.getLiveTimeline().getEvents(); // timelines are most recent last
++    for (let i = events.length - 1; i >= 0; i--) {
++      const ev = events[i];
++      if (results.length >= limit) break;
++      if (since !== undefined && ev.getId() === since) break;
++
++      if (ev.getType() !== eventType || ev.isState()) continue;
++      if (eventType === EventType.RoomMessage && msgtype && msgtype !== ev.getContent().msgtype)
++        continue;
++      if (ev.getStateKey() !== undefined && stateKey !== undefined && ev.getStateKey() !== stateKey)
++        continue;
++      results.push(ev);
++    }
++
++    return results.map((e) => e.getEffectiveEvent() as IRoomEvent);
++  }
++
++  public async askOpenID(observer: SimpleObservable<IOpenIDUpdate>): Promise<void> {
++    return observer.update({
++      state: OpenIDRequestState.Allowed,
++      token: await this.mxClient.getOpenIdToken(),
++    });
++  }
++
++  /**
++   * Reads the current values of all matching room state entries.
++   * @param roomId The ID of the room.
++   * @param eventType The event type of the entries to be read.
++   * @param stateKey The state key of the entry to be read. If undefined,
++   * all room state entries with a matching event type should be returned.
++   * @returns {Promise<IRoomEvent[]>} Resolves to the events representing the
++   * current values of the room state entries.
++   */
++  public async readRoomState(
++    roomId: string,
++    eventType: string,
++    stateKey: string | undefined
++  ): Promise<IRoomEvent[]> {
++    const room = this.mxClient.getRoom(roomId);
++    if (room === null) return [];
++    const state = room.getLiveTimeline().getState(Direction.Forward);
++    if (state === undefined) return [];
++
++    if (stateKey === undefined)
++      return state.getStateEvents(eventType).map((e) => e.getEffectiveEvent() as IRoomEvent);
++    const event = state.getStateEvents(eventType, stateKey);
++    return event === null ? [] : [event.getEffectiveEvent() as IRoomEvent];
++  }
++
++  /*
++    public async navigate(uri: string): Promise<void> {
++        navigateToPermalink(uri);
++    }
++    */
++
++  public async readEventRelations(
++    eventId: string,
++    roomId?: string,
++    relationType?: string,
++    eventType?: string,
++    from?: string,
++    to?: string,
++    limit?: number,
++    direction?: 'f' | 'b'
++  ): Promise<IReadEventRelationsResult> {
++    const client = this.mxClient;
++    const dir = direction as Direction;
++    roomId = roomId ?? this.inRoomId ?? undefined;
++
++    if (typeof roomId !== 'string') {
++      throw new Error('Error while reading the current room');
++    }
++
++    const { events, nextBatch, prevBatch } = await client.relations(
++      roomId,
++      eventId,
++      relationType ?? null,
++      eventType ?? null,
++      { from, to, limit, dir }
++    );
++
++    return {
++      chunk: events.map((e) => e.getEffectiveEvent() as IRoomEvent),
++      nextBatch: nextBatch ?? undefined,
++      prevBatch: prevBatch ?? undefined,
++    };
++  }
++
++  public async searchUserDirectory(
++    searchTerm: string,
++    limit?: number
++  ): Promise<ISearchUserDirectoryResult> {
++    const client = this.mxClient;
++
++    const { limited, results } = await client.searchUserDirectory({ term: searchTerm, limit });
++
++    return {
++      limited,
++      results: results.map((r) => ({
++        userId: r.user_id,
++        displayName: r.display_name,
++        avatarUrl: r.avatar_url,
++      })),
++    };
++  }
++
++  public async getMediaConfig(): Promise<IGetMediaConfigResult> {
++    const client = this.mxClient;
++
++    return await client.getMediaConfig();
++  }
++
++  public async uploadFile(file: XMLHttpRequestBodyInit): Promise<{ contentUri: string }> {
++    const client = this.mxClient;
++
++    const uploadResult = await client.uploadContent(file);
++
++    return { contentUri: uploadResult.content_uri };
++  }
++
++  /**
++   * Download a file from the media repository on the homeserver.
++   *
++   * @param contentUri - the MXC URI of the file to download
++   * @returns an object with: file - response contents as Blob
++   */
++  /*
++    public async downloadFile(contentUri: string): Promise<{ file: XMLHttpRequestBodyInit }> {
++        const client = this.mxClient;
++        const media = mediaFromMxc(contentUri, client);
++        const response = await media.downloadSource();
++        const blob = await response.blob();
++        return { file: blob };
++    }
++    */
++
++  /**
++   * Gets the IDs of all joined or invited rooms currently known to the
++   * client.
++   * @returns The room IDs.
++   */
++  public getKnownRooms(): string[] {
++    return this.mxClient.getVisibleRooms().map((r) => r.roomId);
++  }
++
++  /**
++   * Expresses a {@link MatrixError} as a JSON payload
++   * for use by Widget API error responses.
++   * @param error The error to handle.
++   * @returns The error expressed as a JSON payload,
++   * or undefined if it is not a {@link MatrixError}.
++   */
++  public processError(error: unknown): IWidgetApiErrorResponseDataDetails | undefined {
++    return error instanceof MatrixError
++      ? { matrix_api_error: error.asWidgetApiErrorData() }
++      : undefined;
++  }
++}
 diff --git a/src/app/features/create-room/CreateRoom.tsx b/src/app/features/create-room/CreateRoom.tsx
 index 05c5c2e385..b1f1fdf761 100644
 --- a/src/app/features/create-room/CreateRoom.tsx
@@ -966,6 +1865,957 @@ index 929dd1e919..6883e3631f 100644
                }
                after={<Icon size="50" src={Icons.Cross} />}
              >
+diff --git a/src/app/features/room/Room.tsx b/src/app/features/room/Room.tsx
+index 24878d5e6e..1594c0ac14 100644
+--- a/src/app/features/room/Room.tsx
++++ b/src/app/features/room/Room.tsx
+@@ -1,4 +1,4 @@
+-import React, { useCallback } from 'react';
++import React, { useCallback, useEffect, useRef, useState } from 'react';
+ import { Box, Line } from 'folds';
+ import { useParams } from 'react-router-dom';
+ import { isKeyHotkey } from 'is-hotkey';
+@@ -13,17 +13,124 @@
+ import { markAsRead } from '../../utils/notifications';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+ import { useRoomMembers } from '../../hooks/useRoomMembers';
++import { CallView } from '../call/CallView';
++import { RoomViewHeader } from './RoomViewHeader';
++import { useCallState } from '../../pages/client/call/CallProvider';
++import { IssueBoard } from '../issues/IssueBoard';
++import { ThreadsDrawer, openThreadIdAtom } from './ThreadsDrawer';
++import { useAtom } from 'jotai';
+ 
+ export function Room() {
+   const { eventId } = useParams();
+   const room = useRoom();
+   const mx = useMatrixClient();
+ 
+-  const [isDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
++  const [isDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+   const screenSize = useScreenSizeContext();
+   const powerLevels = usePowerLevels(room);
+-  const members = useRoomMembers(mx, room.roomId);
++  const members = useRoomMembers(mx, room?.roomId);
++
++  const { activeCallRoomId, isCallViewOpen, isChatOpen } = useCallState();
++  const isActiveCall = activeCallRoomId === room?.roomId;
++
++  const [isIssueBoard, setIsIssueBoard] = useState(false);
++  const [isThreadsDrawer, setIsThreadsDrawer] = useState(false);
++  const [openThreadId] = useAtom(openThreadIdAtom);
++
++  // Reset all panel views when navigating to a different room.
++  useEffect(() => {
++    setIsIssueBoard(false);
++    setIsThreadsDrawer(false);
++  }, [room.roomId]);
++
++  // When something (e.g. a timeline thread indicator) requests a thread to be opened,
++  // ensure the threads drawer is visible. ThreadsDrawer itself handles resetting the atom.
++  useEffect(() => {
++    if (openThreadId) {
++      setIsThreadsDrawer(true);
++      setPeopleDrawer(false);
++    }
++  }, [openThreadId, setPeopleDrawer]);
++
++  const handleThreadDividerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
++    e.preventDefault();
++    (e.target as HTMLElement).setPointerCapture(e.pointerId);
++    const startX = e.clientX;
++    const startWidth = threadWidthRef.current;
++    const onMove = (me: PointerEvent) => {
++      // Divider is on the LEFT of the thread panel, so dragging left = wider thread
++      const newWidth = Math.max(200, Math.min(600, startWidth - (me.clientX - startX)));
++      threadWidthRef.current = newWidth;
++      setThreadPanelWidth(newWidth);
++    };
++    const onUp = () => {
++      localStorage.setItem(THREAD_WIDTH_KEY, String(threadWidthRef.current));
++      window.removeEventListener('pointermove', onMove);
++      window.removeEventListener('pointerup', onUp);
++    };
++    window.addEventListener('pointermove', onMove);
++    window.addEventListener('pointerup', onUp);
++  }, []);
++
++  const handleToggleThreadsDrawer = useCallback(() => {
++    setIsThreadsDrawer((open) => {
++      const opening = !open;
++      // Close members drawer when opening threads to avoid two sidebars
++      if (opening) setPeopleDrawer(false);
++      return opening;
++    });
++  }, [setPeopleDrawer]);
++
++  useEffect(() => {
++    const name = room.name || room.roomId;
++    document.title = `${name} – Wally`;
++    return () => {
++      document.title = 'Wally';
++    };
++  }, [room.name, room.roomId]);
++
++  const isVoiceRoom = room.isCallRoom();
++  const isCallLayout = isVoiceRoom || isActiveCall;
++  const showCallPanel = isCallLayout && isCallViewOpen;
++  // Voice rooms: show chat by default when call panel is closed (no isChatOpen state needed).
++  // Regular rooms with call: only show chat when explicitly toggled (isChatOpen).
++  const showChatPanel = !isCallLayout || isChatOpen || (isVoiceRoom && !isCallViewOpen);
++  const showBoth = showCallPanel && showChatPanel && screenSize === ScreenSize.Desktop;
++
++  const containerRef = useRef<HTMLDivElement>(null);
++  const splitRatioRef = useRef(0.5);
++  const [splitRatio, setSplitRatio] = useState(0.5);
++
++  // Thread panel width — persisted in localStorage
++  const THREAD_WIDTH_KEY = 'cinny_thread_panel_width';
++  const getStoredThreadWidth = () => {
++    const stored = localStorage.getItem(THREAD_WIDTH_KEY);
++    return stored ? Math.max(200, Math.min(600, Number(stored))) : 320;
++  };
++  const threadWidthRef = useRef<number>(getStoredThreadWidth());
++  const [threadPanelWidth, setThreadPanelWidth] = useState<number>(threadWidthRef.current);
++
++  const handleDividerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
++    e.preventDefault();
++    (e.target as HTMLElement).setPointerCapture(e.pointerId);
++    const container = containerRef.current;
++    if (!container) return;
++    const startX = e.clientX;
++    const startRatio = splitRatioRef.current;
++    const totalWidth = container.getBoundingClientRect().width;
++    const onMove = (me: PointerEvent) => {
++      const ratio = Math.max(0.2, Math.min(0.8, startRatio + (me.clientX - startX) / totalWidth));
++      splitRatioRef.current = ratio;
++      setSplitRatio(ratio);
++    };
++    const onUp = () => {
++      window.removeEventListener('pointermove', onMove);
++      window.removeEventListener('pointerup', onUp);
++    };
++    window.addEventListener('pointermove', onMove);
++    window.addEventListener('pointerup', onUp);
++  }, []);
+ 
+   useKeyDown(
+     window,
+@@ -40,13 +147,80 @@
+   return (
+     <PowerLevelsContextProvider value={powerLevels}>
+       <Box grow="Yes">
+-        <RoomView room={room} eventId={eventId} />
++        <Box grow="Yes" direction="Column">
++          <RoomViewHeader
++            isIssueBoard={isIssueBoard}
++            onToggleIssueBoard={() => setIsIssueBoard((b) => !b)}
++            isThreadsDrawer={isThreadsDrawer}
++            onToggleThreadsDrawer={handleToggleThreadsDrawer}
++          />
++          <Box grow="Yes" ref={containerRef}>
++            {isIssueBoard ? (
++              <IssueBoard room={room} />
++            ) : (
++              <>
++                {isCallLayout && (
++                  <Box
++                    grow={showBoth ? undefined : showCallPanel ? 'Yes' : undefined}
++                    direction="Column"
++                    style={
++                      showBoth
++                        ? { flexBasis: `${splitRatio * 100}%`, flexShrink: 0, overflow: 'hidden' }
++                        : { display: showCallPanel ? 'flex' : 'none' }
++                    }
++                  >
++                    <CallView room={room} />
++                  </Box>
++                )}
++                {showBoth && (
++                  <div
++                    role="separator"
++                    style={{
++                      width: '6px',
++                      cursor: 'col-resize',
++                      flexShrink: 0,
++                      background: 'var(--bg-surface-border)',
++                    }}
++                    onPointerDown={handleDividerPointerDown}
++                  />
++                )}
++                <Box
++                  grow={showChatPanel ? 'Yes' : undefined}
++                  direction="Column"
++                  style={{ display: showChatPanel ? 'flex' : 'none' }}
++                >
++                  <RoomView room={room} eventId={eventId} />
++                </Box>
++              </>
++            )}
++          </Box>
++        </Box>
+         {screenSize === ScreenSize.Desktop && isDrawer && (
+           <>
+             <Line variant="Background" direction="Vertical" size="300" />
+             <MembersDrawer key={room.roomId} room={room} members={members} />
+           </>
+         )}
++        {screenSize === ScreenSize.Desktop && isThreadsDrawer && (
++          <>
++            <div
++              role="separator"
++              style={{
++                width: '6px',
++                cursor: 'col-resize',
++                flexShrink: 0,
++                background: 'var(--bg-surface-border)',
++              }}
++              onPointerDown={handleThreadDividerPointerDown}
++            />
++            <ThreadsDrawer
++              key={room.roomId}
++              room={room}
++              onClose={handleToggleThreadsDrawer}
++              width={threadPanelWidth}
++            />
++          </>
++        )}
+       </Box>
+     </PowerLevelsContextProvider>
+   );
+diff --git a/src/app/features/room/RoomView.tsx b/src/app/features/room/RoomView.tsx
+index 0f8375943c..69cc55e6d4 100644
+--- a/src/app/features/room/RoomView.tsx
++++ b/src/app/features/room/RoomView.tsx
+@@ -1,6 +1,7 @@
+-import React, { useCallback, useRef } from 'react';
++import React, { useCallback, useEffect, useRef } from 'react';
+ import { Box, Text, config } from 'folds';
+-import { EventType, Room } from 'matrix-js-sdk';
++import { EventType, JoinRule, Room } from 'matrix-js-sdk';
++import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
+ import { ReactEditor } from 'slate-react';
+ import { isKeyHotkey } from 'is-hotkey';
+ import { useStateEvent } from '../../hooks/useStateEvent';
+@@ -15,13 +16,19 @@
+ import { RoomInput } from './RoomInput';
+ import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
+ import { Page } from '../../components/page';
+-import { RoomViewHeader } from './RoomViewHeader';
++import { useSetAtom } from 'jotai';
+ import { useKeyDown } from '../../hooks/useKeyDown';
+ import { editableActiveElement } from '../../utils/dom';
++import { searchModalAtom } from '../../state/searchModal';
+ import { settingsAtom } from '../../state/settings';
+ import { useSetting } from '../../state/hooks/settings';
+ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
+ import { useRoomCreators } from '../../hooks/useRoomCreators';
++import { useIsDirectRoom } from '../../hooks/useRoom';
++import { useRoomUnread } from '../../state/hooks/unread';
++import { roomToUnreadAtom } from '../../state/room/roomToUnread';
++import { announce } from '../../utils/announce';
++import { playReactionSound, playReplyToMeSound } from '../../utils/sounds';
+ 
+ const FN_KEYS_REGEX = /^F\d+$/;
+ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
+@@ -30,10 +37,8 @@
+     return false;
+   }
+ 
+-  // do not focus on F keys
+   if (FN_KEYS_REGEX.test(code)) return false;
+ 
+-  // do not focus on numlock/scroll lock
+   if (
+     code.startsWith('OS') ||
+     code.startsWith('Meta') ||
+@@ -53,6 +58,9 @@
+     return false;
+   }
+ 
++  const active = document.activeElement;
++  if (active && active.closest('[role="log"], [role="listbox"]')) return false;
++
+   return true;
+ };
+ 
+@@ -70,10 +78,32 @@
+   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
+   const powerLevels = usePowerLevelsContext();
+   const creators = useRoomCreators(room);
++  const direct = useIsDirectRoom();
++  const unread = useRoomUnread(roomId, roomToUnreadAtom);
++
++  useEffect(() => {
++    const roomType = room.isCallRoom()
++      ? 'Call Room'
++      : direct
++        ? 'Direct Message'
++        : room.getJoinRule() === JoinRule.Public
++          ? 'Public Room'
++          : 'Group Room';
++    const parts: string[] = [room.name, roomType];
++    if (unread?.total) parts.push(`${unread.total} unread messages`);
++    const callMemberCount = MatrixRTCSession.callMembershipsForRoom(room).length;
++    if (callMemberCount > 0)
++      parts.push(`${callMemberCount} member${callMemberCount === 1 ? '' : 's'} in call`);
++    announce(parts.join(', '));
++    setTimeout(() => document.getElementById('cinny-timeline')?.focus(), 100);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [roomId]);
+ 
+   const permissions = useRoomPermissions(creators, powerLevels);
+   const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
+ 
++  const setSearchModal = useSetAtom(searchModalAtom);
++
+   useKeyDown(
+     window,
+     useCallback(
+@@ -91,52 +121,150 @@
+     )
+   );
+ 
++  useKeyDown(
++    window,
++    useCallback(
++      (evt) => {
++        const active = document.activeElement;
++        if (!active?.closest('[role="log"]')) return;
++        // Don't intercept keys while typing in the message editor or any other contenteditable
++        if ((active as HTMLElement)?.isContentEditable) return;
++        const noMod = !evt.ctrlKey && !evt.altKey && !evt.metaKey && !evt.shiftKey;
++
++        if (evt.key === 'Escape' && noMod) {
++          evt.preventDefault();
++          ReactEditor.focus(editor);
++          return;
++        }
++
++        if (evt.key === '/' && noMod) {
++          evt.preventDefault();
++          setSearchModal(true);
++          return;
++        }
++
++        if ((evt.key === 'ArrowDown' || evt.key === 'ArrowUp') && noMod) {
++          const scrollEl = document.getElementById('cinny-timeline');
++          if (!scrollEl) return;
++          const messages = Array.from(
++            scrollEl.querySelectorAll('[data-timeline-message]')
++          ) as HTMLElement[];
++          if (messages.length === 0) return;
++          evt.preventDefault();
++          const currentIdx = messages.findIndex(
++            (m) => m === active || m.contains(active as Node)
++          );
++          let next: HTMLElement | undefined;
++          if (currentIdx < 0) {
++            next = messages[messages.length - 1];
++          } else if (evt.key === 'ArrowDown') {
++            next = messages[Math.min(currentIdx + 1, messages.length - 1)];
++          } else {
++            next = messages[Math.max(currentIdx - 1, 0)];
++          }
++          if (next && next !== active) {
++            next.focus({ preventScroll: true });
++            next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
++            // Announce message content for screen readers
++            const evtId = next.getAttribute('data-event-id');
++            if (evtId) {
++              const mxEvent = room.findEventById(evtId);
++              if (mxEvent) {
++                const sender = room.getMember(mxEvent.getSender() ?? '')?.name ?? mxEvent.getSender() ?? '';
++                const content = mxEvent.getContent() as Record<string, unknown>;
++                const body = (content.body as string | undefined) ?? '';
++                const replyRel = (content['m.relates_to'] as Record<string, unknown> | undefined)?.['m.in_reply_to'] as Record<string, unknown> | undefined;
++                const replyId = replyRel?.event_id as string | undefined;
++                const ts = mxEvent.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
++                const parts: string[] = [sender, body];
++                // Reactions on this message
++                const relations = room.getUnfilteredTimelineSet()
++                  .getRelationsForEvent?.(evtId, 'm.annotation', 'm.reaction');
++                if (relations && relations.getRelations().length > 0) {
++                  playReactionSound();
++                  parts.push('has reactions');
++                }
++                if (replyId) {
++                  const replyEvt = room.findEventById(replyId);
++                  if (replyEvt) {
++                    const replySender = room.getMember(replyEvt.getSender() ?? '')?.name ?? replyEvt.getSender() ?? '';
++                    const replyBody = (replyEvt.getContent().body as string | undefined) ?? '';
++                    if (replyBody) parts.push(`In reply to ${replySender}: ${replyBody.slice(0, 80)}`);
++                    // Reply to my own message
++                    if (replyEvt.getSender() === mx.getUserId()) {
++                      playReplyToMeSound();
++                    }
++                  }
++                }
++                if (ts) parts.push(ts);
++                announce(parts.filter(Boolean).join('. '));
++              }
++            }
++          }
++          return;
++        }
++
++        if ((evt.key === 'PageDown' || evt.key === 'PageUp') && noMod) {
++          const scrollEl = document.getElementById('cinny-timeline');
++          if (!scrollEl) return;
++          evt.preventDefault();
++          scrollEl.scrollBy({
++            top: evt.key === 'PageDown' ? scrollEl.clientHeight * 0.9 : -scrollEl.clientHeight * 0.9,
++            behavior: 'smooth',
++          });
++        }
++      },
++      [setSearchModal, room]
++    )
++  );
++
+   return (
+-    <Page ref={roomViewRef}>
+-      <RoomViewHeader />
+-      <Box grow="Yes" direction="Column">
+-        <RoomTimeline
+-          key={roomId}
+-          room={room}
+-          eventId={eventId}
+-          roomInputRef={roomInputRef}
+-          editor={editor}
+-        />
+-        <RoomViewTyping room={room} />
+-      </Box>
+-      <Box shrink="No" direction="Column">
+-        <div style={{ padding: `0 ${config.space.S400}` }}>
+-          {tombstoneEvent ? (
+-            <RoomTombstone
+-              roomId={roomId}
+-              body={tombstoneEvent.getContent().body}
+-              replacementRoomId={tombstoneEvent.getContent().replacement_room}
+-            />
+-          ) : (
+-            <>
+-              {canMessage && (
+-                <RoomInput
+-                  room={room}
+-                  editor={editor}
+-                  roomId={roomId}
+-                  fileDropContainerRef={roomViewRef}
+-                  ref={roomInputRef}
+-                />
+-              )}
+-              {!canMessage && (
+-                <RoomInputPlaceholder
+-                  style={{ padding: config.space.S200 }}
+-                  alignItems="Center"
+-                  justifyContent="Center"
+-                >
+-                  <Text align="Center">You do not have permission to post in this room</Text>
+-                </RoomInputPlaceholder>
+-              )}
+-            </>
+-          )}
+-        </div>
+-        {hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />}
+-      </Box>
+-    </Page>
++    <Page
++      ref={roomViewRef}
++    >
++        <Box grow="Yes" direction="Column">
++          <RoomTimeline
++            key={roomId}
++            room={room}
++            eventId={eventId}
++            roomInputRef={roomInputRef}
++            editor={editor}
++          />
++          <RoomViewTyping room={room} />
++        </Box>
++        <Box shrink="No" direction="Column">
++          <div style={{ padding: `0 ${config.space.S400}` }}>
++            {tombstoneEvent ? (
++              <RoomTombstone
++                roomId={roomId}
++                body={tombstoneEvent.getContent().body}
++                replacementRoomId={tombstoneEvent.getContent().replacement_room}
++              />
++            ) : (
++              <>
++                {canMessage && (
++                  <RoomInput
++                    room={room}
++                    editor={editor}
++                    roomId={roomId}
++                    fileDropContainerRef={roomViewRef}
++                    ref={roomInputRef}
++                  />
++                )}
++                {!canMessage && (
++                  <RoomInputPlaceholder
++                    style={{ padding: config.space.S200 }}
++                    alignItems="Center"
++                    justifyContent="Center"
++                  >
++                    <Text align="Center">You do not have permission to post in this room</Text>
++                  </RoomInputPlaceholder>
++                )}
++              </>
++            )}
++          </div>
++          {hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />}
++        </Box>
++      </Page>
+   );
+ }
+diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
+index 9b4bfd237a..c25fdb2b8a 100644
+--- a/src/app/features/room/RoomViewHeader.tsx
++++ b/src/app/features/room/RoomViewHeader.tsx
+@@ -23,8 +23,7 @@
+   Spinner,
+ } from 'folds';
+ import { useNavigate } from 'react-router-dom';
+-import { JoinRule, Room } from 'matrix-js-sdk';
+-import { useAtomValue } from 'jotai';
++import { EventTimeline, Room } from 'matrix-js-sdk';
+ 
+ import { useStateEvent } from '../../hooks/useStateEvent';
+ import { PageHeader } from '../../components/page';
+@@ -33,7 +32,7 @@
+ import { RoomTopicViewer } from '../../components/room-topic-viewer';
+ import { StateEvent } from '../../../types/matrix/room';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+-import { useRoom } from '../../hooks/useRoom';
++import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
+ import { useSetting } from '../../state/hooks/settings';
+ import { settingsAtom } from '../../state/settings';
+ import { useSpaceOptionally } from '../../hooks/useSpace';
+@@ -48,7 +47,6 @@
+ import { copyToClipboard } from '../../utils/dom';
+ import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
+ import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
+-import { mDirectAtom } from '../../state/mDirectList';
+ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
+ import { stopPropagation } from '../../utils/keyboard';
+ import { getMatrixToRoom } from '../../plugins/matrix-to';
+@@ -69,26 +67,45 @@
+ import { useRoomCreators } from '../../hooks/useRoomCreators';
+ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
+ import { InviteUserPrompt } from '../../components/invite-user-prompt';
++import { useCallState } from '../../pages/client/call/CallProvider';
++import { ContainerColor } from '../../styles/ContainerColor.css';
++import { getIssueSchema } from '../issues/IssueBoard';
+ 
+ type RoomMenuProps = {
+   room: Room;
+   requestClose: () => void;
++  onOpenIssueBoard?: () => void;
++  onToggleThreadsDrawer?: () => void;
++  isThreadsDrawer?: boolean;
+ };
+-const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
++const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard, onToggleThreadsDrawer, isThreadsDrawer }, ref) => {
+   const mx = useMatrixClient();
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
++  const [issueTrackerEnabled] = useSetting(settingsAtom, 'issueTracker');
+   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+   const powerLevels = usePowerLevelsContext();
+   const creators = useRoomCreators(room);
+ 
+   const permissions = useRoomPermissions(creators, powerLevels);
+   const canInvite = permissions.action('invite', mx.getSafeUserId());
++  // Check room creator directly from the create event (creatorsSupported returns false for
++  // room versions 1–11, which covers virtually all real rooms, breaking the creator bypass).
++  const roomCreateEvent = room
++    .getLiveTimeline()
++    .getState(EventTimeline.BACKWARDS)
++    ?.getStateEvents(StateEvent.RoomCreate, '');
++  const isRoomCreator = roomCreateEvent?.getSender() === mx.getSafeUserId();
++  const canConfigSchema =
++    isRoomCreator ||
++    permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
+   const notificationPreferences = useRoomsNotificationPreferencesContext();
+   const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
+   const { navigateRoom } = useRoomNavigate();
+ 
+   const [invitePrompt, setInvitePrompt] = useState(false);
+ 
++  const hasIssueSchema = !!getIssueSchema(room);
++
+   const handleMarkAsRead = () => {
+     markAsRead(mx, room.roomId, hideActivity);
+     requestClose();
+@@ -112,6 +129,17 @@
+     requestClose();
+   };
+ 
++  const handleToggleThreads = () => {
++    onToggleThreadsDrawer?.();
++    requestClose();
++  };
++
++  const handleInitializeIssueTracker = () => {
++    // Open the issue board — when no schema exists, IssueBoard renders the schema editor inline.
++    onOpenIssueBoard?.();
++    requestClose();
++  };
++
+   return (
+     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+       {invitePrompt && (
+@@ -220,7 +248,40 @@
+             </>
+           )}
+         </UseStateProvider>
++        {onToggleThreadsDrawer && (
++          <MenuItem
++            onClick={handleToggleThreads}
++            size="300"
++            after={<Icon size="100" src={Icons.Message} />}
++            radii="300"
++            aria-pressed={isThreadsDrawer}
++          >
++            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++              {isThreadsDrawer ? 'Hide Threads' : 'Threads'}
++            </Text>
++          </MenuItem>
++        )}
+       </Box>
++      {/* Experimental: Issue Tracker setup (requires experimental setting + admin rights) */}
++      {issueTrackerEnabled && canConfigSchema && !hasIssueSchema && (
++        <>
++          <Line variant="Surface" size="300" />
++          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++            <MenuItem
++              onClick={handleInitializeIssueTracker}
++              variant="Primary"
++              fill="None"
++              size="300"
++              after={<Icon size="100" src={Icons.CheckTwice} />}
++              radii="300"
++            >
++              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++                Init Issue Tracker
++              </Text>
++            </MenuItem>
++          </Box>
++        </>
++      )}
+       <Line variant="Surface" size="300" />
+       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+         <UseStateProvider initial={false}>
+@@ -254,7 +315,14 @@
+   );
+ });
+ 
+-export function RoomViewHeader() {
++type RoomViewHeaderProps = {
++  isIssueBoard?: boolean;
++  onToggleIssueBoard?: () => void;
++  isThreadsDrawer?: boolean;
++  onToggleThreadsDrawer?: () => void;
++};
++
++export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDrawer, onToggleThreadsDrawer }: RoomViewHeaderProps) {
+   const navigate = useNavigate();
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
+@@ -263,12 +331,43 @@
+   const space = useSpaceOptionally();
+   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
+-  const mDirects = useAtomValue(mDirectAtom);
++  const direct = useIsDirectRoom();
++
++  const { isChatOpen, isCallViewOpen, toggleChat, toggleCallView, setActiveCallRoomId, hangUp, activeCallRoomId } = useCallState();
++  // NOTE: isActiveCall hides the phone button and shows the chat toggle for active calls.
++  const isActiveCall = activeCallRoomId === room.roomId;
++
++  const powerLevels = usePowerLevelsContext();
++  const creators = useRoomCreators(room);
++  const permissions = useRoomPermissions(creators, powerLevels);
++  const canCall = permissions.stateEvent('org.matrix.msc3401.call.member', mx.getSafeUserId());
++  const canWriteIssues = permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
++  // Check room creator directly (creatorsSupported returns false for versions 1–11).
++  const headerCreateEvent = room
++    .getLiveTimeline()
++    .getState(EventTimeline.BACKWARDS)
++    ?.getStateEvents(StateEvent.RoomCreate, '');
++  const isHeaderRoomCreator = headerCreateEvent?.getSender() === mx.getSafeUserId();
++  const canConfigSchema =
++    isHeaderRoomCreator ||
++    permissions.stateEvent('eu.kiefte.issues.schema' as any, mx.getSafeUserId());
++
++  // Issues button is shown when schema exists AND user has rights to interact with issues.
++  const hasIssueSchema = !!getIssueSchema(room);
++  const showIssuesButton = hasIssueSchema && (canWriteIssues || canConfigSchema);
++
++  // NOTE: This handler is a new addition compared to the PR (hazre/cinny feat/element-call).
++  // The PR only adds a Chat toggle for voice rooms; this adds a Start Call button for
++  // regular and DM rooms so users can initiate Element Call from any room.
++  const handleStartCall = () => {
++    hangUp();
++    setActiveCallRoomId(room.roomId, true);
++  };
+ 
+   const pinnedEvents = useRoomPinnedEvents(room);
+   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
+   const ecryptedRoom = !!encryptionEvent;
+-  const avatarMxc = useRoomAvatar(room, mDirects.has(room.roomId));
++  const avatarMxc = useRoomAvatar(room, direct);
+   const name = useRoomName(room);
+   const topic = useRoomTopic(room);
+   const avatarUrl = avatarMxc
+@@ -296,13 +395,16 @@
+   };
+ 
+   return (
+-    <PageHeader balance={screenSize === ScreenSize.Mobile}>
++    <PageHeader
++      className={ContainerColor({ variant: 'Surface' })}
++      balance={screenSize === ScreenSize.Mobile}
++    >
+       <Box grow="Yes" gap="300">
+         {screenSize === ScreenSize.Mobile && (
+           <BackRouteHandler>
+             {(onBack) => (
+               <Box shrink="No" alignItems="Center">
+-                <IconButton onClick={onBack}>
++                <IconButton fill="None" onClick={onBack} aria-label="Go back">
+                   <Icon src={Icons.ArrowLeft} />
+                 </IconButton>
+               </Box>
+@@ -317,11 +419,7 @@
+                 src={avatarUrl}
+                 alt={name}
+                 renderFallback={() => (
+-                  <RoomIcon
+-                    size="200"
+-                    joinRule={room.getJoinRule() ?? JoinRule.Restricted}
+-                    filled
+-                  />
++                  <RoomIcon size="200" joinRule={room.getJoinRule()} roomType={room.getType()} />
+                 )}
+               />
+             </Avatar>
+@@ -369,7 +467,104 @@
+             )}
+           </Box>
+         </Box>
++
+         <Box shrink="No">
++          {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
++              Wobble here (left side of group) is less noticeable than at the right. */}
++
++          {/* Call button — hidden when canCall is false AND no call is active/running.
++              Unified: "Start Call" before a call, "Show/Hide Call" toggle once active. */}
++          {(canCall || isActiveCall || room.isCallRoom()) && !isIssueBoard && (
++            <TooltipProvider
++              position="Bottom"
++              offset={4}
++              tooltip={
++                <Tooltip>
++                  <Text>
++                    {(isActiveCall || room.isCallRoom())
++                      ? (isCallViewOpen ? 'Hide Call' : 'Show Call')
++                      : 'Start Call'}
++                  </Text>
++                </Tooltip>
++              }
++            >
++              {(triggerRef) => (
++                <IconButton
++                  fill="None"
++                  ref={triggerRef}
++                  onClick={isActiveCall || room.isCallRoom() ? toggleCallView : handleStartCall}
++                  aria-label={
++                    (isActiveCall || room.isCallRoom())
++                      ? (isCallViewOpen ? 'Hide call' : 'Show call')
++                      : 'Start call'
++                  }
++                  aria-pressed={(isActiveCall || room.isCallRoom()) ? isCallViewOpen : undefined}
++                  aria-keyshortcuts={!isActiveCall && !room.isCallRoom() ? 'Alt+J' : undefined}
++                >
++                  <Icon
++                    size="400"
++                    src={Icons.Phone}
++                    filled={(isActiveCall || room.isCallRoom()) && isCallViewOpen}
++                  />
++                </IconButton>
++              )}
++            </TooltipProvider>
++          )}
++
++          {/* Chat toggle — hidden when no call is active */}
++          {(isActiveCall || room.isCallRoom()) && !isIssueBoard && (
++            <TooltipProvider
++              position="Bottom"
++              offset={4}
++              tooltip={
++                <Tooltip>
++                  <Text>{isChatOpen ? 'Hide Chat' : 'Show Chat'}</Text>
++                </Tooltip>
++              }
++            >
++              {(triggerRef) => (
++                <IconButton
++                  fill="None"
++                  ref={triggerRef}
++                  onClick={toggleChat}
++                  aria-label={isChatOpen ? 'Hide chat' : 'Show chat'}
++                  aria-pressed={isChatOpen}
++                >
++                  <Icon size="400" src={Icons.Message} filled={isChatOpen} />
++                </IconButton>
++              )}
++            </TooltipProvider>
++          )}
++
++          {/* Issue board toggle — hidden when schema absent or insufficient rights */}
++          {showIssuesButton && (
++            <TooltipProvider
++              position="Bottom"
++              offset={4}
++              tooltip={
++                <Tooltip>
++                  <Text>{isIssueBoard ? 'Show Chat' : 'Issue Tracker'}</Text>
++                </Tooltip>
++              }
++            >
++              {(triggerRef) => (
++                <IconButton
++                  fill="None"
++                  ref={triggerRef}
++                  onClick={onToggleIssueBoard}
++                  aria-pressed={isIssueBoard}
++                  aria-label={isIssueBoard ? 'Show chat' : 'Issue tracker'}
++                >
++                  <Icon size="400" src={Icons.CheckTwice} filled={isIssueBoard} />
++                </IconButton>
++              )}
++            </TooltipProvider>
++          )}
++
++          {/* BACK: stable buttons — always visible, greyed when temporarily unavailable.
++              The … menu is always the rightmost button; its position never changes. */}
++
++          {/* Search — greyed when issue board covers the chat */}
+           {!ecryptedRoom && (
+             <TooltipProvider
+               position="Bottom"
+@@ -381,12 +576,14 @@
+               }
+             >
+               {(triggerRef) => (
+-                <IconButton ref={triggerRef} onClick={handleSearchClick}>
++                <IconButton fill="None" ref={triggerRef} disabled={isIssueBoard} onClick={handleSearchClick} aria-label="Search room">
+                   <Icon size="400" src={Icons.Search} />
+                 </IconButton>
+               )}
+             </TooltipProvider>
+           )}
++
++          {/* Pinned messages — greyed when issue board covers the chat */}
+           <TooltipProvider
+             position="Bottom"
+             offset={4}
+@@ -398,10 +595,13 @@
+           >
+             {(triggerRef) => (
+               <IconButton
++                fill="None"
+                 style={{ position: 'relative' }}
++                disabled={isIssueBoard}
+                 onClick={handleOpenPinMenu}
+                 ref={triggerRef}
+                 aria-pressed={!!pinMenuAnchor}
++                aria-label={`Pinned messages${pinnedEvents.length > 0 ? ` (${pinnedEvents.length} pinned)` : ''}`}
+               >
+                 {pinnedEvents.length > 0 && (
+                   <Badge
+@@ -443,6 +643,8 @@
+               </FocusTrap>
+             }
+           />
++
++          {/* Members — Desktop, always enabled */}
+           {screenSize === ScreenSize.Desktop && (
+             <TooltipProvider
+               position="Bottom"
+@@ -454,12 +656,45 @@
+               }
+             >
+               {(triggerRef) => (
+-                <IconButton ref={triggerRef} onClick={() => setPeopleDrawer((drawer) => !drawer)}>
++                <IconButton
++                  fill="None"
++                  ref={triggerRef}
++                  onClick={() => setPeopleDrawer((drawer) => !drawer)}
++                  aria-label={peopleDrawer ? 'Hide members' : 'Show members'}
++                  aria-pressed={peopleDrawer}
++                >
+                   <Icon size="400" src={Icons.User} />
+                 </IconButton>
+               )}
+             </TooltipProvider>
+           )}
++
++          {/* Threads — Desktop, always enabled */}
++          {screenSize === ScreenSize.Desktop && (
++            <TooltipProvider
++              position="Bottom"
++              offset={4}
++              tooltip={
++                <Tooltip>
++                  <Text>{isThreadsDrawer ? 'Hide Threads' : 'Show Threads'}</Text>
++                </Tooltip>
++              }
++            >
++              {(triggerRef) => (
++                <IconButton
++                  fill="None"
++                  ref={triggerRef}
++                  onClick={onToggleThreadsDrawer}
++                  aria-pressed={isThreadsDrawer}
++                  aria-label={isThreadsDrawer ? 'Hide threads panel' : 'Show threads panel'}
++                >
++                  <Icon size="400" src={Icons.Message} filled={isThreadsDrawer} />
++                </IconButton>
++              )}
++            </TooltipProvider>
++          )}
++
++          {/* More options — always rightmost */}
+           <TooltipProvider
+             position="Bottom"
+             align="End"
+@@ -471,7 +706,13 @@
+             }
+           >
+             {(triggerRef) => (
+-              <IconButton onClick={handleOpenMenu} ref={triggerRef} aria-pressed={!!menuAnchor}>
++              <IconButton
++                fill="None"
++                onClick={handleOpenMenu}
++                ref={triggerRef}
++                aria-pressed={!!menuAnchor}
++                aria-label="More options"
++              >
+                 <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
+               </IconButton>
+             )}
+@@ -492,7 +733,7 @@
+                   escapeDeactivates: stopPropagation,
+                 }}
+               >
+-                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} />
++                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} onOpenIssueBoard={onToggleIssueBoard} onToggleThreadsDrawer={onToggleThreadsDrawer} isThreadsDrawer={isThreadsDrawer} />
+               </FocusTrap>
+             }
+           />
 diff --git a/src/app/features/room-nav/RoomCallNavStatus.css.ts b/src/app/features/room-nav/RoomCallNavStatus.css.ts
 new file mode 100644
 index 0000000000..059afd5add
@@ -993,6 +2843,960 @@ index 0000000000..059afd5add
 +  flexGrow: 1,
 +  minWidth: 0,
 +});
+diff --git a/src/app/features/room-nav/RoomCallNavStatus.tsx b/src/app/features/room-nav/RoomCallNavStatus.tsx
+new file mode 100644
+index 0000000000..94bd355119
+--- /dev/null
++++ b/src/app/features/room-nav/RoomCallNavStatus.tsx
+@@ -0,0 +1,505 @@
++import {
++  Box,
++  Chip,
++  Icon,
++  IconButton,
++  Icons,
++  Line,
++  Spinner,
++  Text,
++  Tooltip,
++  TooltipProvider,
++  color,
++} from 'folds';
++import React, { useCallback, useEffect, useRef, useState } from 'react';
++import { useAtomValue } from 'jotai';
++import { EventType } from 'matrix-js-sdk';
++import { MatrixRTCSessionManagerEvents } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager';
++import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
++import { useCallState } from '../../pages/client/call/CallProvider';
++import { useRoomNavigate } from '../../hooks/useRoomNavigate';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { mxcUrlToHttp } from '../../utils/matrix';
++import { announce } from '../../utils/announce';
++import {
++  getRoomNotificationMode,
++  RoomNotificationMode,
++  useRoomsNotificationPreferences,
++} from '../../hooks/useRoomsNotificationPreferences';
++import { settingsAtom } from '../../state/settings';
++import * as css from './RoomCallNavStatus.css';
++
++// Module-level: persists across tab switches (Direct/Home/Space each mount their own CallNavStatus).
++// Stores rooms where the ring timed out so we don't re-ring on remount.
++const timedOutCalls = new Set<string>();
++// Rooms the user explicitly hung up or dismissed — SessionStarted won't clear these,
++// so the call can't re-ring until it truly ends (SessionEnded) and restarts.
++const hungUpCalls = new Set<string>();
++
++const RING_TIMEOUT_MS = 30_000;
++
++// Play two short bursts (480Hz + 620Hz, classic POTS ring) then a pause.
++function playRingCycle(ctx: AudioContext) {
++  const now = ctx.currentTime;
++  for (let burst = 0; burst < 2; burst++) {
++    const start = now + burst * 0.5;
++    const end = start + 0.4;
++    const gain = ctx.createGain();
++    gain.connect(ctx.destination);
++    gain.gain.setValueAtTime(0, start);
++    gain.gain.linearRampToValueAtTime(0.15, start + 0.02);
++    gain.gain.setValueAtTime(0.15, end - 0.04);
++    gain.gain.linearRampToValueAtTime(0, end);
++    [480, 620].forEach((freq) => {
++      const osc = ctx.createOscillator();
++      osc.type = 'sine';
++      osc.frequency.value = freq;
++      osc.connect(gain);
++      osc.start(start);
++      osc.stop(end);
++    });
++  }
++}
++
++interface IncomingCall {
++  roomId: string;
++}
++
++export function CallNavStatus() {
++  const mx = useMatrixClient();
++  const {
++    activeCallRoomId,
++    isActiveCallReady,
++    isAudioEnabled,
++    isVideoEnabled,
++    toggleAudio,
++    toggleVideo,
++    hangUp,
++    setActiveCallRoomId,
++  } = useCallState();
++  const { navigateRoom } = useRoomNavigate();
++
++  const [incomingCalls, setIncomingCalls] = useState<IncomingCall[]>([]);
++  const [callPage, setCallPage] = useState(0);
++
++  const dismissedRef = useRef<Set<string>>(new Set());
++  // Per-call ring timeout handles
++  const callTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
++  // Track which incoming call we've already announced to avoid re-announcing on re-render
++  const announcedCallRef = useRef<string | null>(null);
++
++  // Ringtone
++  const audioCtxRef = useRef<AudioContext | null>(null);
++  const ringTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
++  const audioElRef = useRef<HTMLAudioElement | null>(null);
++
++  const callRingtoneUrl = useAtomValue(settingsAtom).callRingtoneUrl ?? null;
++  const useAuthentication = useMediaAuthentication();
++
++  const stopRingtone = useCallback(() => {
++    if (ringTimerRef.current) {
++      clearTimeout(ringTimerRef.current);
++      ringTimerRef.current = null;
++    }
++    if (audioCtxRef.current) {
++      audioCtxRef.current.close().catch(() => {});
++      audioCtxRef.current = null;
++    }
++    if (audioElRef.current) {
++      audioElRef.current.pause();
++      audioElRef.current.src = '';
++      audioElRef.current = null;
++    }
++  }, []);
++
++  const scheduleNextCycle = useCallback((ctx: AudioContext) => {
++    playRingCycle(ctx);
++    ringTimerRef.current = setTimeout(() => {
++      if (audioCtxRef.current) scheduleNextCycle(audioCtxRef.current);
++    }, 3000);
++  }, []);
++
++  const startRingtone = useCallback(() => {
++    if (audioCtxRef.current || audioElRef.current) return;
++
++    // Resolve custom ringtone URL (supports mxc:// and https://)
++    const resolvedUrl = callRingtoneUrl
++      ? callRingtoneUrl.startsWith('mxc://')
++        ? mxcUrlToHttp(mx, callRingtoneUrl, useAuthentication)
++        : callRingtoneUrl
++      : null;
++
++    if (resolvedUrl) {
++      const audio = new Audio(resolvedUrl);
++      audio.loop = true;
++      audioElRef.current = audio;
++      audio.play().catch(() => {
++        // Playback failed — fall through to synthesized fallback
++        audioElRef.current = null;
++        try {
++          const ctx = new AudioContext();
++          audioCtxRef.current = ctx;
++          scheduleNextCycle(ctx);
++        } catch {
++          // Audio blocked or not supported
++        }
++      });
++      return;
++    }
++
++    // Fallback: synthesized POTS ring
++    try {
++      const ctx = new AudioContext();
++      audioCtxRef.current = ctx;
++      scheduleNextCycle(ctx);
++    } catch {
++      // Audio blocked or not supported
++    }
++  }, [callRingtoneUrl, mx, useAuthentication, scheduleNextCycle]);
++
++  const notificationPreferences = useRoomsNotificationPreferences();
++  const callRingScope = useAtomValue(settingsAtom).callRingScope ?? 'nonVoice';
++
++  const hasActiveCall = Boolean(activeCallRoomId);
++  const isConnected = hasActiveCall && isActiveCallReady;
++
++  const clearCallTimeout = useCallback((roomId: string) => {
++    const t = callTimeoutsRef.current.get(roomId);
++    if (t) {
++      clearTimeout(t);
++      callTimeoutsRef.current.delete(roomId);
++    }
++  }, []);
++
++  // Clean up all per-call timeouts on unmount
++  useEffect(
++    () => () => {
++      callTimeoutsRef.current.forEach((t) => clearTimeout(t));
++      callTimeoutsRef.current.clear();
++      stopRingtone();
++    },
++    [stopRingtone]
++  );
++
++  useEffect(() => {
++    const myUserId = mx.getUserId();
++
++    const addCall = (roomId: string, session: MatrixRTCSession) => {
++      if (roomId === activeCallRoomId) return;
++      if (dismissedRef.current.has(roomId)) return;
++      if (timedOutCalls.has(roomId)) return;
++      // Voice rooms are persistent channels — skip unless user opted into 'all'
++      if (callRingScope !== 'all' && mx.getRoom(roomId)?.isCallRoom()) return;
++      // For DM-only scope, skip non-DM rooms
++      if (callRingScope === 'dm') {
++        const dmContent = mx.getAccountData(EventType.Direct)?.getContent<Record<string, string[]>>();
++        const dmRoomIds = new Set(Object.values(dmContent ?? {}).flat());
++        if (!dmRoomIds.has(roomId)) return;
++      }
++      // Respect notification settings — muted rooms get no ring or bar
++      if (getRoomNotificationMode(notificationPreferences, roomId) === RoomNotificationMode.Mute) return;
++      const otherMembers = session.memberships.filter((m) => m.sender !== myUserId);
++      if (otherMembers.length === 0) return;
++
++      setIncomingCalls((prev) => {
++        if (prev.some((c) => c.roomId === roomId)) return prev;
++        return [...prev, { roomId }];
++      });
++
++      // Auto-dismiss after timeout so a missed call doesn't re-ring on tab switch
++      if (!callTimeoutsRef.current.has(roomId)) {
++        const t = setTimeout(() => {
++          timedOutCalls.add(roomId);
++          dismissedRef.current.add(roomId);
++          callTimeoutsRef.current.delete(roomId);
++          setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
++        }, RING_TIMEOUT_MS);
++        callTimeoutsRef.current.set(roomId, t);
++      }
++    };
++
++    for (const room of mx.getRooms()) {
++      const memberships = MatrixRTCSession.callMembershipsForRoom(room);
++      if (memberships.filter((m) => m.sender !== myUserId).length > 0) {
++        const session = mx.matrixRTC.getRoomSession(room);
++        addCall(room.roomId, session);
++      }
++    }
++
++    const handleSessionStarted = (roomId: string, session: MatrixRTCSession) => {
++      // New session means a fresh call — clear timeout/dismiss state, UNLESS the user
++      // explicitly hung up or dismissed this room (hungUpCalls). In that case, keep
++      // suppressing the ring until SessionEnded confirms the call truly ended.
++      if (!hungUpCalls.has(roomId)) {
++        timedOutCalls.delete(roomId);
++        dismissedRef.current.delete(roomId);
++      }
++      clearCallTimeout(roomId);
++      addCall(roomId, session);
++    };
++
++    const handleSessionEnded = (roomId: string) => {
++      // Session truly ended — clear all state including explicit hang-up, allow re-ring next time.
++      timedOutCalls.delete(roomId);
++      hungUpCalls.delete(roomId);
++      dismissedRef.current.delete(roomId);
++      clearCallTimeout(roomId);
++      setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
++    };
++
++    mx.matrixRTC.on(MatrixRTCSessionManagerEvents.SessionStarted, handleSessionStarted);
++    mx.matrixRTC.on(MatrixRTCSessionManagerEvents.SessionEnded, handleSessionEnded);
++
++    return () => {
++      mx.matrixRTC.removeListener(MatrixRTCSessionManagerEvents.SessionStarted, handleSessionStarted);
++      mx.matrixRTC.removeListener(MatrixRTCSessionManagerEvents.SessionEnded, handleSessionEnded);
++    };
++  }, [mx, activeCallRoomId, clearCallTimeout, notificationPreferences, callRingScope]);
++
++  const handleJoin = useCallback(
++    (roomId: string) => {
++      clearCallTimeout(roomId);
++      setActiveCallRoomId(roomId, true);
++      navigateRoom(roomId);
++      setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
++    },
++    [setActiveCallRoomId, navigateRoom, clearCallTimeout]
++  );
++
++  const handleDismiss = useCallback(
++    (roomId: string) => {
++      clearCallTimeout(roomId);
++      timedOutCalls.add(roomId);
++      hungUpCalls.add(roomId);
++      dismissedRef.current.add(roomId);
++      setIncomingCalls((prev) => prev.filter((c) => c.roomId !== roomId));
++    },
++    [clearCallTimeout]
++  );
++
++  // Ring while incoming calls are waiting; announce the first call to screen readers
++  useEffect(() => {
++    if (!hasActiveCall && incomingCalls.length > 0) {
++      startRingtone();
++      const firstRoomId = incomingCalls[0].roomId;
++      if (announcedCallRef.current !== firstRoomId) {
++        announcedCallRef.current = firstRoomId;
++        const room = mx.getRoom(firstRoomId);
++        announce(`Incoming call${room ? ` in ${room.name}` : ''}`);
++      }
++    } else {
++      stopRingtone();
++      announcedCallRef.current = null;
++    }
++    return stopRingtone;
++  }, [hasActiveCall, incomingCalls, startRingtone, stopRingtone, mx]);
++
++  // Clamp page index when calls list shrinks
++  const safeIndex = Math.min(callPage, Math.max(0, incomingCalls.length - 1));
++
++  if (!hasActiveCall && incomingCalls.length === 0) return null;
++
++  // Incoming call(s) with pagination
++  if (!hasActiveCall) {
++    const current = incomingCalls[safeIndex];
++    const room = mx.getRoom(current.roomId);
++    const total = incomingCalls.length;
++
++    return (
++      <Box direction="Column" shrink="No">
++        <Line variant="Surface" size="300" />
++        <Box
++          className={css.Actions}
++          direction="Row"
++          alignItems="Center"
++          gap="100"
++          style={{ borderLeft: `3px solid ${color.Warning.Main}` }}
++        >
++          {/* Prev/next pagination — only when multiple calls */}
++          {total > 1 && (
++            <IconButton
++              fill="None"
++              size="300"
++              onClick={() => setCallPage((p) => Math.max(0, p - 1))}
++              disabled={safeIndex === 0}
++              aria-label="Previous incoming call"
++            >
++              <Icon src={Icons.ChevronLeft} size="50" />
++            </IconButton>
++          )}
++
++          <Box className={css.RoomButtonWrap} grow="Yes">
++            <TooltipProvider
++              position="Top"
++              offset={4}
++              tooltip={
++                <Tooltip>
++                  <Text>Join call</Text>
++                </Tooltip>
++              }
++            >
++              {(triggerRef) => (
++                <Chip
++                  id="incoming-call-join"
++                  size="500"
++                  fill="Soft"
++                  as="button"
++                  aria-label={`Join call${room ? ` in ${room.name}` : ''}`}
++                  onClick={() => handleJoin(current.roomId)}
++                  ref={triggerRef}
++                  className={css.RoomButton}
++                >
++                  <Icon size="300" src={Icons.Phone} style={{ color: color.Warning.Main }} />
++                  <Text as="span" size="L400" style={{ color: color.Warning.Main }} truncate>
++                    {room?.name ?? current.roomId}
++                    {total > 1 && ` (${safeIndex + 1}/${total})`}
++                  </Text>
++                </Chip>
++              )}
++            </TooltipProvider>
++          </Box>
++
++          {total > 1 && (
++            <IconButton
++              fill="None"
++              size="300"
++              onClick={() => setCallPage((p) => Math.min(total - 1, p + 1))}
++              disabled={safeIndex === total - 1}
++              aria-label="Next incoming call"
++            >
++              <Icon src={Icons.ChevronRight} size="50" />
++            </IconButton>
++          )}
++
++          <TooltipProvider
++            position="Top"
++            offset={4}
++            tooltip={
++              <Tooltip>
++                <Text>Dismiss</Text>
++              </Tooltip>
++            }
++          >
++            {(triggerRef) => (
++              <IconButton
++                fill="None"
++                size="300"
++                ref={triggerRef}
++                aria-label="Dismiss incoming call"
++                onClick={() => {
++                  handleDismiss(current.roomId);
++                  setCallPage((p) => Math.max(0, p - 1));
++                }}
++              >
++                <Icon src={Icons.Cross} />
++              </IconButton>
++            )}
++          </TooltipProvider>
++        </Box>
++      </Box>
++    );
++  }
++
++  // Active call
++  return (
++    <Box direction="Column" shrink="No">
++      <Line variant="Surface" size="300" />
++      <Box className={css.Actions} direction="Row" alignItems="Center" gap="100">
++        <Box className={css.RoomButtonWrap} grow="Yes">
++          <TooltipProvider
++            position="Top"
++            offset={4}
++            tooltip={
++              <Tooltip>
++                <Text>Go to Room</Text>
++              </Tooltip>
++            }
++          >
++            {(triggerRef) => (
++              <Chip
++                size="500"
++                fill="Soft"
++                as="button"
++                onClick={() => activeCallRoomId && navigateRoom(activeCallRoomId)}
++                ref={triggerRef}
++                className={css.RoomButton}
++              >
++                {isConnected ? (
++                  <Icon size="300" src={Icons.VolumeHigh} style={{ color: color.Success.Main }} />
++                ) : (
++                  <Spinner size="300" variant="Secondary" />
++                )}
++                <Text
++                  as="span"
++                  size="L400"
++                  style={{ color: isConnected ? color.Success.Main : color.Warning.Main }}
++                >
++                  {isConnected ? 'Connected' : 'Connecting'}
++                </Text>
++              </Chip>
++            )}
++          </TooltipProvider>
++        </Box>
++        <TooltipProvider
++          position="Top"
++          offset={4}
++          tooltip={
++            <Tooltip>
++              <Text>Hang Up</Text>
++            </Tooltip>
++          }
++        >
++          {(triggerRef) => (
++            <IconButton
++              fill="None"
++              size="300"
++              ref={triggerRef}
++              aria-label="Hang up"
++              onClick={() => {
++                if (activeCallRoomId) {
++                  timedOutCalls.add(activeCallRoomId);
++                  hungUpCalls.add(activeCallRoomId);
++                  dismissedRef.current.add(activeCallRoomId);
++                }
++                hangUp();
++              }}
++            >
++              <Icon src={Icons.PhoneDown} />
++            </IconButton>
++          )}
++        </TooltipProvider>
++        <TooltipProvider
++          position="Top"
++          offset={4}
++          tooltip={
++            <Tooltip>
++              <Text>{!isAudioEnabled ? 'Unmute' : 'Mute'}</Text>
++            </Tooltip>
++          }
++        >
++          {(triggerRef) => (
++            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'} onClick={() => { toggleAudio(); announce(isAudioEnabled ? 'Microphone muted' : 'Microphone unmuted'); }}>
++              <Icon src={!isAudioEnabled ? Icons.MicMute : Icons.Mic} />
++            </IconButton>
++          )}
++        </TooltipProvider>
++        <TooltipProvider
++          position="Top"
++          offset={4}
++          tooltip={
++            <Tooltip>
++              <Text>{!isVideoEnabled ? 'Video On' : 'Video Off'}</Text>
++            </Tooltip>
++          }
++        >
++          {(triggerRef) => (
++            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'} onClick={() => { toggleVideo(); announce(isVideoEnabled ? 'Camera off' : 'Camera on'); }}>
++              <Icon src={!isVideoEnabled ? Icons.VideoCameraMute : Icons.VideoCamera} />
++            </IconButton>
++          )}
++        </TooltipProvider>
++      </Box>
++    </Box>
++  );
++}
+diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
+index 33b21bff24..66e541a6dc 100644
+--- a/src/app/features/room-nav/RoomNavItem.tsx
++++ b/src/app/features/room-nav/RoomNavItem.tsx
+@@ -1,5 +1,5 @@
+-import React, { MouseEventHandler, forwardRef, useState } from 'react';
+-import { Room } from 'matrix-js-sdk';
++import React, { MouseEventHandler, forwardRef, useState, MouseEvent } from 'react';
++import { EventType, JoinRule, Room } from 'matrix-js-sdk';
+ import {
+   Avatar,
+   Box,
+@@ -16,10 +16,13 @@
+   RectCords,
+   Badge,
+   Spinner,
++  Tooltip,
++  TooltipProvider,
+ } from 'folds';
+ import { useFocusWithin, useHover } from 'react-aria';
+ import FocusTrap from 'focus-trap-react';
+-import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
++import { useNavigate } from 'react-router-dom';
++import { NavButton, NavItem, NavItemContent, NavItemOptions } from '../../components/nav';
+ import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
+ import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
+ import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
+@@ -51,6 +54,11 @@
+ import { useRoomCreators } from '../../hooks/useRoomCreators';
+ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
+ import { InviteUserPrompt } from '../../components/invite-user-prompt';
++import { useCallState } from '../../pages/client/call/CallProvider';
++import { useCallMembers } from '../../hooks/useCallMemberships';
++import { useRoomNavigate } from '../../hooks/useRoomNavigate';
++import { RoomNavUser } from './RoomNavUser';
++import { useRoomName } from '../../hooks/useRoomMeta';
+ 
+ type RoomNavItemMenuProps = {
+   room: Room;
+@@ -208,6 +216,7 @@
+     );
+   }
+ );
++RoomNavItemMenu.displayName = 'RoomNavItemMenu';
+ 
+ type RoomNavItemProps = {
+   room: Room;
+@@ -216,6 +225,9 @@
+   notificationMode?: RoomNotificationMode;
+   showAvatar?: boolean;
+   direct?: boolean;
++  focused?: boolean;
++  optionId?: string;
++  tabIndex?: number;
+ };
+ export function RoomNavItem({
+   room,
+@@ -224,6 +236,9 @@
+   direct,
+   notificationMode,
+   linkPath,
++  focused,
++  optionId,
++  tabIndex,
+ }: RoomNavItemProps) {
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
+@@ -236,6 +251,29 @@
+     (receipt) => receipt.userId !== mx.getUserId()
+   );
+ 
++  const {
++    activeCallRoomId,
++    setActiveCallRoomId,
++    setViewedCallRoomId,
++    isChatOpen,
++    toggleChat,
++    hangUp,
++  } = useCallState();
++
++  // isActiveCall: true as soon as this room is set as active call (including while connecting)
++  const isActiveCall = activeCallRoomId === room.roomId;
++  const callMemberships = useCallMembers(mx, room.roomId);
++
++  const powerLevels = usePowerLevels(room);
++  const creators = useRoomCreators(room);
++  const roomName = useRoomName(room);
++
++  const permissions = useRoomPermissions(creators, powerLevels);
++  const canJoinCall = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
++
++  const { navigateRoom } = useRoomNavigate();
++  const navigate = useNavigate();
++
+   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
+     evt.preventDefault();
+     setMenuAnchor({
+@@ -250,109 +288,246 @@
+     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
+   };
+ 
++  // Navigate to the room; for voice rooms also join the call so the call panel opens
++  const handleNavItemClick: MouseEventHandler<HTMLElement> = () => {
++    if (room.isCallRoom() && activeCallRoomId !== room.roomId) {
++      hangUp();
++      setActiveCallRoomId(room.roomId, true);
++    }
++    navigate(linkPath);
++  };
++
++  // Open chat panel for voice rooms
++  const handleChatButtonClick = (evt: MouseEvent<HTMLButtonElement>) => {
++    evt.stopPropagation();
++    if (!isChatOpen) toggleChat();
++    setViewedCallRoomId(room.roomId);
++    navigate(linkPath);
++  };
++
++  // Join the call for a voice room and navigate to it so the call panel opens
++  const handleCallButtonClick = (evt: MouseEvent<HTMLButtonElement>) => {
++    evt.stopPropagation();
++    if (activeCallRoomId !== room.roomId) {
++      hangUp();
++      setActiveCallRoomId(room.roomId, true);
++    }
++    navigateRoom(room.roomId);
++  };
++
+   const optionsVisible = hover || !!menuAnchor;
++  const ariaLabel = [
++    roomName,
++    room.isCallRoom()
++      ? [
++          'Call Room',
++          isActiveCall && 'Currently in Call',
++          callMemberships.length && `${callMemberships.length} in Call`,
++        ]
++      : direct
++        ? 'Direct Message'
++        : room.getJoinRule() === JoinRule.Public
++          ? 'Public Room'
++          : 'Group Room',
++    unread?.total && `${unread.total} Messages`,
++  ]
++    .flat()
++    .filter(Boolean)
++    .join(', ');
+ 
+   return (
+-    <NavItem
+-      variant="Background"
+-      radii="400"
+-      highlight={unread !== undefined}
+-      aria-selected={selected}
+-      data-hover={!!menuAnchor}
+-      onContextMenu={handleContextMenu}
+-      {...hoverProps}
+-      {...focusWithinProps}
+-    >
+-      <NavLink to={linkPath}>
+-        <NavItemContent>
+-          <Box as="span" grow="Yes" alignItems="Center" gap="200">
+-            <Avatar size="200" radii="400">
+-              {showAvatar ? (
+-                <RoomAvatar
+-                  roomId={room.roomId}
+-                  src={
+-                    direct
+-                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
+-                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
+-                  }
+-                  alt={room.name}
+-                  renderFallback={() => (
+-                    <Text as="span" size="H6">
+-                      {nameInitials(room.name)}
+-                    </Text>
+-                  )}
+-                />
+-              ) : (
+-                <RoomIcon
+-                  style={{ opacity: unread ? config.opacity.P500 : config.opacity.P300 }}
+-                  filled={selected}
+-                  size="100"
+-                  joinRule={room.getJoinRule()}
+-                />
+-              )}
+-            </Avatar>
+-            <Box as="span" grow="Yes">
+-              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
+-                {room.name}
+-              </Text>
++    <Box direction="Column" grow="Yes">
++      <NavItem
++        variant="Background"
++        radii="400"
++        highlight={unread !== undefined}
++        aria-selected={selected}
++        role="option"
++        id={optionId}
++        data-hover={!!menuAnchor}
++        onContextMenu={handleContextMenu}
++        style={focused ? { outline: '2px solid', outlineOffset: '-2px', borderRadius: '12px' } : undefined}
++        {...hoverProps}
++        {...focusWithinProps}
++      >
++        <NavButton onClick={handleNavItemClick} aria-label={ariaLabel} tabIndex={tabIndex}>
++          <NavItemContent>
++            <Box as="span" grow="Yes" alignItems="Center" gap="200">
++              <Avatar size="200" radii="400">
++                {showAvatar ? (
++                  <RoomAvatar
++                    roomId={room.roomId}
++                    src={
++                      direct
++                        ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
++                        : getRoomAvatarUrl(mx, room, 96, useAuthentication)
++                    }
++                    alt={roomName}
++                    renderFallback={() => (
++                      <Text as="span" size="H6">
++                        {nameInitials(roomName)}
++                      </Text>
++                    )}
++                  />
++                ) : (
++                  <RoomIcon
++                    style={{
++                      opacity: unread || isActiveCall ? config.opacity.P500 : config.opacity.P300,
++                    }}
++                    filled={selected || isActiveCall}
++                    size="100"
++                    joinRule={room.getJoinRule()}
++                    roomType={room.getType()}
++                    locked={room.isCallRoom() && !canJoinCall}
++                  />
++                )}
++              </Avatar>
++              <Box as="span" grow="Yes">
++                <Text
++                  priority={unread || isActiveCall ? '500' : '300'}
++                  as="span"
++                  size="Inherit"
++                  truncate
++                >
++                  {roomName}
++                </Text>
++              </Box>
++              {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
++                <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
++                  <TypingIndicator size="300" disableAnimation />
++                </Badge>
++              )}
++              {!optionsVisible && unread && (
++                <UnreadBadgeCenter>
++                  <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
++                </UnreadBadgeCenter>
++              )}
++              {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
++                <Icon
++                  size="50"
++                  src={getRoomNotificationModeIcon(notificationMode)}
++                  aria-label={notificationMode}
++                />
++              )}
+             </Box>
+-            {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
+-              <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
+-                <TypingIndicator size="300" disableAnimation />
+-              </Badge>
+-            )}
+-            {!optionsVisible && unread && (
+-              <UnreadBadgeCenter>
+-                <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
+-              </UnreadBadgeCenter>
+-            )}
+-            {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
+-              <Icon size="50" src={getRoomNotificationModeIcon(notificationMode)} />
+-            )}
+-          </Box>
+-        </NavItemContent>
+-      </NavLink>
+-      {optionsVisible && (
+-        <NavItemOptions>
+-          <PopOut
+-            anchor={menuAnchor}
+-            offset={menuAnchor?.width === 0 ? 0 : undefined}
+-            alignOffset={menuAnchor?.width === 0 ? 0 : -5}
+-            position="Bottom"
+-            align={menuAnchor?.width === 0 ? 'Start' : 'End'}
+-            content={
+-              <FocusTrap
+-                focusTrapOptions={{
+-                  initialFocus: false,
+-                  returnFocusOnDeactivate: false,
+-                  onDeactivate: () => setMenuAnchor(undefined),
+-                  clickOutsideDeactivates: true,
+-                  isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+-                  isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+-                  escapeDeactivates: stopPropagation,
+-                }}
+-              >
+-                <RoomNavItemMenu
+-                  room={room}
+-                  requestClose={() => setMenuAnchor(undefined)}
+-                  notificationMode={notificationMode}
+-                />
+-              </FocusTrap>
+-            }
+-          >
+-            <IconButton
+-              onClick={handleOpenMenu}
+-              aria-pressed={!!menuAnchor}
+-              variant="Background"
+-              fill="None"
+-              size="300"
+-              radii="300"
+-            >
+-              <Icon size="50" src={Icons.VerticalDots} />
+-            </IconButton>
+-          </PopOut>
+-        </NavItemOptions>
++          </NavItemContent>
++        </NavButton>
++        {/* Always show call icon for voice rooms; show full options on hover */}
++        {(room.isCallRoom() || optionsVisible) && (
++          <NavItemOptions>
++            {/* Persistent call icon — always visible for voice rooms */}
++            {room.isCallRoom() && (
++              <TooltipProvider
++                position="Bottom"
++                offset={4}
++                tooltip={
++                  <Tooltip>
++                    <Text>{isActiveCall ? 'Open Call' : 'Join Call'}</Text>
++                  </Tooltip>
++                }
++              >
++                {(triggerRef) => (
++                  <IconButton
++                    ref={triggerRef}
++                    data-testid="call-button"
++                    onClick={handleCallButtonClick}
++                    aria-pressed={isActiveCall}
++                    aria-label={isActiveCall ? 'Open Call' : 'Join Call'}
++                    variant="Background"
++                    fill="None"
++                    size="300"
++                    radii="300"
++                  >
++                    <Icon size="50" src={Icons.Phone} filled={isActiveCall} />
++                  </IconButton>
++                )}
++              </TooltipProvider>
++            )}
++            {/* Context menu options — hover only */}
++            {optionsVisible && (
++              <PopOut
++                id={`menu-${room.roomId}`}
++                aria-expanded={!!menuAnchor}
++                anchor={menuAnchor}
++                offset={menuAnchor?.width === 0 ? 0 : undefined}
++                alignOffset={menuAnchor?.width === 0 ? 0 : -5}
++                position="Bottom"
++                align={menuAnchor?.width === 0 ? 'Start' : 'End'}
++                content={
++                  <FocusTrap
++                    focusTrapOptions={{
++                      initialFocus: false,
++                      returnFocusOnDeactivate: false,
++                      onDeactivate: () => setMenuAnchor(undefined),
++                      clickOutsideDeactivates: true,
++                      isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
++                      isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
++                      escapeDeactivates: stopPropagation,
++                    }}
++                  >
++                    <RoomNavItemMenu
++                      room={room}
++                      requestClose={() => setMenuAnchor(undefined)}
++                      notificationMode={notificationMode}
++                    />
++                  </FocusTrap>
++                }
++              >
++                {room.isCallRoom() && (
++                  <TooltipProvider
++                    position="Bottom"
++                    offset={4}
++                    tooltip={
++                      <Tooltip>
++                        <Text>Open Chat</Text>
++                      </Tooltip>
++                    }
++                  >
++                    {(triggerRef) => (
++                      <IconButton
++                        ref={triggerRef}
++                        data-testid="chat-button"
++                        onClick={handleChatButtonClick}
++                        aria-pressed={isChatOpen && selected}
++                        aria-label="Open Chat"
++                        variant="Background"
++                        fill="None"
++                        size="300"
++                        radii="300"
++                      >
++                        <Icon size="50" src={Icons.Message} />
++                      </IconButton>
++                    )}
++                  </TooltipProvider>
++                )}
++                <IconButton
++                  onClick={handleOpenMenu}
++                  aria-pressed={!!menuAnchor}
++                  aria-controls={`menu-${room.roomId}`}
++                  aria-label="More Options"
++                  variant="Background"
++                  fill="None"
++                  size="300"
++                  radii="300"
++                >
++                  <Icon size="50" src={Icons.VerticalDots} filled={!!menuAnchor} />
++                </IconButton>
++              </PopOut>
++            )}
++          </NavItemOptions>
++        )}
++      </NavItem>
++      {room.isCallRoom() && (
++        <Box direction="Column" style={{ paddingLeft: config.space.S200 }}>
++          {callMemberships.map((callMembership) => (
++            <RoomNavUser
++              key={callMembership.membershipID}
++              room={room}
++              callMembership={callMembership}
++            />
++          ))}
++        </Box>
+       )}
+-    </NavItem>
++    </Box>
+   );
+ }
 diff --git a/src/app/features/room-nav/RoomNavUser.tsx b/src/app/features/room-nav/RoomNavUser.tsx
 new file mode 100644
 index 0000000000..967956474b
@@ -1062,6 +3866,45 @@ index 0000000000..967956474b
 +    </NavItem>
 +  );
 +}
+diff --git a/src/app/hooks/useCallMemberships.ts b/src/app/hooks/useCallMemberships.ts
+new file mode 100644
+index 0000000000..0eab2a835e
+--- /dev/null
++++ b/src/app/hooks/useCallMemberships.ts
+@@ -0,0 +1,33 @@
++import { MatrixClient } from 'matrix-js-sdk';
++import {
++  MatrixRTCSession,
++  MatrixRTCSessionEvent,
++} from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
++import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
++import { useEffect, useState } from 'react';
++
++export const useCallMembers = (mx: MatrixClient, roomId: string): CallMembership[] => {
++  const [memberships, setMemberships] = useState<CallMembership[]>([]);
++  const room = mx.getRoom(roomId);
++  useEffect(() => {
++    if (!room) {
++      setMemberships([]);
++      return undefined;
++    }
++
++    const mxr = mx.matrixRTC.getRoomSession(room);
++
++    const updateMemberships = () => {
++      setMemberships(MatrixRTCSession.callMembershipsForRoom(room));
++    };
++
++    updateMemberships();
++
++    mxr.on(MatrixRTCSessionEvent.MembershipsChanged, updateMemberships);
++    return () => {
++      mxr.removeListener(MatrixRTCSessionEvent.MembershipsChanged, updateMemberships);
++    };
++  }, [mx, room, roomId]);
++
++  return memberships;
++};
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
 index f8647d1865..bea09a92b7 100644
 --- a/src/app/pages/Router.tsx
@@ -1126,6 +3969,390 @@ index 146f039bf9..9d972e6936 100644
      </Box>
    );
  }
+diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
+new file mode 100644
+index 0000000000..9ea05396a6
+--- /dev/null
++++ b/src/app/pages/client/call/CallProvider.tsx
+@@ -0,0 +1,378 @@
++import React, {
++  createContext,
++  useState,
++  useContext,
++  useMemo,
++  useCallback,
++  ReactNode,
++  useEffect,
++} from 'react';
++import {
++  WidgetApiToWidgetAction,
++  WidgetApiAction,
++  ClientWidgetApi,
++  IWidgetApiRequestData,
++} from 'matrix-widget-api';
++import { useParams } from 'react-router-dom';
++import { SmallWidget } from '../../../features/call/SmallWidget';
++
++interface MediaStatePayload {
++  data?: {
++    audio_enabled?: boolean;
++    video_enabled?: boolean;
++  };
++}
++
++const WIDGET_MEDIA_STATE_UPDATE_ACTION = 'io.element.device_mute';
++const WIDGET_HANGUP_ACTION = 'im.vector.hangup';
++const WIDGET_ON_SCREEN_ACTION = 'set_always_on_screen';
++const WIDGET_JOIN_ACTION = 'io.element.join';
++const WIDGET_TILE_UPDATE = 'io.element.tile_layout';
++
++interface CallContextState {
++  activeCallRoomId: string | null;
++  setActiveCallRoomId: (roomId: string | null, isVoiceRoom?: boolean) => void;
++  viewedCallRoomId: string | null;
++  setViewedCallRoomId: (roomId: string | null) => void;
++  hangUp: () => void;
++  activeClientWidgetApi: ClientWidgetApi | null;
++  activeClientWidget: SmallWidget | null;
++  registerActiveClientWidgetApi: (
++    roomId: string | null,
++    clientWidgetApi: ClientWidgetApi | null,
++    clientWidget: SmallWidget,
++    activeClientIframeRef: HTMLIFrameElement
++  ) => void;
++  sendWidgetAction: <T extends IWidgetApiRequestData = IWidgetApiRequestData>(
++    action: WidgetApiToWidgetAction | string,
++    data: T
++  ) => Promise<void>;
++  isAudioEnabled: boolean;
++  isVideoEnabled: boolean;
++  isChatOpen: boolean;
++  isCallViewOpen: boolean;
++  isActiveCallReady: boolean;
++  toggleAudio: () => Promise<void>;
++  toggleVideo: () => Promise<void>;
++  toggleChat: () => Promise<void>;
++  toggleCallView: () => void;
++}
++
++const CallContext = createContext<CallContextState | undefined>(undefined);
++
++interface CallProviderProps {
++  children: ReactNode;
++}
++
++const DEFAULT_AUDIO_ENABLED = true;
++const DEFAULT_VIDEO_ENABLED = false;
++const DEFAULT_CHAT_OPENED = false;
++
++export function CallProvider({ children }: CallProviderProps) {
++  const [activeCallRoomId, setActiveCallRoomIdState] = useState<string | null>(null);
++  const [viewedCallRoomId, setViewedCallRoomIdState] = useState<string | null>(null);
++
++  const [activeClientWidgetApi, setActiveClientWidgetApiState] = useState<ClientWidgetApi | null>(
++    null
++  );
++  const [activeClientWidget, setActiveClientWidget] = useState<SmallWidget | null>(null);
++  const [activeClientWidgetApiRoomId, setActiveClientWidgetApiRoomId] = useState<string | null>(
++    null
++  );
++  const [activeClientWidgetIframeRef, setActiveClientWidgetIframeRef] =
++    useState<HTMLIFrameElement | null>(null);
++
++  const [isAudioEnabled, setIsAudioEnabledState] = useState<boolean>(DEFAULT_AUDIO_ENABLED);
++  const [isVideoEnabled, setIsVideoEnabledState] = useState<boolean>(DEFAULT_VIDEO_ENABLED);
++  const [isChatOpen, setIsChatOpenState] = useState<boolean>(DEFAULT_CHAT_OPENED);
++  const [isCallViewOpen, setIsCallViewOpenState] = useState<boolean>(false);
++  const [isActiveCallReady, setIsActiveCallReady] = useState<boolean>(false);
++
++  const { roomIdOrAlias: viewedRoomId } = useParams<{ roomIdOrAlias: string }>();
++
++  const setActiveCallRoomId = useCallback((roomId: string | null, isVoiceRoom = false) => {
++    setActiveCallRoomIdState(roomId);
++    if (roomId !== null) {
++      // Voice rooms: show call by default. Regular/DM rooms: show chat by default.
++      setIsCallViewOpenState(isVoiceRoom);
++      setIsChatOpenState(!isVoiceRoom);
++    }
++  }, []);
++
++  const setViewedCallRoomId = useCallback(
++    (roomId: string | null) => {
++      setViewedCallRoomIdState(roomId);
++    },
++    [setViewedCallRoomIdState]
++  );
++
++  const setActiveClientWidgetApi = useCallback(
++    (
++      clientWidgetApi: ClientWidgetApi | null,
++      clientWidget: SmallWidget | null,
++      roomId: string | null,
++      clientWidgetIframeRef: HTMLIFrameElement | null
++    ) => {
++      setActiveClientWidgetApiState(clientWidgetApi);
++      setActiveClientWidget(clientWidget);
++      setActiveClientWidgetApiRoomId(roomId);
++      setActiveClientWidgetIframeRef(clientWidgetIframeRef);
++    },
++    []
++  );
++
++  const registerActiveClientWidgetApi = useCallback(
++    (
++      roomId: string | null,
++      clientWidgetApi: ClientWidgetApi | null,
++      clientWidget: SmallWidget | null,
++      clientWidgetIframeRef: HTMLIFrameElement | null
++    ) => {
++      if (roomId && clientWidgetApi) {
++        setActiveClientWidgetApi(clientWidgetApi, clientWidget, roomId, clientWidgetIframeRef);
++      } else if (roomId === activeClientWidgetApiRoomId || roomId === null) {
++        setActiveClientWidgetApi(null, null, null, null);
++      }
++    },
++    [activeClientWidgetApiRoomId, setActiveClientWidgetApi]
++  );
++
++  const hangUp = useCallback(() => {
++    setActiveClientWidgetApi(null, null, null, null);
++    setActiveCallRoomIdState(null);
++    activeClientWidgetApi?.transport.send(`${WIDGET_HANGUP_ACTION}`, {});
++    setIsActiveCallReady(false);
++    setIsCallViewOpenState(false);
++  }, [activeClientWidgetApi?.transport, setActiveClientWidgetApi]);
++
++  const sendWidgetAction = useCallback(
++    async <T extends IWidgetApiRequestData = IWidgetApiRequestData>(
++      action: WidgetApiToWidgetAction | string,
++      data: T
++    ): Promise<void> => {
++      if (!activeClientWidgetApi) {
++        return Promise.reject(new Error('No active call clientWidgetApi'));
++      }
++      if (!activeClientWidgetApiRoomId || activeClientWidgetApiRoomId !== activeCallRoomId) {
++        return Promise.reject(new Error('Mismatched active call clientWidgetApi'));
++      }
++
++      await activeClientWidgetApi.transport.send(action as WidgetApiAction, data);
++
++      return Promise.resolve();
++    },
++    [activeClientWidgetApi, activeCallRoomId, activeClientWidgetApiRoomId]
++  );
++
++  const toggleAudio = useCallback(async () => {
++    const newState = !isAudioEnabled;
++    setIsAudioEnabledState(newState);
++
++    if (isActiveCallReady) {
++      try {
++        await sendWidgetAction(WIDGET_MEDIA_STATE_UPDATE_ACTION, {
++          audio_enabled: newState,
++          video_enabled: isVideoEnabled,
++        });
++      } catch (error) {
++        setIsAudioEnabledState(!newState);
++        throw error;
++      }
++    }
++  }, [isAudioEnabled, isVideoEnabled, sendWidgetAction, isActiveCallReady]);
++
++  const toggleVideo = useCallback(async () => {
++    const newState = !isVideoEnabled;
++    setIsVideoEnabledState(newState);
++
++    if (isActiveCallReady) {
++      try {
++        await sendWidgetAction(WIDGET_MEDIA_STATE_UPDATE_ACTION, {
++          audio_enabled: isAudioEnabled,
++          video_enabled: newState,
++        });
++      } catch (error) {
++        setIsVideoEnabledState(!newState);
++        throw error;
++      }
++    }
++  }, [isVideoEnabled, isAudioEnabled, sendWidgetAction, isActiveCallReady]);
++
++  useEffect(() => {
++    if (!activeCallRoomId && !viewedCallRoomId) {
++      return;
++    }
++
++    if (!activeClientWidgetApi) {
++      return;
++    }
++
++    const handleHangup = (ev: CustomEvent) => {
++      ev.preventDefault();
++      if (isActiveCallReady && ev.detail.widgetId === activeClientWidgetApi.widget.id) {
++        activeClientWidgetApi.transport.reply(ev.detail, {});
++        setActiveCallRoomIdState(null);
++        setActiveClientWidgetApi(null, null, null, null);
++        setIsActiveCallReady(false);
++        setIsCallViewOpenState(false);
++      }
++    };
++
++    const handleMediaStateUpdate = (ev: CustomEvent<MediaStatePayload>) => {
++      if (!isActiveCallReady) return;
++      ev.preventDefault();
++
++      /* eslint-disable camelcase */
++      const { audio_enabled, video_enabled } = ev.detail.data ?? {};
++
++      if (typeof audio_enabled === 'boolean' && audio_enabled !== isAudioEnabled) {
++        setIsAudioEnabledState(audio_enabled);
++      }
++      if (typeof video_enabled === 'boolean' && video_enabled !== isVideoEnabled) {
++        setIsVideoEnabledState(video_enabled);
++      }
++      /* eslint-enable camelcase */
++    };
++
++    const handleOnScreenStateUpdate = (ev: CustomEvent) => {
++      ev.preventDefault();
++      activeClientWidgetApi.transport.reply(ev.detail, {});
++    };
++
++    const handleOnTileLayout = (ev: CustomEvent) => {
++      ev.preventDefault();
++
++      activeClientWidgetApi.transport.reply(ev.detail, {});
++    };
++
++    const handleJoin = (ev: CustomEvent) => {
++      ev.preventDefault();
++
++      activeClientWidgetApi.transport.reply(ev.detail, {});
++
++      // Wrap iframe access in try-catch to prevent cross-origin errors
++      // when Element Call is hosted on a different domain
++      try {
++        const iframeDoc =
++          activeClientWidgetIframeRef?.contentWindow?.document ||
++          activeClientWidgetIframeRef?.contentDocument;
++
++        if (iframeDoc) {
++          const observer = new MutationObserver(() => {
++            const button = iframeDoc.querySelector('[data-testid="incall_leave"]');
++            if (button) {
++              button.addEventListener('click', () => {
++                hangUp();
++              });
++            }
++            observer.disconnect();
++          });
++          observer.observe(iframeDoc, { childList: true, subtree: true });
++        }
++      } catch (error) {
++        // Ignore cross-origin errors - they're expected when Element Call is on a different domain
++      }
++
++      setIsActiveCallReady(true);
++    };
++
++    void sendWidgetAction(WIDGET_MEDIA_STATE_UPDATE_ACTION, {
++      audio_enabled: isAudioEnabled,
++      video_enabled: isVideoEnabled,
++    }).catch(() => {
++      // Widget transport may reject while call/session setup is still in progress.
++    });
++
++    activeClientWidgetApi.on(`action:${WIDGET_HANGUP_ACTION}`, handleHangup);
++    activeClientWidgetApi.on(`action:${WIDGET_MEDIA_STATE_UPDATE_ACTION}`, handleMediaStateUpdate);
++    activeClientWidgetApi.on(`action:${WIDGET_TILE_UPDATE}`, handleOnTileLayout);
++    activeClientWidgetApi.on(`action:${WIDGET_ON_SCREEN_ACTION}`, handleOnScreenStateUpdate);
++    activeClientWidgetApi.on(`action:${WIDGET_JOIN_ACTION}`, handleJoin);
++
++    return () => {
++      activeClientWidgetApi.off(`action:${WIDGET_HANGUP_ACTION}`, handleHangup);
++      activeClientWidgetApi.off(`action:${WIDGET_MEDIA_STATE_UPDATE_ACTION}`, handleMediaStateUpdate);
++      activeClientWidgetApi.off(`action:${WIDGET_TILE_UPDATE}`, handleOnTileLayout);
++      activeClientWidgetApi.off(`action:${WIDGET_ON_SCREEN_ACTION}`, handleOnScreenStateUpdate);
++      activeClientWidgetApi.off(`action:${WIDGET_JOIN_ACTION}`, handleJoin);
++    };
++  }, [
++    activeClientWidgetIframeRef,
++    activeClientWidgetApi,
++    activeCallRoomId,
++    activeClientWidgetApiRoomId,
++    hangUp,
++    isChatOpen,
++    isAudioEnabled,
++    isVideoEnabled,
++    isActiveCallReady,
++    viewedRoomId,
++    viewedCallRoomId,
++    setViewedCallRoomId,
++    activeClientWidget?.iframe?.contentDocument,
++    activeClientWidget?.iframe?.contentWindow?.document,
++    sendWidgetAction,
++  ]);
++
++  const toggleChat = useCallback(async () => {
++    const newState = !isChatOpen;
++    setIsChatOpenState(newState);
++  }, [isChatOpen]);
++
++  const toggleCallView = useCallback(() => {
++    setIsCallViewOpenState((prev) => !prev);
++  }, []);
++
++  const contextValue = useMemo<CallContextState>(
++    () => ({
++      activeCallRoomId,
++      setActiveCallRoomId,
++      viewedCallRoomId,
++      setViewedCallRoomId,
++      hangUp,
++      activeClientWidgetApi,
++      registerActiveClientWidgetApi,
++      activeClientWidget,
++      sendWidgetAction,
++      isChatOpen,
++      isCallViewOpen,
++      isAudioEnabled,
++      isVideoEnabled,
++      isActiveCallReady,
++      toggleAudio,
++      toggleVideo,
++      toggleChat,
++      toggleCallView,
++    }),
++    [
++      activeCallRoomId,
++      setActiveCallRoomId,
++      viewedCallRoomId,
++      setViewedCallRoomId,
++      hangUp,
++      activeClientWidgetApi,
++      registerActiveClientWidgetApi,
++      activeClientWidget,
++      sendWidgetAction,
++      isChatOpen,
++      isCallViewOpen,
++      isAudioEnabled,
++      isVideoEnabled,
++      isActiveCallReady,
++      toggleAudio,
++      toggleVideo,
++      toggleChat,
++      toggleCallView,
++    ]
++  );
++
++  return <CallContext.Provider value={contextValue}>{children}</CallContext.Provider>;
++}
++
++export function useCallState(): CallContextState {
++  const context = useContext(CallContext);
++  if (context === undefined) {
++    throw new Error('useCallState must be used within a CallProvider');
++  }
++  return context;
++}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
 index 0000000000..3b5f8954f9

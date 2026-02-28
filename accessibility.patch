@@ -477,10 +477,10 @@ index 0000000000..7e3a46eb7c
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index ae46d2d098..4df67cd0a5 100644
+index 20dca577a0..a2a09dd692 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
-@@ -553,6 +553,7 @@
+@@ -567,6 +567,7 @@
                  >
                    <IconButton
                      onClick={() => setReplyDraft(undefined)}
@@ -488,7 +488,7 @@ index ae46d2d098..4df67cd0a5 100644
                      variant="SurfaceVariant"
                      size="300"
                      radii="300"
-@@ -585,6 +586,8 @@
+@@ -599,6 +600,8 @@
            before={
              <IconButton
                onClick={() => pickFile('*')}
@@ -497,7 +497,7 @@ index ae46d2d098..4df67cd0a5 100644
                variant="SurfaceVariant"
                size="300"
                radii="300"
-@@ -595,6 +598,8 @@
+@@ -609,6 +612,8 @@
            after={
              <>
                <IconButton
@@ -506,7 +506,7 @@ index ae46d2d098..4df67cd0a5 100644
                  variant="SurfaceVariant"
                  size="300"
                  radii="300"
-@@ -637,6 +642,7 @@
+@@ -651,6 +656,7 @@
                    >
                      {!hideStickerBtn && (
                        <IconButton
@@ -514,7 +514,7 @@ index ae46d2d098..4df67cd0a5 100644
                          aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
                          onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
                          variant="SurfaceVariant"
-@@ -651,6 +657,7 @@
+@@ -665,6 +671,7 @@
                      )}
                      <IconButton
                        ref={emojiBtnRef}
@@ -522,7 +522,7 @@ index ae46d2d098..4df67cd0a5 100644
                        aria-pressed={
                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
                        }
-@@ -669,7 +676,7 @@
+@@ -683,7 +690,7 @@
                    </PopOut>
                  )}
                </UseStateProvider>
@@ -532,10 +532,10 @@ index ae46d2d098..4df67cd0a5 100644
                </IconButton>
              </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d1678b65b3..d06f165c5e 100644
+index 69c87646c9..ac40a5f474 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
-@@ -1688,7 +1688,15 @@
+@@ -1798,7 +1798,15 @@
            </Chip>
          </TimelineFloat>
        )}
@@ -846,7 +846,7 @@ index fcd6233a28..68f7c1c008 100644
                            after={
                              <Box gap="100">
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
-index f7af2d6aab..97aec97e00 100644
+index d31d673f0b..f29cda39ad 100644
 --- a/src/app/features/settings/about/About.tsx
 +++ b/src/app/features/settings/about/About.tsx
 @@ -24,7 +24,7 @@
@@ -1416,18 +1416,18 @@ index 0000000000..82edcf6a5c
 +  };
 +};
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index bea09a92b7..d600c610c6 100644
+index 6fbdf6641b..69f52bc9bd 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
-@@ -70,6 +70,7 @@
+@@ -71,6 +71,7 @@
  import { CallProvider } from './client/call/CallProvider';
  import { PersistentCallContainer } from './client/call/PersistentCallContainer';
  import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
 +import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
  import { getFallbackSession } from '../state/sessions';
  
- export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
-@@ -140,6 +141,21 @@
+ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize, basePath?: string) => {
+@@ -141,6 +142,21 @@
                            </PersistentCallContainer>
                          </ClientLayout>
                          <IncomingCallNotification />
@@ -1813,18 +1813,12 @@ index e0977d9739..c88829561f 100644
      </>
    );
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index a2e1b68207..d24d5747ba 100644
+index b3f419d805..f2a197756d 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
-@@ -1,4 +1,4 @@
--import React, { useRef } from 'react';
-+import React, { useEffect, useRef } from 'react';
- import { Scroll } from 'folds';
- 
- import {
-@@ -22,8 +22,45 @@
- export function SidebarNav() {
+@@ -157,8 +157,45 @@
    const scrollRef = useRef<HTMLDivElement>(null);
+   const [multiAccount] = useSetting(settingsAtom, 'multiAccount');
  
 +  // Initialise roving tabIndex: all sidebar buttons get tabindex=-1 except the first.
 +  // This makes the sidebar a single tab stop; arrow keys move within it.
@@ -1870,10 +1864,10 @@ index a2e1b68207..d24d5747ba 100644
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 4ffd3dc86e..039de0eefb 100644
+index 56dfe7a3bc..623488a862 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
-@@ -52,6 +52,8 @@
+@@ -53,6 +53,8 @@
  } from '../../../hooks/useRoomsNotificationPreferences';
  import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
  import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
@@ -1882,7 +1876,7 @@ index 4ffd3dc86e..039de0eefb 100644
  
  type DirectMenuProps = {
    requestClose: () => void;
-@@ -200,6 +202,14 @@
+@@ -246,6 +248,14 @@
      getItemKey: (index) => sortedDirects[index],
    });
  
@@ -1897,7 +1891,7 @@ index 4ffd3dc86e..039de0eefb 100644
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -240,39 +250,52 @@
+@@ -286,39 +296,52 @@
                    Chats
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -1982,10 +1976,10 @@ index 4ffd3dc86e..039de0eefb 100644
            </Box>
          </PageNavContent>
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index 721e55188a..a76a226b2c 100644
+index 141e1aa9fe..cb9e44212b 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
-@@ -63,6 +63,8 @@
+@@ -64,6 +64,8 @@
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
  import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
@@ -1994,7 +1988,7 @@ index 721e55188a..a76a226b2c 100644
  import { UseStateProvider } from '../../../components/UseStateProvider';
  import { JoinAddressPrompt } from '../../../components/join-address-prompt';
  import { _RoomSearchParams } from '../../paths';
-@@ -230,6 +232,14 @@
+@@ -272,6 +274,14 @@
      getItemKey: (index) => sortedRooms[index],
    });
  
@@ -2009,7 +2003,7 @@ index 721e55188a..a76a226b2c 100644
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -324,37 +334,50 @@
+@@ -366,37 +376,50 @@
                    Rooms
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -2134,10 +2128,10 @@ index a45b583091..63879f825d 100644
            </SidebarAvatar>
          )}
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index 778b729e2e..fbe35241bc 100644
+index 53b3a4cf9c..325d1f7f0b 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
 +++ b/src/app/pages/client/sidebar/HomeTab.tsx
-@@ -95,12 +95,13 @@
+@@ -127,12 +127,13 @@
  
    return (
      <SidebarItem active={homeSelected}>
@@ -2153,10 +2147,10 @@ index 778b729e2e..fbe35241bc 100644
              onContextMenu={handleContextMenu}
            >
 diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
-index 5d13a9ab65..553cf8490c 100644
+index 101589de53..5f673ea535 100644
 --- a/src/app/pages/client/sidebar/InboxTab.tsx
 +++ b/src/app/pages/client/sidebar/InboxTab.tsx
-@@ -45,9 +45,9 @@
+@@ -53,9 +53,9 @@
  
    return (
      <SidebarItem active={inboxSelected}>
@@ -2234,10 +2228,10 @@ index 6fc528a106..0d7474b72c 100644
                    const space = mx.getRoom(sId);
                    if (!space) return null;
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 616b6fc09d..eb0100132c 100644
+index 4884456326..41b6613817 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
-@@ -77,6 +77,8 @@
+@@ -78,6 +78,8 @@
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
  import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
@@ -2246,7 +2240,7 @@ index 616b6fc09d..eb0100132c 100644
  import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
  import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
  import { useRoomCreators } from '../../../hooks/useRoomCreators';
-@@ -433,13 +435,34 @@
+@@ -466,13 +468,34 @@
      getItemKey: (index) => hierarchy[index]?.roomId ?? index,
    });
  
@@ -2284,7 +2278,7 @@ index 616b6fc09d..eb0100132c 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -491,48 +514,61 @@
+@@ -524,48 +547,61 @@
                position: 'relative',
              }}
            >
@@ -2448,7 +2442,7 @@ index 1ca7e7de12..795b484b1d 100644
    }, [mx, memberships, setRoomsAtom]);
  };
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 5267983759..d52f70a4eb 100644
+index 68caa8e28f..95f3ec30f3 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -42,6 +42,10 @@
@@ -2462,7 +2456,7 @@ index 5267983759..d52f70a4eb 100644
    callRingScope: 'dm' | 'nonVoice' | 'all';
    callRingtoneUrl: string | null;
  
-@@ -78,6 +82,9 @@
+@@ -81,6 +85,9 @@
  
    showNotifications: true,
    isNotificationSounds: true,

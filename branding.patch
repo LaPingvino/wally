@@ -62,7 +62,7 @@ index 27adadbade..0d1e28774f 100644
        </Box>
      </Box>
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
-index 97aec97e00..f29cda39ad 100644
+index f7af2d6aab..d31d673f0b 100644
 --- a/src/app/features/settings/about/About.tsx
 +++ b/src/app/features/settings/about/About.tsx
 @@ -39,22 +39,22 @@
@@ -93,7 +93,7 @@ index 97aec97e00..f29cda39ad 100644
                        target="_blank"
                        variant="Secondary"
 diff --git a/src/app/pages/auth/AuthLayout.tsx b/src/app/pages/auth/AuthLayout.tsx
-index bb747cfc48..63e29c3ae1 100644
+index 3943f42d19..5d60abd821 100644
 --- a/src/app/pages/auth/AuthLayout.tsx
 +++ b/src/app/pages/auth/AuthLayout.tsx
 @@ -134,8 +134,8 @@

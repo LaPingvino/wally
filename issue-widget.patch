@@ -1,9 +1,9 @@
 diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
 new file mode 100644
-index 0000000000..a1ea02108f
+index 0000000000..3533ffc925
 --- /dev/null
 +++ b/src/app/widget/IssueBoardWidget.tsx
-@@ -0,0 +1,921 @@
+@@ -0,0 +1,1281 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { IRoomEvent, WidgetApi, WidgetApiToWidgetAction } from 'matrix-widget-api';
 +
@@ -28,10 +28,14 @@ index 0000000000..a1ea02108f
 +
 +interface WidgetIssue {
 +  stateKey: string;
++  eventId: string;
 +  content: IssueContent;
 +  sender: string;
 +  ts: number;
 +}
++
++// emoji → set of sender user IDs
++type ReactionMap = Map<string, Set<string>>;
 +
 +export const DEFAULT_ISSUE_SCHEMA: IssueSchema = {
 +  fields: [
@@ -271,6 +275,111 @@ index 0000000000..a1ea02108f
 +  return `issue-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 +}
 +
++function shortUserId(userId: string): string {
++  // "@alice:server.com" → "alice"
++  return userId.startsWith('@') ? userId.slice(1).split(':')[0] : userId;
++}
++
++function formatTime(ts: number): string {
++  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
++}
++
++// Extract @user:server.com mentions from free text → m.mentions user_ids
++function extractMentions(text: string): string[] {
++  const found = text.match(/@[\w.-]+:[\w.:-]+/g) ?? [];
++  return [...new Set(found)];
++}
++
++// ── Reaction bar ──────────────────────────────────────────────────────────────
++
++const QUICK_REACTIONS = ['👍', '👎', '❤️', '🎉'];
++
++interface ReactionBarProps {
++  reactions: ReactionMap;
++  currentUserId: string;
++  onReact: (emoji: string) => void;
++  compact?: boolean;
++}
++
++function ReactionBar({ reactions, currentUserId, onReact, compact }: ReactionBarProps) {
++  if (reactions.size === 0 && !compact) return null;
++
++  const entries = [...reactions.entries()].sort((a, b) => b[1].size - a[1].size);
++
++  return (
++    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: compact ? 0 : 4 }}>
++      {entries.map(([emoji, senders]) => {
++        const mine = senders.has(currentUserId);
++        return (
++          <button
++            key={emoji}
++            onClick={() => onReact(emoji)}
++            title={[...senders].map(shortUserId).join(', ')}
++            style={{
++              fontSize: 12,
++              padding: '1px 6px',
++              borderRadius: 10,
++              border: mine ? '1px solid #1976d2' : '1px solid #e0e0e0',
++              background: mine ? '#e3f0fd' : '#fafafa',
++              color: mine ? '#1976d2' : 'inherit',
++              cursor: 'pointer',
++              lineHeight: '18px',
++              fontFamily: 'inherit',
++            }}
++          >
++            {emoji} {senders.size}
++          </button>
++        );
++      })}
++      {!compact && QUICK_REACTIONS.filter(e => !reactions.has(e)).map(emoji => (
++        <button
++          key={emoji}
++          onClick={() => onReact(emoji)}
++          title={`React with ${emoji}`}
++          style={{
++            fontSize: 12,
++            padding: '1px 6px',
++            borderRadius: 10,
++            border: '1px dashed #ccc',
++            background: 'transparent',
++            color: '#999',
++            cursor: 'pointer',
++            lineHeight: '18px',
++            fontFamily: 'inherit',
++          }}
++        >
++          {emoji}
++        </button>
++      ))}
++    </div>
++  );
++}
++
++// ── Issue activity (count badge) ──────────────────────────────────────────────
++
++interface ActivityBadgeProps {
++  reactions: ReactionMap;
++  commentCount: number;
++}
++
++function ActivityBadge({ reactions, commentCount }: ActivityBadgeProps) {
++  const parts: string[] = [];
++
++  // Show up to 3 emoji reaction groups (most popular first)
++  const sorted = [...reactions.entries()].sort((a, b) => b[1].size - a[1].size).slice(0, 3);
++  for (const [emoji, senders] of sorted) {
++    parts.push(`${emoji}${senders.size}`);
++  }
++  if (commentCount > 0) parts.push(`💬${commentCount}`);
++
++  if (parts.length === 0) return null;
++  return (
++    <span style={{ fontSize: 11, color: '#666', whiteSpace: 'nowrap' }}>
++      {parts.join(' ')}
++    </span>
++  );
++}
++
 +// ── Schema editor ────────────────────────────────────────────────────────────
 +
 +interface DraftField extends SchemaField { _enumRaw: string; }
@@ -443,20 +552,38 @@ index 0000000000..a1ea02108f
 +  initial: IssueContent;
 +  isNew: boolean;
 +  canDelete: boolean;
++  issueKey: string | null;
++  reactions: ReactionMap;
++  comments: IRoomEvent[];
++  currentUserId: string;
 +  onSave: (content: IssueContent) => Promise<void>;
 +  onDelete: (() => Promise<void>) | undefined;
 +  onCancel: () => void;
++  onReact: (emoji: string) => void;
++  onComment: (text: string) => Promise<void>;
 +}
 +
-+function IssueForm({ schema, initial, isNew, canDelete, onSave, onDelete, onCancel }: IssueFormProps) {
++function IssueForm({
++  schema, initial, isNew, canDelete, issueKey,
++  reactions, comments, currentUserId,
++  onSave, onDelete, onCancel, onReact, onComment,
++}: IssueFormProps) {
 +  const [form, setForm] = useState<IssueContent>({ ...initial });
 +  const [saving, setSaving] = useState(false);
 +  const [err, setErr] = useState('');
++  const [commentText, setCommentText] = useState('');
++  const [commentSending, setCommentSending] = useState(false);
 +  const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null>(null);
++  const commentsEndRef = useRef<HTMLDivElement | null>(null);
 +
 +  useEffect(() => {
 +    (firstInputRef.current as HTMLElement | null)?.focus();
 +  }, []);
++
++  // Scroll to bottom of comments when new ones arrive
++  useEffect(() => {
++    commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
++  }, [comments.length]);
 +
 +  const handleSave = async () => {
 +    setSaving(true);
@@ -480,8 +607,29 @@ index 0000000000..a1ea02108f
 +    }
 +  };
 +
++  const handleSendComment = async () => {
++    const text = commentText.trim();
++    if (!text) return;
++    setCommentSending(true);
++    try {
++      await onComment(text);
++      setCommentText('');
++    } catch (e) {
++      setErr(String(e));
++    } finally {
++      setCommentSending(false);
++    }
++  };
++
 +  const handleKeyDown = (e: React.KeyboardEvent) => {
 +    if (e.key === 'Escape') onCancel();
++  };
++
++  const handleCommentKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
++    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
++      e.preventDefault();
++      handleSendComment();
++    }
 +  };
 +
 +  return (
@@ -492,6 +640,7 @@ index 0000000000..a1ea02108f
 +          <button onClick={onCancel} style={{ ...s.btn, border: 'none', background: 'none', fontSize: 18, padding: '0 4px' }} aria-label="Close">✕</button>
 +        </div>
 +        <div style={s.dialogBody}>
++          {/* Form fields */}
 +          {schema.fields.map((field, idx) => {
 +            const val = String(form[field.key] ?? '');
 +            const commonProps = {
@@ -518,12 +667,82 @@ index 0000000000..a1ea02108f
 +                ) : field.key === 'description' ? (
 +                  <textarea {...commonProps} rows={4} style={{ ...s.input, resize: 'vertical', fontFamily: 'inherit' }} />
 +                ) : (
-+                  <input type={field.type === 'user' ? 'text' : 'text'} {...commonProps}
++                  <input type="text" {...commonProps}
 +                    placeholder={field.type === 'user' ? '@user:server' : ''} />
 +                )}
 +              </div>
 +            );
 +          })}
++
++          {/* Reactions (existing issues only) */}
++          {!isNew && (
++            <div style={{ marginBottom: 12 }}>
++              <ReactionBar
++                reactions={reactions}
++                currentUserId={currentUserId}
++                onReact={onReact}
++              />
++            </div>
++          )}
++
++          {/* Comments (existing issues only) */}
++          {!isNew && (
++            <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: 12 }}>
++              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: '#444' }}>
++                Comments{comments.length > 0 ? ` (${comments.length})` : ''}
++              </div>
++
++              {comments.length === 0 && (
++                <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>No comments yet.</div>
++              )}
++
++              {comments.length > 0 && (
++                <div style={{ maxHeight: 180, overflowY: 'auto', marginBottom: 8, paddingRight: 4 }}>
++                  {comments.map(c => {
++                    const body = String((c.content as Record<string, unknown>).body ?? '');
++                    return (
++                      <div key={c.event_id ?? c.origin_server_ts} style={{ marginBottom: 10 }}>
++                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 2 }}>
++                          <span style={{ fontWeight: 600, fontSize: 12 }}>{shortUserId(c.sender)}</span>
++                          <span style={{ color: '#aaa', fontSize: 11 }}>{formatTime(c.origin_server_ts)}</span>
++                        </div>
++                        <div style={{ fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>
++                          {body}
++                        </div>
++                      </div>
++                    );
++                  })}
++                  <div ref={commentsEndRef} />
++                </div>
++              )}
++
++              {/* New comment input */}
++              <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
++                <div style={{ flex: 1 }}>
++                  <textarea
++                    value={commentText}
++                    onChange={e => setCommentText(e.target.value)}
++                    onKeyDown={handleCommentKeyDown}
++                    placeholder="Add a comment… (@user:server for mentions, Ctrl+Enter to send)"
++                    rows={2}
++                    style={{ ...s.input, resize: 'none', fontFamily: 'inherit' }}
++                    disabled={commentSending}
++                  />
++                </div>
++                <button
++                  onClick={handleSendComment}
++                  disabled={!commentText.trim() || commentSending}
++                  style={{ ...s.btnPrimary, flexShrink: 0, alignSelf: 'flex-end' }}
++                >
++                  {commentSending ? '…' : 'Send'}
++                </button>
++              </div>
++              <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>
++                Use @user:server.com to mention someone
++              </div>
++            </div>
++          )}
++
 +          {err && <div style={{ color: '#d32f2f', marginTop: 8, fontSize: 13 }}>{err}</div>}
 +        </div>
 +        <div style={s.dialogFooter}>
@@ -547,10 +766,12 @@ index 0000000000..a1ea02108f
 +interface ListViewProps {
 +  issues: WidgetIssue[];
 +  schema: IssueSchema;
++  reactionsByIssue: Map<string, ReactionMap>;
++  commentCountByIssue: Map<string, number>;
 +  onEdit: ((issue: WidgetIssue) => void) | undefined;
 +}
 +
-+function ListView({ issues, schema, onEdit }: ListViewProps) {
++function ListView({ issues, schema, reactionsByIssue, commentCountByIssue, onEdit }: ListViewProps) {
 +  // Show title + up to 3 other fields
 +  const displayFields = useMemo(() => {
 +    const titleField = schema.fields.find(f => f.key === 'title') ?? schema.fields[0];
@@ -576,6 +797,7 @@ index 0000000000..a1ea02108f
 +          {displayFields.map(f => (
 +            <th key={f.key} style={s.th}>{f.label}</th>
 +          ))}
++          <th style={{ ...s.th, width: 1 }} aria-label="Activity" />
 +        </tr>
 +      </thead>
 +      <tbody>
@@ -596,6 +818,12 @@ index 0000000000..a1ea02108f
 +                {formatFieldValue(f, issue.content[f.key]) || <span style={{ color: '#bbb' }}>—</span>}
 +              </td>
 +            ))}
++            <td style={{ ...s.td, whiteSpace: 'nowrap', paddingLeft: 4 }}>
++              <ActivityBadge
++                reactions={reactionsByIssue.get(issue.stateKey) ?? new Map()}
++                commentCount={commentCountByIssue.get(issue.stateKey) ?? 0}
++              />
++            </td>
 +          </tr>
 +        ))}
 +      </tbody>
@@ -609,10 +837,12 @@ index 0000000000..a1ea02108f
 +  issues: WidgetIssue[];
 +  schema: IssueSchema;
 +  kanbanField: SchemaField;
++  reactionsByIssue: Map<string, ReactionMap>;
++  commentCountByIssue: Map<string, number>;
 +  onEdit: ((issue: WidgetIssue) => void) | undefined;
 +}
 +
-+function KanbanView({ issues, schema, kanbanField, onEdit }: KanbanViewProps) {
++function KanbanView({ issues, schema, kanbanField, reactionsByIssue, commentCountByIssue, onEdit }: KanbanViewProps) {
 +  const titleField = schema.fields.find(f => f.key === 'title') ?? schema.fields[0];
 +  const metaFields = schema.fields.filter(f => f !== titleField && f !== kanbanField).slice(0, 2);
 +
@@ -653,6 +883,8 @@ index 0000000000..a1ea02108f
 +          <div style={s.kanbanColBody}>
 +            {col.issues.map(issue => {
 +              const title = titleField ? String(issue.content[titleField.key] ?? '') || '(untitled)' : issue.stateKey;
++              const issueReactions = reactionsByIssue.get(issue.stateKey) ?? new Map<string, Set<string>>();
++              const commentCount = commentCountByIssue.get(issue.stateKey) ?? 0;
 +              return (
 +                <div
 +                  key={issue.stateKey}
@@ -673,6 +905,11 @@ index 0000000000..a1ea02108f
 +                      </div>
 +                    );
 +                  })}
++                  {(issueReactions.size > 0 || commentCount > 0) && (
++                    <div style={{ marginTop: 6 }}>
++                      <ActivityBadge reactions={issueReactions} commentCount={commentCount} />
++                    </div>
++                  )}
 +                </div>
 +              );
 +            })}
@@ -699,6 +936,10 @@ index 0000000000..a1ea02108f
 +  const [editing, setEditing] = useState<WidgetIssue | 'new' | null>(null);
 +  const [editingSchema, setEditingSchema] = useState(false);
 +
++  // Timeline feed state
++  const [comments, setComments] = useState<IRoomEvent[]>([]);
++  const [reactions, setReactions] = useState<IRoomEvent[]>([]);
++
 +  const userId = useMemo(() => new URLSearchParams(window.location.search).get('userId') ?? '', []);
 +
 +  // Load initial state on mount
@@ -706,10 +947,12 @@ index 0000000000..a1ea02108f
 +    let cancelled = false;
 +    async function load() {
 +      try {
-+        const [schemaEvents, issueEvents, plEvents] = await Promise.all([
++        const [schemaEvents, issueEvents, plEvents, commentEvents, reactionEvents] = await Promise.all([
 +          widgetApi.readStateEvents('eu.kiefte.issues.schema', 1),
 +          widgetApi.readStateEvents('eu.kiefte.issue', 10000),
 +          widgetApi.readStateEvents('m.room.power_levels', 1),
++          (widgetApi as any).readRoomEvents('m.room.message', 2000).catch(() => [] as IRoomEvent[]),
++          (widgetApi as any).readRoomEvents('m.reaction', 5000).catch(() => [] as IRoomEvent[]),
 +        ]);
 +        if (cancelled) return;
 +
@@ -721,6 +964,7 @@ index 0000000000..a1ea02108f
 +            .filter(e => e.state_key && !(e.content as any)?._deleted)
 +            .map(e => ({
 +              stateKey: e.state_key!,
++              eventId: e.event_id ?? '',
 +              content: e.content as IssueContent,
 +              sender: e.sender,
 +              ts: e.origin_server_ts,
@@ -733,9 +977,16 @@ index 0000000000..a1ea02108f
 +          const stateDefault = (pl.state_default ?? 50) as number;
 +          setCanWrite(userPL >= stateDefault);
 +        } else {
-+          // If we can't check, optimistically allow writes (errors surface on save)
 +          setCanWrite(true);
 +        }
++
++        // Filter comments: only those tagged with eu.kiefte.issue_id
++        setComments(
++          (commentEvents as IRoomEvent[]).filter(
++            e => (e.content as Record<string, unknown>)['eu.kiefte.issue_id']
++          )
++        );
++        setReactions(reactionEvents as IRoomEvent[]);
 +      } catch (e) {
 +        if (!cancelled) setError(String(e));
 +      } finally {
@@ -765,21 +1016,88 @@ index 0000000000..a1ea02108f
 +            const rest = prev.filter(i => i.stateKey !== event.state_key!);
 +            return [
 +              ...rest,
-+              { stateKey: event.state_key!, content: c, sender: event.sender, ts: event.origin_server_ts },
++              {
++                stateKey: event.state_key!,
++                eventId: event.event_id ?? '',
++                content: c,
++                sender: event.sender,
++                ts: event.origin_server_ts,
++              },
 +            ];
 +          });
 +        }
++      } else if (event.type === 'm.reaction') {
++        setReactions(prev => {
++          // Deduplicate by event_id
++          const filtered = event.event_id ? prev.filter(r => r.event_id !== event.event_id) : prev;
++          return [...filtered, event];
++        });
++      } else if (
++        event.type === 'm.room.message' &&
++        (event.content as Record<string, unknown>)['eu.kiefte.issue_id']
++      ) {
++        setComments(prev => {
++          const filtered = event.event_id ? prev.filter(c => c.event_id !== event.event_id) : prev;
++          return [...filtered, event];
++        });
 +      }
 +    };
 +    widgetApi.on(eventName, handler);
 +    return () => { widgetApi.off(eventName, handler); };
 +  }, [widgetApi]);
 +
++  // ── Computed aggregates ───────────────────────────────────────────────────
++
++  // Map from issue eventId → stateKey (for reaction lookups)
++  const eventIdToKey = useMemo(() => {
++    const m = new Map<string, string>();
++    for (const issue of issues) {
++      if (issue.eventId) m.set(issue.eventId, issue.stateKey);
++    }
++    return m;
++  }, [issues]);
++
++  // stateKey → (emoji → Set<senderId>)
++  const reactionsByIssue = useMemo(() => {
++    const result = new Map<string, ReactionMap>();
++    for (const r of reactions) {
++      const rel = (r.content as any)?.['m.relates_to'];
++      if (rel?.rel_type !== 'm.annotation' || !rel.event_id || !rel.key) continue;
++      const key = eventIdToKey.get(rel.event_id);
++      if (!key) continue;
++      if (!result.has(key)) result.set(key, new Map());
++      const byEmoji = result.get(key)!;
++      if (!byEmoji.has(rel.key)) byEmoji.set(rel.key, new Set());
++      byEmoji.get(rel.key)!.add(r.sender);
++    }
++    return result;
++  }, [reactions, eventIdToKey]);
++
++  // stateKey → comment count
++  const commentCountByIssue = useMemo(() => {
++    const counts = new Map<string, number>();
++    for (const c of comments) {
++      const key = (c.content as Record<string, unknown>)['eu.kiefte.issue_id'] as string;
++      if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
++    }
++    return counts;
++  }, [comments]);
++
++  // Comments for the currently-edited issue
++  const editingComments = useMemo(() => {
++    const key = editing !== null && editing !== 'new' ? editing.stateKey : null;
++    if (!key) return [];
++    return comments
++      .filter(c => (c.content as Record<string, unknown>)['eu.kiefte.issue_id'] === key)
++      .sort((a, b) => a.origin_server_ts - b.origin_server_ts);
++  }, [comments, editing]);
++
++  // ── Callbacks ─────────────────────────────────────────────────────────────
++
 +  const doSave = useCallback(async (stateKey: string, content: IssueContent) => {
-+    // Optimistic update
 +    setIssues(prev => {
 +      const rest = prev.filter(i => i.stateKey !== stateKey);
-+      return [...rest, { stateKey, content, sender: userId, ts: Date.now() }];
++      return [...rest, { stateKey, eventId: '', content, sender: userId, ts: Date.now() }];
 +    });
 +    setEditing(null);
 +    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, content);
@@ -796,6 +1114,39 @@ index 0000000000..a1ea02108f
 +    setEditingSchema(false);
 +    await widgetApi.sendStateEvent('eu.kiefte.issues.schema', '', newSchema);
 +  }, [widgetApi]);
++
++  const doComment = useCallback(async (issueKey: string, text: string) => {
++    const mentioned = extractMentions(text);
++    const content: Record<string, unknown> = {
++      msgtype: 'm.text',
++      body: text,
++      'eu.kiefte.issue_id': issueKey,
++    };
++    if (mentioned.length > 0) {
++      content['m.mentions'] = { user_ids: mentioned };
++    }
++    // Optimistic local update so the comment appears immediately
++    const tempEvent: IRoomEvent = {
++      event_id: `local-${Date.now()}`,
++      type: 'm.room.message',
++      sender: userId,
++      origin_server_ts: Date.now(),
++      content: content as any,
++    };
++    setComments(prev => [...prev, tempEvent]);
++    await (widgetApi as any).sendRoomEvent('m.room.message', content);
++  }, [widgetApi, userId]);
++
++  const doReact = useCallback(async (issueKey: string, emoji: string) => {
++    const issue = issues.find(i => i.stateKey === issueKey);
++    if (!issue?.eventId) return;
++    const content = {
++      'm.relates_to': { rel_type: 'm.annotation', event_id: issue.eventId, key: emoji },
++    };
++    await (widgetApi as any).sendRoomEvent('m.reaction', content);
++  }, [widgetApi, issues]);
++
++  // ── Render ────────────────────────────────────────────────────────────────
 +
 +  const activeIssues = useMemo(
 +    () => issues.filter(i => !i.content._deleted).sort((a, b) => b.ts - a.ts),
@@ -839,7 +1190,6 @@ index 0000000000..a1ea02108f
 +    );
 +  }
 +
-+  // schema is non-null past this point
 +  const effectiveSchema = schema;
 +  const kanbanField = effectiveSchema.fields.find(f => f.kanban_group && f.type === 'enum');
 +
@@ -889,12 +1239,16 @@ index 0000000000..a1ea02108f
 +            issues={activeIssues}
 +            schema={effectiveSchema}
 +            kanbanField={kanbanField}
++            reactionsByIssue={reactionsByIssue}
++            commentCountByIssue={commentCountByIssue}
 +            onEdit={canWrite ? setEditing : undefined}
 +          />
 +        ) : (
 +          <ListView
 +            issues={activeIssues}
 +            schema={effectiveSchema}
++            reactionsByIssue={reactionsByIssue}
++            commentCountByIssue={commentCountByIssue}
 +            onEdit={canWrite ? setEditing : undefined}
 +          />
 +        )}
@@ -907,12 +1261,18 @@ index 0000000000..a1ea02108f
 +          initial={editingContent}
 +          isNew={editing === 'new'}
 +          canDelete={canWrite && editing !== 'new'}
++          issueKey={editingKey}
++          reactions={reactionsByIssue.get(editingKey ?? '') ?? new Map()}
++          comments={editingComments}
++          currentUserId={userId}
 +          onSave={async (content) => {
 +            const key = editingKey ?? newIssueKey();
 +            await doSave(key, content);
 +          }}
 +          onDelete={editingKey ? () => doDelete(editingKey) : undefined}
 +          onCancel={() => setEditing(null)}
++          onReact={(emoji) => { if (editingKey) doReact(editingKey, emoji); }}
++          onComment={async (text) => { if (editingKey) await doComment(editingKey, text); }}
 +        />
 +      )}
 +      {editingSchema && (
@@ -927,10 +1287,10 @@ index 0000000000..a1ea02108f
 +}
 diff --git a/src/widget.tsx b/src/widget.tsx
 new file mode 100644
-index 0000000000..8da0154226
+index 0000000000..ba49c18e63
 --- /dev/null
 +++ b/src/widget.tsx
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,94 @@
 +import React from 'react';
 +import { createRoot } from 'react-dom/client';
 +import { WidgetApi } from 'matrix-widget-api';
@@ -947,6 +1307,12 @@ index 0000000000..8da0154226
 +widgetApi.requestCapabilityToSendState('eu.kiefte.issue');
 +widgetApi.requestCapabilityToSendState('eu.kiefte.issues.schema');
 +widgetApi.requestCapabilityToReceiveState('m.room.power_levels');
++
++// Timeline event capabilities for comments, reactions, and mentions
++widgetApi.requestCapabilityToReceiveEvent('m.room.message');
++widgetApi.requestCapabilityToSendEvent('m.room.message');
++widgetApi.requestCapabilityToReceiveEvent('m.reaction');
++widgetApi.requestCapabilityToSendEvent('m.reaction');
 +
 +widgetApi.start();
 +
@@ -1020,10 +1386,10 @@ index 0000000000..8da0154226
 +  );
 +}, 4000);
 diff --git a/vite.config.js b/vite.config.js
-index 3cff0dbf81..7e0f999de4 100644
+index dfa02fc4eb..e3c4dbac13 100644
 --- a/vite.config.js
 +++ b/vite.config.js
-@@ -130,6 +130,10 @@
+@@ -126,6 +126,10 @@
      copyPublicDir: false,
      rollupOptions: {
        plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],

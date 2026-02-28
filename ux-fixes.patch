@@ -137,7 +137,7 @@ index de8d3d69f9..08381e8ddb 100644
 +};
 +
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index ea9ef1a0c3..69f52bc9bd 100644
+index f8647d1865..17c59a5f82 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
 @@ -28,6 +28,7 @@
@@ -157,7 +157,7 @@ index ea9ef1a0c3..69f52bc9bd 100644
  import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
  import { Room } from '../features/room';
  import { Lobby } from '../features/lobby';
-@@ -311,6 +312,7 @@
+@@ -287,6 +288,7 @@
                element={<WelcomePage />}
              />
            )}
@@ -166,7 +166,7 @@ index ea9ef1a0c3..69f52bc9bd 100644
            <Route path={_INVITES_PATH} element={<Invites />} />
          </Route>
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 039de0eefb..623488a862 100644
+index 04edf10906..29857b38c3 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -7,6 +7,7 @@
@@ -186,7 +186,7 @@ index 039de0eefb..623488a862 100644
  import {
    NavButton,
    NavCategory,
-@@ -63,6 +64,7 @@
+@@ -60,6 +61,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const orphanRooms = useDirectRooms();
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
@@ -194,7 +194,7 @@ index 039de0eefb..623488a862 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -74,6 +76,37 @@
+@@ -71,6 +73,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -232,7 +232,7 @@ index 039de0eefb..623488a862 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -185,14 +218,27 @@
+@@ -182,14 +215,27 @@
    const selectedRoomId = useSelectedRoom();
    const noRoomToDisplay = directs.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
@@ -263,7 +263,7 @@ index 039de0eefb..623488a862 100644
    const virtualizer = useVirtualizer({
      count: sortedDirects.length,
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index a76a226b2c..cb9e44212b 100644
+index d87db963df..1309dc1d24 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -7,6 +7,7 @@
@@ -283,7 +283,7 @@ index a76a226b2c..cb9e44212b 100644
  import {
    NavButton,
    NavCategory,
-@@ -77,6 +78,7 @@
+@@ -74,6 +75,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
    const mx = useMatrixClient();
@@ -291,7 +291,7 @@ index a76a226b2c..cb9e44212b 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -88,6 +90,37 @@
+@@ -85,6 +87,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -329,7 +329,7 @@ index a76a226b2c..cb9e44212b 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -211,18 +244,27 @@
+@@ -208,18 +241,27 @@
    const searchSelected = useHomeSearchSelected();
    const noRoomToDisplay = rooms.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
@@ -911,7 +911,7 @@ index c8036b471f..325a2e97a8 100644
  export * from './Invites';
 +export * from './Unread';
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index fbe35241bc..325d1f7f0b 100644
+index 778b729e2e..53b3a4cf9c 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
 +++ b/src/app/pages/client/sidebar/HomeTab.tsx
 @@ -1,6 +1,6 @@
@@ -969,7 +969,7 @@ index fbe35241bc..325d1f7f0b 100644
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
 diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
-index 553cf8490c..5f673ea535 100644
+index 5d13a9ab65..101589de53 100644
 --- a/src/app/pages/client/sidebar/InboxTab.tsx
 +++ b/src/app/pages/client/sidebar/InboxTab.tsx
 @@ -9,10 +9,14 @@
@@ -999,7 +999,7 @@ index 553cf8490c..5f673ea535 100644
    const handleInboxClick = () => {
      if (screenSize === ScreenSize.Mobile) {
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index eb0100132c..41b6613817 100644
+index 3f60d2a957..989c55b485 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -53,7 +53,8 @@
@@ -1012,7 +1012,7 @@ index eb0100132c..41b6613817 100644
  import { allRoomsAtom } from '../../../state/room-list/roomList';
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
-@@ -96,6 +97,7 @@
+@@ -93,6 +94,7 @@
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const [developerTools] = useSetting(settingsAtom, 'developerTools');
@@ -1020,7 +1020,7 @@ index eb0100132c..41b6613817 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -153,6 +155,37 @@
+@@ -150,6 +152,37 @@
            />
          )}
          <MenuItem
@@ -1095,21 +1095,21 @@ index 9cf4bfb963..024e962a8d 100644
  export const SPACE_SETTINGS_PATH = '/space-settings/';
  
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index e7afeda401..95f3ec30f3 100644
+index 31ee6ccb97..1128dce42f 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -55,6 +55,7 @@
+@@ -41,6 +41,7 @@
+   dateFormatString: string;
+ 
    developerTools: boolean;
-   issueTracker: boolean;
-   multiAccount: boolean;
 +  roomSortOrder: 'activity' | 'az' | 'unread';
  }
  
  const defaultSettings: Settings = {
-@@ -96,6 +97,7 @@
+@@ -75,6 +76,7 @@
+   dateFormatString: 'D MMM YYYY',
+ 
    developerTools: false,
-   issueTracker: false,
-   multiAccount: false,
 +  roomSortOrder: 'activity',
  };
  

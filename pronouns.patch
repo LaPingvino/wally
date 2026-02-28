@@ -29,10 +29,10 @@ index 0546686657..3584a2bc0a 100644
    }
  }
 diff --git a/package.json b/package.json
-index 2dc0a4b103..3f100beade 100644
+index de8ee72da9..24773f169a 100644
 --- a/package.json
 +++ b/package.json
-@@ -74,7 +74,8 @@
+@@ -73,7 +73,8 @@
      "slate-dom": "0.112.2",
      "slate-history": "0.110.3",
      "slate-react": "0.112.1",
@@ -41,7 +41,7 @@ index 2dc0a4b103..3f100beade 100644
 +    "zod": "4.1.8"
    },
    "devDependencies": {
-     "@element-hq/element-call-embedded": "0.16.3",
+     "@esbuild-plugins/node-globals-polyfill": "0.2.3",
 diff --git a/src/app/components/AccountDataEditor.tsx b/src/app/components/AccountDataEditor.tsx
 index 2dbaf1f1f2..ef8d01a149 100644
 --- a/src/app/components/AccountDataEditor.tsx
