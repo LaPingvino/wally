@@ -1,5 +1,5 @@
-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
-import { useAtom, useAtomValue } from 'jotai';
+import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Avatar,
   Box,
@@ -7,6 +7,7 @@ import {
   Icon,
   IconButton,
   Icons,
+  Line,
   Menu,
   MenuItem,
   PopOut,
@@ -19,7 +20,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import FocusTrap from 'focus-trap-react';
 import { useNavigate } from 'react-router-dom';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { factoryRoomIdByActivity } from '../../../utils/sort';
+import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst } from '../../../utils/sort';
 import {
   NavButton,
   NavCategory,
@@ -34,6 +35,7 @@ import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+import { useNavigateUnread } from '../../../hooks/useNavigateUnread';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
@@ -55,6 +57,7 @@ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
 import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
 import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
+import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
 
 type DirectMenuProps = {
   requestClose: () => void;
@@ -64,6 +67,7 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const orphanRooms = useDirectRooms();
   const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
 
   const handleMarkAsRead = () => {
     if (!unread) return;
@@ -74,6 +78,37 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
   return (
     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+        <MenuItem
+          onClick={() => setRoomSortOrder('activity')}
+          size="300"
+          after={roomSortOrder === 'activity' ? <Icon size="100" src={Icons.Check} /> : undefined}
+          radii="300"
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Sort by Activity
+          </Text>
+        </MenuItem>
+        <MenuItem
+          onClick={() => setRoomSortOrder('az')}
+          size="300"
+          after={roomSortOrder === 'az' ? <Icon size="100" src={Icons.Check} /> : undefined}
+          radii="300"
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Sort A-Z
+          </Text>
+        </MenuItem>
+        <MenuItem
+          onClick={() => setRoomSortOrder('unread')}
+          size="300"
+          after={roomSortOrder === 'unread' ? <Icon size="100" src={Icons.Check} /> : undefined}
+          radii="300"
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Unread First
+          </Text>
+        </MenuItem>
+        <Line variant="Surface" size="300" />
         <MenuItem
           onClick={handleMarkAsRead}
           size="300"
@@ -172,6 +207,7 @@ function DirectEmpty() {
 }
 
 const DEFAULT_CATEGORY_ID = makeNavCategoryId('direct', 'direct');
+const FAVORITES_CATEGORY_ID = makeNavCategoryId('direct', 'favorites');
 export function Direct() {
   const mx = useMatrixClient();
   useNavToActivePathMapper('direct');
@@ -182,18 +218,35 @@ export function Direct() {
   const navigate = useNavigate();
 
   const createDirectSelected = useDirectCreateSelected();
+  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
 
   const selectedRoomId = useSelectedRoom();
   const noRoomToDisplay = directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
+  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+
+  const favoriteRoomIds = useFavoriteRooms(directs);
+  const favoriteRoomIdsSet = useMemo(() => new Set(favoriteRoomIds), [favoriteRoomIds]);
 
   const sortedDirects = useMemo(() => {
-    const items = Array.from(directs).sort(factoryRoomIdByActivity(mx));
+    let sortFn;
+    if (roomSortOrder === 'az') {
+      sortFn = factoryRoomIdByAtoZ(mx);
+    } else if (roomSortOrder === 'unread') {
+      sortFn = factoryRoomIdByUnreadFirst(
+        (id) => roomToUnread.get(id)?.highlight ?? 0,
+        (id) => roomToUnread.get(id)?.total ?? 0,
+        factoryRoomIdByActivity(mx)
+      );
+    } else {
+      sortFn = factoryRoomIdByActivity(mx);
+    }
+    const items = Array.from(directs).sort(sortFn).filter((rId) => !favoriteRoomIdsSet.has(rId));
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
+  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId, roomSortOrder, favoriteRoomIdsSet]);
 
   const virtualizer = useVirtualizer({
     count: sortedDirects.length,
@@ -232,7 +285,58 @@ export function Direct() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
+              {unreadCount > 0 && (
+                <NavItem variant="Background" radii="400">
+                  <NavItemContent>
+                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
+                      <IconButton size="300" radii="300" onClick={navigatePrev}
+                        aria-label={`Previous unread room (Alt+Shift+Up), ${unreadCount} unread`}>
+                        <Icon src={Icons.ChevronTop} size="100" />
+                      </IconButton>
+                      <Box as="span" grow="Yes" style={{ textAlign: 'center' }}>
+                        <Text as="span" size="T200" priority="300">{unreadCount} unread</Text>
+                      </Box>
+                      <IconButton size="300" radii="300" onClick={navigateNext}
+                        aria-label="Next unread room (Alt+Shift+Down)">
+                        <Icon src={Icons.ChevronBottom} size="100" />
+                      </IconButton>
+                    </Box>
+                  </NavItemContent>
+                </NavItem>
+              )}
             </NavCategory>
+            {favoriteRoomIds.length > 0 && (
+              <NavCategory>
+                <NavCategoryHeader>
+                  <RoomNavCategoryButton
+                    closed={closedCategories.has(FAVORITES_CATEGORY_ID)}
+                    data-category-id={FAVORITES_CATEGORY_ID}
+                    onClick={handleCategoryClick}
+                  >
+                    Favorites
+                  </RoomNavCategoryButton>
+                </NavCategoryHeader>
+                {!closedCategories.has(FAVORITES_CATEGORY_ID) &&
+                  favoriteRoomIds.map((roomId) => {
+                    const room = mx.getRoom(roomId);
+                    if (!room) return null;
+                    return (
+                      <RoomNavItem
+                        key={roomId}
+                        room={room}
+                        selected={selectedRoomId === roomId}
+                        focused={false}
+                        optionId={`room-option-fav-${roomId}`}
+                        tabIndex={0}
+                        showAvatar
+                        direct
+                        linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                        notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
+                      />
+                    );
+                  })}
+              </NavCategory>
+            )}
             <NavCategory>
               <NavCategoryHeader>
                 <RoomNavCategoryButton

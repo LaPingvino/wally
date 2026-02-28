@@ -56,6 +56,7 @@ export interface Settings {
   developerTools: boolean;
   issueTracker: boolean;
   multiAccount: boolean;
+  roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
 }
 
 const defaultSettings: Settings = {
@@ -98,6 +99,7 @@ const defaultSettings: Settings = {
   developerTools: false,
   issueTracker: false,
   multiAccount: false,
+  roomSortOrder: 'activity',
 };
 
 export const getSettings = () => {

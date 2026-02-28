@@ -44,6 +44,22 @@ export const factoryRoomIdByUnreadCount =
 
 export const byTsOldToNew: SortFunc<number> = (a, b) => a - b;
 
+export const factoryRoomIdByUnreadFirst =
+  (
+    getHighlight: (roomId: string) => number,
+    getTotal: (roomId: string) => number,
+    fallback: SortFunc<string>
+  ): SortFunc<string> =>
+  (a, b) => {
+    const aH = getHighlight(a);
+    const bH = getHighlight(b);
+    if (bH !== aH) return bH - aH;
+    const aT = getTotal(a);
+    const bT = getTotal(b);
+    if (bT !== aT) return bT - aT;
+    return fallback(a, b);
+  };
+
 export const byOrderKey: SortFunc<string | undefined> = (a, b) => {
   if (!a && !b) {
     return 0;

@@ -28,12 +28,14 @@ import { useSelectedRoom } from './router/useSelectedRoom';
  * even when the list shrinks as rooms are read.
  */
 const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
+const lastNavigatedMentionAtom = atom<{ roomId: string; index: number } | null>(null);
 
 /**
  * The roomId last navigated to via unread nav (keyboard shortcuts or inbox buttons).
  * Used to show the ↑↓ nav bar in the timeline only when in "unread browsing mode".
  */
 export const unreadNavRoomAtom = atom<string | null>(null);
+export const mentionNavRoomAtom = atom<string | null>(null);
 
 type SidebarItem = string | { id: string; content: string[] };
 
@@ -204,4 +206,116 @@ export function useNavigateUnread() {
   }, [unreadEntries, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
 
   return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
+}
+
+/** Same as useNavigateUnread but restricted to rooms with highlight (mention) counts > 0. */
+export function useNavigateMention() {
+  const navigate = useNavigate();
+  const mx = useMatrixClient();
+  const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const mDirects = useAtomValue(mDirectAtom);
+  const roomToParents = useAtomValue(roomToParentsAtom);
+  const settings = useAtomValue(settingsAtom);
+  const roomSortOrder: string =
+    (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
+  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedMentionAtom);
+  const setMentionNavRoom = useAtom(mentionNavRoomAtom)[1];
+  const selectedRoomId = useSelectedRoom();
+
+  const mentionEntries = useMemo(() => {
+    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
+
+    const sidebarSpaceIds = getSidebarSpaceIds(mx);
+    const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
+
+    const allMentions = Array.from(roomToUnread.keys()).filter(
+      (id) => (roomToUnread.get(id)?.highlight ?? 0) > 0 && !mx.getRoom(id)?.isSpaceRoom()
+    );
+
+    const sortFallback =
+      roomSortOrder === 'az'
+        ? factoryRoomIdByAtoZ(mx)
+        : roomSortOrder === 'unread'
+        ? factoryRoomIdByUnreadFirst(
+            (id) => getUnread(id).highlight,
+            (id) => getUnread(id).total,
+            factoryRoomIdByActivity(mx)
+          )
+        : factoryRoomIdByActivity(mx);
+
+    allMentions.sort((a, b) => {
+      const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
+      const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
+      if (ai !== bi) return ai - bi;
+      return sortFallback(a, b);
+    });
+
+    return allMentions.map((id) => [id, roomToUnread.get(id)!] as const);
+  }, [mx, roomToUnread, roomToParents, roomSortOrder]);
+
+  const navigateToRoom = useCallback(
+    (roomId: string) => {
+      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
+      const isDirect = mDirects.has(roomId);
+      if (isDirect) {
+        navigate(getDirectRoomPath(roomIdOrAlias));
+      } else {
+        const parents = roomToParents.get(roomId);
+        if (parents && parents.size > 0) {
+          const spaceId = Array.from(parents)[0];
+          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
+        } else {
+          navigate(getHomeRoomPath(roomIdOrAlias));
+        }
+      }
+    },
+    [mx, mDirects, roomToParents, navigate]
+  );
+
+  const resolveBaseIndex = useCallback(
+    (fallback: number): number => {
+      if (lastNavigated) {
+        const found = mentionEntries.findIndex(([id]) => id === lastNavigated.roomId);
+        if (found >= 0) return found;
+        const clamped = Math.min(lastNavigated.index, mentionEntries.length);
+        return fallback < 0 ? clamped - 1 : Math.max(1, clamped);
+      }
+      if (selectedRoomId) {
+        const found = mentionEntries.findIndex(([id]) => id === selectedRoomId);
+        if (found >= 0) return found;
+      }
+      return fallback;
+    },
+    [mentionEntries, lastNavigated, selectedRoomId]
+  );
+
+  const navigateNext = useCallback(() => {
+    if (mentionEntries.length === 0) return;
+    const baseIndex = resolveBaseIndex(-1);
+    const next = (baseIndex + 1) % mentionEntries.length;
+    const roomId = mentionEntries[next][0];
+    setLastNavigated({ roomId, index: next });
+    setMentionNavRoom(roomId);
+    navigateToRoom(roomId);
+  }, [mentionEntries, resolveBaseIndex, setLastNavigated, setMentionNavRoom, navigateToRoom]);
+
+  const navigatePrev = useCallback(() => {
+    if (mentionEntries.length === 0) return;
+    const baseIndex = resolveBaseIndex(mentionEntries.length);
+    const prev = (baseIndex - 1 + mentionEntries.length) % mentionEntries.length;
+    const roomId = mentionEntries[prev][0];
+    setLastNavigated({ roomId, index: prev });
+    setMentionNavRoom(roomId);
+    navigateToRoom(roomId);
+  }, [mentionEntries, resolveBaseIndex, setLastNavigated, setMentionNavRoom, navigateToRoom]);
+
+  const navigateFirst = useCallback(() => {
+    if (mentionEntries.length === 0) return;
+    const roomId = mentionEntries[0][0];
+    setLastNavigated({ roomId, index: 0 });
+    setMentionNavRoom(roomId);
+    navigateToRoom(roomId);
+  }, [mentionEntries, setLastNavigated, setMentionNavRoom, navigateToRoom]);
+
+  return { navigateNext, navigatePrev, navigateFirst, mentionCount: mentionEntries.length };
 }

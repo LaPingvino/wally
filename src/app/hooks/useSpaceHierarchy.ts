@@ -8,7 +8,7 @@ import { roomToParentsAtom } from '../state/room/roomToParents';
 import { MSpaceChildContent, StateEvent } from '../../types/matrix/room';
 import { getAllParents, getStateEvents, isValidChild } from '../utils/room';
 import { isRoomId } from '../utils/matrix';
-import { SortFunc, byOrderKey, byTsOldToNew, factoryRoomIdByActivity } from '../utils/sort';
+import { SortFunc, byOrderKey, byTsOldToNew } from '../utils/sort';
 import { useStateEventCallback } from './useStateEventCallback';
 import { ErrorCode } from '../cs-errorcode';
 
@@ -221,22 +221,10 @@ export const useSpaceJoinedHierarchy = (
   spaceId: string,
   getRoom: GetRoomCallback,
   excludeRoom: (parentId: string, roomId: string) => boolean,
-  sortByActivity: (spaceId: string) => boolean
+  sortRoomItems: (parentId: string, items: HierarchyItem[]) => HierarchyItem[]
 ): HierarchyItem[] => {
   const mx = useMatrixClient();
   const roomToParents = useAtomValue(roomToParentsAtom);
-
-  const sortRoomItems = useCallback(
-    (sId: string, items: HierarchyItem[]) => {
-      if (sortByActivity(sId)) {
-        items.sort((a, b) => factoryRoomIdByActivity(mx)(a.roomId, b.roomId));
-        return items;
-      }
-      items.sort(hierarchyItemTs).sort(hierarchyItemByOrder);
-      return items;
-    },
-    [mx, sortByActivity]
-  );
 
   const [hierarchyAtom] = useState(() =>
     atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems))
