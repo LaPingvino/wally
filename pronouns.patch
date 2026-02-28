@@ -2128,10 +2128,10 @@ index 0000000000..963a7a949e
 +}
 diff --git a/src/app/features/settings/account/fields/ProfileTextField.tsx b/src/app/features/settings/account/fields/ProfileTextField.tsx
 new file mode 100644
-index 0000000000..fc96cb69c7
+index 0000000000..407507ad4f
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileTextField.tsx
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,64 @@
 +import { Text, Box, Input, IconButton, Icon, Icons } from 'folds';
 +import React, { ChangeEventHandler } from 'react';
 +import { FilterByValues } from '../../../../../types/utils';
@@ -2185,6 +2185,7 @@ index 0000000000..fc96cb69c7
 +                    size="300"
 +                    radii="300"
 +                    variant="Secondary"
++                    aria-label="Reset"
 +                  >
 +                    <Icon src={Icons.Cross} size="100" />
 +                  </IconButton>
@@ -2197,7 +2198,7 @@ index 0000000000..fc96cb69c7
 +}
 diff --git a/src/app/features/settings/account/fields/ProfileTimezone.tsx b/src/app/features/settings/account/fields/ProfileTimezone.tsx
 new file mode 100644
-index 0000000000..6ebea2aca9
+index 0000000000..5ab6fd9d64
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileTimezone.tsx
 @@ -0,0 +1,160 @@
@@ -2278,7 +2279,7 @@ index 0000000000..6ebea2aca9
 +                <Box grow="Yes">
 +                  <Text size="H4">Choose a Timezone</Text>
 +                </Box>
-+                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300">
++                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300" aria-label="Close">
 +                  <Icon src={Icons.Cross} />
 +                </IconButton>
 +              </Header>
@@ -2528,7 +2529,7 @@ index 0000000000..9c9cbe6ad1
 +  );
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567b6..01e6e6a43c 100644
+index a3f04567b6..44fcfb72b8 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -1,5 +1,7 @@
@@ -2709,7 +2710,7 @@ index a3f04567b6..01e6e6a43c 100644
 +                </Text>
 +              </Box>
 +              <Box shrink="No">
-+                <IconButton onClick={requestClose} variant="Surface">
++                <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
 +                  <Icon src={Icons.Cross} />
 +                </IconButton>
 +              </Box>

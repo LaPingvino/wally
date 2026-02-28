@@ -3928,7 +3928,7 @@ index 0000000000..967956474b
 +  );
 +}
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df91..cb7f29bd4e 100644
+index e0df06df91..24517f8a5c 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
@@ -3940,7 +3940,7 @@ index e0df06df91..cb7f29bd4e 100644
  import { IPusherRequest } from 'matrix-js-sdk';
  import { SequenceCard } from '../../../components/sequence-card';
  import { SequenceCardStyle } from '../styles.css';
-@@ -84,6 +85,116 @@
+@@ -84,6 +85,118 @@
    );
  }
  
@@ -4031,6 +4031,7 @@ index e0df06df91..cb7f29bd4e 100644
 +      style={selectStyle}
 +      value={batchDelay ?? 60}
 +      onChange={(e) => setBatchDelay(Number(e.target.value))}
++      aria-label="Notification batch interval"
 +    >
 +      {BATCH_DELAY_OPTIONS.map((opt) => (
 +        <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -4046,6 +4047,7 @@ index e0df06df91..cb7f29bd4e 100644
 +      style={selectStyle}
 +      value={callRingScope ?? 'nonVoice'}
 +      onChange={(e) => setCallRingScope(e.target.value as CallRingScope)}
++      aria-label="Incoming call ring scope"
 +    >
 +      {(Object.entries(CALL_RING_SCOPE_LABELS) as [CallRingScope, string][]).map(([val, label]) => (
 +        <option key={val} value={val}>{label}</option>
@@ -4057,7 +4059,7 @@ index e0df06df91..cb7f29bd4e 100644
  export function SystemNotification() {
    const notifPermission = usePermissionState('notifications', getNotificationState());
    const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
-@@ -151,6 +262,70 @@
+@@ -151,6 +264,70 @@
          direction="Column"
          gap="400"
        >

@@ -1,9 +1,9 @@
 diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
 new file mode 100644
-index 0000000000..3533ffc925
+index 0000000000..7c1f677d0f
 --- /dev/null
 +++ b/src/app/widget/IssueBoardWidget.tsx
-@@ -0,0 +1,1281 @@
+@@ -0,0 +1,1289 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { IRoomEvent, WidgetApi, WidgetApiToWidgetAction } from 'matrix-widget-api';
 +
@@ -724,6 +724,7 @@ index 0000000000..3533ffc925
 +                    onChange={e => setCommentText(e.target.value)}
 +                    onKeyDown={handleCommentKeyDown}
 +                    placeholder="Add a comment… (@user:server for mentions, Ctrl+Enter to send)"
++                    aria-label="Add a comment"
 +                    rows={2}
 +                    style={{ ...s.input, resize: 'none', fontFamily: 'inherit' }}
 +                    disabled={commentSending}
@@ -801,21 +802,28 @@ index 0000000000..3533ffc925
 +        </tr>
 +      </thead>
 +      <tbody>
-+        {issues.map(issue => (
++        {issues.map((issue) => (
 +          <tr
 +            key={issue.stateKey}
-+            onClick={() => onEdit?.(issue)}
 +            onMouseEnter={() => setHovered(issue.stateKey)}
 +            onMouseLeave={() => setHovered(null)}
 +            style={{
-+              ...s.trHover,
 +              background: hovered === issue.stateKey ? '#f5f8ff' : undefined,
-+              cursor: onEdit ? 'pointer' : 'default',
 +            }}
 +          >
-+            {displayFields.map(f => (
++            {displayFields.map((f, fi) => (
 +              <td key={f.key} style={s.td}>
-+                {formatFieldValue(f, issue.content[f.key]) || <span style={{ color: '#bbb' }}>—</span>}
++                {fi === 0 && onEdit ? (
++                  <button
++                    onClick={() => onEdit(issue)}
++                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: '#1976d2', textDecoration: 'underline', textAlign: 'left' }}
++                    aria-label={`Open issue: ${String(issue.content[f.key] ?? '(untitled)')}`}
++                  >
++                    {formatFieldValue(f, issue.content[f.key]) || <span style={{ color: '#bbb' }}>—</span>}
++                  </button>
++                ) : (
++                  formatFieldValue(f, issue.content[f.key]) || <span style={{ color: '#bbb' }}>—</span>
++                )}
 +              </td>
 +            ))}
 +            <td style={{ ...s.td, whiteSpace: 'nowrap', paddingLeft: 4 }}>

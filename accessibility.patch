@@ -1,3 +1,51 @@
+diff --git a/src/app/components/AccountDataEditor.tsx b/src/app/components/AccountDataEditor.tsx
+index ef8d01a149..b81f4dbdd4 100644
+--- a/src/app/components/AccountDataEditor.tsx
++++ b/src/app/components/AccountDataEditor.tsx
+@@ -323,7 +323,7 @@
+             </Chip>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/components/DeviceVerification.tsx b/src/app/components/DeviceVerification.tsx
+index d2502ccf72..6230f36e46 100644
+--- a/src/app/components/DeviceVerification.tsx
++++ b/src/app/components/DeviceVerification.tsx
+@@ -261,7 +261,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">Device Verification</Text>
+               </Box>
+-              <IconButton size="300" radii="300" onClick={handleCancel}>
++              <IconButton size="300" radii="300" onClick={handleCancel} aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
+diff --git a/src/app/components/DeviceVerificationSetup.tsx b/src/app/components/DeviceVerificationSetup.tsx
+index 433fa6a1db..8f0d3c7d8e 100644
+--- a/src/app/components/DeviceVerificationSetup.tsx
++++ b/src/app/components/DeviceVerificationSetup.tsx
+@@ -301,7 +301,7 @@
+           <Box grow="Yes">
+             <Text size="H4">Setup Device Verification</Text>
+           </Box>
+-          <IconButton size="300" radii="300" onClick={onCancel}>
++          <IconButton size="300" radii="300" onClick={onCancel} aria-label="Close">
+             <Icon src={Icons.Cross} />
+           </IconButton>
+         </Header>
+@@ -336,7 +336,7 @@
+           <Box grow="Yes">
+             <Text size="H4">Reset Device Verification</Text>
+           </Box>
+-          <IconButton size="300" radii="300" onClick={onCancel}>
++          <IconButton size="300" radii="300" onClick={onCancel} aria-label="Close">
+             <Icon src={Icons.Cross} />
+           </IconButton>
+         </Header>
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
 index 0000000000..f0e72d3672
@@ -231,6 +279,184 @@ index 0000000000..f0e72d3672
 +
 +  return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
 +}
+diff --git a/src/app/components/Pdf-viewer/PdfViewer.tsx b/src/app/components/Pdf-viewer/PdfViewer.tsx
+index 9c7fd9804c..a94328951b 100644
+--- a/src/app/components/Pdf-viewer/PdfViewer.tsx
++++ b/src/app/components/Pdf-viewer/PdfViewer.tsx
+@@ -108,7 +108,7 @@
+       <Box className={classNames(css.PdfViewer, className)} direction="Column" {...props} ref={ref}>
+         <Header className={css.PdfViewerHeader} size="400">
+           <Box grow="Yes" alignItems="Center" gap="200">
+-            <IconButton size="300" radii="300" onClick={requestClose}>
++            <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
+               <Icon size="50" src={Icons.ArrowLeft} />
+             </IconButton>
+             <Text size="T300" truncate>
+diff --git a/src/app/components/UIAFlowOverlay.tsx b/src/app/components/UIAFlowOverlay.tsx
+index a2bdd1b875..fbfee51c3d 100644
+--- a/src/app/components/UIAFlowOverlay.tsx
++++ b/src/app/components/UIAFlowOverlay.tsx
+@@ -59,6 +59,7 @@
+                   onClick={onCancel}
+                   radii="Pill"
+                   outlined
++                  aria-label="Close"
+                 >
+                   <Icon size="50" src={Icons.Cross} />
+                 </IconButton>
+diff --git a/src/app/components/editor/Editor.preview.tsx b/src/app/components/editor/Editor.preview.tsx
+index b760dddcb3..388909a1f1 100644
+--- a/src/app/components/editor/Editor.preview.tsx
++++ b/src/app/components/editor/Editor.preview.tsx
+@@ -23,7 +23,7 @@
+ 
+   return (
+     <>
+-      <IconButton variant="SurfaceVariant" onClick={() => setOpen(!open)}>
++      <IconButton variant="SurfaceVariant" onClick={() => setOpen(!open)} aria-label="Open editor preview" aria-pressed={open}>
+         <Icon src={Icons.BlockQuote} />
+       </IconButton>
+       <Overlay open={open} backdrop={<OverlayBackdrop />}>
+@@ -42,7 +42,7 @@
+                   editor={editor}
+                   placeholder="Send a message..."
+                   before={
+-                    <IconButton variant="SurfaceVariant" size="300" radii="300">
++                    <IconButton variant="SurfaceVariant" size="300" radii="300" aria-label="Attach file">
+                       <Icon src={Icons.PlusCircle} />
+                     </IconButton>
+                   }
+@@ -54,13 +54,14 @@
+                         radii="300"
+                         onClick={() => setToolbar(!toolbar)}
+                         aria-pressed={toolbar}
++                        aria-label="Toggle formatting toolbar"
+                       >
+                         <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
+                       </IconButton>
+-                      <IconButton variant="SurfaceVariant" size="300" radii="300">
++                      <IconButton variant="SurfaceVariant" size="300" radii="300" aria-label="Insert emoji">
+                         <Icon src={Icons.Smile} />
+                       </IconButton>
+-                      <IconButton variant="SurfaceVariant" size="300" radii="300">
++                      <IconButton variant="SurfaceVariant" size="300" radii="300" aria-label="Send message">
+                         <Icon src={Icons.Send} />
+                       </IconButton>
+                     </>
+diff --git a/src/app/components/editor/Toolbar.tsx b/src/app/components/editor/Toolbar.tsx
+index 7d701c424b..11472fa795 100644
+--- a/src/app/components/editor/Toolbar.tsx
++++ b/src/app/components/editor/Toolbar.tsx
+@@ -167,6 +167,7 @@
+                     onClick={() => handleMenuSelect(1)}
+                     size="400"
+                     radii="300"
++                    aria-label="Heading 1"
+                   >
+                     <Icon size="200" src={Icons.Heading1} />
+                   </IconButton>
+@@ -182,6 +183,7 @@
+                     onClick={() => handleMenuSelect(2)}
+                     size="400"
+                     radii="300"
++                    aria-label="Heading 2"
+                   >
+                     <Icon size="200" src={Icons.Heading2} />
+                   </IconButton>
+@@ -197,6 +199,7 @@
+                     onClick={() => handleMenuSelect(3)}
+                     size="400"
+                     radii="300"
++                    aria-label="Heading 3"
+                   >
+                     <Icon size="200" src={Icons.Heading3} />
+                   </IconButton>
+@@ -244,6 +247,7 @@
+           onClick={handleClick}
+           size="400"
+           radii="300"
++          aria-label="Exit formatting"
+         >
+           <Text size="B400">{`Exit ${KeySymbol.Hyper}`}</Text>
+         </IconButton>
+diff --git a/src/app/components/event-readers/EventReaders.tsx b/src/app/components/event-readers/EventReaders.tsx
+index c790023750..c9a495f349 100644
+--- a/src/app/components/event-readers/EventReaders.tsx
++++ b/src/app/components/event-readers/EventReaders.tsx
+@@ -52,7 +52,7 @@
+           <Box grow="Yes">
+             <Text size="H3">Seen by</Text>
+           </Box>
+-          <IconButton size="300" onClick={requestClose}>
++          <IconButton size="300" onClick={requestClose} aria-label="Close">
+             <Icon src={Icons.Cross} />
+           </IconButton>
+         </Header>
+diff --git a/src/app/components/image-editor/ImageEditor.tsx b/src/app/components/image-editor/ImageEditor.tsx
+index 1ec474e8b7..53e4662a4c 100644
+--- a/src/app/components/image-editor/ImageEditor.tsx
++++ b/src/app/components/image-editor/ImageEditor.tsx
+@@ -24,7 +24,7 @@
+       >
+         <Header className={css.ImageEditorHeader} size="400">
+           <Box grow="Yes" alignItems="Center" gap="200">
+-            <IconButton size="300" radii="300" onClick={requestClose}>
++            <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
+               <Icon size="50" src={Icons.ArrowLeft} />
+             </IconButton>
+             <Text size="T300" truncate>
+diff --git a/src/app/components/image-pack-view/ImagePackView.tsx b/src/app/components/image-pack-view/ImagePackView.tsx
+index ab81d5031a..fb0e189be4 100644
+--- a/src/app/components/image-pack-view/ImagePackView.tsx
++++ b/src/app/components/image-pack-view/ImagePackView.tsx
+@@ -29,7 +29,7 @@
+             </Chip>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/components/image-viewer/ImageViewer.tsx b/src/app/components/image-viewer/ImageViewer.tsx
+index 4956a7b6dd..fae5b0b931 100644
+--- a/src/app/components/image-viewer/ImageViewer.tsx
++++ b/src/app/components/image-viewer/ImageViewer.tsx
+@@ -33,7 +33,7 @@
+       >
+         <Header className={css.ImageViewerHeader} size="400">
+           <Box grow="Yes" alignItems="Center" gap="200">
+-            <IconButton size="300" radii="300" onClick={requestClose}>
++            <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
+               <Icon size="50" src={Icons.ArrowLeft} />
+             </IconButton>
+             <Text size="T300" truncate>
+diff --git a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
+index ddac0576ce..586d2904dd 100644
+--- a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
++++ b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
+@@ -173,7 +173,7 @@
+                   </Text>
+                 </Box>
+                 <Box shrink="No">
+-                  <IconButton size="300" radii="300" onClick={requestClose}>
++                  <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
+                     <Icon src={Icons.Cross} />
+                   </IconButton>
+                 </Box>
+diff --git a/src/app/components/join-address-prompt/JoinAddressPrompt.tsx b/src/app/components/join-address-prompt/JoinAddressPrompt.tsx
+index 50a89418e6..65140d943e 100644
+--- a/src/app/components/join-address-prompt/JoinAddressPrompt.tsx
++++ b/src/app/components/join-address-prompt/JoinAddressPrompt.tsx
+@@ -82,7 +82,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">Join with Address</Text>
+               </Box>
+-              <IconButton size="300" onClick={onCancel} radii="300">
++              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
 diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
 new file mode 100644
 index 0000000000..1a8cf1ebae
@@ -392,6 +618,44 @@ index 0000000000..1a8cf1ebae
 +    </Overlay>
 +  );
 +}
+diff --git a/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx b/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
+index 217491e689..94e3f47cbe 100644
+--- a/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
++++ b/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
+@@ -68,7 +68,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">Leave Room</Text>
+               </Box>
+-              <IconButton size="300" onClick={onCancel} radii="300">
++              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
+diff --git a/src/app/components/leave-space-prompt/LeaveSpacePrompt.tsx b/src/app/components/leave-space-prompt/LeaveSpacePrompt.tsx
+index 8709b942c7..966fc4f0ab 100644
+--- a/src/app/components/leave-space-prompt/LeaveSpacePrompt.tsx
++++ b/src/app/components/leave-space-prompt/LeaveSpacePrompt.tsx
+@@ -68,7 +68,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">Leave Space</Text>
+               </Box>
+-              <IconButton size="300" onClick={onCancel} radii="300">
++              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
+diff --git a/src/app/components/message/FileHeader.tsx b/src/app/components/message/FileHeader.tsx
+index 2ffc9ec456..0800d1cc95 100644
+--- a/src/app/components/message/FileHeader.tsx
++++ b/src/app/components/message/FileHeader.tsx
+@@ -48,6 +48,7 @@
+       variant={hasError ? 'Critical' : 'SurfaceVariant'}
+       size="300"
+       radii="300"
++      aria-label="Download file"
+     >
+       {downloading ? (
+         <Spinner size="100" variant={hasError ? 'Critical' : 'Secondary'} />
 diff --git a/src/app/components/message/Reply.tsx b/src/app/components/message/Reply.tsx
 index 57bf2af99a..91ef8aa9da 100644
 --- a/src/app/components/message/Reply.tsx
@@ -460,6 +724,328 @@ index 0000000000..7e3a46eb7c
 +    </div>
 +  );
 +}
+diff --git a/src/app/components/room-topic-viewer/RoomTopicViewer.tsx b/src/app/components/room-topic-viewer/RoomTopicViewer.tsx
+index 5212877222..c6eae43f41 100644
+--- a/src/app/components/room-topic-viewer/RoomTopicViewer.tsx
++++ b/src/app/components/room-topic-viewer/RoomTopicViewer.tsx
+@@ -26,7 +26,7 @@
+           {name}
+         </Text>
+       </Box>
+-      <IconButton size="300" onClick={requestClose} radii="300">
++      <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
+         <Icon src={Icons.Cross} />
+       </IconButton>
+     </Header>
+diff --git a/src/app/components/text-viewer/TextViewer.tsx b/src/app/components/text-viewer/TextViewer.tsx
+index ec4ed0a55c..d7e1e82765 100644
+--- a/src/app/components/text-viewer/TextViewer.tsx
++++ b/src/app/components/text-viewer/TextViewer.tsx
+@@ -53,7 +53,7 @@
+       >
+         <Header className={css.TextViewerHeader} size="400">
+           <Box grow="Yes" alignItems="Center" gap="200">
+-            <IconButton size="300" radii="300" onClick={requestClose}>
++            <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
+               <Icon size="50" src={Icons.ArrowLeft} />
+             </IconButton>
+             <Text size="T300" truncate>
+diff --git a/src/app/components/uia-stages/PasswordStage.tsx b/src/app/components/uia-stages/PasswordStage.tsx
+index 0164cae6f8..7523d5958c 100644
+--- a/src/app/components/uia-stages/PasswordStage.tsx
++++ b/src/app/components/uia-stages/PasswordStage.tsx
+@@ -45,7 +45,7 @@
+         <Box grow="Yes">
+           <Text size="H4">Account Password</Text>
+         </Box>
+-        <IconButton size="300" onClick={onCancel} radii="300">
++        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+           <Icon src={Icons.Cross} />
+         </IconButton>
+       </Header>
+diff --git a/src/app/components/uia-stages/SSOStage.tsx b/src/app/components/uia-stages/SSOStage.tsx
+index e3d6126a56..d42926c51b 100644
+--- a/src/app/components/uia-stages/SSOStage.tsx
++++ b/src/app/components/uia-stages/SSOStage.tsx
+@@ -56,7 +56,7 @@
+         <Box grow="Yes">
+           <Text size="H4">SSO Login</Text>
+         </Box>
+-        <IconButton size="300" onClick={onCancel} radii="300">
++        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+           <Icon src={Icons.Cross} />
+         </IconButton>
+       </Header>
+diff --git a/src/app/components/url-preview/UrlPreviewCard.tsx b/src/app/components/url-preview/UrlPreviewCard.tsx
+index cbe85df2ac..1d9b4dcc66 100644
+--- a/src/app/components/url-preview/UrlPreviewCard.tsx
++++ b/src/app/components/url-preview/UrlPreviewCard.tsx
+@@ -161,6 +161,7 @@
+                 size="300"
+                 outlined
+                 onClick={handleScrollBack}
++                aria-label="Scroll previews left"
+               >
+                 <Icon size="300" src={Icons.ArrowLeft} />
+               </IconButton>
+@@ -179,6 +180,7 @@
+                   size="300"
+                   outlined
+                   onClick={handleScrollFront}
++                  aria-label="Scroll previews right"
+                 >
+                   <Icon size="300" src={Icons.ArrowRight} />
+                 </IconButton>
+diff --git a/src/app/components/user-profile/PowerChip.tsx b/src/app/components/user-profile/PowerChip.tsx
+index a675830034..1b6095e0dd 100644
+--- a/src/app/components/user-profile/PowerChip.tsx
++++ b/src/app/components/user-profile/PowerChip.tsx
+@@ -70,7 +70,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">Self Demotion</Text>
+               </Box>
+-              <IconButton size="300" onClick={onCancel} radii="300">
++              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
+@@ -120,7 +120,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">Shared Power</Text>
+               </Box>
+-              <IconButton size="300" onClick={onCancel} radii="300">
++              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
+diff --git a/src/app/features/add-existing/AddExisting.tsx b/src/app/features/add-existing/AddExisting.tsx
+index cbae018f27..11e3e4e328 100644
+--- a/src/app/features/add-existing/AddExisting.tsx
++++ b/src/app/features/add-existing/AddExisting.tsx
+@@ -201,7 +201,7 @@
+                   <Text size="H4">Add Existing</Text>
+                 </Box>
+                 <Box shrink="No">
+-                  <IconButton size="300" radii="300" onClick={requestClose}>
++                  <IconButton size="300" radii="300" onClick={requestClose} aria-label="Close">
+                     <Icon src={Icons.Cross} />
+                   </IconButton>
+                 </Box>
+diff --git a/src/app/features/common-settings/developer-tools/DevelopTools.tsx b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
+index 4125f6d2b1..fc57ef91c2 100644
+--- a/src/app/features/common-settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
+@@ -93,7 +93,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/common-settings/developer-tools/SendRoomEvent.tsx b/src/app/features/common-settings/developer-tools/SendRoomEvent.tsx
+index f25ba7c363..4b28c95d99 100644
+--- a/src/app/features/common-settings/developer-tools/SendRoomEvent.tsx
++++ b/src/app/features/common-settings/developer-tools/SendRoomEvent.tsx
+@@ -118,7 +118,7 @@
+             </Chip>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/common-settings/developer-tools/StateEventEditor.tsx b/src/app/features/common-settings/developer-tools/StateEventEditor.tsx
+index 0ea96901c7..eaec74f378 100644
+--- a/src/app/features/common-settings/developer-tools/StateEventEditor.tsx
++++ b/src/app/features/common-settings/developer-tools/StateEventEditor.tsx
+@@ -275,7 +275,7 @@
+             </Chip>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/common-settings/emojis-stickers/EmojisStickers.tsx b/src/app/features/common-settings/emojis-stickers/EmojisStickers.tsx
+index ad8ffae689..c5250c5c41 100644
+--- a/src/app/features/common-settings/emojis-stickers/EmojisStickers.tsx
++++ b/src/app/features/common-settings/emojis-stickers/EmojisStickers.tsx
+@@ -29,7 +29,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx b/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx
+index fdbe546ee5..f0b42f7a62 100644
+--- a/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx
++++ b/src/app/features/common-settings/emojis-stickers/RoomPacks.tsx
+@@ -220,6 +220,7 @@
+                     variant="Critical"
+                     onClick={() => handleUndoRemove(address)}
+                     disabled={applyingChanges}
++                    aria-label="Undo remove pack"
+                   >
+                     <Icon src={Icons.Plus} size="100" />
+                   </IconButton>
+@@ -230,6 +231,7 @@
+                     variant="Secondary"
+                     onClick={() => handleRemove(address)}
+                     disabled={applyingChanges}
++                    aria-label="Remove pack"
+                   >
+                     <Icon src={Icons.Cross} size="100" />
+                   </IconButton>
+diff --git a/src/app/features/common-settings/general/RoomEncryption.tsx b/src/app/features/common-settings/general/RoomEncryption.tsx
+index 15b1f15680..8d7df50d3d 100644
+--- a/src/app/features/common-settings/general/RoomEncryption.tsx
++++ b/src/app/features/common-settings/general/RoomEncryption.tsx
+@@ -123,7 +123,7 @@
+                     <Box grow="Yes">
+                       <Text size="H4">Enable Encryption</Text>
+                     </Box>
+-                    <IconButton size="300" onClick={() => setPrompt(false)} radii="300">
++                    <IconButton size="300" onClick={() => setPrompt(false)} radii="300" aria-label="Close">
+                       <Icon src={Icons.Cross} />
+                     </IconButton>
+                   </Header>
+diff --git a/src/app/features/common-settings/general/RoomUpgrade.tsx b/src/app/features/common-settings/general/RoomUpgrade.tsx
+index 45a480aa31..754b5e6f40 100644
+--- a/src/app/features/common-settings/general/RoomUpgrade.tsx
++++ b/src/app/features/common-settings/general/RoomUpgrade.tsx
+@@ -105,7 +105,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">{room.isSpaceRoom() ? 'Space Upgrade' : 'Room Upgrade'}</Text>
+               </Box>
+-              <IconButton size="300" onClick={requestClose} radii="300">
++              <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
+diff --git a/src/app/features/common-settings/members/Members.tsx b/src/app/features/common-settings/members/Members.tsx
+index 15cd1d08ba..4b2289ca7e 100644
+--- a/src/app/features/common-settings/members/Members.tsx
++++ b/src/app/features/common-settings/members/Members.tsx
+@@ -161,7 +161,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/common-settings/permissions/PowersEditor.tsx b/src/app/features/common-settings/permissions/PowersEditor.tsx
+index 9730594692..66791b99b8 100644
+--- a/src/app/features/common-settings/permissions/PowersEditor.tsx
++++ b/src/app/features/common-settings/permissions/PowersEditor.tsx
+@@ -369,7 +369,7 @@
+             </Chip>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/create-room/CreateRoomModal.tsx b/src/app/features/create-room/CreateRoomModal.tsx
+index c9919ba91c..b4b4b33443 100644
+--- a/src/app/features/create-room/CreateRoomModal.tsx
++++ b/src/app/features/create-room/CreateRoomModal.tsx
+@@ -60,7 +60,7 @@
+                     <Text size="H4">New Room</Text>
+                   </Box>
+                   <Box shrink="No">
+-                    <IconButton size="300" radii="300" onClick={closeDialog}>
++                    <IconButton size="300" radii="300" onClick={closeDialog} aria-label="Close">
+                       <Icon src={Icons.Cross} />
+                     </IconButton>
+                   </Box>
+diff --git a/src/app/features/create-space/CreateSpaceModal.tsx b/src/app/features/create-space/CreateSpaceModal.tsx
+index c1bc6898f7..10a26a9ded 100644
+--- a/src/app/features/create-space/CreateSpaceModal.tsx
++++ b/src/app/features/create-space/CreateSpaceModal.tsx
+@@ -61,7 +61,7 @@
+                     <Text size="H4">New Space</Text>
+                   </Box>
+                   <Box shrink="No">
+-                    <IconButton size="300" radii="300" onClick={closeDialog}>
++                    <IconButton size="300" radii="300" onClick={closeDialog} aria-label="Close">
+                       <Icon src={Icons.Cross} />
+                     </IconButton>
+                   </Box>
+diff --git a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
+index 1bc74540c2..31a230fd97 100644
+--- a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
++++ b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
+@@ -89,7 +89,7 @@
+             {screenSize === ScreenSize.Mobile && (
+               <BackRouteHandler>
+                 {(onBack) => (
+-                  <IconButton onClick={onBack}>
++                  <IconButton onClick={onBack} aria-label="Go back">
+                     <Icon src={Icons.ArrowLeft} />
+                   </IconButton>
+                 )}
+diff --git a/src/app/features/lobby/LobbyHeader.tsx b/src/app/features/lobby/LobbyHeader.tsx
+index a0c4d3ab42..8baaa73536 100644
+--- a/src/app/features/lobby/LobbyHeader.tsx
++++ b/src/app/features/lobby/LobbyHeader.tsx
+@@ -165,7 +165,7 @@
+             <Box shrink="No">
+               <BackRouteHandler>
+                 {(onBack) => (
+-                  <IconButton onClick={onBack}>
++                  <IconButton onClick={onBack} aria-label="Go back">
+                     <Icon src={Icons.ArrowLeft} />
+                   </IconButton>
+                 )}
+@@ -173,7 +173,7 @@
+             </Box>
+             <Box grow="Yes" justifyContent="Center">
+               {showProfile && (
+-                <Text size="H3" truncate>
++                <Text as="h1" size="H3" truncate>
+                   {name}
+                 </Text>
+               )}
+@@ -193,7 +193,7 @@
+                       renderFallback={() => <Text size="H4">{nameInitials(name)}</Text>}
+                     />
+                   </Avatar>
+-                  <Text size="H3" truncate>
++                  <Text as="h1" size="H3" truncate>
+                     {name}
+                   </Text>
+                 </>
+@@ -218,7 +218,7 @@
+               }
+             >
+               {(triggerRef) => (
+-                <IconButton ref={triggerRef} onClick={() => setPeopleDrawer((drawer) => !drawer)}>
++                <IconButton ref={triggerRef} onClick={() => setPeopleDrawer((drawer) => !drawer)} aria-label="Members">
+                   <Icon size="400" src={Icons.User} />
+                 </IconButton>
+               )}
+diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
+index d9205076b2..a14c41d9c8 100644
+--- a/src/app/features/room/MembersDrawer.tsx
++++ b/src/app/features/room/MembersDrawer.tsx
+@@ -90,6 +90,7 @@
+                 ref={triggerRef}
+                 variant="Background"
+                 onClick={() => setPeopleDrawer(false)}
++                aria-label="Close"
+               >
+                 <Icon src={Icons.Cross} />
+               </IconButton>
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
 index 20dca577a0..a2a09dd692 100644
 --- a/src/app/features/room/RoomInput.tsx
@@ -548,8 +1134,34 @@ index 5a96e6ad47..1bdbc67ef9 100644
            className={classNames(css.RoomViewFollowing({ clickable: names.length > 0 }), className)}
            alignItems="Center"
            justifyContent="End"
+diff --git a/src/app/features/room/RoomViewTyping.tsx b/src/app/features/room/RoomViewTyping.tsx
+index 1142a3a814..8fffe3acbe 100644
+--- a/src/app/features/room/RoomViewTyping.tsx
++++ b/src/app/features/room/RoomViewTyping.tsx
+@@ -111,7 +111,7 @@
+               </>
+             )}
+           </Text>
+-          <IconButton title="Drop Typing Status" size="300" radii="Pill" onClick={handleDropAll}>
++          <IconButton title="Drop Typing Status" aria-label="Drop typing status" size="300" radii="Pill" onClick={handleDropAll}>
+             <Icon size="50" src={Icons.Cross} />
+           </IconButton>
+         </Box>
+diff --git a/src/app/features/room/jump-to-time/JumpToTime.tsx b/src/app/features/room/jump-to-time/JumpToTime.tsx
+index 223c6cf69f..26fb89069f 100644
+--- a/src/app/features/room/jump-to-time/JumpToTime.tsx
++++ b/src/app/features/room/jump-to-time/JumpToTime.tsx
+@@ -108,7 +108,7 @@
+               <Box grow="Yes">
+                 <Text size="H4">Jump to Time</Text>
+               </Box>
+-              <IconButton size="300" onClick={onCancel} radii="300">
++              <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} />
+               </IconButton>
+             </Header>
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c29d..b983000cf4 100644
+index 9324e1c29d..e7dc39732d 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -79,6 +79,8 @@
@@ -561,6 +1173,24 @@ index 9324e1c29d..b983000cf4 100644
  
  export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
  
+@@ -454,7 +456,7 @@
+                 <Box grow="Yes">
+                   <Text size="H4">Delete Message</Text>
+                 </Box>
+-                <IconButton size="300" onClick={handleClose} radii="300">
++                <IconButton size="300" onClick={handleClose} radii="300" aria-label="Close">
+                   <Icon src={Icons.Cross} />
+                 </IconButton>
+               </Header>
+@@ -584,7 +586,7 @@
+                 <Box grow="Yes">
+                   <Text size="H4">Report Message</Text>
+                 </Box>
+-                <IconButton size="300" onClick={handleClose} radii="300">
++                <IconButton size="300" onClick={handleClose} radii="300" aria-label="Close">
+                   <Icon src={Icons.Cross} />
+                 </IconButton>
+               </Header>
 @@ -723,6 +725,7 @@
      const mx = useMatrixClient();
      const useAuthentication = useMediaAuthentication();
@@ -732,6 +1362,92 @@ index 9324e1c29d..b983000cf4 100644
                      aria-pressed={!!menuAnchor}
                    >
                      <Icon src={Icons.VerticalDots} size="100" />
+diff --git a/src/app/features/room/message/MessageEditor.tsx b/src/app/features/room/message/MessageEditor.tsx
+index 9a7567aacb..7a205992af 100644
+--- a/src/app/features/room/message/MessageEditor.tsx
++++ b/src/app/features/room/message/MessageEditor.tsx
+@@ -293,6 +293,8 @@
+                     size="300"
+                     radii="300"
+                     onClick={() => setToolbar(!toolbar)}
++                    aria-label="Toggle formatting toolbar"
++                    aria-pressed={toolbar}
+                   >
+                     <Icon size="400" src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
+                   </IconButton>
+diff --git a/src/app/features/room/reaction-viewer/ReactionViewer.tsx b/src/app/features/room/reaction-viewer/ReactionViewer.tsx
+index 6c686bc569..8546dd67b5 100644
+--- a/src/app/features/room/reaction-viewer/ReactionViewer.tsx
++++ b/src/app/features/room/reaction-viewer/ReactionViewer.tsx
+@@ -100,7 +100,7 @@
+             <Box grow="Yes">
+               <Text size="H3" truncate>{`Reacted with :${selectedShortcode}:`}</Text>
+             </Box>
+-            <IconButton size="300" onClick={requestClose}>
++            <IconButton size="300" onClick={requestClose} aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Header>
+diff --git a/src/app/features/room/room-pin-menu/RoomPinMenu.tsx b/src/app/features/room/room-pin-menu/RoomPinMenu.tsx
+index 9986849f4a..8718c0c253 100644
+--- a/src/app/features/room/room-pin-menu/RoomPinMenu.tsx
++++ b/src/app/features/room/room-pin-menu/RoomPinMenu.tsx
+@@ -152,6 +152,7 @@
+           radii="Pill"
+           onClick={unpinState.status === AsyncStatus.Loading ? undefined : handleUnpinClick}
+           aria-disabled={unpinState.status === AsyncStatus.Loading}
++          aria-label="Unpin"
+         >
+           {unpinState.status === AsyncStatus.Loading ? (
+             <Spinner size="100" />
+@@ -457,7 +458,7 @@
+               <Text size="H5">Pinned Messages</Text>
+             </Box>
+             <Box shrink="No">
+-              <IconButton size="300" onClick={requestClose} radii="300">
++              <IconButton size="300" onClick={requestClose} radii="300" aria-label="Close">
+                 <Icon src={Icons.Cross} size="400" />
+               </IconButton>
+             </Box>
+diff --git a/src/app/features/room-settings/RoomSettings.tsx b/src/app/features/room-settings/RoomSettings.tsx
+index 32b5df9c68..cf0ca96388 100644
+--- a/src/app/features/room-settings/RoomSettings.tsx
++++ b/src/app/features/room-settings/RoomSettings.tsx
+@@ -116,7 +116,7 @@
+               </Box>
+               <Box shrink="No">
+                 {screenSize === ScreenSize.Mobile && (
+-                  <IconButton onClick={requestClose} variant="Background">
++                  <IconButton onClick={requestClose} variant="Background" aria-label="Close">
+                     <Icon src={Icons.Cross} />
+                   </IconButton>
+                 )}
+diff --git a/src/app/features/room-settings/general/General.tsx b/src/app/features/room-settings/general/General.tsx
+index 1515730433..62916bc415 100644
+--- a/src/app/features/room-settings/general/General.tsx
++++ b/src/app/features/room-settings/general/General.tsx
+@@ -35,7 +35,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/room-settings/permissions/Permissions.tsx b/src/app/features/room-settings/permissions/Permissions.tsx
+index 7572a71bf4..83c75791ca 100644
+--- a/src/app/features/room-settings/permissions/Permissions.tsx
++++ b/src/app/features/room-settings/permissions/Permissions.tsx
+@@ -45,7 +45,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
 diff --git a/src/app/features/search/Search.tsx b/src/app/features/search/Search.tsx
 index fcd6233a28..68f7c1c008 100644
 --- a/src/app/features/search/Search.tsx
@@ -829,6 +1545,19 @@ index fcd6233a28..68f7c1c008 100644
                            radii="400"
                            after={
                              <Box gap="100">
+diff --git a/src/app/features/settings/Settings.tsx b/src/app/features/settings/Settings.tsx
+index fc8e1a7ffc..dd3d067877 100644
+--- a/src/app/features/settings/Settings.tsx
++++ b/src/app/features/settings/Settings.tsx
+@@ -139,7 +139,7 @@
+               </Box>
+               <Box shrink="No">
+                 {screenSize === ScreenSize.Mobile && (
+-                  <IconButton onClick={requestClose} variant="Background">
++                  <IconButton onClick={requestClose} variant="Background" aria-label="Close">
+                     <Icon src={Icons.Cross} />
+                   </IconButton>
+                 )}
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
 index d31d673f0b..f29cda39ad 100644
 --- a/src/app/features/settings/about/About.tsx
@@ -868,7 +1597,7 @@ index 98db9459a1..850ef8efb3 100644
                  <Icon src={Icons.Cross} size="100" />
                </IconButton>
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index 491a78d7fd..00db376b73 100644
+index f7a67a1cea..9dd480f038 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -182,6 +182,7 @@
@@ -905,11 +1634,52 @@ index c957ab3184..22a46f396b 100644
                <Icon src={Icons.Cross} />
              </IconButton>
            </Box>
+diff --git a/src/app/features/settings/emojis-stickers/EmojisStickers.tsx b/src/app/features/settings/emojis-stickers/EmojisStickers.tsx
+index 93715120cf..85762b4f65 100644
+--- a/src/app/features/settings/emojis-stickers/EmojisStickers.tsx
++++ b/src/app/features/settings/emojis-stickers/EmojisStickers.tsx
+@@ -30,7 +30,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/settings/emojis-stickers/GlobalPacks.tsx b/src/app/features/settings/emojis-stickers/GlobalPacks.tsx
+index a9288728fe..d9c1d54f84 100644
+--- a/src/app/features/settings/emojis-stickers/GlobalPacks.tsx
++++ b/src/app/features/settings/emojis-stickers/GlobalPacks.tsx
+@@ -373,6 +373,7 @@
+                   variant="Critical"
+                   onClick={() => handleUndoRemove(address)}
+                   disabled={applyingChanges}
++                  aria-label="Undo remove"
+                 >
+                   <Icon src={Icons.Plus} size="100" />
+                 </IconButton>
+@@ -383,6 +384,7 @@
+                   variant="Secondary"
+                   onClick={() => handleRemove(address)}
+                   disabled={applyingChanges}
++                  aria-label="Remove"
+                 >
+                   <Icon src={Icons.Cross} size="100" />
+                 </IconButton>
 diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
-index be2f204e19..a0f3bf3940 100644
+index be2f204e19..bf1567c485 100644
 --- a/src/app/features/settings/general/General.tsx
 +++ b/src/app/features/settings/general/General.tsx
-@@ -601,6 +601,7 @@
+@@ -590,6 +590,7 @@
+           variant="Secondary"
+           size="300"
+           radii="300"
++          aria-label="Reset date format"
+         >
+           <Icon src={Icons.Cross} size="100" />
+         </IconButton>
+@@ -601,6 +602,7 @@
            variant="Secondary"
            size="300"
            radii="300"
@@ -917,11 +1687,60 @@ index be2f204e19..a0f3bf3940 100644
            aria-pressed={!!anchor}
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
+@@ -1076,12 +1078,12 @@
+       <PageHeader outlined={false}>
+         <Box grow="Yes" gap="200">
+           <Box grow="Yes" alignItems="Center" gap="200">
+-            <Text size="H3" truncate>
++            <Text as="h1" size="H3" truncate>
+               General
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/settings/notifications/KeywordMessages.tsx b/src/app/features/settings/notifications/KeywordMessages.tsx
+index 7f84d607f9..dcbe7209ad 100644
+--- a/src/app/features/settings/notifications/KeywordMessages.tsx
++++ b/src/app/features/settings/notifications/KeywordMessages.tsx
+@@ -80,6 +80,7 @@
+                 size="300"
+                 radii="300"
+                 variant="Secondary"
++                aria-label="Clear keyword"
+               >
+                 <Icon src={Icons.Cross} size="100" />
+               </IconButton>
+@@ -118,7 +119,7 @@
+ 
+   const removing = removeState.status === AsyncStatus.Loading;
+   return (
+-    <IconButton onClick={remove} size="300" radii="Pill" variant="Secondary" disabled={removing}>
++    <IconButton onClick={remove} size="300" radii="Pill" variant="Secondary" disabled={removing} aria-label="Remove keyword">
+       {removing ? <Spinner size="100" /> : <Icon src={Icons.Cross} size="100" />}
+     </IconButton>
+   );
+diff --git a/src/app/features/settings/notifications/Notifications.tsx b/src/app/features/settings/notifications/Notifications.tsx
+index 095a9bba91..e7caae92e6 100644
+--- a/src/app/features/settings/notifications/Notifications.tsx
++++ b/src/app/features/settings/notifications/Notifications.tsx
+@@ -23,7 +23,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index cb7f29bd4e..0c8590871e 100644
+index 24517f8a5c..5454dcf057 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
-@@ -202,6 +202,15 @@
+@@ -204,6 +204,15 @@
      settingsAtom,
      'isNotificationSounds'
    );
@@ -937,7 +1756,7 @@ index cb7f29bd4e..0c8590871e 100644
  
    const requestNotificationPermission = () => {
      window.Notification.requestPermission();
-@@ -252,9 +261,14 @@
+@@ -254,9 +263,14 @@
        >
          <SettingTile
            title="Notification Sound"
@@ -953,6 +1772,45 @@ index cb7f29bd4e..0c8590871e 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
+diff --git a/src/app/features/space-settings/SpaceSettings.tsx b/src/app/features/space-settings/SpaceSettings.tsx
+index e565fb92cf..804287444a 100644
+--- a/src/app/features/space-settings/SpaceSettings.tsx
++++ b/src/app/features/space-settings/SpaceSettings.tsx
+@@ -117,7 +117,7 @@
+               </Box>
+               <Box shrink="No">
+                 {screenSize === ScreenSize.Mobile && (
+-                  <IconButton onClick={requestClose} variant="Background">
++                  <IconButton onClick={requestClose} variant="Background" aria-label="Close">
+                     <Icon src={Icons.Cross} />
+                   </IconButton>
+                 )}
+diff --git a/src/app/features/space-settings/general/General.tsx b/src/app/features/space-settings/general/General.tsx
+index 720406321e..934858a80e 100644
+--- a/src/app/features/space-settings/general/General.tsx
++++ b/src/app/features/space-settings/general/General.tsx
+@@ -33,7 +33,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/space-settings/permissions/Permissions.tsx b/src/app/features/space-settings/permissions/Permissions.tsx
+index 7572a71bf4..83c75791ca 100644
+--- a/src/app/features/space-settings/permissions/Permissions.tsx
++++ b/src/app/features/space-settings/permissions/Permissions.tsx
+@@ -45,7 +45,7 @@
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
 diff --git a/src/app/hooks/useAsyncSearch.ts b/src/app/hooks/useAsyncSearch.ts
 index 3852d3b97e..6c96e46306 100644
 --- a/src/app/hooks/useAsyncSearch.ts
@@ -1693,6 +2551,19 @@ index 23bd48e644..5a569bc213 100644
        {children}
      </>
    );
+diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
+index e630f9fb50..aa991672b8 100644
+--- a/src/app/pages/client/ClientRoot.tsx
++++ b/src/app/pages/client/ClientRoot.tsx
+@@ -92,6 +92,8 @@
+       variant="Background"
+       fill="None"
+       onClick={handleToggle}
++      aria-label="More options"
++      aria-pressed={!!menuAnchor}
+     >
+       <Icon size="200" src={Icons.VerticalDots} />
+       <PopOut
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
 index b3f419d805..f2a197756d 100644
 --- a/src/app/pages/client/SidebarNav.tsx
@@ -1847,6 +2718,101 @@ index ad731f6fbc..623488a862 100644
              </NavCategory>
            </Box>
          </PageNavContent>
+diff --git a/src/app/pages/client/direct/DirectCreate.tsx b/src/app/pages/client/direct/DirectCreate.tsx
+index 3deb0b6dd2..39523ac773 100644
+--- a/src/app/pages/client/direct/DirectCreate.tsx
++++ b/src/app/pages/client/direct/DirectCreate.tsx
+@@ -44,7 +44,7 @@
+           <Box grow="Yes" alignItems="Center" gap="200">
+             <BackRouteHandler>
+               {(onBack) => (
+-                <IconButton onClick={onBack}>
++                <IconButton onClick={onBack} aria-label="Go back">
+                   <Icon src={Icons.ArrowLeft} />
+                 </IconButton>
+               )}
+diff --git a/src/app/pages/client/explore/Explore.tsx b/src/app/pages/client/explore/Explore.tsx
+index dae8316687..24036be0c9 100644
+--- a/src/app/pages/client/explore/Explore.tsx
++++ b/src/app/pages/client/explore/Explore.tsx
+@@ -96,7 +96,7 @@
+                 <Box grow="Yes">
+                   <Text size="H4">Add Server</Text>
+                 </Box>
+-                <IconButton size="300" onClick={() => setDialog(false)} radii="300">
++                <IconButton size="300" onClick={() => setDialog(false)} radii="300" aria-label="Close">
+                   <Icon src={Icons.Cross} />
+                 </IconButton>
+               </Header>
+diff --git a/src/app/pages/client/explore/Featured.tsx b/src/app/pages/client/explore/Featured.tsx
+index f056cbb5cd..3bfb5e5093 100644
+--- a/src/app/pages/client/explore/Featured.tsx
++++ b/src/app/pages/client/explore/Featured.tsx
+@@ -33,7 +33,7 @@
+           <Box shrink="No">
+             <BackRouteHandler>
+               {(onBack) => (
+-                <IconButton onClick={onBack}>
++                <IconButton onClick={onBack} aria-label="Go back">
+                   <Icon src={Icons.ArrowLeft} />
+                 </IconButton>
+               )}
+diff --git a/src/app/pages/client/explore/Server.tsx b/src/app/pages/client/explore/Server.tsx
+index 48f267ccdd..fab17c8bda 100644
+--- a/src/app/pages/client/explore/Server.tsx
++++ b/src/app/pages/client/explore/Server.tsx
+@@ -487,7 +487,7 @@
+ 
+             <Box grow="No" justifyContent="Center" alignItems="Center" gap="200">
+               {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Search} />}
+-              <Text size="H3" truncate>
++              <Text as="h1" size="H3" truncate>
+                 Search
+               </Text>
+             </Box>
+@@ -499,7 +499,7 @@
+               {screenSize === ScreenSize.Mobile && (
+                 <BackRouteHandler>
+                   {(onBack) => (
+-                    <IconButton onClick={onBack}>
++                    <IconButton onClick={onBack} aria-label="Go back">
+                       <Icon src={Icons.ArrowLeft} />
+                     </IconButton>
+                   )}
+@@ -508,7 +508,7 @@
+             </Box>
+             <Box grow="Yes" justifyContent="Center" alignItems="Center" gap="200">
+               {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Server} />}
+-              <Text size="H3" truncate>
++              <Text as="h1" size="H3" truncate>
+                 {server}
+               </Text>
+             </Box>
+@@ -532,9 +532,9 @@
+                 <Box direction="Column" gap="400">
+                   <Box direction="Column" gap="300">
+                     {isSearch ? (
+-                      <Text size="H4">{`Results for "${serverSearchParams.term}"`}</Text>
++                      <Text as="h2" size="H4">{`Results for "${serverSearchParams.term}"`}</Text>
+                     ) : (
+-                      <Text size="H4">Popular Communities</Text>
++                      <Text as="h2" size="H4">Popular Communities</Text>
+                     )}
+                     <Box gap="200">
+                       {roomTypeFilters.map((filter) => (
+diff --git a/src/app/pages/client/home/CreateRoom.tsx b/src/app/pages/client/home/CreateRoom.tsx
+index fddd75aac1..56d09e6392 100644
+--- a/src/app/pages/client/home/CreateRoom.tsx
++++ b/src/app/pages/client/home/CreateRoom.tsx
+@@ -25,7 +25,7 @@
+           <Box grow="Yes" alignItems="Center" gap="200">
+             <BackRouteHandler>
+               {(onBack) => (
+-                <IconButton onClick={onBack}>
++                <IconButton onClick={onBack} aria-label="Go back">
+                   <Icon src={Icons.ArrowLeft} />
+                 </IconButton>
+               )}
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
 index 3b3e208fe0..cb9e44212b 100644
 --- a/src/app/pages/client/home/Home.tsx
@@ -1946,6 +2912,81 @@ index 3b3e208fe0..cb9e44212b 100644
              </NavCategory>
            </Box>
          </PageNavContent>
+diff --git a/src/app/pages/client/home/Search.tsx b/src/app/pages/client/home/Search.tsx
+index d5ddfb778a..b90605d217 100644
+--- a/src/app/pages/client/home/Search.tsx
++++ b/src/app/pages/client/home/Search.tsx
+@@ -19,7 +19,7 @@
+             {screenSize === ScreenSize.Mobile && (
+               <BackRouteHandler>
+                 {(onBack) => (
+-                  <IconButton onClick={onBack}>
++                  <IconButton onClick={onBack} aria-label="Go back">
+                     <Icon src={Icons.ArrowLeft} />
+                   </IconButton>
+                 )}
+diff --git a/src/app/pages/client/inbox/Invites.tsx b/src/app/pages/client/inbox/Invites.tsx
+index 20518e5686..2ea426dcb0 100644
+--- a/src/app/pages/client/inbox/Invites.tsx
++++ b/src/app/pages/client/inbox/Invites.tsx
+@@ -429,7 +429,7 @@
+ }: KnownInvitesProps) {
+   return (
+     <Box direction="Column" gap="200">
+-      <Text size="H4">Primary</Text>
++      <Text as="h2" size="H4">Primary</Text>
+       {invites.length > 0 ? (
+         <Box direction="Column" gap="100">
+           {invites.map((invite) => (
+@@ -488,7 +488,7 @@
+   return (
+     <Box direction="Column" gap="200">
+       <Box gap="200" justifyContent="SpaceBetween" alignItems="Center">
+-        <Text size="H4">Public</Text>
++        <Text as="h2" size="H4">Public</Text>
+         <Box>
+           {invites.length > 0 && (
+             <Chip
+@@ -585,7 +585,7 @@
+ 
+   return (
+     <Box direction="Column" gap="200">
+-      <Text size="H4">Spam</Text>
++      <Text as="h2" size="H4">Spam</Text>
+       {invites.length > 0 ? (
+         <Box direction="Column" gap="100">
+           <SequenceCard
+@@ -753,7 +753,7 @@
+             {screenSize === ScreenSize.Mobile && (
+               <BackRouteHandler>
+                 {(onBack) => (
+-                  <IconButton onClick={onBack}>
++                  <IconButton onClick={onBack} aria-label="Go back">
+                     <Icon src={Icons.ArrowLeft} />
+                   </IconButton>
+                 )}
+@@ -762,7 +762,7 @@
+           </Box>
+           <Box alignItems="Center" gap="200">
+             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Mail} />}
+-            <Text size="H3" truncate>
++            <Text as="h1" size="H3" truncate>
+               Invites
+             </Text>
+           </Box>
+diff --git a/src/app/pages/client/inbox/Notifications.tsx b/src/app/pages/client/inbox/Notifications.tsx
+index 50fd9d99b6..1fc9c10f25 100644
+--- a/src/app/pages/client/inbox/Notifications.tsx
++++ b/src/app/pages/client/inbox/Notifications.tsx
+@@ -649,7 +649,7 @@
+             {screenSize === ScreenSize.Mobile && (
+               <BackRouteHandler>
+                 {(onBack) => (
+-                  <IconButton onClick={onBack}>
++                  <IconButton onClick={onBack} aria-label="Go back">
+                     <Icon src={Icons.ArrowLeft} />
+                   </IconButton>
+                 )}
 diff --git a/src/app/pages/client/sidebar/CreateTab.tsx b/src/app/pages/client/sidebar/CreateTab.tsx
 index e6575cb438..2c4907b00d 100644
 --- a/src/app/pages/client/sidebar/CreateTab.tsx
@@ -2090,6 +3131,19 @@ index 6fc528a106..0d7474b72c 100644
                  {folder.content.map((sId) => {
                    const space = mx.getRoom(sId);
                    if (!space) return null;
+diff --git a/src/app/pages/client/space/Search.tsx b/src/app/pages/client/space/Search.tsx
+index 017262b5b8..cfbc54856d 100644
+--- a/src/app/pages/client/space/Search.tsx
++++ b/src/app/pages/client/space/Search.tsx
+@@ -34,7 +34,7 @@
+             {screenSize === ScreenSize.Mobile && (
+               <BackRouteHandler>
+                 {(onBack) => (
+-                  <IconButton onClick={onBack}>
++                  <IconButton onClick={onBack} aria-label="Go back">
+                     <Icon src={Icons.ArrowLeft} />
+                   </IconButton>
+                 )}
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
 index de59149cb8..41b6613817 100644
 --- a/src/app/pages/client/space/Space.tsx
