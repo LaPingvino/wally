@@ -3928,27 +3928,19 @@ index 0000000000..967956474b
 +  );
 +}
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df91..fe87f4669e 100644
+index e0df06df91..cb7f29bd4e 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
 -import React, { useCallback } from 'react';
 -import { Box, Text, Switch, Button, color, Spinner } from 'folds';
-+import React, { MouseEventHandler, useCallback, useEffect, useState } from 'react';
-+import { Box, Text, Switch, Button, color, Spinner, Icon, IconButton, Icons, Menu, MenuItem, PopOut, RectCords, as, config } from 'folds';
-+import FocusTrap from 'focus-trap-react';
++import React, { useCallback, useEffect, useState } from 'react';
++import { Box, Text, Switch, color, Spinner, Icon, IconButton, Icons, config } from 'folds';
++
  import { IPusherRequest } from 'matrix-js-sdk';
  import { SequenceCard } from '../../../components/sequence-card';
  import { SequenceCardStyle } from '../styles.css';
-@@ -10,6 +11,7 @@
- import { useEmailNotifications } from '../../../hooks/useEmailNotifications';
- import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
- import { useMatrixClient } from '../../../hooks/useMatrixClient';
-+import { stopPropagation } from '../../../utils/keyboard';
- 
- function EmailNotification() {
-   const mx = useMatrixClient();
-@@ -84,6 +86,239 @@
+@@ -84,6 +85,116 @@
    );
  }
  
@@ -3960,30 +3952,6 @@ index e0df06df91..fe87f4669e 100644
 +  all: 'All rooms',
 +};
 +
-+type CallRingScopeMenuProps = {
-+  scopes: CallRingScope[];
-+  selected: CallRingScope;
-+  onSelect: (scope: CallRingScope) => void;
-+};
-+const CallRingScopeMenu = as<'div', CallRingScopeMenuProps>(
-+  ({ scopes, selected, onSelect, ...props }, ref) => (
-+    <Menu {...props} ref={ref}>
-+      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-+        {scopes.map((scope) => (
-+          <MenuItem
-+            key={scope}
-+            size="300"
-+            variant={scope === selected ? 'Primary' : 'Surface'}
-+            radii="300"
-+            onClick={() => onSelect(scope)}
-+          >
-+            <Text size="T300">{CALL_RING_SCOPE_LABELS[scope]}</Text>
-+          </MenuItem>
-+        ))}
-+      </Box>
-+    </Menu>
-+  )
-+);
 +
 +function RingtoneUrlInput() {
 +  const [callRingtoneUrl, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
@@ -4046,149 +4014,50 @@ index e0df06df91..fe87f4669e 100644
 +  { value: 600, label: '10 minutes' },
 +];
 +
-+function BatchDelayMenu({
-+  selected,
-+  onSelect,
-+}: {
-+  selected: number;
-+  onSelect: (v: number) => void;
-+}) {
-+  return (
-+    <Menu>
-+      {BATCH_DELAY_OPTIONS.map((opt) => (
-+        <MenuItem
-+          key={opt.value}
-+          variant="Surface"
-+          radii="300"
-+          aria-selected={selected === opt.value}
-+          onClick={() => onSelect(opt.value)}
-+        >
-+          <Text size="T300">{opt.label}</Text>
-+        </MenuItem>
-+      ))}
-+    </Menu>
-+  );
-+}
++const selectStyle: React.CSSProperties = {
++  padding: `2px ${config.space.S200}`,
++  borderRadius: config.radii.R300,
++  border: `1px solid ${color.Surface.ContainerLine}`,
++  background: color.Surface.Container,
++  color: 'inherit',
++  font: 'inherit',
++  fontSize: '0.85em',
++};
 +
 +function SelectBatchDelay() {
 +  const [batchDelay, setBatchDelay] = useSetting(settingsAtom, 'inboxNotifBatchDelay');
-+  const [menuCords, setMenuCords] = useState<RectCords>();
-+
-+  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
-+    setMenuCords(evt.currentTarget.getBoundingClientRect());
-+  };
-+
-+  const handleSelect = (v: number) => {
-+    setBatchDelay(v);
-+    setMenuCords(undefined);
-+  };
-+
-+  const currentLabel =
-+    BATCH_DELAY_OPTIONS.find((o) => o.value === (batchDelay ?? 60))?.label ?? '1 minute';
-+
 +  return (
-+    <>
-+      <Button
-+        size="300"
-+        variant="Primary"
-+        outlined
-+        fill="Soft"
-+        radii="300"
-+        after={<Icon size="300" src={Icons.ChevronBottom} />}
-+        onClick={handleMenu}
-+      >
-+        <Text size="T300">{currentLabel}</Text>
-+      </Button>
-+      <PopOut
-+        anchor={menuCords}
-+        offset={5}
-+        position="Bottom"
-+        align="End"
-+        content={
-+          <FocusTrap
-+            focusTrapOptions={{
-+              initialFocus: false,
-+              onDeactivate: () => setMenuCords(undefined),
-+              clickOutsideDeactivates: true,
-+              isKeyForward: (evt: KeyboardEvent) =>
-+                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
-+              isKeyBackward: (evt: KeyboardEvent) =>
-+                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
-+              escapeDeactivates: stopPropagation,
-+              tabbableOptions: { iFrameSelector: '' },
-+            }}
-+          >
-+            <BatchDelayMenu selected={batchDelay ?? 60} onSelect={handleSelect} />
-+          </FocusTrap>
-+        }
-+      />
-+    </>
++    <select
++      style={selectStyle}
++      value={batchDelay ?? 60}
++      onChange={(e) => setBatchDelay(Number(e.target.value))}
++    >
++      {BATCH_DELAY_OPTIONS.map((opt) => (
++        <option key={opt.value} value={opt.value}>{opt.label}</option>
++      ))}
++    </select>
 +  );
 +}
 +
 +function SelectCallRingScope() {
 +  const [callRingScope, setCallRingScope] = useSetting(settingsAtom, 'callRingScope');
-+  const [menuCords, setMenuCords] = useState<RectCords>();
-+
-+  const scopes: CallRingScope[] = ['dm', 'nonVoice', 'all'];
-+
-+  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
-+    setMenuCords(evt.currentTarget.getBoundingClientRect());
-+  };
-+
-+  const handleSelect = (scope: CallRingScope) => {
-+    setCallRingScope(scope);
-+    setMenuCords(undefined);
-+  };
-+
 +  return (
-+    <>
-+      <Button
-+        size="300"
-+        variant="Primary"
-+        outlined
-+        fill="Soft"
-+        radii="300"
-+        after={<Icon size="300" src={Icons.ChevronBottom} />}
-+        onClick={handleMenu}
-+      >
-+        <Text size="T300">{CALL_RING_SCOPE_LABELS[callRingScope ?? 'nonVoice']}</Text>
-+      </Button>
-+      <PopOut
-+        anchor={menuCords}
-+        offset={5}
-+        position="Bottom"
-+        align="End"
-+        content={
-+          <FocusTrap
-+            focusTrapOptions={{
-+              initialFocus: false,
-+              onDeactivate: () => setMenuCords(undefined),
-+              clickOutsideDeactivates: true,
-+              isKeyForward: (evt: KeyboardEvent) =>
-+                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
-+              isKeyBackward: (evt: KeyboardEvent) =>
-+                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
-+              escapeDeactivates: stopPropagation,
-+              tabbableOptions: { iFrameSelector: '' },
-+            }}
-+          >
-+            <CallRingScopeMenu
-+              scopes={scopes}
-+              selected={callRingScope ?? 'nonVoice'}
-+              onSelect={handleSelect}
-+            />
-+          </FocusTrap>
-+        }
-+      />
-+    </>
++    <select
++      style={selectStyle}
++      value={callRingScope ?? 'nonVoice'}
++      onChange={(e) => setCallRingScope(e.target.value as CallRingScope)}
++    >
++      {(Object.entries(CALL_RING_SCOPE_LABELS) as [CallRingScope, string][]).map(([val, label]) => (
++        <option key={val} value={val}>{label}</option>
++      ))}
++    </select>
 +  );
 +}
 +
  export function SystemNotification() {
    const notifPermission = usePermissionState('notifications', getNotificationState());
    const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
-@@ -151,6 +386,70 @@
+@@ -151,6 +262,70 @@
          direction="Column"
          gap="400"
        >
