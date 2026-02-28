@@ -234,6 +234,67 @@ index d0a45c3d96..467de37e48 100644
    };
  
    if (data.type === RoomType.Space) {
+diff --git a/src/app/components/message/content/AudioContent.tsx b/src/app/components/message/content/AudioContent.tsx
+index 478486a4bd..0c8470a44c 100644
+--- a/src/app/components/message/content/AudioContent.tsx
++++ b/src/app/components/message/content/AudioContent.tsx
+@@ -1,6 +1,8 @@
+ /* eslint-disable jsx-a11y/media-has-caption */
+ import React, { ReactNode, useCallback, useRef, useState } from 'react';
+-import { Badge, Chip, Icon, IconButton, Icons, ProgressBar, Spinner, Text, toRem } from 'folds';
++import { Badge, Chip, Icon, IconButton, Icons, ProgressBar, Spinner, Text, Tooltip, TooltipProvider, toRem } from 'folds';
++import { useSetting } from '../../../state/hooks/settings';
++import { settingsAtom } from '../../../state/settings';
+ import { EncryptedAttachmentInfo } from 'browser-encrypt-attachment';
+ import { Range } from 'react-range';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+@@ -51,6 +53,8 @@
+ }: AudioContentProps) {
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
++  const [, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
++  const [ringtoneSet, setRingtoneSet] = useState(false);
+ 
+   const [srcState, loadSrc] = useAsyncCallback(
+     useCallback(async () => {
+@@ -155,12 +159,37 @@
+     ),
+     rightControl: (
+       <>
++        {!encInfo && (
++          <TooltipProvider
++            position="Top"
++            offset={4}
++            tooltip={<Tooltip><Text>{ringtoneSet ? 'Ringtone set!' : 'Set as ringtone'}</Text></Tooltip>}
++          >
++            {(triggerRef) => (
++              <IconButton
++                ref={triggerRef}
++                variant={ringtoneSet ? "Success" : "SurfaceVariant"}
++                size="300"
++                radii="Pill"
++                onClick={() => {
++                  setCallRingtoneUrl(url);
++                  setRingtoneSet(true);
++                  setTimeout(() => setRingtoneSet(false), 2000);
++                }}
++                aria-label={ringtoneSet ? 'Ringtone set!' : 'Set as ringtone'}
++              >
++                <Icon src={ringtoneSet ? Icons.Check : Icons.Bell} size="50" />
++              </IconButton>
++            )}
++          </TooltipProvider>
++        )}
+         <IconButton
+           variant="SurfaceVariant"
+           size="300"
+           radii="Pill"
+           onClick={() => setMute(!mute)}
+           aria-pressed={mute}
++          aria-label={mute ? 'Unmute' : 'Mute'}
+         >
+           <Icon src={mute ? Icons.VolumeMute : Icons.VolumeHigh} size="50" />
+         </IconButton>
 diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
 index 23f3998d88..1ee72d4aa5 100644
 --- a/src/app/components/room-avatar/RoomAvatar.tsx
@@ -3866,6 +3927,338 @@ index 0000000000..967956474b
 +    </NavItem>
 +  );
 +}
+diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
+index e0df06df91..fe87f4669e 100644
+--- a/src/app/features/settings/notifications/SystemNotification.tsx
++++ b/src/app/features/settings/notifications/SystemNotification.tsx
+@@ -1,5 +1,6 @@
+-import React, { useCallback } from 'react';
+-import { Box, Text, Switch, Button, color, Spinner } from 'folds';
++import React, { MouseEventHandler, useCallback, useEffect, useState } from 'react';
++import { Box, Text, Switch, Button, color, Spinner, Icon, IconButton, Icons, Menu, MenuItem, PopOut, RectCords, as, config } from 'folds';
++import FocusTrap from 'focus-trap-react';
+ import { IPusherRequest } from 'matrix-js-sdk';
+ import { SequenceCard } from '../../../components/sequence-card';
+ import { SequenceCardStyle } from '../styles.css';
+@@ -10,6 +11,7 @@
+ import { useEmailNotifications } from '../../../hooks/useEmailNotifications';
+ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { stopPropagation } from '../../../utils/keyboard';
+ 
+ function EmailNotification() {
+   const mx = useMatrixClient();
+@@ -84,6 +86,239 @@
+   );
+ }
+ 
++type CallRingScope = 'dm' | 'nonVoice' | 'all';
++
++const CALL_RING_SCOPE_LABELS: Record<CallRingScope, string> = {
++  dm: 'DMs only',
++  nonVoice: 'All except voice rooms',
++  all: 'All rooms',
++};
++
++type CallRingScopeMenuProps = {
++  scopes: CallRingScope[];
++  selected: CallRingScope;
++  onSelect: (scope: CallRingScope) => void;
++};
++const CallRingScopeMenu = as<'div', CallRingScopeMenuProps>(
++  ({ scopes, selected, onSelect, ...props }, ref) => (
++    <Menu {...props} ref={ref}>
++      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++        {scopes.map((scope) => (
++          <MenuItem
++            key={scope}
++            size="300"
++            variant={scope === selected ? 'Primary' : 'Surface'}
++            radii="300"
++            onClick={() => onSelect(scope)}
++          >
++            <Text size="T300">{CALL_RING_SCOPE_LABELS[scope]}</Text>
++          </MenuItem>
++        ))}
++      </Box>
++    </Menu>
++  )
++);
++
++function RingtoneUrlInput() {
++  const [callRingtoneUrl, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
++  const [draft, setDraft] = useState(callRingtoneUrl ?? '');
++
++  // Sync when set externally (e.g., "Set as ringtone" from a chat audio message)
++  useEffect(() => {
++    setDraft(callRingtoneUrl ?? '');
++  }, [callRingtoneUrl]);
++
++  const commit = () => {
++    const trimmed = draft.trim();
++    setCallRingtoneUrl(trimmed || null);
++  };
++
++  return (
++    <Box direction="Row" gap="200" alignItems="Center" grow="Yes">
++      <input
++        type="url"
++        value={draft}
++        onChange={(e) => setDraft(e.target.value)}
++        onBlur={commit}
++        onKeyDown={(e) => {
++          if (e.key === 'Enter') { commit(); (e.target as HTMLInputElement).blur(); }
++        }}
++        placeholder="https://... or mxc://..."
++        aria-label="Custom ringtone URL"
++        style={{
++          flexGrow: 1,
++          minWidth: 0,
++          background: 'transparent',
++          border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
++          borderRadius: config.radii.R300,
++          padding: `${config.space.S100} ${config.space.S200}`,
++          color: 'inherit',
++          font: 'inherit',
++          outline: 'none',
++        }}
++      />
++      {callRingtoneUrl && (
++        <IconButton
++          size="300"
++          radii="Pill"
++          variant="SurfaceVariant"
++          onClick={() => { setDraft(''); setCallRingtoneUrl(null); }}
++          aria-label="Reset to built-in ringtone"
++        >
++          <Icon src={Icons.Cross} size="50" />
++        </IconButton>
++      )}
++    </Box>
++  );
++}
++
++const BATCH_DELAY_OPTIONS: { value: number; label: string }[] = [
++  { value: 0, label: 'Immediately' },
++  { value: 30, label: '30 seconds' },
++  { value: 60, label: '1 minute' },
++  { value: 300, label: '5 minutes' },
++  { value: 600, label: '10 minutes' },
++];
++
++function BatchDelayMenu({
++  selected,
++  onSelect,
++}: {
++  selected: number;
++  onSelect: (v: number) => void;
++}) {
++  return (
++    <Menu>
++      {BATCH_DELAY_OPTIONS.map((opt) => (
++        <MenuItem
++          key={opt.value}
++          variant="Surface"
++          radii="300"
++          aria-selected={selected === opt.value}
++          onClick={() => onSelect(opt.value)}
++        >
++          <Text size="T300">{opt.label}</Text>
++        </MenuItem>
++      ))}
++    </Menu>
++  );
++}
++
++function SelectBatchDelay() {
++  const [batchDelay, setBatchDelay] = useSetting(settingsAtom, 'inboxNotifBatchDelay');
++  const [menuCords, setMenuCords] = useState<RectCords>();
++
++  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++
++  const handleSelect = (v: number) => {
++    setBatchDelay(v);
++    setMenuCords(undefined);
++  };
++
++  const currentLabel =
++    BATCH_DELAY_OPTIONS.find((o) => o.value === (batchDelay ?? 60))?.label ?? '1 minute';
++
++  return (
++    <>
++      <Button
++        size="300"
++        variant="Primary"
++        outlined
++        fill="Soft"
++        radii="300"
++        after={<Icon size="300" src={Icons.ChevronBottom} />}
++        onClick={handleMenu}
++      >
++        <Text size="T300">{currentLabel}</Text>
++      </Button>
++      <PopOut
++        anchor={menuCords}
++        offset={5}
++        position="Bottom"
++        align="End"
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: () => setMenuCords(undefined),
++              clickOutsideDeactivates: true,
++              isKeyForward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
++              isKeyBackward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
++              escapeDeactivates: stopPropagation,
++              tabbableOptions: { iFrameSelector: '' },
++            }}
++          >
++            <BatchDelayMenu selected={batchDelay ?? 60} onSelect={handleSelect} />
++          </FocusTrap>
++        }
++      />
++    </>
++  );
++}
++
++function SelectCallRingScope() {
++  const [callRingScope, setCallRingScope] = useSetting(settingsAtom, 'callRingScope');
++  const [menuCords, setMenuCords] = useState<RectCords>();
++
++  const scopes: CallRingScope[] = ['dm', 'nonVoice', 'all'];
++
++  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++
++  const handleSelect = (scope: CallRingScope) => {
++    setCallRingScope(scope);
++    setMenuCords(undefined);
++  };
++
++  return (
++    <>
++      <Button
++        size="300"
++        variant="Primary"
++        outlined
++        fill="Soft"
++        radii="300"
++        after={<Icon size="300" src={Icons.ChevronBottom} />}
++        onClick={handleMenu}
++      >
++        <Text size="T300">{CALL_RING_SCOPE_LABELS[callRingScope ?? 'nonVoice']}</Text>
++      </Button>
++      <PopOut
++        anchor={menuCords}
++        offset={5}
++        position="Bottom"
++        align="End"
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: () => setMenuCords(undefined),
++              clickOutsideDeactivates: true,
++              isKeyForward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
++              isKeyBackward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
++              escapeDeactivates: stopPropagation,
++              tabbableOptions: { iFrameSelector: '' },
++            }}
++          >
++            <CallRingScopeMenu
++              scopes={scopes}
++              selected={callRingScope ?? 'nonVoice'}
++              onSelect={handleSelect}
++            />
++          </FocusTrap>
++        }
++      />
++    </>
++  );
++}
++
+ export function SystemNotification() {
+   const notifPermission = usePermissionState('notifications', getNotificationState());
+   const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
+@@ -151,6 +386,70 @@
+         direction="Column"
+         gap="400"
+       >
++        <SettingTile
++          title="Custom Ringtone"
++          description="Paste an audio URL (https:// or mxc://), or click 'Set as ringtone' on any audio message in chat. Leave empty to use the built-in ring."
++          after={<RingtoneUrlInput />}
++        />
++      </SequenceCard>
++      <SequenceCard
++        className={SequenceCardStyle}
++        variant="SurfaceVariant"
++        direction="Column"
++        gap="400"
++      >
++        <SettingTile
++          title="Incoming Call Ringtone"
++          description="Choose which rooms trigger an incoming call ring."
++          after={<SelectCallRingScope />}
++        />
++      </SequenceCard>
++      <SequenceCard
++        className={SequenceCardStyle}
++        variant="SurfaceVariant"
++        direction="Column"
++        gap="400"
++      >
++        <SettingTile
++          title="Auto-Join Calls"
++          description="Skip the call lobby and join immediately when opening a call."
++          after={<Switch value={callAutoJoin} onChange={setCallAutoJoin} />}
++        />
++      </SequenceCard>
++      <SequenceCard
++        className={SequenceCardStyle}
++        variant="SurfaceVariant"
++        direction="Column"
++        gap="400"
++      >
++        <SettingTile
++          title="Unread Inbox Notifications (Experimental)"
++          description="Send a system notification when new rooms appear in your Unread inbox."
++          after={
++            <Switch
++              disabled={notifPermission === 'denied'}
++              value={inboxUnreadNotifications}
++              onChange={(v) => {
++                if (v && notifPermission === 'prompt') requestNotificationPermission();
++                setInboxUnreadNotifications(v);
++              }}
++            />
++          }
++        />
++        {inboxUnreadNotifications && (
++          <SettingTile
++            title="Notification Batch Interval"
++            description="Minimum time between unread notifications. 'Immediately' fires within ~1 second."
++            after={<SelectBatchDelay />}
++          />
++        )}
++      </SequenceCard>
++      <SequenceCard
++        className={SequenceCardStyle}
++        variant="SurfaceVariant"
++        direction="Column"
++        gap="400"
++      >
+         <EmailNotification />
+       </SequenceCard>
+     </Box>
 diff --git a/src/app/hooks/useCallMemberships.ts b/src/app/hooks/useCallMemberships.ts
 new file mode 100644
 index 0000000000..0eab2a835e
@@ -3906,20 +4299,21 @@ index 0000000000..0eab2a835e
 +  return memberships;
 +};
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index f8647d1865..bea09a92b7 100644
+index f8647d1865..d600c610c6 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
-@@ -67,6 +67,9 @@
+@@ -67,6 +67,10 @@
  import { Create } from './client/create';
  import { CreateSpaceModalRenderer } from '../features/create-space';
  import { SearchModalRenderer } from '../features/search';
 +import { CallProvider } from './client/call/CallProvider';
 +import { PersistentCallContainer } from './client/call/PersistentCallContainer';
 +import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
++import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
  import { getFallbackSession } from '../state/sessions';
  
  export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
-@@ -124,15 +127,20 @@
+@@ -124,15 +128,35 @@
                  <ClientRoomsNotificationPreferences>
                    <ClientBindAtoms>
                      <ClientNonUIFeatures>
@@ -3945,6 +4339,21 @@ index f8647d1865..bea09a92b7 100644
 +                          </PersistentCallContainer>
 +                        </ClientLayout>
 +                        <IncomingCallNotification />
++                        <GlobalKeyboardShortcuts />
++                        <div
++                          id="cinny-announcements"
++                          role="status"
++                          aria-live="polite"
++                          aria-atomic="true"
++                          style={{
++                            position: 'absolute',
++                            width: '1px',
++                            height: '1px',
++                            overflow: 'hidden',
++                            clip: 'rect(0,0,0,0)',
++                            whiteSpace: 'nowrap',
++                          }}
++                        />
 +                      </CallProvider>
                        <SearchModalRenderer />
                        <UserRoomProfileRenderer />
@@ -4355,10 +4764,10 @@ index 0000000000..9ea05396a6
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..3b5f8954f9
+index 0000000000..6214519012
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,191 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -4373,6 +4782,8 @@ index 0000000000..3b5f8954f9
 +import { useClientConfig } from '../../../hooks/useClientConfig';
 +import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 +import { ThemeKind, useTheme } from '../../../hooks/useTheme';
++import { useSetting } from '../../../state/hooks/settings';
++import { settingsAtom } from '../../../state/settings';
 +
 +interface PersistentCallContainerProps {
 +  children: ReactNode;
@@ -4399,6 +4810,7 @@ index 0000000000..3b5f8954f9
 +  const screenSize = useScreenSizeContext();
 +  const theme = useTheme();
 +  const isMobile = screenSize === ScreenSize.Mobile;
++  const [callAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
 +
 +  /* eslint-disable no-param-reassign */
 +
@@ -4458,7 +4870,7 @@ index 0000000000..3b5f8954f9
 +            'm.call',
 +            newUrl,
 +            true,
-+            getWidgetData(mx, roomIdToSet, {}, { skipLobby: true, callIntent: 'audio' }),
++            getWidgetData(mx, roomIdToSet, {}, { skipLobby: callAutoJoin, callIntent: 'audio' }),
 +            roomIdToSet,
 +          );
 +
@@ -4483,12 +4895,13 @@ index 0000000000..3b5f8954f9
 +      clientConfig.elementCallUrl,
 +      activeClientWidget,
 +      registerActiveClientWidgetApi,
++      callAutoJoin,
 +    ],
 +  );
 +
 +  useEffect(() => {
 +    if (activeCallRoomId) {
-+      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, true, theme.kind);
++      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, callAutoJoin, theme.kind);
 +    }
 +  }, [
 +    theme,
@@ -4547,18 +4960,20 @@ index 0000000000..3b5f8954f9
 +  );
 +}
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf10906..4ffd3dc86e 100644
+index 04edf10906..8a6aa2cbd0 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
-@@ -51,6 +51,7 @@
+@@ -51,6 +51,9 @@
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
  import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
 +import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
  
  type DirectMenuProps = {
    requestClose: () => void;
-@@ -196,6 +197,7 @@
+@@ -196,6 +199,7 @@
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 38,
      overscan: 10,
@@ -4566,7 +4981,7 @@ index 04edf10906..4ffd3dc86e 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -253,7 +255,7 @@
+@@ -253,7 +257,7 @@
                    return (
                      <VirtualTile
                        virtualItem={vItem}
@@ -4575,7 +4990,7 @@ index 04edf10906..4ffd3dc86e 100644
                        ref={virtualizer.measureElement}
                      >
                        <RoomNavItem
-@@ -275,6 +277,7 @@
+@@ -275,6 +279,7 @@
            </Box>
          </PageNavContent>
        )}
@@ -4584,18 +4999,20 @@ index 04edf10906..4ffd3dc86e 100644
    );
  }
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963df..721e55188a 100644
+index d87db963df..0540a1fc3e 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
-@@ -62,6 +62,7 @@
+@@ -62,6 +62,9 @@
    getRoomNotificationMode,
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
 +import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
  import { UseStateProvider } from '../../../components/UseStateProvider';
  import { JoinAddressPrompt } from '../../../components/join-address-prompt';
  import { _RoomSearchParams } from '../../paths';
-@@ -226,6 +227,7 @@
+@@ -226,6 +229,7 @@
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 38,
      overscan: 10,
@@ -4603,7 +5020,7 @@ index d87db963df..721e55188a 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -337,7 +339,7 @@
+@@ -337,7 +341,7 @@
                    return (
                      <VirtualTile
                        virtualItem={vItem}
@@ -4612,7 +5029,7 @@ index d87db963df..721e55188a 100644
                        ref={virtualizer.measureElement}
                      >
                        <RoomNavItem
-@@ -357,6 +359,7 @@
+@@ -357,6 +361,7 @@
            </Box>
          </PageNavContent>
        )}
@@ -4621,18 +5038,20 @@ index d87db963df..721e55188a 100644
    );
  }
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..616b6fc09d 100644
+index 3f60d2a957..44de34d037 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
-@@ -76,6 +76,7 @@
+@@ -76,6 +76,9 @@
    getRoomNotificationMode,
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
 +import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
  import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
  import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
  import { useRoomCreators } from '../../../hooks/useRoomCreators';
-@@ -429,6 +430,7 @@
+@@ -429,6 +432,7 @@
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 0,
      overscan: 10,
@@ -4640,7 +5059,7 @@ index 3f60d2a957..616b6fc09d 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -500,7 +502,7 @@
+@@ -500,7 +504,7 @@
                  return (
                    <VirtualTile
                      virtualItem={vItem}
@@ -4649,7 +5068,7 @@ index 3f60d2a957..616b6fc09d 100644
                      ref={virtualizer.measureElement}
                    >
                      <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
-@@ -519,7 +521,7 @@
+@@ -519,7 +523,7 @@
                }
  
                return (
@@ -4658,7 +5077,7 @@ index 3f60d2a957..616b6fc09d 100644
                    <RoomNavItem
                      room={room}
                      selected={selectedRoomId === roomId}
-@@ -534,6 +536,7 @@
+@@ -534,6 +538,7 @@
            </NavCategory>
          </Box>
        </PageNavContent>
@@ -4666,6 +5085,37 @@ index 3f60d2a957..616b6fc09d 100644
      </PageNav>
    );
  }
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 31ee6ccb97..83c14bfa87 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -36,6 +36,13 @@
+ 
+   showNotifications: boolean;
+   isNotificationSounds: boolean;
++  inRoomActivitySound: boolean;
++  inboxUnreadNotifications: boolean;
++  // Minimum seconds between inbox unread notifications (0 = ~1s debounce only)
++  inboxNotifBatchDelay: number;
++  callRingScope: 'dm' | 'nonVoice' | 'all';
++  callRingtoneUrl: string | null;
++  callAutoJoin: boolean;
+ 
+   hour24Clock: boolean;
+   dateFormatString: string;
+@@ -70,6 +77,12 @@
+ 
+   showNotifications: true,
+   isNotificationSounds: true,
++  inRoomActivitySound: true,
++  inboxUnreadNotifications: false,
++  inboxNotifBatchDelay: 60,
++  callRingScope: 'nonVoice',
++  callRingtoneUrl: null,
++  callAutoJoin: false,
+ 
+   hour24Clock: false,
+   dateFormatString: 'D MMM YYYY',
 diff --git a/src/app/utils/room.ts b/src/app/utils/room.ts
 index c282a0a20c..02186a4c56 100644
 --- a/src/app/utils/room.ts

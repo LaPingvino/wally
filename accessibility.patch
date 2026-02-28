@@ -883,6 +883,18 @@ index 98db9459a1..850ef8efb3 100644
                >
                  <Icon src={Icons.Cross} size="100" />
                </IconButton>
+diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
+index 491a78d7fd..00db376b73 100644
+--- a/src/app/features/settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
+@@ -182,6 +182,7 @@
+                             value={developerTools}
+                             onChange={setDeveloperTools}
+                           />
++                        }
+                       />
+                     </SequenceCard>
+                     {developerTools && (
 diff --git a/src/app/features/settings/devices/DeviceTile.tsx b/src/app/features/settings/devices/DeviceTile.tsx
 index 71b684f56f..dfe7b2aa81 100644
 --- a/src/app/features/settings/devices/DeviceTile.tsx
@@ -922,105 +934,10 @@ index be2f204e19..a0f3bf3940 100644
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e1ff1052fc..900806de23 100644
+index fe87f4669e..fbe029dd8f 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
-@@ -172,6 +172,94 @@
-   );
- }
- 
-+const BATCH_DELAY_OPTIONS: { value: number; label: string }[] = [
-+  { value: 0, label: 'Immediately' },
-+  { value: 30, label: '30 seconds' },
-+  { value: 60, label: '1 minute' },
-+  { value: 300, label: '5 minutes' },
-+  { value: 600, label: '10 minutes' },
-+];
-+
-+function BatchDelayMenu({
-+  selected,
-+  onSelect,
-+}: {
-+  selected: number;
-+  onSelect: (v: number) => void;
-+}) {
-+  return (
-+    <Menu>
-+      {BATCH_DELAY_OPTIONS.map((opt) => (
-+        <MenuItem
-+          key={opt.value}
-+          variant="Surface"
-+          radii="300"
-+          aria-selected={selected === opt.value}
-+          onClick={() => onSelect(opt.value)}
-+        >
-+          <Text size="T300">{opt.label}</Text>
-+        </MenuItem>
-+      ))}
-+    </Menu>
-+  );
-+}
-+
-+function SelectBatchDelay() {
-+  const [batchDelay, setBatchDelay] = useSetting(settingsAtom, 'inboxNotifBatchDelay');
-+  const [menuCords, setMenuCords] = useState<RectCords>();
-+
-+  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
-+    setMenuCords(evt.currentTarget.getBoundingClientRect());
-+  };
-+
-+  const handleSelect = (v: number) => {
-+    setBatchDelay(v);
-+    setMenuCords(undefined);
-+  };
-+
-+  const currentLabel =
-+    BATCH_DELAY_OPTIONS.find((o) => o.value === (batchDelay ?? 60))?.label ?? '1 minute';
-+
-+  return (
-+    <>
-+      <Button
-+        size="300"
-+        variant="Primary"
-+        outlined
-+        fill="Soft"
-+        radii="300"
-+        after={<Icon size="300" src={Icons.ChevronBottom} />}
-+        onClick={handleMenu}
-+      >
-+        <Text size="T300">{currentLabel}</Text>
-+      </Button>
-+      <PopOut
-+        anchor={menuCords}
-+        offset={5}
-+        position="Bottom"
-+        align="End"
-+        content={
-+          <FocusTrap
-+            focusTrapOptions={{
-+              initialFocus: false,
-+              onDeactivate: () => setMenuCords(undefined),
-+              clickOutsideDeactivates: true,
-+              isKeyForward: (evt: KeyboardEvent) =>
-+                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
-+              isKeyBackward: (evt: KeyboardEvent) =>
-+                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
-+              escapeDeactivates: stopPropagation,
-+              tabbableOptions: { iFrameSelector: '' },
-+            }}
-+          >
-+            <BatchDelayMenu selected={batchDelay ?? 60} onSelect={handleSelect} />
-+          </FocusTrap>
-+        }
-+      />
-+    </>
-+  );
-+}
-+
- function SelectCallRingScope() {
-   const [callRingScope, setCallRingScope] = useSetting(settingsAtom, 'callRingScope');
-   const [menuCords, setMenuCords] = useState<RectCords>();
-@@ -238,6 +326,14 @@
+@@ -326,6 +326,15 @@
      settingsAtom,
      'isNotificationSounds'
    );
@@ -1032,10 +949,11 @@ index e1ff1052fc..900806de23 100644
 +    settingsAtom,
 +    'inboxUnreadNotifications'
 +  );
++  const [callAutoJoin, setCallAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
  
    const requestNotificationPermission = () => {
      window.Notification.requestPermission();
-@@ -288,9 +384,14 @@
+@@ -376,9 +385,14 @@
        >
          <SettingTile
            title="Notification Sound"
@@ -1051,41 +969,6 @@ index e1ff1052fc..900806de23 100644
        </SequenceCard>
        <SequenceCard
          className={SequenceCardStyle}
-@@ -322,6 +423,34 @@
-         direction="Column"
-         gap="400"
-       >
-+        <SettingTile
-+          title="Unread Inbox Notifications (Experimental)"
-+          description="Send a system notification when new rooms appear in your Unread inbox."
-+          after={
-+            <Switch
-+              disabled={notifPermission === 'denied'}
-+              value={inboxUnreadNotifications}
-+              onChange={(v) => {
-+                if (v && notifPermission === 'prompt') requestNotificationPermission();
-+                setInboxUnreadNotifications(v);
-+              }}
-+            />
-+          }
-+        />
-+        {inboxUnreadNotifications && (
-+          <SettingTile
-+            title="Notification Batch Interval"
-+            description="Minimum time between unread notifications. 'Immediately' fires within ~1 second."
-+            after={<SelectBatchDelay />}
-+          />
-+        )}
-+      </SequenceCard>
-+      <SequenceCard
-+        className={SequenceCardStyle}
-+        variant="SurfaceVariant"
-+        direction="Column"
-+        gap="400"
-+      >
-         <EmailNotification />
-       </SequenceCard>
-     </Box>
 diff --git a/src/app/hooks/useAsyncSearch.ts b/src/app/hooks/useAsyncSearch.ts
 index 3852d3b97e..6c96e46306 100644
 --- a/src/app/hooks/useAsyncSearch.ts
@@ -1415,42 +1298,8 @@ index 0000000000..82edcf6a5c
 +    setFocusedIndex,
 +  };
 +};
-diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index 6fbdf6641b..69f52bc9bd 100644
---- a/src/app/pages/Router.tsx
-+++ b/src/app/pages/Router.tsx
-@@ -71,6 +71,7 @@
- import { CallProvider } from './client/call/CallProvider';
- import { PersistentCallContainer } from './client/call/PersistentCallContainer';
- import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
-+import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
- import { getFallbackSession } from '../state/sessions';
- 
- export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize, basePath?: string) => {
-@@ -141,6 +142,21 @@
-                           </PersistentCallContainer>
-                         </ClientLayout>
-                         <IncomingCallNotification />
-+                        <GlobalKeyboardShortcuts />
-+                        <div
-+                          id="cinny-announcements"
-+                          role="status"
-+                          aria-live="polite"
-+                          aria-atomic="true"
-+                          style={{
-+                            position: 'absolute',
-+                            width: '1px',
-+                            height: '1px',
-+                            overflow: 'hidden',
-+                            clip: 'rect(0,0,0,0)',
-+                            whiteSpace: 'nowrap',
-+                          }}
-+                        />
-                       </CallProvider>
-                       <SearchModalRenderer />
-                       <UserRoomProfileRenderer />
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index e0977d9739..c88829561f 100644
+index 23bd48e644..5a569bc213 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -1463,12 +1312,7 @@ index e0977d9739..c88829561f 100644
  import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
  import LogoSVG from '../../../../public/res/svg/cinny.svg';
  import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
-@@ -10,11 +10,19 @@
- import InviteSound from '../../../../public/sound/invite.ogg';
- import { notificationPermission, setFavicon } from '../../utils/dom';
- import { useSetting } from '../../state/hooks/settings';
--import { EmojiFont, settingsAtom } from '../../state/settings';
-+import { EmojiFont, getSettings, settingsAtom } from '../../state/settings';
+@@ -14,7 +14,15 @@
  import { allInvitesAtom } from '../../state/room-list/inviteList';
  import { usePreviousValue } from '../../hooks/usePreviousValue';
  import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -1505,7 +1349,7 @@ index e0977d9739..c88829561f 100644
  
  function SystemEmojiFeature() {
    const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-@@ -139,10 +155,12 @@
+@@ -139,36 +155,40 @@
    const audioRef = useRef<HTMLAudioElement>(null);
    const notifRef = useRef<Notification>();
    const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
@@ -1518,7 +1362,42 @@ index e0977d9739..c88829561f 100644
  
    const navigate = useNavigate();
    const notificationSelected = useInboxNotificationsSelected();
-@@ -193,7 +211,6 @@
+   const selectedRoomId = useSelectedRoom();
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
+ 
+   const notify = useCallback(
+     ({
+-      roomName,
+       roomAvatar,
+       username,
++      body,
++      navigateTo,
+     }: {
+-      roomName: string;
+       roomAvatar?: string;
+       username: string;
+-      roomId: string;
+-      eventId: string;
++      body: string;
++      navigateTo: string;
+     }) => {
+-      const noti = new window.Notification(roomName, {
++      const trimmed = body.length > 120 ? `${body.slice(0, 120)}\u2026` : body;
++      const noti = new window.Notification(`${username}: ${trimmed}`, {
+         icon: roomAvatar,
+         badge: roomAvatar,
+-        body: `New inbox notification from ${username}`,
+         silent: true,
+       });
+ 
+       noti.onclick = () => {
+-        if (!window.closed) navigate(getInboxNotificationsPath());
++        if (!window.closed) navigate(navigateTo);
+         noti.close();
+         notifRef.current = undefined;
+       };
+@@ -193,7 +213,6 @@
        data
      ) => {
        if (mx.getSyncState() !== 'SYNCING') return;
@@ -1526,7 +1405,7 @@ index e0977d9739..c88829561f 100644
        if (
          !room ||
          !data.liveEvent ||
-@@ -206,7 +223,7 @@
+@@ -206,7 +225,7 @@
  
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
@@ -1535,7 +1414,7 @@ index e0977d9739..c88829561f 100644
        const unreadInfo = getUnreadInfo(room);
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
-@@ -219,31 +236,88 @@
+@@ -219,37 +238,106 @@
          return;
        }
  
@@ -1559,14 +1438,24 @@ index e0977d9739..c88829561f 100644
 +        if (showNotifications && notificationPermission('granted')) {
 +          const avatarMxc =
 +            room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room.getMxcAvatarUrl();
++          const msgBody = (mEvent.getContent()?.body as string | undefined) ?? room.name ?? 'New message';
++          const rIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
++          let roomPath: string;
++          if (mDirects.has(room.roomId)) {
++            roomPath = getDirectRoomPath(rIdOrAlias);
++          } else {
++            const parents = roomToParents.get(room.roomId);
++            roomPath = parents && parents.size > 0
++              ? getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, Array.from(parents)[0]), rIdOrAlias)
++              : getHomeRoomPath(rIdOrAlias);
++          }
 +          notify({
-+            roomName: room.name ?? 'Unknown',
 +            roomAvatar: avatarMxc
 +              ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
 +              : undefined,
 +            username: getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender,
-+            roomId: room.roomId,
-+            eventId,
++            body: msgBody,
++            navigateTo: roomPath,
 +          });
 +        }
        }
@@ -1637,7 +1526,15 @@ index e0977d9739..c88829561f 100644
      notificationSelected,
      showNotifications,
      playSound,
-@@ -260,6 +334,166 @@
+     notify,
+     selectedRoomId,
+     useAuthentication,
++    mDirects,
++    roomToParents,
+   ]);
+ 
+   return (
+@@ -260,6 +348,166 @@
    );
  }
  
@@ -1804,7 +1701,7 @@ index e0977d9739..c88829561f 100644
  type ClientNonUIFeaturesProps = {
    children: ReactNode;
  };
-@@ -272,6 +506,7 @@
+@@ -272,6 +520,7 @@
        <FaviconUpdater />
        <InviteNotifications />
        <MessageNotifications />
@@ -1864,19 +1761,10 @@ index b3f419d805..f2a197756d 100644
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 56dfe7a3bc..623488a862 100644
+index ad731f6fbc..623488a862 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
-@@ -53,6 +53,8 @@
- } from '../../../hooks/useRoomsNotificationPreferences';
- import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
- import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
-+import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
-+import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
- 
- type DirectMenuProps = {
-   requestClose: () => void;
-@@ -246,6 +248,14 @@
+@@ -248,6 +248,14 @@
      getItemKey: (index) => sortedDirects[index],
    });
  
@@ -1891,7 +1779,7 @@ index 56dfe7a3bc..623488a862 100644
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -286,39 +296,52 @@
+@@ -288,39 +296,52 @@
                    Chats
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -1976,19 +1864,10 @@ index 56dfe7a3bc..623488a862 100644
            </Box>
          </PageNavContent>
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index 141e1aa9fe..cb9e44212b 100644
+index 3b3e208fe0..cb9e44212b 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
-@@ -64,6 +64,8 @@
-   useRoomsNotificationPreferencesContext,
- } from '../../../hooks/useRoomsNotificationPreferences';
- import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
-+import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
-+import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
- import { UseStateProvider } from '../../../components/UseStateProvider';
- import { JoinAddressPrompt } from '../../../components/join-address-prompt';
- import { _RoomSearchParams } from '../../paths';
-@@ -272,6 +274,14 @@
+@@ -274,6 +274,14 @@
      getItemKey: (index) => sortedRooms[index],
    });
  
@@ -2003,7 +1882,7 @@ index 141e1aa9fe..cb9e44212b 100644
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -366,37 +376,50 @@
+@@ -368,37 +376,50 @@
                    Rooms
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -2228,19 +2107,10 @@ index 6fc528a106..0d7474b72c 100644
                    const space = mx.getRoom(sId);
                    if (!space) return null;
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 4884456326..41b6613817 100644
+index de59149cb8..41b6613817 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
-@@ -78,6 +78,8 @@
-   useRoomsNotificationPreferencesContext,
- } from '../../../hooks/useRoomsNotificationPreferences';
- import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
-+import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
-+import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
- import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
- import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
- import { useRoomCreators } from '../../../hooks/useRoomCreators';
-@@ -466,13 +468,34 @@
+@@ -468,13 +468,34 @@
      getItemKey: (index) => hierarchy[index]?.roomId ?? index,
    });
  
@@ -2278,7 +2148,7 @@ index 4884456326..41b6613817 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -524,48 +547,61 @@
+@@ -526,48 +547,61 @@
                position: 'relative',
              }}
            >
@@ -2441,31 +2311,6 @@ index 1ca7e7de12..795b484b1d 100644
      };
    }, [mx, memberships, setRoomsAtom]);
  };
-diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 68caa8e28f..95f3ec30f3 100644
---- a/src/app/state/settings.ts
-+++ b/src/app/state/settings.ts
-@@ -42,6 +42,10 @@
- 
-   showNotifications: boolean;
-   isNotificationSounds: boolean;
-+  inRoomActivitySound: boolean;
-+  inboxUnreadNotifications: boolean;
-+  // Minimum seconds between inbox unread notifications (0 = ~1s debounce only)
-+  inboxNotifBatchDelay: number;
-   callRingScope: 'dm' | 'nonVoice' | 'all';
-   callRingtoneUrl: string | null;
- 
-@@ -81,6 +85,9 @@
- 
-   showNotifications: true,
-   isNotificationSounds: true,
-+  inRoomActivitySound: true,
-+  inboxUnreadNotifications: false,
-+  inboxNotifBatchDelay: 60,
-   callRingScope: 'nonVoice',
-   callRingtoneUrl: null,
- 
 diff --git a/src/app/utils/announce.ts b/src/app/utils/announce.ts
 new file mode 100644
 index 0000000000..c854ce584a

@@ -128,7 +128,7 @@ index b861a060b7..be2f204e19 100644
        </SequenceCard>
  
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc67..e0977d9739 100644
+index ce952bfc67..23bd48e644 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -10,7 +10,7 @@
@@ -136,7 +136,7 @@ index ce952bfc67..e0977d9739 100644
  import { notificationPermission, setFavicon } from '../../utils/dom';
  import { useSetting } from '../../state/hooks/settings';
 -import { settingsAtom } from '../../state/settings';
-+import { EmojiFont, settingsAtom } from '../../state/settings';
++import { EmojiFont, getSettings, settingsAtom } from '../../state/settings';
  import { allInvitesAtom } from '../../state/room-list/inviteList';
  import { usePreviousValue } from '../../hooks/usePreviousValue';
  import { useMatrixClient } from '../../hooks/useMatrixClient';
