@@ -14,6 +14,7 @@ import {
   LOGIN_PATH,
   INBOX_INVITES_PATH,
   INBOX_NOTIFICATIONS_PATH,
+  INBOX_UNREAD_PATH,
   INBOX_PATH,
   REGISTER_PATH,
   RESET_PASSWORD_PATH,
@@ -23,6 +24,8 @@ import {
   SPACE_ROOM_PATH,
   SPACE_SEARCH_PATH,
   CREATE_PATH,
+  FAVORITES_PATH,
+  FAVORITES_ROOM_PATH,
 } from './paths';
 import { trimLeadingSlash, trimTrailingSlash } from '../utils/common';
 import { HashRouterConfig } from '../hooks/useClientConfig';
@@ -158,3 +161,14 @@ export const getCreatePath = (): string => CREATE_PATH;
 export const getInboxPath = (): string => INBOX_PATH;
 export const getInboxNotificationsPath = (): string => INBOX_NOTIFICATIONS_PATH;
 export const getInboxInvitesPath = (): string => INBOX_INVITES_PATH;
+export const getInboxUnreadPath = (): string => INBOX_UNREAD_PATH;
+
+export const getFavoritesPath = (): string => FAVORITES_PATH;
+export const getFavoritesRoomPath = (roomIdOrAlias: string, eventId?: string): string => {
+  const params = {
+    roomIdOrAlias: encodeURIComponent(roomIdOrAlias),
+    eventId: eventId ? encodeURIComponent(eventId) : null,
+  };
+
+  return generatePath(FAVORITES_ROOM_PATH, params);
+};

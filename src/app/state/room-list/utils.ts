@@ -1,5 +1,5 @@
 import { useSetAtom, WritableAtom } from 'jotai';
-import { ClientEvent, MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
+import { ClientEvent, ClientEventHandlerMap, MatrixClient, Room, RoomEvent, SyncState } from 'matrix-js-sdk';
 import { useEffect } from 'react';
 import { Membership } from '../../../types/matrix/room';
 
@@ -23,13 +23,21 @@ export const useBindRoomsWithMembershipsAtom = (
   useEffect(() => {
     const satisfyMembership = (room: Room): boolean =>
       !!memberships.find((membership) => membership === room.getMyMembership());
-    setRoomsAtom({
-      type: 'INITIALIZE',
-      rooms: mx
-        .getRooms()
-        .filter(satisfyMembership)
-        .map((room) => room.roomId),
-    });
+    const initRooms = () =>
+      setRoomsAtom({
+        type: 'INITIALIZE',
+        rooms: mx
+          .getRooms()
+          .filter(satisfyMembership)
+          .map((room) => room.roomId),
+      });
+    initRooms();
+
+    // Re-read rooms on initial sync completion and reconnect, not on every sync batch.
+    // Ongoing membership changes are handled by handleAddRoom / handleMembershipChange.
+    const handleSync: ClientEventHandlerMap[ClientEvent.Sync] = (state) => {
+      if (state === SyncState.Prepared || state === SyncState.Catchup) initRooms();
+    };
 
     const handleAddRoom = (room: Room) => {
       if (satisfyMembership(room)) {
@@ -49,10 +57,12 @@ export const useBindRoomsWithMembershipsAtom = (
       setRoomsAtom({ type: 'DELETE', roomId });
     };
 
+    mx.on(ClientEvent.Sync, handleSync);
     mx.on(ClientEvent.Room, handleAddRoom);
     mx.on(RoomEvent.MyMembership, handleMembershipChange);
     mx.on(ClientEvent.DeleteRoom, handleDeleteRoom);
     return () => {
+      mx.removeListener(ClientEvent.Sync, handleSync);
       mx.removeListener(ClientEvent.Room, handleAddRoom);
       mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
       mx.removeListener(ClientEvent.DeleteRoom, handleDeleteRoom);

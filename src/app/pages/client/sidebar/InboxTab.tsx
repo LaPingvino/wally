@@ -9,10 +9,14 @@ import {
   SidebarItemTooltip,
 } from '../../../components/sidebar';
 import { allInvitesAtom } from '../../../state/room-list/inviteList';
+import { allRoomsAtom } from '../../../state/room-list/roomList';
+import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { useRoomsUnread } from '../../../state/hooks/unread';
 import {
   getInboxInvitesPath,
   getInboxNotificationsPath,
   getInboxPath,
+  getInboxUnreadPath,
   joinPathComponent,
 } from '../../pathUtils';
 import { useInboxSelected } from '../../../hooks/router/useInbox';
@@ -27,6 +31,10 @@ export function InboxTab() {
   const inboxSelected = useInboxSelected();
   const allInvites = useAtomValue(allInvitesAtom);
   const inviteCount = allInvites.length;
+  const allRooms = useAtomValue(allRoomsAtom);
+  const allUnread = useRoomsUnread(allRooms, roomToUnreadAtom);
+  const hasHighlight = (allUnread?.highlight ?? 0) > 0;
+  const hasUnread = (allUnread?.total ?? 0) > 0;
 
   const handleInboxClick = () => {
     if (screenSize === ScreenSize.Mobile) {
@@ -44,19 +52,21 @@ export function InboxTab() {
   };
 
   return (
-    <SidebarItem active={inboxSelected}>
-      <SidebarItemTooltip tooltip="Inbox">
-        {(triggerRef) => (
-          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={handleInboxClick}>
-            <Icon src={Icons.Inbox} filled={inboxSelected} />
-          </SidebarAvatar>
+    <>
+      <SidebarItem active={inboxSelected}>
+        <SidebarItemTooltip tooltip="Inbox (Alt+I)">
+          {(triggerRef) => (
+            <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Inbox" aria-keyshortcuts="Alt+I" onClick={handleInboxClick}>
+              <Icon src={Icons.Inbox} filled={inboxSelected} />
+            </SidebarAvatar>
+          )}
+        </SidebarItemTooltip>
+        {inviteCount > 0 && (
+          <SidebarItemBadge hasCount>
+            <UnreadBadge highlight count={inviteCount} />
+          </SidebarItemBadge>
         )}
-      </SidebarItemTooltip>
-      {inviteCount > 0 && (
-        <SidebarItemBadge hasCount>
-          <UnreadBadge highlight count={inviteCount} />
-        </SidebarItemBadge>
-      )}
-    </SidebarItem>
+      </SidebarItem>
+    </>
   );
 }

@@ -13,6 +13,8 @@ import { AuthLayout, Login, Register, ResetPassword } from './auth';
 import {
   DIRECT_PATH,
   EXPLORE_PATH,
+  FAVORITES_PATH,
+  FAVORITES_ROOM_PATH,
   HOME_PATH,
   LOGIN_PATH,
   INBOX_PATH,
@@ -28,6 +30,7 @@ import {
   _ROOM_PATH,
   _SEARCH_PATH,
   _SERVER_PATH,
+  _UNREAD_PATH,
   CREATE_PATH,
 } from './paths';
 import {
@@ -42,9 +45,10 @@ import {
 import { ClientBindAtoms, ClientLayout, ClientRoot } from './client';
 import { Home, HomeRouteRoomProvider, HomeSearch } from './client/home';
 import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
+import { Favorites, FavoritesRouteRoomProvider } from './client/favorites';
 import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
 import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
-import { Notifications, Inbox, Invites } from './client/inbox';
+import { Notifications, Inbox, Invites, Unread } from './client/inbox';
 import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
 import { Room } from '../features/room';
 import { Lobby } from '../features/lobby';
@@ -228,6 +232,30 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize,
           />
         </Route>
         <Route
+          path={FAVORITES_PATH}
+          element={
+            <PageRoot
+              nav={
+                <MobileFriendlyPageNav path={FAVORITES_PATH}>
+                  <Favorites />
+                </MobileFriendlyPageNav>
+              }
+            >
+              <Outlet />
+            </PageRoot>
+          }
+        >
+          {mobile ? null : <Route index element={<WelcomePage />} />}
+          <Route
+            path={FAVORITES_ROOM_PATH}
+            element={
+              <FavoritesRouteRoomProvider>
+                <Room />
+              </FavoritesRouteRoomProvider>
+            }
+          />
+        </Route>
+        <Route
           path={SPACE_PATH}
           element={
             <RouteSpaceProvider>
@@ -313,6 +341,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize,
               element={<WelcomePage />}
             />
           )}
+          <Route path={_UNREAD_PATH} element={<Unread />} />
           <Route path={_NOTIFICATIONS_PATH} element={<Notifications />} />
           <Route path={_INVITES_PATH} element={<Invites />} />
         </Route>

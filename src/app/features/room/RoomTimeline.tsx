@@ -115,6 +115,8 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
+import { useNavigateUnread, unreadNavRoomAtom, useNavigateMention, mentionNavRoomAtom } from '../../hooks/useNavigateUnread';
+import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { useImagePackRooms } from '../../hooks/useImagePackRooms';
@@ -567,6 +569,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   const roomToParents = useAtomValue(roomToParentsAtom);
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const { navigateRoom } = useRoomNavigate();
+  const unreadNavRoom = useAtomValue(unreadNavRoomAtom);
+  const mentionNavRoom = useAtomValue(mentionNavRoomAtom);
+  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
+  const { navigatePrev: navigatePrevMention, navigateNext: navigateNextMention, mentionCount } = useNavigateMention();
+  const showUnreadNav = !threadId && unreadNavRoom === room.roomId && unreadCount > 0;
+  const showMentionNav = !threadId && mentionNavRoom === room.roomId && mentionCount > 0;
+  const screenSize = useScreenSizeContext();
+  const isMobile = screenSize === ScreenSize.Mobile;
   const mentionClickHandler = useMentionClickHandler(room.roomId);
   const spoilerClickHandler = useSpoilerClickHandler();
   const openUserRoomProfile = useOpenUserRoomProfile();
@@ -1644,13 +1654,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
           </Event>
         );
       },
-    },
-    (mEventId, mEvent, item) => {
-      if (!showHiddenEvents) return null;
+      'm.call.notify': (mEventId, mEvent, item) => {
       const highlighted = focusItem?.index === item && focusItem.highlight;
       const senderId = mEvent.getSender() ?? '';
       const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
-
+      const content = mEvent.getContent();
+      const notifyType = content.notify_type ?? 'ring';
+      const isOwn = senderId === mx.getUserId();
       const timeJSX = (
         <Time
           ts={mEvent.getTs()}
@@ -1659,7 +1669,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
           dateFormatString={dateFormatString}
         />
       );
-
       return (
         <Event
           key={mEvent.getId()}
@@ -1669,28 +1678,86 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
           mEvent={mEvent}
           highlight={highlighted}
           messageSpacing={messageSpacing}
-          canDelete={canRedact || mEvent.getSender() === mx.getUserId()}
+          canDelete={canRedact || isOwn}
           hideReadReceipts={hideActivity}
           showDeveloperTools={showDeveloperTools}
         >
           <EventContent
             messageLayout={messageLayout}
             time={timeJSX}
-            iconSrc={Icons.Code}
+            iconSrc={Icons.Phone}
             content={
-              <Box grow="Yes" direction="Column">
+              <Box grow="Yes" alignItems="Center" gap="200">
                 <Text size="T300" priority="300">
                   <b>{senderName}</b>
-                  {' sent '}
-                  <code className={customHtmlCss.Code}>{mEvent.getType()}</code>
-                  {' state event'}
+                  {notifyType === 'ring' ? ' started a call' : ' sent a call notification'}
                 </Text>
+                {isOwn && (
+                  <Chip
+                    variant="Secondary"
+                    radii="Pill"
+                    before={<Icon size="50" src={Icons.Phone} />}
+                    onClick={() =>
+                      mx.sendEvent(room.roomId, 'm.call.notify', content).catch(() => undefined)
+                    }
+                    aria-label="Ring again"
+                  >
+                    <Text size="T200">Ring again</Text>
+                  </Chip>
+                )}
               </Box>
             }
           />
         </Event>
       );
     },
+  },
+  (mEventId, mEvent, item) => {
+    if (!showHiddenEvents) return null;
+    const highlighted = focusItem?.index === item && focusItem.highlight;
+    const senderId = mEvent.getSender() ?? '';
+    const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+
+    const timeJSX = (
+      <Time
+        ts={mEvent.getTs()}
+        compact={messageLayout === MessageLayout.Compact}
+        hour24Clock={hour24Clock}
+        dateFormatString={dateFormatString}
+      />
+    );
+
+    return (
+      <Event
+        key={mEvent.getId()}
+        data-message-item={item}
+        data-message-id={mEventId}
+        room={room}
+        mEvent={mEvent}
+        highlight={highlighted}
+        messageSpacing={messageSpacing}
+        canDelete={canRedact || mEvent.getSender() === mx.getUserId()}
+        hideReadReceipts={hideActivity}
+        showDeveloperTools={showDeveloperTools}
+      >
+        <EventContent
+          messageLayout={messageLayout}
+          time={timeJSX}
+          iconSrc={Icons.Code}
+          content={
+            <Box grow="Yes" direction="Column">
+              <Text size="T300" priority="300">
+                <b>{senderName}</b>
+                {' sent '}
+                <code className={customHtmlCss.Code}>{mEvent.getType()}</code>
+                {' state event'}
+              </Text>
+            </Box>
+          }
+        />
+      </Event>
+    );
+  },
     (mEventId, mEvent, item) => {
       if (!showHiddenEvents) return null;
       if (Object.keys(mEvent.getContent()).length === 0) return null;
@@ -1840,27 +1907,80 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
 
   return (
     <Box grow="Yes" style={{ position: 'relative' }}>
-      {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
+      {(showUnreadNav || showMentionNav || (unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline)) && (
         <TimelineFloat position="Top">
-          <Chip
-            variant="Primary"
-            radii="Pill"
-            outlined
-            before={<Icon size="50" src={Icons.MessageUnread} />}
-            onClick={handleJumpToUnread}
-          >
-            <Text size="L400">Jump to Unread</Text>
-          </Chip>
-
-          <Chip
-            variant="SurfaceVariant"
-            radii="Pill"
-            outlined
-            before={<Icon size="50" src={Icons.CheckTwice} />}
-            onClick={handleMarkAsRead}
-          >
-            <Text size="L400">Mark as Read</Text>
-          </Chip>
+          {showUnreadNav && (
+            <>
+              <Chip
+                variant="SurfaceVariant"
+                radii="Pill"
+                outlined
+                before={<Icon size="50" src={Icons.ChevronTop} />}
+                onClick={navigatePrev}
+                aria-label="Previous unread room (Alt+Shift+Up)"
+                aria-keyshortcuts="Alt+Shift+ArrowUp"
+              >
+                <Text size="L400">{isMobile ? '↑' : 'Prev Unread'}</Text>
+              </Chip>
+              <Chip
+                variant="SurfaceVariant"
+                radii="Pill"
+                outlined
+                before={<Icon size="50" src={Icons.ChevronBottom} />}
+                onClick={navigateNext}
+                aria-label="Next unread room (Alt+Shift+Down)"
+                aria-keyshortcuts="Alt+Shift+ArrowDown"
+              >
+                <Text size="L400">{isMobile ? '↓' : 'Next Unread'}</Text>
+              </Chip>
+            </>
+          )}
+          {showMentionNav && (
+            <>
+              <Chip
+                variant="SurfaceVariant"
+                radii="Pill"
+                outlined
+                before={<Icon size="50" src={Icons.Mention} />}
+                onClick={navigatePrevMention}
+                aria-label="Previous mention"
+              >
+                <Text size="L400">{isMobile ? '@↑' : 'Prev @'}</Text>
+              </Chip>
+              <Chip
+                variant="SurfaceVariant"
+                radii="Pill"
+                outlined
+                before={<Icon size="50" src={Icons.Mention} />}
+                onClick={navigateNextMention}
+                aria-label="Next mention"
+              >
+                <Text size="L400">{isMobile ? '@↓' : 'Next @'}</Text>
+              </Chip>
+            </>
+          )}
+          {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
+            <>
+              <Chip
+                variant="Primary"
+                radii="Pill"
+                outlined
+                before={<Icon size="50" src={Icons.MessageUnread} />}
+                onClick={handleJumpToUnread}
+              >
+                <Text size="L400">{isMobile && showUnreadNav ? 'Jump' : 'Jump to Unread'}</Text>
+              </Chip>
+              <Chip
+                variant="SurfaceVariant"
+                radii="Pill"
+                outlined
+                before={<Icon size="50" src={Icons.CheckTwice} />}
+                onClick={handleMarkAsRead}
+              >
+                <Text size="L400">{isMobile && showUnreadNav ? 'Read' : 'Mark as Read'}</Text>
+              </Chip>
+            </>
+          )}
         </TimelineFloat>
       )}
       <Scroll ref={scrollRef} visibility="Hover">

@@ -104,6 +104,16 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       requestClose();
     };
 
+    const isFavorite = !!room.tags['m.favourite'];
+    const handleToggleFavorite = () => {
+      if (isFavorite) {
+        mx.deleteRoomTag(room.roomId, 'm.favourite');
+      } else {
+        mx.setRoomTag(room.roomId, 'm.favourite', { order: 0.5 });
+      }
+      requestClose();
+    };
+
     return (
       <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
         {invitePrompt && room && (
@@ -148,6 +158,16 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               </MenuItem>
             )}
           </RoomNotificationModeSwitcher>
+          <MenuItem
+            onClick={handleToggleFavorite}
+            size="300"
+            after={<Icon size="100" src={Icons.Star} filled={isFavorite} />}
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              {isFavorite ? 'Unfavorite' : 'Favorite'}
+            </Text>
+          </MenuItem>
         </Box>
         <Line variant="Surface" size="300" />
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>

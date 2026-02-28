@@ -13,7 +13,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   INotification,
   INotificationsResponse,
@@ -31,6 +31,7 @@ import { Page, PageContent, PageContentCenter, PageHeader } from '../../../compo
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../../utils/matrix';
 import { InboxNotificationsPathSearchParams } from '../../paths';
+import { getInboxUnreadPath } from '../../pathUtils';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { SequenceCard } from '../../../components/sequence-card';
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
@@ -573,6 +574,7 @@ export function Notifications() {
   const mDirects = useAtomValue(mDirectAtom);
 
   const { navigateRoom } = useRoomNavigate();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const notificationsSearchParams = useNotificationsSearchParams(searchParams);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -621,6 +623,16 @@ export function Notifications() {
   useEffect(() => {
     loadTimeline();
   }, [loadTimeline]);
+
+  useEffect(() => {
+    if (timelineState.status === AsyncStatus.Error) {
+      const err = timelineState.error as any;
+      if (err?.httpStatus === 404 || err?.errcode === 'M_UNRECOGNIZED') {
+        setRefreshIntervalTime(-1);
+        navigate(getInboxUnreadPath(), { replace: true });
+      }
+    }
+  }, [timelineState, navigate]);
 
   const lastVItem = vItems[vItems.length - 1];
   const lastVItemIndex: number | undefined = lastVItem?.index;
@@ -770,20 +782,41 @@ export function Notifications() {
                     ))}
                   </Box>
                 )}
-                {timelineState.status === AsyncStatus.Error && (
-                  <Box
-                    className={ContainerColor({ variant: 'Critical' })}
-                    style={{
-                      padding: config.space.S300,
-                      borderRadius: config.radii.R400,
-                    }}
-                    direction="Column"
-                    gap="200"
-                  >
-                    <Text size="L400">{(timelineState.error as Error).name}</Text>
-                    <Text size="T300">{(timelineState.error as Error).message}</Text>
-                  </Box>
-                )}
+                {timelineState.status === AsyncStatus.Error &&
+                  (() => {
+                    const err = timelineState.error as any;
+                    const isUnsupported =
+                      err?.httpStatus === 404 || err?.errcode === 'M_UNRECOGNIZED';
+                    return isUnsupported ? (
+                      <Box
+                        className={ContainerColor({ variant: 'SurfaceVariant' })}
+                        style={{
+                          padding: config.space.S300,
+                          borderRadius: config.radii.R400,
+                        }}
+                        direction="Column"
+                        gap="200"
+                      >
+                        <Text>Not Available</Text>
+                        <Text size="T200">
+                          The notification timeline is not supported by your server.
+                        </Text>
+                      </Box>
+                    ) : (
+                      <Box
+                        className={ContainerColor({ variant: 'Critical' })}
+                        style={{
+                          padding: config.space.S300,
+                          borderRadius: config.radii.R400,
+                        }}
+                        direction="Column"
+                        gap="200"
+                      >
+                        <Text size="L400">{err.name}</Text>
+                        <Text size="T300">{err.message}</Text>
+                      </Box>
+                    );
+                  })()}
               </Box>
             </PageContentCenter>
           </PageContent>
