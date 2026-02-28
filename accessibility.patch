@@ -1,9 +1,9 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 0000000000..b5a5e3d454
+index 0000000000..f0e72d3672
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,227 @@
 +import React, { useCallback, useRef } from 'react';
 +import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
@@ -41,12 +41,6 @@ index 0000000000..b5a5e3d454
 +  key: 'alt+n',
 +  description: 'Go to next unread room',
 +  category: 'Navigation',
-+};
-+
-+const CALL_ANSWER_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
-+  key: 'alt+space',
-+  description: 'Answer incoming call',
-+  category: 'Actions',
 +};
 +
 +const START_CALL_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
@@ -218,26 +212,16 @@ index 0000000000..b5a5e3d454
 +    [currentRoomId, setActiveCallRoomId]
 +  );
 +
-+  const handleAnswerCallKeyDown = useCallback((evt: KeyboardEvent) => {
-+    if (!isKeyHotkey('alt+space', evt)) return;
-+    const joinBtn = document.getElementById('incoming-call-join') as HTMLButtonElement | null;
-+    if (!joinBtn) return;
-+    evt.preventDefault();
-+    joinBtn.click();
-+  }, []);
-+
 +  useKeyDown(window, handleCallKeyDown);
 +  useKeyDown(window, handleSpaceKeyDown);
 +  useKeyDown(window, handleNextUnreadKeyDown);
 +  useKeyDown(window, handleUnreadNavKeyDown);
 +  useKeyDown(window, handleStartCallKeyDown);
-+  useKeyDown(window, handleAnswerCallKeyDown);
 +
 +  const allShortcuts: KeyboardShortcut[] = [
 +    ...shortcuts,
 +    ...CALL_SHORTCUTS.map((s) => ({ ...s, action: () => {} })),
 +    { ...START_CALL_SHORTCUT, action: () => {} },
-+    { ...CALL_ANSWER_SHORTCUT, action: () => {} },
 +    { ...SPACE_SHORTCUT, action: () => {} },
 +    { ...NEXT_UNREAD_SHORTCUT, action: () => {} },
 +    { ...NEXT_UNREAD_DOWN_SHORTCUT, action: () => {} },
