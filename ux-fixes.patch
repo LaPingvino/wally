@@ -557,10 +557,10 @@ index 4cc94d918d..50fd9d99b6 100644
            </PageContent>
 diff --git a/src/app/pages/client/inbox/Unread.tsx b/src/app/pages/client/inbox/Unread.tsx
 new file mode 100644
-index 0000000000..a5a29ec8e2
+index 0000000000..bcf07ee9b4
 --- /dev/null
 +++ b/src/app/pages/client/inbox/Unread.tsx
-@@ -0,0 +1,340 @@
+@@ -0,0 +1,337 @@
 +import React, { useMemo } from 'react';
 +import {
 +  Avatar,
@@ -583,7 +583,6 @@ index 0000000000..a5a29ec8e2
 +  PageContentCenter,
 +  PageHeader,
 +  PageHero,
-+  PageHeroSection,
 +} from '../../../components/page';
 +import { useMatrixClient } from '../../../hooks/useMatrixClient';
 +import { allRoomsAtom } from '../../../state/room-list/roomList';
@@ -878,21 +877,19 @@ index 0000000000..a5a29ec8e2
 +                  subTitle="No unread messages."
 +                />
 +              ) : (
-+                <PageHeroSection>
-+                  <Box direction="Column" gap="200">
-+                    {unreadGroups.map(({ roomId, room, messages }) => (
-+                      <UnreadRoomGroup
-+                        key={roomId}
-+                        room={room}
-+                        messages={messages}
-+                        hideActivity={hideActivity}
-+                        hour24Clock={hour24Clock}
-+                        dateFormatString={dateFormatString}
-+                        onOpen={navigateToRoom}
-+                      />
-+                    ))}
-+                  </Box>
-+                </PageHeroSection>
++                <Box direction="Column" gap="200">
++                  {unreadGroups.map(({ roomId, room, messages }) => (
++                    <UnreadRoomGroup
++                      key={roomId}
++                      room={room}
++                      messages={messages}
++                      hideActivity={hideActivity}
++                      hour24Clock={hour24Clock}
++                      dateFormatString={dateFormatString}
++                      onOpen={navigateToRoom}
++                    />
++                  ))}
++                </Box>
 +              )}
 +            </PageContentCenter>
 +          </PageContent>
