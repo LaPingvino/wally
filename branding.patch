@@ -108,18 +108,17 @@ index 3943f42d19..5d60abd821 100644
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index 79630990e6..127a11ea22 100644
+index 79630990e6..873f5518a9 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
-@@ -3,6 +3,21 @@
+@@ -3,6 +3,20 @@
  import { Page, PageHero, PageHeroSection } from '../../components/page';
  import CinnySVG from '../../../../public/res/svg/cinny.svg';
  
 +const PATCHES: Array<{ name: string; desc: string }> = [
 +  { name: 'emoji-font', desc: 'Custom emoji font with Bahá\'í symbols' },
-+  { name: 'element-call', desc: 'Voice and video calling via Element Call' },
++  { name: 'element-call', desc: 'Voice and video calling via Element Call, with configurable ringtone and auto-join settings' },
 +  { name: 'pronouns', desc: 'Pronouns, timezone, and extended profile fields' },
-+  { name: 'call-settings', desc: 'Configurable ringtone and call notification sounds' },
 +  { name: 'login-a11y', desc: 'Screen-reader labels on all login forms' },
 +  { name: 'accessibility', desc: 'ARIA roles, keyboard shortcuts, and notification sounds' },
 +  { name: 'issue-tracker', desc: 'Schema-driven issue board stored in Matrix room state' },
@@ -133,7 +132,7 @@ index 79630990e6..127a11ea22 100644
  export function WelcomePage() {
    return (
      <Page>
-@@ -14,11 +29,11 @@
+@@ -14,11 +28,11 @@
        >
          <PageHeroSection>
            <PageHero
@@ -148,7 +147,7 @@ index 79630990e6..127a11ea22 100644
                  <a
                    href="https://github.com/cinnyapp/cinny/releases"
                    target="_blank"
-@@ -29,31 +44,58 @@
+@@ -29,31 +43,58 @@
                </span>
              }
            >
