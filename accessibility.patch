@@ -1919,10 +1919,88 @@ index c6aff741d6..a12a381665 100644
                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                      {onTogglePin && (
 diff --git a/src/app/features/lobby/Lobby.tsx b/src/app/features/lobby/Lobby.tsx
-index 4b19e5163c..ffdd9d7ff5 100644
+index 4b19e5163c..76e8c68b22 100644
 --- a/src/app/features/lobby/Lobby.tsx
 +++ b/src/app/features/lobby/Lobby.tsx
-@@ -435,7 +435,14 @@
+@@ -1,4 +1,4 @@
+-import React, { MouseEventHandler, useCallback, useMemo, useRef, useState } from 'react';
++import React, { KeyboardEventHandler, MouseEventHandler, useCallback, useMemo, useRef, useState } from 'react';
+ import { Box, Chip, Icon, IconButton, Icons, Line, Scroll, Spinner, Text, config } from 'folds';
+ import { useVirtualizer } from '@tanstack/react-virtual';
+ import { useAtom, useAtomValue } from 'jotai';
+@@ -56,6 +56,7 @@
+ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+ import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
+ import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
++import { isKeyHotkey } from 'is-hotkey';
+ 
+ const useCanDropLobbyItem = (
+   space: Room,
+@@ -408,6 +409,63 @@
+     closedCategories.has(categoryId)
+   );
+ 
++  // Flat list of room IDs in lobby order (open categories only), paired with the
++  // virtualizer index of the SpaceHierarchy that contains them.
++  type LobbyNavItem = { roomId: string; virtIndex: number };
++  const lobbyNavItems = useMemo<LobbyNavItem[]>(() => {
++    const items: LobbyNavItem[] = [];
++    hierarchy.forEach((item, virtIndex) => {
++      const catId = makeLobbyCategoryId(space.roomId, item.space.roomId);
++      if (!closedCategories.has(catId) && item.rooms) {
++        item.rooms.forEach((r) => items.push({ roomId: r.roomId, virtIndex }));
++      }
++    });
++    return items;
++  }, [hierarchy, closedCategories, space.roomId]);
++
++  const handleLobbyKeyDown: KeyboardEventHandler<HTMLElement> = useCallback(
++    (evt) => {
++      if (lobbyNavItems.length === 0) return;
++      // Only handle plain arrow/home/end keys (not when a button inside has focus
++      // and handles the event itself — check the event target isn't a button).
++      const target = evt.target as HTMLElement;
++      if (target !== evt.currentTarget && target.tagName === 'BUTTON') return;
++
++      const isDown = isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent);
++      const isUp = isKeyHotkey('arrowup', evt as unknown as KeyboardEvent);
++      const isHome = isKeyHotkey('home', evt as unknown as KeyboardEvent);
++      const isEnd = isKeyHotkey('end', evt as unknown as KeyboardEvent);
++      if (!isDown && !isUp && !isHome && !isEnd) return;
++
++      // Find which lobby room is currently focused (by data-room-id attribute).
++      const focused = document.activeElement as HTMLElement | null;
++      const currentRoomId = focused?.getAttribute('data-room-id') ?? null;
++      const currentIdx = currentRoomId
++        ? lobbyNavItems.findIndex((i) => i.roomId === currentRoomId)
++        : -1;
++
++      let nextIdx: number;
++      if (isHome) nextIdx = 0;
++      else if (isEnd) nextIdx = lobbyNavItems.length - 1;
++      else if (isDown) nextIdx = currentIdx < 0 ? 0 : Math.min(currentIdx + 1, lobbyNavItems.length - 1);
++      else nextIdx = currentIdx < 0 ? lobbyNavItems.length - 1 : Math.max(currentIdx - 1, 0);
++
++      evt.preventDefault();
++      const item = lobbyNavItems[nextIdx];
++      virtualizer.scrollToIndex(item.virtIndex, { align: 'auto' });
++      // Wait two frames for the virtualizer to render the target item, then focus it.
++      requestAnimationFrame(() =>
++        requestAnimationFrame(() => {
++          const btn = document.querySelector<HTMLElement>(
++            `[data-room-id="${item.roomId}"]`
++          );
++          btn?.focus();
++        })
++      );
++    },
++    [lobbyNavItems, virtualizer]
++  );
++
+   const handleOpenRoom: MouseEventHandler<HTMLButtonElement> = (evt) => {
+     const rId = evt.currentTarget.getAttribute('data-room-id');
+     if (!rId) return;
+@@ -435,7 +493,15 @@
              showProfile={!onTop}
              powerLevels={roomsPowerLevels.get(space.roomId) ?? {}}
            />
@@ -1934,6 +2012,7 @@ index 4b19e5163c..ffdd9d7ff5 100644
 +            tabIndex={-1}
 +            style={{ position: 'relative' }}
 +            grow="Yes"
++            onKeyDown={handleLobbyKeyDown}
 +          >
              <Scroll ref={scrollRef} hideTrack visibility="Hover">
                <PageContent>
@@ -2093,10 +2172,28 @@ index 62ef9c4bd7..cafe4896c6 100644
            </Text>
          </Box>
 diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
-index d9205076b2..c3161ab87d 100644
+index d9205076b2..2c13ad54a3 100644
 --- a/src/app/features/room/MembersDrawer.tsx
 +++ b/src/app/features/room/MembersDrawer.tsx
-@@ -70,7 +70,7 @@
+@@ -1,7 +1,9 @@
+ import React, {
+   ChangeEventHandler,
++  KeyboardEventHandler,
+   MouseEventHandler,
+   useCallback,
++  useEffect,
+   useMemo,
+   useRef,
+   useState,
+@@ -59,6 +61,7 @@
+ import { ContainerColor } from '../../styles/ContainerColor.css';
+ import { useFlattenPowerTagMembers, useGetMemberPowerTag } from '../../hooks/useMemberPowerTag';
+ import { useRoomCreators } from '../../hooks/useRoomCreators';
++import { isKeyHotkey } from 'is-hotkey';
+ 
+ type MemberDrawerHeaderProps = {
+   room: Room;
+@@ -70,7 +73,7 @@
      <Header className={css.MembersDrawerHeader} variant="Background" size="600">
        <Box grow="Yes" alignItems="Center" gap="200">
          <Box grow="Yes" alignItems="Center" gap="200">
@@ -2105,7 +2202,7 @@ index d9205076b2..c3161ab87d 100644
              {`${millify(room.getJoinedMemberCount())} Members`}
            </Text>
          </Box>
-@@ -90,6 +90,7 @@
+@@ -90,6 +93,7 @@
                  ref={triggerRef}
                  variant="Background"
                  onClick={() => setPeopleDrawer(false)}
@@ -2113,8 +2210,155 @@ index d9205076b2..c3161ab87d 100644
                >
                  <Icon src={Icons.Cross} />
                </IconButton>
-@@ -246,6 +247,10 @@
+@@ -109,6 +113,8 @@
+   onClick: MouseEventHandler<HTMLButtonElement>;
+   pressed?: boolean;
+   typing?: boolean;
++  focused?: boolean;
++  optionId?: string;
+ };
+ function MemberItem({
+   mx,
+@@ -118,6 +124,8 @@
+   onClick,
+   pressed,
+   typing,
++  focused,
++  optionId,
+ }: MemberItemProps) {
+   const name =
+     getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
+@@ -128,9 +136,12 @@
  
+   return (
+     <MenuItem
++      id={optionId}
++      role="option"
+       style={{ padding: `0 ${config.space.S200}` }}
+-      aria-pressed={pressed}
++      aria-selected={pressed || focused}
+       data-user-id={member.userId}
++      tabIndex={-1}
+       variant="Background"
+       radii="400"
+       onClick={onClick}
+@@ -244,8 +255,125 @@
+     openUserRoomProfile(room.roomId, space?.roomId, userId, btn.getBoundingClientRect(), 'Left');
+   };
+ 
++  // Keyboard navigation: only member items (skip power-tag label rows).
++  const memberIndices = useMemo(
++    () =>
++      PLTagOrRoomMember.reduce<number[]>((acc, item, i) => {
++        if ('userId' in item) acc.push(i);
++        return acc;
++      }, []),
++    [PLTagOrRoomMember]
++  );
++  const [focusedVirtIndex, setFocusedVirtIndex] = useState(-1);
++
++  // Keep focusedVirtIndex valid when list shrinks (e.g. search filter).
++  useEffect(() => {
++    if (focusedVirtIndex >= PLTagOrRoomMember.length) setFocusedVirtIndex(-1);
++  }, [PLTagOrRoomMember.length, focusedVirtIndex]);
++
++  const focusedMember =
++    focusedVirtIndex >= 0 ? PLTagOrRoomMember[focusedVirtIndex] : undefined;
++  const focusedUserId =
++    focusedMember && 'userId' in focusedMember ? focusedMember.userId : undefined;
++
++  const handleListFocus = useCallback(() => {
++    if (focusedVirtIndex < 0 && memberIndices.length > 0) {
++      const idx = memberIndices[0];
++      setFocusedVirtIndex(idx);
++      virtualizer.scrollToIndex(idx, { align: 'auto' });
++    }
++  }, [focusedVirtIndex, memberIndices, virtualizer]);
++
++  const handleListKeyDown: KeyboardEventHandler<HTMLDivElement> = useCallback(
++    (evt) => {
++      if (memberIndices.length === 0) return;
++      const currentPos =
++        focusedVirtIndex >= 0 ? memberIndices.indexOf(focusedVirtIndex) : -1;
++
++      if (isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent)) {
++        evt.preventDefault();
++        const nextPos =
++          currentPos < 0 ? 0 : Math.min(currentPos + 1, memberIndices.length - 1);
++        const idx = memberIndices[nextPos];
++        setFocusedVirtIndex(idx);
++        virtualizer.scrollToIndex(idx, { align: 'auto' });
++        return;
++      }
++      if (isKeyHotkey('arrowup', evt as unknown as KeyboardEvent)) {
++        evt.preventDefault();
++        const nextPos =
++          currentPos < 0
++            ? memberIndices.length - 1
++            : Math.max(currentPos - 1, 0);
++        const idx = memberIndices[nextPos];
++        setFocusedVirtIndex(idx);
++        virtualizer.scrollToIndex(idx, { align: 'auto' });
++        return;
++      }
++      if (isKeyHotkey('home', evt as unknown as KeyboardEvent)) {
++        evt.preventDefault();
++        const idx = memberIndices[0];
++        setFocusedVirtIndex(idx);
++        virtualizer.scrollToIndex(idx, { align: 'start' });
++        return;
++      }
++      if (isKeyHotkey('end', evt as unknown as KeyboardEvent)) {
++        evt.preventDefault();
++        const idx = memberIndices[memberIndices.length - 1];
++        setFocusedVirtIndex(idx);
++        virtualizer.scrollToIndex(idx, { align: 'end' });
++        return;
++      }
++      if (
++        (isKeyHotkey('enter', evt as unknown as KeyboardEvent) ||
++          isKeyHotkey('space', evt as unknown as KeyboardEvent)) &&
++        focusedUserId
++      ) {
++        evt.preventDefault();
++        const btn = document.querySelector<HTMLButtonElement>(
++          `[data-user-id="${focusedUserId}"]`
++        );
++        if (btn) btn.click();
++        return;
++      }
++      // Type-ahead: jump to first member whose name starts with typed character.
++      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
++        evt.preventDefault();
++        const char = evt.key.toLowerCase();
++        const startPos = currentPos >= 0 ? currentPos + 1 : 0;
++        for (let i = 0; i < memberIndices.length; i++) {
++          const pos = (startPos + i) % memberIndices.length;
++          const item = PLTagOrRoomMember[memberIndices[pos]];
++          if (item && 'userId' in item) {
++            const name =
++              getMemberDisplayName(room, item.userId) ??
++              getMxIdLocalPart(item.userId) ??
++              item.userId;
++            if (name.toLowerCase().startsWith(char)) {
++              setFocusedVirtIndex(memberIndices[pos]);
++              virtualizer.scrollToIndex(memberIndices[pos], { align: 'auto' });
++              return;
++            }
++          }
++        }
++      }
++    },
++    [
++      memberIndices,
++      focusedVirtIndex,
++      focusedUserId,
++      PLTagOrRoomMember,
++      virtualizer,
++      room,
++    ]
++  );
++
    return (
      <Box
 +      id="cinny-members-panel"
@@ -2124,6 +2368,49 @@ index d9205076b2..c3161ab87d 100644
        className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
        shrink="No"
        direction="Column"
+@@ -378,10 +506,21 @@
+ 
+             <Box className={css.MembersGroup} direction="Column" gap="100">
+               <div
+-                style={{
+-                  position: 'relative',
+-                  height: virtualizer.getTotalSize(),
+-                }}
++                role="listbox"
++                aria-label="Members"
++                aria-orientation="vertical"
++                aria-activedescendant={
++                  focusedUserId ? `member-option-${focusedUserId}` : undefined
++                }
++                tabIndex={0}
++                onKeyDown={handleListKeyDown}
++                onFocus={(evt) => {
++                  if (evt.target === evt.currentTarget) handleListFocus();
++                }}
++                onMouseDown={(evt) => {
++                  if (evt.target === evt.currentTarget) evt.preventDefault();
++                }}
++                style={{ position: 'relative', height: virtualizer.getTotalSize() }}
+               >
+                 {virtualizer.getVirtualItems().map((vItem) => {
+                   const tagOrMember = PLTagOrRoomMember[vItem.index];
+@@ -402,6 +541,7 @@
+                     );
+                   }
+ 
++                  const isFocused = focusedVirtIndex === vItem.index;
+                   return (
+                     <div
+                       style={{
+@@ -422,6 +562,8 @@
+                         typing={typingMembers.some(
+                           (receipt) => receipt.userId === tagOrMember.userId
+                         )}
++                        focused={isFocused}
++                        optionId={`member-option-${tagOrMember.userId}`}
+                       />
+                     </div>
+                   );
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
 index 20dca577a0..857a4b1d1e 100644
 --- a/src/app/features/room/RoomInput.tsx
@@ -2231,7 +2518,7 @@ index 5a96e6ad47..81b5b3164e 100644
            alignItems="Center"
            justifyContent="End"
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index 732bb4f267..d27f6b28e5 100644
+index 732bb4f267..fd70f75e22 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -1,4 +1,4 @@
@@ -2249,10 +2536,32 @@ index 732bb4f267..d27f6b28e5 100644
        {invitePrompt && (
          <InviteUserPrompt
            room={room}
-@@ -396,6 +396,23 @@
+@@ -396,6 +396,45 @@
      setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
    };
  
++  const handleToolbarKeyDown = useCallback((evt: React.KeyboardEvent<HTMLElement>) => {
++    const isLeft = isKeyHotkey('arrowleft', evt as unknown as KeyboardEvent);
++    const isRight = isKeyHotkey('arrowright', evt as unknown as KeyboardEvent);
++    const isHome = isKeyHotkey('home', evt as unknown as KeyboardEvent);
++    const isEnd = isKeyHotkey('end', evt as unknown as KeyboardEvent);
++    if (!isLeft && !isRight && !isHome && !isEnd) return;
++    const toolbar = evt.currentTarget;
++    const buttons = Array.from(
++      toolbar.querySelectorAll<HTMLElement>('button:not([disabled])')
++    );
++    if (buttons.length === 0) return;
++    evt.preventDefault();
++    const focused = document.activeElement as HTMLElement;
++    const currentIdx = buttons.indexOf(focused);
++    let nextIdx: number;
++    if (isHome) nextIdx = 0;
++    else if (isEnd) nextIdx = buttons.length - 1;
++    else if (isLeft) nextIdx = currentIdx <= 0 ? buttons.length - 1 : currentIdx - 1;
++    else nextIdx = currentIdx >= buttons.length - 1 ? 0 : currentIdx + 1;
++    buttons[nextIdx].focus();
++  }, []);
++
 +  const handleHeaderKeyDown = useCallback(
 +    (evt: KeyboardEvent) => {
 +      if (isKeyHotkey('alt+shift+t', evt)) {
@@ -2273,12 +2582,12 @@ index 732bb4f267..d27f6b28e5 100644
    return (
      <PageHeader
        className={ContainerColor({ variant: 'Surface' })}
-@@ -470,7 +487,7 @@
+@@ -470,7 +509,7 @@
            </Box>
          </Box>
  
 -        <Box shrink="No">
-+        <Box id="cinny-room-header-toolbar" data-section-label="Room actions" shrink="No">
++        <Box id="cinny-room-header-toolbar" data-section-label="Room actions" role="toolbar" aria-label="Room actions" aria-orientation="horizontal" shrink="No" onKeyDown={handleToolbarKeyDown}>
            {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
                Wobble here (left side of group) is less noticeable than at the right. */}
  
