@@ -688,7 +688,7 @@ index 0000000000..76425cabb6
 +}
 diff --git a/src/app/features/room/ThreadsDrawer.tsx b/src/app/features/room/ThreadsDrawer.tsx
 new file mode 100644
-index 0000000000..e2b114fb4d
+index 0000000000..03183beca7
 --- /dev/null
 +++ b/src/app/features/room/ThreadsDrawer.tsx
 @@ -0,0 +1,270 @@
@@ -924,7 +924,7 @@ index 0000000000..e2b114fb4d
 +              <Icon size="200" src={Icons.ArrowLeft} />
 +            </IconButton>
 +          )}
-+          <Text size="H5">{selectedThreadId ? 'Thread' : 'Threads'}</Text>
++          <Text size="H5" as="h2">{selectedThreadId ? 'Thread' : 'Threads'}</Text>
 +        </Box>
 +        <IconButton fill="None" size="300" onClick={onClose} aria-label="Close threads panel">
 +          <Icon size="200" src={Icons.Cross} />

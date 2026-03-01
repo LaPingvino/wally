@@ -90,7 +90,7 @@ index f8647d1865..e0c7612667 100644
  };
 diff --git a/src/app/pages/client/AddAccountDialog.tsx b/src/app/pages/client/AddAccountDialog.tsx
 new file mode 100644
-index 0000000000..75ece24a0a
+index 0000000000..16f78b3e7b
 --- /dev/null
 +++ b/src/app/pages/client/AddAccountDialog.tsx
 @@ -0,0 +1,213 @@
@@ -228,7 +228,7 @@ index 0000000000..75ece24a0a
 +          style={{ padding: config.space.S400 }}
 +        >
 +          <Box direction="Row" alignItems="Center" justifyContent="SpaceBetween">
-+            <Text size="H4">Add Account</Text>
++            <Text size="H4" as="h2">Add Account</Text>
 +            <IconButton
 +              onClick={onClose}
 +              variant="Background"

@@ -372,10 +372,10 @@ index 0000000000..ef470ca518
 +});
 diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
 new file mode 100644
-index 0000000000..510f2020b4
+index 0000000000..80988d6d2b
 --- /dev/null
 +++ b/src/app/features/call/CallView.tsx
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,303 @@
 +import { EventType, Room } from 'matrix-js-sdk';
 +import React, {
 +  useContext,
@@ -649,6 +649,7 @@ index 0000000000..510f2020b4
 +        >
 +          <Text
 +            size="H1"
++            as="h2"
 +            style={{
 +              paddingBottom: config.space.S300,
 +            }}

@@ -235,7 +235,7 @@ index 0000000000..95c0296455
 +  );
 +}
 diff --git a/src/app/components/user-profile/UserChips.tsx b/src/app/components/user-profile/UserChips.tsx
-index 53e6618b5a..d65006bdeb 100644
+index 53e6618b5a..f809c5a867 100644
 --- a/src/app/components/user-profile/UserChips.tsx
 +++ b/src/app/components/user-profile/UserChips.tsx
 @@ -1,4 +1,4 @@
@@ -357,7 +357,7 @@ index 53e6618b5a..d65006bdeb 100644
 +                escapeDeactivates: stopPropagation,
 +              }}
 +            >
-+              <Modal variant="Surface" size="500">
++              <Modal variant="Surface" size="500" role="dialog" aria-modal="true" aria-label="Profile Fields">
 +                <TextViewer
 +                  name="Profile Fields"
 +                  langName="json"
@@ -385,7 +385,7 @@ index 53e6618b5a..d65006bdeb 100644
 +              isKeyBackward: (evt: KeyboardEvent) => isKeyHotkey('arrowup', evt),
 +            }}
 +          >
-+            <Menu>
++            <Menu role="menu">
 +              <div style={{ padding: config.space.S100 }}>
 +                <MenuItem
 +                  variant="Critical"
@@ -1740,7 +1740,7 @@ index e982a79921..71f5773f30 100644
    );
 diff --git a/src/app/features/settings/account/fields/ProfileAvatar.tsx b/src/app/features/settings/account/fields/ProfileAvatar.tsx
 new file mode 100644
-index 0000000000..5c668c56c3
+index 0000000000..8c5dfdb8f1
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileAvatar.tsx
 @@ -0,0 +1,118 @@
@@ -1849,7 +1849,7 @@ index 0000000000..5c668c56c3
 +                escapeDeactivates: stopPropagation,
 +              }}
 +            >
-+              <Modal className={ModalWide} variant="Surface" size="500">
++              <Modal className={ModalWide} variant="Surface" size="500" role="dialog" aria-modal="true" aria-label="Edit Avatar">
 +                <ImageEditor
 +                  name={imageFile?.name ?? 'Unnamed'}
 +                  url={imageFileURL}
@@ -2198,7 +2198,7 @@ index 0000000000..407507ad4f
 +}
 diff --git a/src/app/features/settings/account/fields/ProfileTimezone.tsx b/src/app/features/settings/account/fields/ProfileTimezone.tsx
 new file mode 100644
-index 0000000000..5ab6fd9d64
+index 0000000000..c5cc90b723
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileTimezone.tsx
 @@ -0,0 +1,160 @@
@@ -2267,7 +2267,7 @@ index 0000000000..5ab6fd9d64
 +              },
 +            }}
 +          >
-+            <Dialog variant="Surface">
++            <Dialog variant="Surface" role="dialog" aria-modal="true" aria-labelledby="choose-timezone-dialog-title">
 +              <Header
 +                style={{
 +                  padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -2277,7 +2277,7 @@ index 0000000000..5ab6fd9d64
 +                size="500"
 +              >
 +                <Box grow="Yes">
-+                  <Text size="H4">Choose a Timezone</Text>
++                  <Text size="H4" as="h2" id="choose-timezone-dialog-title">Choose a Timezone</Text>
 +                </Box>
 +                <IconButton size="300" onClick={() => setOverlayOpen(false)} radii="300" aria-label="Close">
 +                  <Icon src={Icons.Cross} />
@@ -2529,7 +2529,7 @@ index 0000000000..9c9cbe6ad1
 +  );
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567b6..44fcfb72b8 100644
+index a3f04567b6..1378c0c929 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -1,5 +1,7 @@
@@ -2705,7 +2705,7 @@ index a3f04567b6..44fcfb72b8 100644
 +          <PageHeader outlined={false}>
 +            <Box grow="Yes" gap="200">
 +              <Box grow="Yes" alignItems="Center" gap="200">
-+                <Text size="H3" truncate>
++                <Text size="H3" as="h1" truncate>
 +                  Developer Tools
 +                </Text>
 +              </Box>

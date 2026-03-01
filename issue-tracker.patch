@@ -1,6 +1,6 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 0000000000..398aeff5db
+index 0000000000..2e3a3a18ff
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
 @@ -0,0 +1,1833 @@
@@ -734,7 +734,7 @@ index 0000000000..398aeff5db
 +  return (
 +    <Dialog role="dialog" aria-modal="true" aria-labelledby={titleId} variant="Surface" style={{ width: '90vw', maxWidth: '680px' }}>
 +      <Header style={{ padding: '0 ' + config.space.S200 + ' 0 ' + config.space.S400, borderBottomWidth: config.borderWidth.B300 }} variant="Surface" size="500">
-+        <Box grow="Yes"><Text id={titleId} size="H4">{titleText ?? 'Configure Issue Tracker'}</Text></Box>
++        <Box grow="Yes"><Text id={titleId} size="H4" as="h2">{titleText ?? 'Configure Issue Tracker'}</Text></Box>
 +        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close"><Icon src={Icons.Cross} /></IconButton>
 +      </Header>
 +
@@ -895,7 +895,7 @@ index 0000000000..398aeff5db
 +  return (
 +    <Dialog role="dialog" aria-modal="true" aria-labelledby={titleId} variant="Surface" style={{ width: '90vw', maxWidth: '520px' }}>
 +      <Header style={{ padding: '0 ' + config.space.S200 + ' 0 ' + config.space.S400, borderBottomWidth: config.borderWidth.B300 }} variant="Surface" size="500">
-+        <Box grow="Yes"><Text id={titleId} size="H4">{issueId ? 'Edit Issue' : 'New Issue'}</Text></Box>
++        <Box grow="Yes"><Text id={titleId} size="H4" as="h2">{issueId ? 'Edit Issue' : 'New Issue'}</Text></Box>
 +        <IconButton size="300" onClick={onCancel} radii="300" aria-label="Close"><Icon src={Icons.Cross} /></IconButton>
 +      </Header>
 +
@@ -1222,7 +1222,7 @@ index 0000000000..398aeff5db
 +      <Dialog role="dialog" aria-modal="true" aria-labelledby={titleId} variant="Surface" style={{ width: '90vw', maxWidth: '480px' }}>
 +        <Header style={{ padding: '0 ' + config.space.S200 + ' 0 ' + config.space.S400, borderBottomWidth: config.borderWidth.B300 }} variant="Surface" size="500">
 +          <Box grow="Yes">
-+            <Text id={titleId} size="H4">
++            <Text id={titleId} size="H4" as="h2">
 +              {'Move ' + issuesToMove.length + ' Issue' + (issuesToMove.length !== 1 ? 's' : '') + ' To\u2026'}
 +            </Text>
 +          </Box>
@@ -1284,7 +1284,7 @@ index 0000000000..398aeff5db
 +          <IconButton size="300" onClick={() => setStep('pick-room')} radii="300" aria-label="Back to room picker">
 +            <Icon src={Icons.ArrowLeft} />
 +          </IconButton>
-+          <Text id={titleId} size="H4">Map Fields</Text>
++          <Text id={titleId} size="H4" as="h2">Map Fields</Text>
 +        </Box>
 +        <IconButton size="300" onClick={onClose} radii="300" aria-label="Close"><Icon src={Icons.Cross} /></IconButton>
 +      </Header>

@@ -1,5 +1,5 @@
 diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
-index b861a060b7..be2f204e19 100644
+index b861a060b7..6ec13f6799 100644
 --- a/src/app/features/settings/general/General.tsx
 +++ b/src/app/features/settings/general/General.tsx
 @@ -32,7 +32,7 @@
@@ -22,7 +22,7 @@ index b861a060b7..be2f204e19 100644
 +};
 +const EmojiFontSelector = as<'div', EmojiFontSelectorProps>(
 +  ({ emojiFonts, selected, onSelect, ...props }, ref) => (
-+    <Menu {...props} ref={ref}>
++    <Menu role="menu" {...props} ref={ref}>
 +      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
 +        {emojiFonts.map((font) => (
 +          <MenuItem

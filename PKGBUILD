@@ -2,7 +2,7 @@
 # Fork maintainer: Joop Kiefte <ikojba@gmail.com>
 _pkgname=cinny-web
 pkgname="${_pkgname}-git"
-pkgver=r1500.6623ca42
+pkgver=r1500.c8f3ef6f
 pkgrel=1
 pkgdesc="Yet another matrix client — web version (with Element Call, accessibility, issue tracker, and other patches)"
 arch=('any')
