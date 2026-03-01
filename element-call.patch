@@ -372,10 +372,10 @@ index 0000000000..ef470ca518
 +});
 diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
 new file mode 100644
-index 0000000000..5a89a0dadc
+index 0000000000..510f2020b4
 --- /dev/null
 +++ b/src/app/features/call/CallView.tsx
-@@ -0,0 +1,298 @@
+@@ -0,0 +1,302 @@
 +import { EventType, Room } from 'matrix-js-sdk';
 +import React, {
 +  useContext,
@@ -541,7 +541,9 @@ index 0000000000..5a89a0dadc
 +    const iframeElement = activeIframeDisplayRef?.current;
 +    const hostElement = iframeHostRef?.current;
 +
-+    if (room.isCallRoom() || (callIsCurrentAndReady && iframeElement && hostElement)) {
++    // Show the iframe as soon as the call is active (not just when ready) so that
++    // the Element Call lobby is visible and interactive when callAutoJoin is off.
++    if (room.isCallRoom() || (isActiveCallRoom && iframeElement && hostElement)) {
 +      applyFixedPositioningToIframe();
 +
 +      const resizeObserver = new ResizeObserver(debouncedApplyFixedPositioning);
@@ -569,7 +571,7 @@ index 0000000000..5a89a0dadc
 +    activeIframeDisplayRef,
 +    applyFixedPositioningToIframe,
 +    debouncedApplyFixedPositioning,
-+    callIsCurrentAndReady,
++    isActiveCallRoom,
 +    room,
 +  ]);
 +
@@ -617,7 +619,8 @@ index 0000000000..5a89a0dadc
 +          height: '100%',
 +          position: 'relative',
 +          pointerEvents: 'none',
-+          display: callIsCurrentAndReady ? 'flex' : 'none',
++          // Show as soon as the call is active so the EC lobby iframe is visible.
++          display: isActiveCallRoom ? 'flex' : 'none',
 +        }}
 +      />
 +      <Box
@@ -627,7 +630,8 @@ index 0000000000..5a89a0dadc
 +        direction="Column"
 +        gap="300"
 +        style={{
-+          display: callIsCurrentAndReady ? 'none' : 'flex',
++          // Show cinny's own join UI only when no call is active yet.
++          display: isActiveCallRoom ? 'none' : 'flex',
 +        }}
 +      >
 +        <CallViewUserGrid>
