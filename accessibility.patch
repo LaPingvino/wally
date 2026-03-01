@@ -91,10 +91,10 @@ index 433fa6a1db..8476147912 100644
          </Header>
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 0000000000..f0e72d3672
+index 0000000000..f20b34ad52
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,247 @@
 +import React, { useCallback, useRef } from 'react';
 +import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
@@ -115,6 +115,8 @@ index 0000000000..f0e72d3672
 +import { mDirectAtom } from '../state/mDirectList';
 +import { roomToUnreadAtom } from '../state/room/roomToUnread';
 +import { announce } from '../utils/announce';
++import { useSetSetting } from '../state/hooks/settings';
++import { settingsAtom } from '../state/settings';
 +
 +const CALL_SHORTCUTS: Omit<KeyboardShortcut, 'action'>[] = [
 +  { key: 'mod+shift+m', description: 'Toggle mute (in call)', category: 'Actions' },
@@ -158,10 +160,17 @@ index 0000000000..f0e72d3672
 +  category: 'Navigation',
 +};
 +
++const PEOPLE_DRAWER_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+p',
++  description: 'Toggle members panel',
++  category: 'Actions',
++};
++
 +export function GlobalKeyboardShortcuts() {
 +  const navigate = useNavigate();
 +  const { shortcuts } = useGlobalKeyboardShortcuts();
 +  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = useCallState();
++  const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
 +  const unreadIndexRef = useRef(0);
 +  const mx = useMatrixClient();
 +  const roomToParents = useAtomValue(roomToParentsAtom);
@@ -303,11 +312,21 @@ index 0000000000..f0e72d3672
 +    [currentRoomId, setActiveCallRoomId]
 +  );
 +
++  const handlePeopleDrawerKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (!isKeyHotkey('alt+p', evt)) return;
++      evt.preventDefault();
++      setPeopleDrawer((v) => !v);
++    },
++    [setPeopleDrawer]
++  );
++
 +  useKeyDown(window, handleCallKeyDown);
 +  useKeyDown(window, handleSpaceKeyDown);
 +  useKeyDown(window, handleNextUnreadKeyDown);
 +  useKeyDown(window, handleUnreadNavKeyDown);
 +  useKeyDown(window, handleStartCallKeyDown);
++  useKeyDown(window, handlePeopleDrawerKeyDown);
 +
 +  const allShortcuts: KeyboardShortcut[] = [
 +    ...shortcuts,
@@ -318,6 +337,7 @@ index 0000000000..f0e72d3672
 +    { ...NEXT_UNREAD_DOWN_SHORTCUT, action: () => {} },
 +    { ...PREV_UNREAD_UP_SHORTCUT, action: () => {} },
 +    { ...ACCOUNT_SWITCH_SHORTCUT, action: () => {} },
++    { ...PEOPLE_DRAWER_SHORTCUT, action: () => {} },
 +  ];
 +
 +  return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
@@ -1792,7 +1812,7 @@ index c6aff741d6..a12a381665 100644
                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                      {onTogglePin && (
 diff --git a/src/app/features/lobby/LobbyHeader.tsx b/src/app/features/lobby/LobbyHeader.tsx
-index a0c4d3ab42..03008b680f 100644
+index a0c4d3ab42..6c5fd17890 100644
 --- a/src/app/features/lobby/LobbyHeader.tsx
 +++ b/src/app/features/lobby/LobbyHeader.tsx
 @@ -65,7 +65,7 @@
@@ -1836,7 +1856,7 @@ index a0c4d3ab42..03008b680f 100644
              >
                {(triggerRef) => (
 -                <IconButton ref={triggerRef} onClick={() => setPeopleDrawer((drawer) => !drawer)}>
-+                <IconButton ref={triggerRef} onClick={() => setPeopleDrawer((drawer) => !drawer)} aria-label="Members">
++                <IconButton ref={triggerRef} onClick={() => setPeopleDrawer((drawer) => !drawer)} aria-label="Members" aria-keyshortcuts="Alt+P">
                    <Icon size="400" src={Icons.User} />
                  </IconButton>
                )}
@@ -2073,7 +2093,7 @@ index 5a96e6ad47..81b5b3164e 100644
            alignItems="Center"
            justifyContent="End"
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index c25fdb2b8a..517c008e33 100644
+index 8f49b9f73a..cbc2ed7c76 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -141,7 +141,7 @@
@@ -4759,10 +4779,10 @@ index e6575cb438..b99d0a4908 100644
              >
                <Icon src={Icons.Plus} />
 diff --git a/src/app/pages/client/sidebar/DirectTab.tsx b/src/app/pages/client/sidebar/DirectTab.tsx
-index dcd44e2f73..7f9eaaa42b 100644
+index dcd44e2f73..2426c93ed3 100644
 --- a/src/app/pages/client/sidebar/DirectTab.tsx
 +++ b/src/app/pages/client/sidebar/DirectTab.tsx
-@@ -93,12 +93,13 @@
+@@ -93,12 +93,14 @@
    };
    return (
      <SidebarItem active={directSelected}>
@@ -4774,6 +4794,7 @@ index dcd44e2f73..7f9eaaa42b 100644
              ref={triggerRef}
              outlined
 +            aria-label="Direct Messages"
++            aria-keyshortcuts="Alt+D"
              onClick={handleDirectClick}
              onContextMenu={handleContextMenu}
            >
@@ -4791,10 +4812,10 @@ index a45b583091..63879f825d 100644
            </SidebarAvatar>
          )}
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index 53b3a4cf9c..325d1f7f0b 100644
+index 53b3a4cf9c..45d5ba2a82 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
 +++ b/src/app/pages/client/sidebar/HomeTab.tsx
-@@ -127,12 +127,13 @@
+@@ -127,12 +127,14 @@
  
    return (
      <SidebarItem active={homeSelected}>
@@ -4806,11 +4827,12 @@ index 53b3a4cf9c..325d1f7f0b 100644
              ref={triggerRef}
              outlined
 +            aria-label="Home"
++            aria-keyshortcuts="Alt+H"
              onClick={handleHomeClick}
              onContextMenu={handleContextMenu}
            >
 diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
-index 101589de53..5f673ea535 100644
+index 101589de53..5688d5b128 100644
 --- a/src/app/pages/client/sidebar/InboxTab.tsx
 +++ b/src/app/pages/client/sidebar/InboxTab.tsx
 @@ -53,9 +53,9 @@
@@ -4821,7 +4843,7 @@ index 101589de53..5f673ea535 100644
 +      <SidebarItemTooltip tooltip="Inbox (Alt+I)">
          {(triggerRef) => (
 -          <SidebarAvatar as="button" ref={triggerRef} outlined onClick={handleInboxClick}>
-+          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Inbox" onClick={handleInboxClick}>
++          <SidebarAvatar as="button" ref={triggerRef} outlined aria-label="Inbox" aria-keyshortcuts="Alt+I" onClick={handleInboxClick}>
              <Icon src={Icons.Inbox} filled={inboxSelected} />
            </SidebarAvatar>
          )}
@@ -4855,7 +4877,7 @@ index df0515a257..9864ad3b3c 100644
                userId={userId}
                src={avatarUrl}
 diff --git a/src/app/pages/client/sidebar/SpaceTabs.tsx b/src/app/pages/client/sidebar/SpaceTabs.tsx
-index 6fc528a106..03c1bb8c00 100644
+index 6fc528a106..cf6298dc60 100644
 --- a/src/app/pages/client/sidebar/SpaceTabs.tsx
 +++ b/src/app/pages/client/sidebar/SpaceTabs.tsx
 @@ -147,7 +147,7 @@
@@ -4867,15 +4889,32 @@ index 6fc528a106..03c1bb8c00 100644
          {invitePrompt && room && (
            <InviteUserPrompt
              room={room}
-@@ -446,6 +446,7 @@
+@@ -390,6 +390,7 @@
+   onDragging: (dragItem?: SidebarDraggable) => void;
+   disabled?: boolean;
+   onUnpin?: (roomId: string) => void;
++  keyShortcut?: string;
+ };
+ function SpaceTab({
+   space,
+@@ -399,6 +400,7 @@
+   onDragging,
+   disabled,
+   onUnpin,
++  keyShortcut,
+ }: SpaceTabProps) {
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
+@@ -446,6 +448,8 @@
              {(triggerRef) => (
                <SidebarAvatar
                  as="button"
 +                aria-label={`${space.name} space`}
++                aria-keyshortcuts={keyShortcut}
                  data-id={space.roomId}
                  ref={triggerRef}
                  size={folder ? '300' : '400'}
-@@ -522,7 +523,13 @@
+@@ -522,7 +526,13 @@
      >
        <SidebarFolderDropTarget ref={aboveTargetRef} position="Top" />
        <SidebarAvatar size="300">
@@ -4890,7 +4929,7 @@ index 6fc528a106..03c1bb8c00 100644
            <Icon size="400" src={Icons.ChevronTop} filled />
          </IconButton>
        </SidebarAvatar>
-@@ -571,7 +578,7 @@
+@@ -571,7 +581,7 @@
          >
            <SidebarItemTooltip tooltip={disabled ? undefined : tooltipName}>
              {(tooltipRef) => (
@@ -4899,6 +4938,34 @@ index 6fc528a106..03c1bb8c00 100644
                  {folder.content.map((sId) => {
                    const space = mx.getRoom(sId);
                    if (!space) return null;
+@@ -797,6 +807,19 @@
+     [mx, sidebarItems, orphanSpaces, localEchoSidebarItem]
+   );
+ 
++  // Build index map for flat (non-folder) spaces — used for Alt+1-9 aria-keyshortcuts
++  const flatSpaceKeyMap = useMemo(() => {
++    const map = new Map<string, string>();
++    let idx = 0;
++    sidebarItems.forEach((item) => {
++      if (typeof item === 'string' && idx < 9) {
++        map.set(item, `Alt+${idx + 1}`);
++        idx += 1;
++      }
++    });
++    return map;
++  }, [sidebarItems]);
++
+   if (sidebarItems.length === 0) return null;
+   return (
+     <>
+@@ -857,6 +880,7 @@
+               onDragging={setDraggingItem}
+               disabled={typeof draggingItem === 'string' ? draggingItem === space.roomId : false}
+               onUnpin={orphanSpaces.includes(space.roomId) ? undefined : handleUnpin}
++              keyShortcut={flatSpaceKeyMap.get(item)}
+             />
+           );
+         })}
 diff --git a/src/app/pages/client/space/Search.tsx b/src/app/pages/client/space/Search.tsx
 index 017262b5b8..1fcfb35822 100644
 --- a/src/app/pages/client/space/Search.tsx
@@ -5214,7 +5281,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk c55d8cce "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 0c6f3c02 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: boolean;
@@ -5237,7 +5304,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk c55d8cce "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 0c6f3c02 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: false,

@@ -2441,7 +2441,7 @@ index 0f8375943c..69cc55e6d4 100644
    );
  }
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index 9b4bfd237a..c25fdb2b8a 100644
+index 9b4bfd237a..8f49b9f73a 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -23,8 +23,7 @@
@@ -2815,7 +2815,7 @@ index 9b4bfd237a..c25fdb2b8a 100644
            {screenSize === ScreenSize.Desktop && (
              <TooltipProvider
                position="Bottom"
-@@ -454,12 +656,45 @@
+@@ -454,12 +656,46 @@
                }
              >
                {(triggerRef) => (
@@ -2826,6 +2826,7 @@ index 9b4bfd237a..c25fdb2b8a 100644
 +                  onClick={() => setPeopleDrawer((drawer) => !drawer)}
 +                  aria-label={peopleDrawer ? 'Hide members' : 'Show members'}
 +                  aria-pressed={peopleDrawer}
++                  aria-keyshortcuts="Alt+P"
 +                >
                    <Icon size="400" src={Icons.User} />
                  </IconButton>
@@ -2862,7 +2863,7 @@ index 9b4bfd237a..c25fdb2b8a 100644
            <TooltipProvider
              position="Bottom"
              align="End"
-@@ -471,7 +706,13 @@
+@@ -471,7 +707,13 @@
              }
            >
              {(triggerRef) => (
@@ -2877,7 +2878,7 @@ index 9b4bfd237a..c25fdb2b8a 100644
                  <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
                </IconButton>
              )}
-@@ -492,7 +733,7 @@
+@@ -492,7 +734,7 @@
                    escapeDeactivates: stopPropagation,
                  }}
                >
