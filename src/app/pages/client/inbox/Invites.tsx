@@ -427,6 +427,23 @@ function KnownInvites({
   hour24Clock,
   dateFormatString,
 }: KnownInvitesProps) {
+  const mx = useMatrixClient();
+  const userId = mx.getSafeUserId();
+
+  const [acceptAllStatus, acceptAll] = useAsyncCallback(
+    useCallback(async () => {
+      await rateLimitedActions(invites, async (invite) => {
+        await mx.joinRoom(invite.roomId);
+        if (invite.isDirect) {
+          const dmUserId = guessDmRoomUserId(invite.room, userId);
+          if (dmUserId) await addRoomIdToMDirect(mx, invite.roomId, dmUserId);
+        }
+      });
+    }, [mx, invites, userId])
+  );
+
+  const accepting = acceptAllStatus.status === AsyncStatus.Loading;
+
   return (
     <Box direction="Column" gap="200">
       <Box gap="200" justifyContent="SpaceBetween" alignItems="Center">

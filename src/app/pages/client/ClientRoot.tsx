@@ -37,7 +37,7 @@ import { useSyncState } from '../../hooks/useSyncState';
 import { stopPropagation } from '../../utils/keyboard';
 import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
-import { getFallbackSession } from '../../state/sessions';
+import { getFallbackSession, removeSecondarySession } from '../../state/sessions';
 import { AutoDiscovery } from './AutoDiscovery';
 import { specVersions, SpecVersions as SpecVersionsData } from '../../cs-api';
 import { SpecVersionsProvider } from '../../hooks/useSpecVersions';
@@ -127,7 +127,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                       logoutClient(mx);
                       return;
                     }
-                    clearLoginData();
+                    // No client yet — check if this is a secondary account page so we
+                    // don't accidentally wipe the main account's localStorage.
+                    const slotStr = sessionStorage.getItem('cinny-account-slot');
+                    const slot = slotStr !== null ? parseInt(slotStr, 10) : null;
+                    const pathSlotMatch = window.location.pathname.match(/^\/account\/(\d+)/);
+                    if (slot !== null || pathSlotMatch) {
+                      if (slot !== null) {
+                        removeSecondarySession(slot);
+                        sessionStorage.removeItem('cinny-account-slot');
+                      } else if (pathSlotMatch) {
+                        removeSecondarySession(parseInt(pathSlotMatch[1], 10));
+                      }
+                      window.location.assign('/');
+                    } else {
+                      clearLoginData();
+                    }
                   }}
                   size="300"
                   radii="300"
