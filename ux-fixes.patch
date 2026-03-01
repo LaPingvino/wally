@@ -136,6 +136,44 @@ index de8d3d69f9..08381e8ddb 100644
 +  return !!match;
 +};
 +
+diff --git a/src/app/hooks/useSpaceHierarchy.ts b/src/app/hooks/useSpaceHierarchy.ts
+index ad34e3f458..ad768ea8f1 100644
+--- a/src/app/hooks/useSpaceHierarchy.ts
++++ b/src/app/hooks/useSpaceHierarchy.ts
+@@ -8,7 +8,7 @@
+ import { MSpaceChildContent, StateEvent } from '../../types/matrix/room';
+ import { getAllParents, getStateEvents, isValidChild } from '../utils/room';
+ import { isRoomId } from '../utils/matrix';
+-import { SortFunc, byOrderKey, byTsOldToNew, factoryRoomIdByActivity } from '../utils/sort';
++import { SortFunc, byOrderKey, byTsOldToNew } from '../utils/sort';
+ import { useStateEventCallback } from './useStateEventCallback';
+ import { ErrorCode } from '../cs-errorcode';
+ 
+@@ -221,23 +221,11 @@
+   spaceId: string,
+   getRoom: GetRoomCallback,
+   excludeRoom: (parentId: string, roomId: string) => boolean,
+-  sortByActivity: (spaceId: string) => boolean
++  sortRoomItems: (parentId: string, items: HierarchyItem[]) => HierarchyItem[]
+ ): HierarchyItem[] => {
+   const mx = useMatrixClient();
+   const roomToParents = useAtomValue(roomToParentsAtom);
+ 
+-  const sortRoomItems = useCallback(
+-    (sId: string, items: HierarchyItem[]) => {
+-      if (sortByActivity(sId)) {
+-        items.sort((a, b) => factoryRoomIdByActivity(mx)(a.roomId, b.roomId));
+-        return items;
+-      }
+-      items.sort(hierarchyItemTs).sort(hierarchyItemByOrder);
+-      return items;
+-    },
+-    [mx, sortByActivity]
+-  );
+-
+   const [hierarchyAtom] = useState(() =>
+     atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems))
+   );
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
 index f8647d1865..17c59a5f82 100644
 --- a/src/app/pages/Router.tsx
@@ -996,7 +1034,7 @@ index 5d13a9ab65..101589de53 100644
    const handleInboxClick = () => {
      if (screenSize === ScreenSize.Mobile) {
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..989c55b485 100644
+index 3f60d2a957..048810f92c 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -53,7 +53,8 @@
@@ -1005,7 +1043,7 @@ index 3f60d2a957..989c55b485 100644
  import { useRoomName } from '../../../hooks/useRoomMeta';
 -import { useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
 +import { HierarchyItem, useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
-+import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst } from '../../../utils/sort';
++import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst, byOrderKey, byTsOldToNew } from '../../../utils/sort';
  import { allRoomsAtom } from '../../../state/room-list/roomList';
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
@@ -1055,6 +1093,59 @@ index 3f60d2a957..989c55b485 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
+@@ -394,6 +427,8 @@
+ 
+   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
+ 
++  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
++
+   const getRoom = useCallback(
+     (rId: string) => {
+       if (allJoinedRooms.has(rId)) {
+@@ -404,6 +439,31 @@
+     [mx, allJoinedRooms]
+   );
+ 
++  const sortSpaceRoomItems = useCallback(
++    (_parentId: string, items: HierarchyItem[]): HierarchyItem[] => {
++      const sorted = [...items];
++      if (roomSortOrder === 'activity') {
++        sorted.sort((a, b) => factoryRoomIdByActivity(mx)(a.roomId, b.roomId));
++      } else if (roomSortOrder === 'az') {
++        sorted.sort((a, b) => factoryRoomIdByAtoZ(mx)(a.roomId, b.roomId));
++      } else if (roomSortOrder === 'unread') {
++        sorted.sort((a, b) =>
++          factoryRoomIdByUnreadFirst(
++            (id) => roomToUnread.get(id)?.highlight ?? 0,
++            (id) => roomToUnread.get(id)?.total ?? 0,
++            factoryRoomIdByActivity(mx)
++          )(a.roomId, b.roomId)
++        );
++      } else {
++        // Default: preserve space admin ordering (order key + timestamp)
++        sorted.sort((a, b) => byTsOldToNew(a.ts, b.ts));
++        sorted.sort((a, b) => byOrderKey(a.content.order, b.content.order));
++      }
++      return sorted;
++    },
++    [mx, roomSortOrder, roomToUnread]
++  );
++
+   const hierarchy = useSpaceJoinedHierarchy(
+     space.roomId,
+     getRoom,
+@@ -418,10 +478,7 @@
+       },
+       [space.roomId, closedCategories, roomToUnread, selectedRoomId]
+     ),
+-    useCallback(
+-      (sId) => closedCategories.has(makeNavCategoryId(space.roomId, sId)),
+-      [closedCategories, space.roomId]
+-    )
++    sortSpaceRoomItems
+   );
+ 
+   const virtualizer = useVirtualizer({
 diff --git a/src/app/pages/pathUtils.ts b/src/app/pages/pathUtils.ts
 index 817d21d1f3..cc940960a7 100644
 --- a/src/app/pages/pathUtils.ts

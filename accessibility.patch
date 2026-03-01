@@ -5131,7 +5131,7 @@ index 017262b5b8..1fcfb35822 100644
              </Text>
            </Box>
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index de59149cb8..0b0d78536b 100644
+index 6878e8bd4d..5aad42cade 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -143,7 +143,7 @@
@@ -5152,7 +5152,7 @@ index de59149cb8..0b0d78536b 100644
                {spaceName}
              </Text>
              {joinRules?.join_rule !== JoinRule.Public && <Icon src={Icons.Lock} size="50" />}
-@@ -468,13 +468,34 @@
+@@ -492,13 +492,34 @@
      getItemKey: (index) => hierarchy[index]?.roomId ?? index,
    });
  
@@ -5190,7 +5190,7 @@ index de59149cb8..0b0d78536b 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -526,48 +547,61 @@
+@@ -550,48 +571,61 @@
                position: 'relative',
              }}
            >
@@ -5427,7 +5427,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: boolean;
--+++++++ nyzwkvwz c24f555a "patch-12: UX fixes (room sort, inbox unread, navigation)"
+-+++++++ nyzwkvwz 3ee4dba2 "patch-12: UX fixes (room sort, inbox unread, navigation)"
 +  issueTracker: boolean;
 +  multiAccount: boolean;
    roomSortOrder: 'activity' | 'az' | 'unread';
@@ -5450,7 +5450,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: false,
--+++++++ nyzwkvwz c24f555a "patch-12: UX fixes (room sort, inbox unread, navigation)"
+-+++++++ nyzwkvwz 3ee4dba2 "patch-12: UX fixes (room sort, inbox unread, navigation)"
 +  issueTracker: false,
 +  multiAccount: false,
    roomSortOrder: 'activity',
