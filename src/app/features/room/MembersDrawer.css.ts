@@ -1,9 +1,7 @@
 import { keyframes, style } from '@vanilla-extract/css';
-import { config, toRem } from 'folds';
+import { config } from 'folds';
 
-export const MembersDrawer = style({
-  width: toRem(266),
-});
+export const MembersDrawer = style({});
 
 export const MembersDrawerHeader = style({
   flexShrink: 0,

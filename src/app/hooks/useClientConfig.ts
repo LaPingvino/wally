@@ -18,6 +18,8 @@ export type ClientConfig = {
   };
 
   hashRouter?: HashRouterConfig;
+
+  elementCallUrl?: string;
 };
 
 const ClientConfigContext = createContext<ClientConfig | null>(null);
