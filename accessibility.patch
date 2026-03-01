@@ -457,9 +457,18 @@ index 7ce915661f..5836bf080f 100644
                {modes.map((mode) => (
                  <MenuItem
 diff --git a/src/app/components/UIAFlowOverlay.tsx b/src/app/components/UIAFlowOverlay.tsx
-index a2bdd1b875..fbfee51c3d 100644
+index a2bdd1b875..cb41d28832 100644
 --- a/src/app/components/UIAFlowOverlay.tsx
 +++ b/src/app/components/UIAFlowOverlay.tsx
+@@ -29,7 +29,7 @@
+   return (
+     <Overlay open backdrop={<OverlayBackdrop />}>
+       <FocusTrap focusTrapOptions={{ initialFocus: false, escapeDeactivates: false }}>
+-        <Box style={{ height: '100%' }} direction="Column" grow="Yes" gap="400">
++        <Box role="dialog" aria-modal="true" style={{ height: '100%' }} direction="Column" grow="Yes" gap="400">
+           <Box grow="Yes" direction="Column" alignItems="Center" justifyContent="Center">
+             {children}
+           </Box>
 @@ -59,6 +59,7 @@
                    onClick={onCancel}
                    radii="Pill"
@@ -468,6 +477,19 @@ index a2bdd1b875..fbfee51c3d 100644
                  >
                    <Icon size="50" src={Icons.Cross} />
                  </IconButton>
+diff --git a/src/app/components/UserRoomProfileRenderer.tsx b/src/app/components/UserRoomProfileRenderer.tsx
+index ca7aa837ed..b124a27fbe 100644
+--- a/src/app/components/UserRoomProfileRenderer.tsx
++++ b/src/app/components/UserRoomProfileRenderer.tsx
+@@ -34,7 +34,7 @@
+             escapeDeactivates: stopPropagation,
+           }}
+         >
+-          <Menu style={{ width: toRem(340) }}>
++          <Menu role="menu" style={{ width: toRem(340) }}>
+             <SpaceProvider value={space ?? null}>
+               <RoomProvider value={room}>
+                 <UserRoomProfile userId={userId} />
 diff --git a/src/app/components/create-room/AdditionalCreatorInput.tsx b/src/app/components/create-room/AdditionalCreatorInput.tsx
 index 84b922310b..8cc17132a4 100644
 --- a/src/app/components/create-room/AdditionalCreatorInput.tsx
@@ -494,7 +516,7 @@ index 219ded0cb0..6aa4b8ec50 100644
                      direction="Column"
                      gap="200"
 diff --git a/src/app/components/editor/Editor.preview.tsx b/src/app/components/editor/Editor.preview.tsx
-index b760dddcb3..388909a1f1 100644
+index b760dddcb3..3cd64716d1 100644
 --- a/src/app/components/editor/Editor.preview.tsx
 +++ b/src/app/components/editor/Editor.preview.tsx
 @@ -23,7 +23,7 @@
@@ -506,7 +528,14 @@ index b760dddcb3..388909a1f1 100644
          <Icon src={Icons.BlockQuote} />
        </IconButton>
        <Overlay open={open} backdrop={<OverlayBackdrop />}>
-@@ -42,7 +42,7 @@
+@@ -36,13 +36,13 @@
+               escapeDeactivates: stopPropagation,
+             }}
+           >
+-            <Modal size="500">
++            <Modal role="dialog" aria-modal="true" size="500">
+               <div style={{ padding: config.space.S400 }}>
+                 <CustomEditor
                    editor={editor}
                    placeholder="Send a message..."
                    before={
@@ -533,9 +562,18 @@ index b760dddcb3..388909a1f1 100644
                        </IconButton>
                      </>
 diff --git a/src/app/components/editor/Toolbar.tsx b/src/app/components/editor/Toolbar.tsx
-index 7d701c424b..11472fa795 100644
+index 7d701c424b..82ac75613a 100644
 --- a/src/app/components/editor/Toolbar.tsx
 +++ b/src/app/components/editor/Toolbar.tsx
+@@ -155,7 +155,7 @@
+             escapeDeactivates: stopPropagation,
+           }}
+         >
+-          <Menu style={{ padding: config.space.S100 }}>
++          <Menu role="menu" style={{ padding: config.space.S100 }}>
+             <Box gap="100">
+               <TooltipProvider
+                 tooltip={<BtnTooltip text="Heading 1" shortCode={`${modKey} + 1`} />}
 @@ -167,6 +167,7 @@
                      onClick={() => handleMenuSelect(1)}
                      size="400"
@@ -568,6 +606,32 @@ index 7d701c424b..11472fa795 100644
          >
            <Text size="B400">{`Exit ${KeySymbol.Hyper}`}</Text>
          </IconButton>
+diff --git a/src/app/components/editor/autocomplete/AutocompleteMenu.tsx b/src/app/components/editor/autocomplete/AutocompleteMenu.tsx
+index 452fa1b4af..41576b53d7 100644
+--- a/src/app/components/editor/autocomplete/AutocompleteMenu.tsx
++++ b/src/app/components/editor/autocomplete/AutocompleteMenu.tsx
+@@ -37,7 +37,7 @@
+             escapeDeactivates: stopPropagation,
+           }}
+         >
+-          <Menu className={css.AutocompleteMenu}>
++          <Menu role="listbox" className={css.AutocompleteMenu}>
+             <Header className={css.AutocompleteMenuHeader} size="400">
+               {headerContent}
+             </Header>
+diff --git a/src/app/components/emoji-board/EmojiBoard.tsx b/src/app/components/emoji-board/EmojiBoard.tsx
+index d5a76c7156..56f2162a76 100644
+--- a/src/app/components/emoji-board/EmojiBoard.tsx
++++ b/src/app/components/emoji-board/EmojiBoard.tsx
+@@ -503,6 +503,8 @@
+       }}
+     >
+       <EmojiBoardLayout
++        role="dialog"
++        aria-label="Emoji and sticker picker"
+         header={
+           <Box direction="Column" gap="200">
+             {onTabChange && <EmojiBoardTabs tab={tab} onTabChange={onTabChange} />}
 diff --git a/src/app/components/event-readers/EventReaders.tsx b/src/app/components/event-readers/EventReaders.tsx
 index c790023750..72ad37a833 100644
 --- a/src/app/components/event-readers/EventReaders.tsx
@@ -650,7 +714,7 @@ index 4956a7b6dd..fae5b0b931 100644
              </IconButton>
              <Text size="T300" truncate>
 diff --git a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
-index ddac0576ce..cedc308f5f 100644
+index ddac0576ce..40813b367d 100644
 --- a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
 +++ b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
 @@ -161,19 +161,19 @@
@@ -676,6 +740,15 @@ index ddac0576ce..cedc308f5f 100644
                      <Icon src={Icons.Cross} />
                    </IconButton>
                  </Box>
+@@ -215,7 +215,7 @@
+                         }}
+                       >
+                         <Box style={{ position: 'relative' }}>
+-                          <Menu style={{ position: 'absolute', top: 0, zIndex: 1, width: '100%' }}>
++                          <Menu role="listbox" aria-label="User suggestions" style={{ position: 'absolute', top: 0, zIndex: 1, width: '100%' }}>
+                             <Scroll size="300" style={{ maxHeight: toRem(100) }}>
+                               <div style={{ padding: config.space.S100 }}>
+                                 {result.items.map((userId) => {
 diff --git a/src/app/components/join-address-prompt/JoinAddressPrompt.tsx b/src/app/components/join-address-prompt/JoinAddressPrompt.tsx
 index 50a89418e6..e117518676 100644
 --- a/src/app/components/join-address-prompt/JoinAddressPrompt.tsx
@@ -1131,6 +1204,32 @@ index ec4ed0a55c..d7e1e82765 100644
                <Icon size="50" src={Icons.ArrowLeft} />
              </IconButton>
              <Text size="T300" truncate>
+diff --git a/src/app/components/time-date/DatePicker.tsx b/src/app/components/time-date/DatePicker.tsx
+index faa43a3fec..0bbfd5d2d8 100644
+--- a/src/app/components/time-date/DatePicker.tsx
++++ b/src/app/components/time-date/DatePicker.tsx
+@@ -57,7 +57,7 @@
+     const minDay = dayjs(min).date();
+     const maxDay = dayjs(max).date();
+     return (
+-      <Menu className={css.PickerMenu} ref={ref}>
++      <Menu role="dialog" aria-label="Date picker" className={css.PickerMenu} ref={ref}>
+         <Box direction="Row" gap="200" className={css.PickerContainer}>
+           <PickerColumn title="Day">
+             {Array.from(Array(daysInMonth(selectedMonth, selectedYear)).keys())
+diff --git a/src/app/components/time-date/TimePicker.tsx b/src/app/components/time-date/TimePicker.tsx
+index c835ed0963..2567d03fe3 100644
+--- a/src/app/components/time-date/TimePicker.tsx
++++ b/src/app/components/time-date/TimePicker.tsx
+@@ -60,7 +60,7 @@
+     const maxDay = inSameDay(max, value);
+ 
+     return (
+-      <Menu className={css.PickerMenu} ref={ref}>
++      <Menu role="dialog" aria-label="Time picker" className={css.PickerMenu} ref={ref}>
+         <Box direction="Row" gap="200" className={css.PickerContainer}>
+           <PickerColumn title="Hour">
+             {hour24Clock
 diff --git a/src/app/components/uia-stages/DummyStage.tsx b/src/app/components/uia-stages/DummyStage.tsx
 index 7e0f85861a..6339985be5 100644
 --- a/src/app/components/uia-stages/DummyStage.tsx
@@ -2619,17 +2718,282 @@ index 98db9459a1..850ef8efb3 100644
                  <Icon src={Icons.Cross} size="100" />
                </IconButton>
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index 5f544f1036..c63b43ef4c 100644
+index 0000000000..c63b43ef4c 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
-@@ -182,6 +182,7 @@
-                             value={developerTools}
+@@ -30,8 +30,6 @@
+ };
+ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+   const mx = useMatrixClient();
+-<<<<<<< conflict 1 of 3
+-+++++++ zmnruntx d5cd4cab "patch-03: pronouns, timezone, extended profile fields"
+   const userId = mx.getUserId() as string;
+ 
+   const [accountDataTypes, setAccountDataKeys] = useState(() =>
+@@ -50,27 +48,14 @@
+   const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
+ 
+   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
++  const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
++  const [multiAccount, setMultiAccount] = useSetting(settingsAtom, 'multiAccount');
+   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
+   const [globalExpand, setGlobalExpand] = useState(false);
+   const [profileExpand, setProfileExpand] = useState(false);
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
+-   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+-+  const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
+-   const [expand, setExpend] = useState(false);
+-   const [accountDataType, setAccountDataType] = useState<string | null>();
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: rnmnvzpk 9062a8be "patch-08: multi-account support"
+--  const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+-+  const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');\n  const [multiAccount, setMultiAccount] = useSetting(settingsAtom, 'multiAccount');
+-   const [expand, setExpend] = useState(false);
+-   const [accountDataType, setAccountDataType] = useState<string | null>();
+->>>>>>> conflict 1 of 3 ends
+ 
+   const submitAccountData: AccountDataSubmitCallback = useCallback(
+     async (type, content) => {
+-<<<<<<< conflict 2 of 3
+-+++++++ zmnruntx d5cd4cab "patch-03: pronouns, timezone, extended profile fields"
+       await mx.setAccountData(type as keyof AccountDataEvents, content);
+     },
+     [mx]
+@@ -150,6 +135,38 @@
+               <PageContent>
+                 <Box direction="Column" gap="700">
+                   <Box direction="Column" gap="100">
++                    <Text size="L400">Experimental Features</Text>
++                    <SequenceCard
++                      className={SequenceCardStyle}
++                      variant="SurfaceVariant"
++                      direction="Column"
++                      gap="400"
++                    >
++                      <SettingTile
++                        title="Issue Tracker"
++                        description="Enable per-room issue tracker (experimental)."
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={issueTracker}
++                            onChange={setIssueTracker}
++                          />
++                        }
++                      />
++                      <SettingTile
++                        title="Multi-Account"
++                        description="Show account switcher in sidebar (experimental)."
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={multiAccount}
++                            onChange={setMultiAccount}
++                          />
++                        }
++                      />
++                    </SequenceCard>
++                  </Box>
++                  <Box direction="Column" gap="100">
+                     <Text size="L400">Options</Text>
+                     <SequenceCard
+                       className={SequenceCardStyle}
+@@ -166,137 +183,7 @@
                              onChange={setDeveloperTools}
                            />
-+                        }
+                         }
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
+-       await mx.setAccountData(type, content);
+-     },
+-     [mx]
+-   );
+- 
+-   if (accountDataType !== undefined) {
+-     return (
+-       <AccountDataEditor
+-         type={accountDataType ?? undefined}
+-         content={accountDataType ? mx.getAccountData(accountDataType)?.getContent() : undefined}
+-         submitChange={submitAccountData}
+-         requestClose={() => setAccountDataType(undefined)}
+-       />
+-     );
+-   }
+- 
+-   return (
+-     <Page>
+-       <PageHeader outlined={false}>
+-         <Box grow="Yes" gap="200">
+-           <Box grow="Yes" alignItems="Center" gap="200">
+-             <Text size="H3" truncate>
+-               Developer Tools
+-             </Text>
+-           </Box>
+-           <Box shrink="No">
+-             <IconButton onClick={requestClose} variant="Surface">
+-               <Icon src={Icons.Cross} />
+-             </IconButton>
+-           </Box>
+-         </Box>
+-       </PageHeader>
+-       <Box grow="Yes">
+-         <Scroll hideTrack visibility="Hover">
+-           <PageContent>
+-             <Box direction="Column" gap="700">
+-               <Box direction="Column" gap="100">
+-+                <Text size="L400">Experimental Features</Text>
+-+                <SequenceCard
+-+                  className={SequenceCardStyle}
+-+                  variant="SurfaceVariant"
+-+                  direction="Column"
+-+                  gap="400"
+-+                >
+-+                  <SettingTile
+-+                    title="Issue Tracker"
+-+                    description="Enable per-room issue tracker (experimental)."
+-+                    after={
+-+                      <Switch
+-+                        variant="Primary"
+-+                        value={issueTracker}
+-+                        onChange={setIssueTracker}
+-+                      />
+-+                    }
+-+                  />
+-+                </SequenceCard>
+-+              </Box>
+-+              <Box direction="Column" gap="100">
+-                 <Text size="L400">Options</Text>
+-                 <SequenceCard
+-                   className={SequenceCardStyle}
+-                   variant="SurfaceVariant"
+-                   direction="Column"
+-                   gap="400"
+-                 >
+-                   <SettingTile
+-                     title="Enable Developer Tools"
+-                     after={
+-                       <Switch
+-                         variant="Primary"
+-                         value={developerTools}
+-                         onChange={setDeveloperTools}
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: rnmnvzpk 9062a8be "patch-08: multi-account support"
+-       await mx.setAccountData(type, content);
+-     },
+-     [mx]
+-   );
+- 
+-   if (accountDataType !== undefined) {
+-     return (
+-       <AccountDataEditor
+-         type={accountDataType ?? undefined}
+-         content={accountDataType ? mx.getAccountData(accountDataType)?.getContent() : undefined}
+-         submitChange={submitAccountData}
+-         requestClose={() => setAccountDataType(undefined)}
+-       />
+-     );
+-   }
+- 
+-   return (
+-     <Page>
+-       <PageHeader outlined={false}>
+-         <Box grow="Yes" gap="200">
+-           <Box grow="Yes" alignItems="Center" gap="200">
+-             <Text size="H3" truncate>
+-               Developer Tools
+-             </Text>
+-           </Box>
+-           <Box shrink="No">
+-             <IconButton onClick={requestClose} variant="Surface">
+-               <Icon src={Icons.Cross} />
+-             </IconButton>
+-           </Box>
+-         </Box>
+-       </PageHeader>
+-       <Box grow="Yes">
+-         <Scroll hideTrack visibility="Hover">
+-           <PageContent>
+-             <Box direction="Column" gap="700">
+-               <Box direction="Column" gap="100">
+-                 <Text size="L400">Options</Text>
+-                 <SequenceCard
+-                   className={SequenceCardStyle}
+-                   variant="SurfaceVariant"
+-                   direction="Column"
+-                   gap="400"
+-                 >
+-                   <SettingTile
+-                     title="Enable Developer Tools"
+-                     after={
+-                       <Switch
+-                         variant="Primary"
+-                         value={developerTools}
+-                         onChange={setDeveloperTools}
+->>>>>>> conflict 2 of 3 ends
                        />
+-<<<<<<< conflict 3 of 3
+-+++++++ zmnruntx d5cd4cab "patch-03: pronouns, timezone, extended profile fields"
                      </SequenceCard>
                      {developerTools && (
+                       <SequenceCard
+@@ -321,56 +208,6 @@
+                             >
+                               <Text size="B300">Copy</Text>
+                             </Button>
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
+-                     }
+-                   />
+-                 </SequenceCard>
+-                 {developerTools && (
+-                   <SequenceCard
+-                     className={SequenceCardStyle}
+-                     variant="SurfaceVariant"
+-                     direction="Column"
+-                     gap="400"
+-                   >
+-                     <SettingTile
+-                       title="Access Token"
+-                       description="Copy access token to clipboard."
+-                       after={
+-                         <Button
+-                           onClick={() =>
+-                             copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: rnmnvzpk 9062a8be "patch-08: multi-account support"
+-                     }
+-                   />
+-+                  <SettingTile
+-+                    title="Multi-Account"
+-+                    description="Show account switcher in sidebar (experimental)."
+-+                    after={
+-+                      <Switch
+-+                        variant="Primary"
+-+                        value={multiAccount}
+-+                        onChange={setMultiAccount}
+-+                      />
+-+                    }
+-+                  />
+-                 </SequenceCard>
+-                 {developerTools && (
+-                   <SequenceCard
+-                     className={SequenceCardStyle}
+-                     variant="SurfaceVariant"
+-                     direction="Column"
+-                     gap="400"
+-                   >
+-                     <SettingTile
+-                       title="Access Token"
+-                       description="Copy access token to clipboard."
+-                       after={
+-                         <Button
+-                           onClick={() =>
+-                             copyToClipboard(mx.getAccessToken() ?? '<NO_ACCESS_TOKEN_FOUND>')
+->>>>>>> conflict 3 of 3 ends
+                           }
+                         />
+                       </SequenceCard>
 diff --git a/src/app/features/settings/devices/DeviceTile.tsx b/src/app/features/settings/devices/DeviceTile.tsx
 index 71b684f56f..dfe7b2aa81 100644
 --- a/src/app/features/settings/devices/DeviceTile.tsx
@@ -3287,6 +3651,19 @@ index 0000000000..82edcf6a5c
 +    setFocusedIndex,
 +  };
 +};
+diff --git a/src/app/pages/auth/ServerPicker.tsx b/src/app/pages/auth/ServerPicker.tsx
+index 9a047bead8..f0b54f4dbc 100644
+--- a/src/app/pages/auth/ServerPicker.tsx
++++ b/src/app/pages/auth/ServerPicker.tsx
+@@ -108,7 +108,7 @@
+                   escapeDeactivates: stopPropagation,
+                 }}
+               >
+-                <Menu>
++                <Menu role="listbox" aria-label="Homeserver List">
+                   <Header size="300" style={{ padding: `0 ${config.space.S200}` }}>
+                     <Text size="L400">Homeserver List</Text>
+                   </Header>
 diff --git a/src/app/pages/auth/login/Login.tsx b/src/app/pages/auth/login/Login.tsx
 index 2f04a73372..ff1af0f35c 100644
 --- a/src/app/pages/auth/login/Login.tsx
@@ -3300,6 +3677,19 @@ index 2f04a73372..ff1af0f35c 100644
          Login
        </Text>
        {parsedFlows.token && loginSearchParams.loginToken && (
+diff --git a/src/app/pages/auth/login/PasswordLoginForm.tsx b/src/app/pages/auth/login/PasswordLoginForm.tsx
+index ab7176eff9..0e50067757 100644
+--- a/src/app/pages/auth/login/PasswordLoginForm.tsx
++++ b/src/app/pages/auth/login/PasswordLoginForm.tsx
+@@ -58,7 +58,7 @@
+             escapeDeactivates: stopPropagation,
+           }}
+         >
+-          <Menu>
++          <Menu role="dialog" aria-label="Login format hints">
+             <Header size="300" style={{ padding: `0 ${config.space.S200}` }}>
+               <Text size="L400">Hint</Text>
+             </Header>
 diff --git a/src/app/pages/auth/register/Register.tsx b/src/app/pages/auth/register/Register.tsx
 index 7176489ba3..40cbe3458b 100644
 --- a/src/app/pages/auth/register/Register.tsx
@@ -3313,6 +3703,19 @@ index 7176489ba3..40cbe3458b 100644
          Register
        </Text>
        {registerFlows.status === RegisterFlowStatus.RegistrationDisabled && !sso && (
+diff --git a/src/app/pages/auth/reset-password/PasswordResetForm.tsx b/src/app/pages/auth/reset-password/PasswordResetForm.tsx
+index 454c9d5ab4..2ec175f34f 100644
+--- a/src/app/pages/auth/reset-password/PasswordResetForm.tsx
++++ b/src/app/pages/auth/reset-password/PasswordResetForm.tsx
+@@ -53,7 +53,7 @@
+     <Overlay open backdrop={<OverlayBackdrop />}>
+       <OverlayCenter>
+         <FocusTrap>
+-          <Dialog>
++          <Dialog role="dialog" aria-modal="true" aria-label="Password reset successful">
+             <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
+               <Text>
+                 Password has been reset successfully. Please login with your new password.
 diff --git a/src/app/pages/auth/reset-password/ResetPassword.tsx b/src/app/pages/auth/reset-password/ResetPassword.tsx
 index c5e1d2ad35..40d6b194d1 100644
 --- a/src/app/pages/auth/reset-password/ResetPassword.tsx
@@ -3327,7 +3730,7 @@ index c5e1d2ad35..40d6b194d1 100644
        </Text>
        <PasswordResetForm defaultEmail={resetPasswordSearchParams.email} />
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index 23bd48e644..5a569bc213 100644
+index 23bd48e644..2806f7b707 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -3377,7 +3780,7 @@ index 23bd48e644..5a569bc213 100644
  
  function SystemEmojiFeature() {
    const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-@@ -139,36 +155,40 @@
+@@ -139,36 +155,43 @@
    const audioRef = useRef<HTMLAudioElement>(null);
    const notifRef = useRef<Notification>();
    const unreadCacheRef = useRef<Map<string, UnreadInfo>>(new Map());
@@ -3396,13 +3799,13 @@ index 23bd48e644..5a569bc213 100644
  
    const notify = useCallback(
      ({
--      roomName,
+       roomName,
        roomAvatar,
        username,
 +      body,
 +      navigateTo,
      }: {
--      roomName: string;
+       roomName: string;
        roomAvatar?: string;
        username: string;
 -      roomId: string;
@@ -3410,12 +3813,12 @@ index 23bd48e644..5a569bc213 100644
 +      body: string;
 +      navigateTo: string;
      }) => {
--      const noti = new window.Notification(roomName, {
 +      const trimmed = body.length > 120 ? `${body.slice(0, 120)}\u2026` : body;
-+      const noti = new window.Notification(`${username}: ${trimmed}`, {
+       const noti = new window.Notification(roomName, {
          icon: roomAvatar,
          badge: roomAvatar,
 -        body: `New inbox notification from ${username}`,
++        body: `${username}: ${trimmed}`,
          silent: true,
        });
  
@@ -3425,7 +3828,7 @@ index 23bd48e644..5a569bc213 100644
          noti.close();
          notifRef.current = undefined;
        };
-@@ -193,7 +213,6 @@
+@@ -193,7 +216,6 @@
        data
      ) => {
        if (mx.getSyncState() !== 'SYNCING') return;
@@ -3433,7 +3836,7 @@ index 23bd48e644..5a569bc213 100644
        if (
          !room ||
          !data.liveEvent ||
-@@ -206,7 +225,7 @@
+@@ -206,7 +228,7 @@
  
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
@@ -3442,7 +3845,7 @@ index 23bd48e644..5a569bc213 100644
        const unreadInfo = getUnreadInfo(room);
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
-@@ -219,37 +238,106 @@
+@@ -219,37 +241,107 @@
          return;
        }
  
@@ -3478,6 +3881,7 @@ index 23bd48e644..5a569bc213 100644
 +              : getHomeRoomPath(rIdOrAlias);
 +          }
 +          notify({
++            roomName: room.name,
 +            roomAvatar: avatarMxc
 +              ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
 +              : undefined,
@@ -3562,7 +3966,7 @@ index 23bd48e644..5a569bc213 100644
    ]);
  
    return (
-@@ -260,6 +348,166 @@
+@@ -260,6 +352,166 @@
    );
  }
  
@@ -3729,7 +4133,7 @@ index 23bd48e644..5a569bc213 100644
  type ClientNonUIFeaturesProps = {
    children: ReactNode;
  };
-@@ -272,6 +520,7 @@
+@@ -272,6 +524,7 @@
        <FaviconUpdater />
        <InviteNotifications />
        <MessageNotifications />
@@ -4334,9 +4738,18 @@ index 50fd9d99b6..a9b237c4d7 100644
              </Text>
            </Box>
 diff --git a/src/app/pages/client/sidebar/CreateTab.tsx b/src/app/pages/client/sidebar/CreateTab.tsx
-index e6575cb438..2c4907b00d 100644
+index e6575cb438..b99d0a4908 100644
 --- a/src/app/pages/client/sidebar/CreateTab.tsx
 +++ b/src/app/pages/client/sidebar/CreateTab.tsx
+@@ -60,7 +60,7 @@
+                   escapeDeactivates: stopPropagation,
+                 }}
+               >
+-                <Menu>
++                <Menu role="menu">
+                   <Box direction="Column">
+                     <SequenceCard
+                       style={{ padding: config.space.S300 }}
 @@ -106,6 +106,7 @@
                as="button"
                ref={triggerRef}
@@ -4442,9 +4855,18 @@ index df0515a257..9864ad3b3c 100644
                userId={userId}
                src={avatarUrl}
 diff --git a/src/app/pages/client/sidebar/SpaceTabs.tsx b/src/app/pages/client/sidebar/SpaceTabs.tsx
-index 6fc528a106..0d7474b72c 100644
+index 6fc528a106..03c1bb8c00 100644
 --- a/src/app/pages/client/sidebar/SpaceTabs.tsx
 +++ b/src/app/pages/client/sidebar/SpaceTabs.tsx
+@@ -147,7 +147,7 @@
+     };
+ 
+     return (
+-      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
++      <Menu role="menu" ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+         {invitePrompt && room && (
+           <InviteUserPrompt
+             room={room}
 @@ -446,6 +446,7 @@
              {(triggerRef) => (
                <SidebarAvatar
@@ -4780,6 +5202,56 @@ index 1ca7e7de12..795b484b1d 100644
      };
    }, [mx, memberships, setRoomsAtom]);
  };
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 0000000000..ff84aef491 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -54,20 +54,9 @@
+   dateFormatString: string;
+ 
+   developerTools: boolean;
+-<<<<<<< conflict 1 of 2
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: ztqplnqk c55d8cce "patch-02: Element Call integration + external component files"
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
+-+  issueTracker: boolean;
+-+++++++ nyzwkvwz c24f555a "patch-12: UX fixes (room sort, inbox unread, navigation)"
++  issueTracker: boolean;
++  multiAccount: boolean;
+   roomSortOrder: 'activity' | 'az' | 'unread';
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: rnmnvzpk 9062a8be "patch-08: multi-account support"
+-+  multiAccount: boolean;
+->>>>>>> conflict 1 of 2 ends
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -108,20 +97,9 @@
+   dateFormatString: 'D MMM YYYY',
+ 
+   developerTools: false,
+-<<<<<<< conflict 2 of 2
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: ztqplnqk c55d8cce "patch-02: Element Call integration + external component files"
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
+-+  issueTracker: false,
+-+++++++ nyzwkvwz c24f555a "patch-12: UX fixes (room sort, inbox unread, navigation)"
++  issueTracker: false,
++  multiAccount: false,
+   roomSortOrder: 'activity',
+-%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
+-\\\\\\\        to: rnmnvzpk 9062a8be "patch-08: multi-account support"
+-+  multiAccount: false,
+->>>>>>> conflict 2 of 2 ends
+ };
+ 
+ export const getSettings = () => {
 diff --git a/src/app/utils/announce.ts b/src/app/utils/announce.ts
 new file mode 100644
 index 0000000000..c854ce584a
