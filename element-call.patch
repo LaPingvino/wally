@@ -2441,7 +2441,7 @@ index 0f8375943c..69cc55e6d4 100644
    );
  }
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index 9b4bfd237a..8f49b9f73a 100644
+index 9b4bfd237a..732bb4f267 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -23,8 +23,7 @@
@@ -2471,12 +2471,14 @@ index 9b4bfd237a..8f49b9f73a 100644
  import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
  import { stopPropagation } from '../../utils/keyboard';
  import { getMatrixToRoom } from '../../plugins/matrix-to';
-@@ -69,26 +67,45 @@
+@@ -69,26 +67,47 @@
  import { useRoomCreators } from '../../hooks/useRoomCreators';
  import { useRoomPermissions } from '../../hooks/useRoomPermissions';
  import { InviteUserPrompt } from '../../components/invite-user-prompt';
 +import { useCallState } from '../../pages/client/call/CallProvider';
 +import { ContainerColor } from '../../styles/ContainerColor.css';
++import { useKeyDown } from '../../hooks/useKeyDown';
++import { isKeyHotkey } from 'is-hotkey';
 +import { getIssueSchema } from '../issues/IssueBoard';
  
  type RoomMenuProps = {
@@ -2518,7 +2520,7 @@ index 9b4bfd237a..8f49b9f73a 100644
    const handleMarkAsRead = () => {
      markAsRead(mx, room.roomId, hideActivity);
      requestClose();
-@@ -112,6 +129,17 @@
+@@ -112,6 +131,17 @@
      requestClose();
    };
  
@@ -2536,7 +2538,7 @@ index 9b4bfd237a..8f49b9f73a 100644
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        {invitePrompt && (
-@@ -220,7 +248,40 @@
+@@ -220,7 +250,40 @@
              </>
            )}
          </UseStateProvider>
@@ -2577,7 +2579,7 @@ index 9b4bfd237a..8f49b9f73a 100644
        <Line variant="Surface" size="300" />
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <UseStateProvider initial={false}>
-@@ -254,7 +315,14 @@
+@@ -254,7 +317,14 @@
    );
  });
  
@@ -2593,7 +2595,7 @@ index 9b4bfd237a..8f49b9f73a 100644
    const navigate = useNavigate();
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
-@@ -263,12 +331,43 @@
+@@ -263,12 +333,43 @@
    const space = useSpaceOptionally();
    const [menuAnchor, setMenuAnchor] = useState<RectCords>();
    const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
@@ -2639,7 +2641,7 @@ index 9b4bfd237a..8f49b9f73a 100644
    const name = useRoomName(room);
    const topic = useRoomTopic(room);
    const avatarUrl = avatarMxc
-@@ -296,13 +395,16 @@
+@@ -296,13 +397,16 @@
    };
  
    return (
@@ -2658,7 +2660,7 @@ index 9b4bfd237a..8f49b9f73a 100644
                    <Icon src={Icons.ArrowLeft} />
                  </IconButton>
                </Box>
-@@ -317,11 +419,7 @@
+@@ -317,11 +421,7 @@
                  src={avatarUrl}
                  alt={name}
                  renderFallback={() => (
@@ -2671,7 +2673,7 @@ index 9b4bfd237a..8f49b9f73a 100644
                  )}
                />
              </Avatar>
-@@ -369,7 +467,104 @@
+@@ -369,7 +469,105 @@
              )}
            </Box>
          </Box>
@@ -2737,6 +2739,7 @@ index 9b4bfd237a..8f49b9f73a 100644
 +                  onClick={toggleChat}
 +                  aria-label={isChatOpen ? 'Hide chat' : 'Show chat'}
 +                  aria-pressed={isChatOpen}
++                  aria-keyshortcuts="Alt+Shift+C"
 +                >
 +                  <Icon size="400" src={Icons.Message} filled={isChatOpen} />
 +                </IconButton>
@@ -2776,12 +2779,12 @@ index 9b4bfd237a..8f49b9f73a 100644
            {!ecryptedRoom && (
              <TooltipProvider
                position="Bottom"
-@@ -381,12 +576,14 @@
+@@ -381,12 +579,14 @@
                }
              >
                {(triggerRef) => (
 -                <IconButton ref={triggerRef} onClick={handleSearchClick}>
-+                <IconButton fill="None" ref={triggerRef} disabled={isIssueBoard} onClick={handleSearchClick} aria-label="Search room">
++                <IconButton fill="None" ref={triggerRef} disabled={isIssueBoard} onClick={handleSearchClick} aria-label="Search room" aria-keyshortcuts="Alt+F">
                    <Icon size="400" src={Icons.Search} />
                  </IconButton>
                )}
@@ -2792,7 +2795,7 @@ index 9b4bfd237a..8f49b9f73a 100644
            <TooltipProvider
              position="Bottom"
              offset={4}
-@@ -398,10 +595,13 @@
+@@ -398,10 +598,13 @@
            >
              {(triggerRef) => (
                <IconButton
@@ -2806,7 +2809,7 @@ index 9b4bfd237a..8f49b9f73a 100644
                >
                  {pinnedEvents.length > 0 && (
                    <Badge
-@@ -443,6 +643,8 @@
+@@ -443,6 +646,8 @@
                </FocusTrap>
              }
            />
@@ -2815,7 +2818,7 @@ index 9b4bfd237a..8f49b9f73a 100644
            {screenSize === ScreenSize.Desktop && (
              <TooltipProvider
                position="Bottom"
-@@ -454,12 +656,46 @@
+@@ -454,12 +659,47 @@
                }
              >
                {(triggerRef) => (
@@ -2852,6 +2855,7 @@ index 9b4bfd237a..8f49b9f73a 100644
 +                  onClick={onToggleThreadsDrawer}
 +                  aria-pressed={isThreadsDrawer}
 +                  aria-label={isThreadsDrawer ? 'Hide threads panel' : 'Show threads panel'}
++                  aria-keyshortcuts="Alt+Shift+T"
 +                >
 +                  <Icon size="400" src={Icons.Message} filled={isThreadsDrawer} />
 +                </IconButton>
@@ -2863,7 +2867,7 @@ index 9b4bfd237a..8f49b9f73a 100644
            <TooltipProvider
              position="Bottom"
              align="End"
-@@ -471,7 +707,13 @@
+@@ -471,7 +711,13 @@
              }
            >
              {(triggerRef) => (
@@ -2878,7 +2882,7 @@ index 9b4bfd237a..8f49b9f73a 100644
                  <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
                </IconButton>
              )}
-@@ -492,7 +734,7 @@
+@@ -492,7 +738,7 @@
                    escapeDeactivates: stopPropagation,
                  }}
                >

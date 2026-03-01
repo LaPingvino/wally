@@ -91,10 +91,10 @@ index 433fa6a1db..8476147912 100644
          </Header>
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 0000000000..c8a3126c67
+index 0000000000..755e42e01d
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,316 @@
+@@ -0,0 +1,339 @@
 +import React, { useCallback, useRef } from 'react';
 +import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
@@ -166,6 +166,24 @@ index 0000000000..c8a3126c67
 +  category: 'Actions',
 +};
 +
++const THREADS_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+shift+t',
++  description: 'Toggle threads panel',
++  category: 'Actions',
++};
++
++const SEARCH_ROOM_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+f',
++  description: 'Search in room',
++  category: 'Search',
++};
++
++const CHAT_TOGGLE_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'alt+shift+c',
++  description: 'Toggle chat panel (during call)',
++  category: 'Actions',
++};
++
 +const SECTION_NAV_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
 +  key: 'f6',
 +  description: 'Move to next section',
@@ -198,6 +216,8 @@ index 0000000000..c8a3126c67
 +const SECTION_FINDERS: Array<() => HTMLElement | null> = [
 +  findSidebarFocus,
 +  () => document.querySelector('#cinny-room-listbox'),
++  // First enabled button in the room header toolbar (skips disabled buttons)
++  () => document.querySelector<HTMLElement>('#cinny-room-header-toolbar button:not([disabled])'),
 +  () => document.querySelector('#cinny-timeline'),
 +  () => document.querySelector('[data-slate-editor="true"]'),
 +  () => document.querySelector('#cinny-members-panel'),
@@ -381,8 +401,8 @@ index 0000000000..c8a3126c67
 +
 +    const label =
 +      SECTION_LABELS[target.id] ??
++      target.closest<HTMLElement>('[data-section-label]')?.getAttribute('data-section-label') ??
 +      target.getAttribute('aria-label') ??
-+      target.closest<HTMLElement>('[aria-label]')?.getAttribute('aria-label') ??
 +      'Section';
 +    announce(label);
 +  }, []);
@@ -405,6 +425,9 @@ index 0000000000..c8a3126c67
 +    { ...PREV_UNREAD_UP_SHORTCUT, action: () => {} },
 +    { ...ACCOUNT_SWITCH_SHORTCUT, action: () => {} },
 +    { ...PEOPLE_DRAWER_SHORTCUT, action: () => {} },
++    { ...THREADS_SHORTCUT, action: () => {} },
++    { ...SEARCH_ROOM_SHORTCUT, action: () => {} },
++    { ...CHAT_TOGGLE_SHORTCUT, action: () => {} },
 +    { ...SECTION_NAV_SHORTCUT, action: () => {} },
 +    { ...SECTION_NAV_BACK_SHORTCUT, action: () => {} },
 +  ];
@@ -2173,10 +2196,16 @@ index 5a96e6ad47..81b5b3164e 100644
            alignItems="Center"
            justifyContent="End"
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index 8f49b9f73a..cbc2ed7c76 100644
+index 732bb4f267..d27f6b28e5 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
-@@ -141,7 +141,7 @@
+@@ -1,4 +1,4 @@
+-import React, { MouseEventHandler, forwardRef, useState } from 'react';
++import React, { MouseEventHandler, forwardRef, useCallback, useState } from 'react';
+ import FocusTrap from 'focus-trap-react';
+ import {
+   Box,
+@@ -143,7 +143,7 @@
    };
  
    return (
@@ -2185,6 +2214,39 @@ index 8f49b9f73a..cbc2ed7c76 100644
        {invitePrompt && (
          <InviteUserPrompt
            room={room}
+@@ -396,6 +396,23 @@
+     setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
+   };
+ 
++  const handleHeaderKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (isKeyHotkey('alt+shift+t', evt)) {
++        evt.preventDefault();
++        onToggleThreadsDrawer?.();
++      } else if (isKeyHotkey('alt+f', evt)) {
++        evt.preventDefault();
++        handleSearchClick();
++      } else if (isKeyHotkey('alt+shift+c', evt) && (isActiveCall || room.isCallRoom())) {
++        evt.preventDefault();
++        toggleChat();
++      }
++    },
++    [onToggleThreadsDrawer, handleSearchClick, isActiveCall, room, toggleChat]
++  );
++  useKeyDown(window, handleHeaderKeyDown);
++
+   return (
+     <PageHeader
+       className={ContainerColor({ variant: 'Surface' })}
+@@ -470,7 +487,7 @@
+           </Box>
+         </Box>
+ 
+-        <Box shrink="No">
++        <Box id="cinny-room-header-toolbar" data-section-label="Room actions" shrink="No">
+           {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
+               Wobble here (left side of group) is less noticeable than at the right. */}
+ 
 diff --git a/src/app/features/room/RoomViewTyping.tsx b/src/app/features/room/RoomViewTyping.tsx
 index 1142a3a814..8fffe3acbe 100644
 --- a/src/app/features/room/RoomViewTyping.tsx
@@ -5361,7 +5423,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk 0c6f3c02 "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 280007f3 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: boolean;
@@ -5384,7 +5446,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk 0c6f3c02 "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 280007f3 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: false,
