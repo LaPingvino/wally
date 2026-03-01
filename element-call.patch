@@ -779,10 +779,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..0f15b32108
+index 0000000000..a1398ac3af
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,398 @@
+@@ -0,0 +1,402 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -836,7 +836,6 @@ index 0000000000..0f15b32108
 +    embed: 'true',
 +    widgetId,
 +    appPrompt: 'false',
-+    skipLobby: setParams.skipLobby ?? 'true', // TODO: skipLobby is deprecated, use intent instead (intent doesn't produce the same effect?)
 +    returnToLobby: setParams.returnToLobby ?? 'true',
 +    perParticipantE2EE: setParams.perParticipantE2EE ?? 'true',
 +    callIntent: setParams.callIntent ?? 'video',
@@ -849,6 +848,11 @@ index 0000000000..0f15b32108
 +    baseUrl: mx.baseUrl!,
 +    parentUrl: window.location.origin,
 +  });
++  // intent controls lobby display: 'join_existing'/'start_call' show lobby;
++  // omitting intent uses Element Call's default (skipLobby=true = skip lobby).
++  if (setParams.intent) {
++    params.set('intent', setParams.intent);
++  }
 +
 +  const replacedParams = params.toString().replace(/%24/g, '$');
 +  url.search = `?${replacedParams}`;
@@ -4635,10 +4639,10 @@ index 0000000000..9ea05396a6
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..6214519012
+index 0000000000..8739c6f674
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,193 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -4690,7 +4694,7 @@ index 0000000000..6214519012
 +      widgetApiRef: React.MutableRefObject<ClientWidgetApi | null>,
 +      smallWidgetRef: React.MutableRefObject<SmallWidget | null>,
 +      iframeRef: React.MutableRefObject<HTMLIFrameElement | null>,
-+      skipLobby: boolean,
++      autoJoin: boolean,
 +      themeKind: ThemeKind | null,
 +    ) => {
 +      if (mx?.getUserId()) {
@@ -4704,7 +4708,9 @@ index 0000000000..6214519012
 +            clientConfig.elementCallUrl ?? '',
 +            widgetId,
 +            {
-+              skipLobby: skipLobby.toString(),
++              // When autoJoin is off, pass intent=join_existing so Element Call shows the lobby.
++              // When autoJoin is on, omit intent; Element Call defaults to skipLobby=true (no lobby).
++              intent: autoJoin ? undefined : 'join_existing',
 +              returnToLobby: 'true',
 +              perParticipantE2EE: 'true',
 +              theme: themeKind,
@@ -4741,7 +4747,7 @@ index 0000000000..6214519012
 +            'm.call',
 +            newUrl,
 +            true,
-+            getWidgetData(mx, roomIdToSet, {}, { skipLobby: callAutoJoin, callIntent: 'audio' }),
++            getWidgetData(mx, roomIdToSet, {}, { callIntent: 'audio' }),
 +            roomIdToSet,
 +          );
 +
@@ -4772,7 +4778,7 @@ index 0000000000..6214519012
 +
 +  useEffect(() => {
 +    if (activeCallRoomId) {
-+      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, callAutoJoin, theme.kind);
++      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, callAutoJoin, theme.kind); // callAutoJoin=false → lobby shown, true → skip lobby
 +    }
 +  }, [
 +    theme,
