@@ -91,10 +91,10 @@ index 433fa6a1db..8476147912 100644
          </Header>
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 0000000000..f20b34ad52
+index 0000000000..c8a3126c67
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,247 @@
+@@ -0,0 +1,316 @@
 +import React, { useCallback, useRef } from 'react';
 +import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
@@ -165,6 +165,44 @@ index 0000000000..f20b34ad52
 +  description: 'Toggle members panel',
 +  category: 'Actions',
 +};
++
++const SECTION_NAV_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'f6',
++  description: 'Move to next section',
++  category: 'Navigation',
++};
++
++const SECTION_NAV_BACK_SHORTCUT: Omit<KeyboardShortcut, 'action'> = {
++  key: 'shift+f6',
++  description: 'Move to previous section',
++  category: 'Navigation',
++};
++
++const SECTION_LABELS: Record<string, string> = {
++  'cinny-room-listbox': 'Room list',
++  'cinny-timeline': 'Message timeline',
++  'cinny-members-panel': 'Members panel',
++  'cinny-threads-panel': 'Threads panel',
++};
++
++function findSidebarFocus(): HTMLElement | null {
++  const nav = document.querySelector<HTMLElement>('[aria-label="Main navigation"]');
++  if (!nav) return null;
++  // Roving tabindex: active item has tabIndex=0; fall back to first button
++  return (
++    nav.querySelector<HTMLElement>('[tabindex="0"]') ??
++    nav.querySelector<HTMLElement>('button:not([disabled])')
++  );
++}
++
++const SECTION_FINDERS: Array<() => HTMLElement | null> = [
++  findSidebarFocus,
++  () => document.querySelector('#cinny-room-listbox'),
++  () => document.querySelector('#cinny-timeline'),
++  () => document.querySelector('[data-slate-editor="true"]'),
++  () => document.querySelector('#cinny-members-panel'),
++  () => document.querySelector('#cinny-threads-panel'),
++];
 +
 +export function GlobalKeyboardShortcuts() {
 +  const navigate = useNavigate();
@@ -321,12 +359,41 @@ index 0000000000..f20b34ad52
 +    [setPeopleDrawer]
 +  );
 +
++  const handleSectionTabKeyDown = useCallback((evt: KeyboardEvent) => {
++    const isForward = isKeyHotkey('f6', evt);
++    const isBackward = isKeyHotkey('shift+f6', evt);
++    if (!isForward && !isBackward) return;
++
++    const sections = SECTION_FINDERS.map((fn) => fn()).filter(
++      (el): el is HTMLElement => el !== null
++    );
++    if (sections.length === 0) return;
++    evt.preventDefault();
++
++    const focused = document.activeElement;
++    const currentIndex = sections.findIndex((el) => el === focused || el.contains(focused as Node));
++    const step = isForward ? 1 : -1;
++    const nextIndex =
++      currentIndex === -1 ? 0 : (currentIndex + step + sections.length) % sections.length;
++
++    const target = sections[nextIndex];
++    target.focus();
++
++    const label =
++      SECTION_LABELS[target.id] ??
++      target.getAttribute('aria-label') ??
++      target.closest<HTMLElement>('[aria-label]')?.getAttribute('aria-label') ??
++      'Section';
++    announce(label);
++  }, []);
++
 +  useKeyDown(window, handleCallKeyDown);
 +  useKeyDown(window, handleSpaceKeyDown);
 +  useKeyDown(window, handleNextUnreadKeyDown);
 +  useKeyDown(window, handleUnreadNavKeyDown);
 +  useKeyDown(window, handleStartCallKeyDown);
 +  useKeyDown(window, handlePeopleDrawerKeyDown);
++  useKeyDown(window, handleSectionTabKeyDown);
 +
 +  const allShortcuts: KeyboardShortcut[] = [
 +    ...shortcuts,
@@ -338,6 +405,8 @@ index 0000000000..f20b34ad52
 +    { ...PREV_UNREAD_UP_SHORTCUT, action: () => {} },
 +    { ...ACCOUNT_SWITCH_SHORTCUT, action: () => {} },
 +    { ...PEOPLE_DRAWER_SHORTCUT, action: () => {} },
++    { ...SECTION_NAV_SHORTCUT, action: () => {} },
++    { ...SECTION_NAV_BACK_SHORTCUT, action: () => {} },
 +  ];
 +
 +  return <KeyboardShortcutsHelp shortcuts={allShortcuts} />;
@@ -1966,7 +2035,7 @@ index 62ef9c4bd7..cafe4896c6 100644
            </Text>
          </Box>
 diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
-index d9205076b2..7f38f4c9d3 100644
+index d9205076b2..c3161ab87d 100644
 --- a/src/app/features/room/MembersDrawer.tsx
 +++ b/src/app/features/room/MembersDrawer.tsx
 @@ -70,7 +70,7 @@
@@ -1986,6 +2055,17 @@ index d9205076b2..7f38f4c9d3 100644
                >
                  <Icon src={Icons.Cross} />
                </IconButton>
+@@ -246,6 +247,10 @@
+ 
+   return (
+     <Box
++      id="cinny-members-panel"
++      role="region"
++      aria-label="Members panel"
++      tabIndex={-1}
+       className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
+       shrink="No"
+       direction="Column"
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
 index 20dca577a0..857a4b1d1e 100644
 --- a/src/app/features/room/RoomInput.tsx

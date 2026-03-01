@@ -688,10 +688,10 @@ index 0000000000..76425cabb6
 +}
 diff --git a/src/app/features/room/ThreadsDrawer.tsx b/src/app/features/room/ThreadsDrawer.tsx
 new file mode 100644
-index 0000000000..03183beca7
+index 0000000000..81c3558857
 --- /dev/null
 +++ b/src/app/features/room/ThreadsDrawer.tsx
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,274 @@
 +import React, { useCallback, useEffect, useState } from 'react';
 +import { Room, MatrixEvent, RoomEvent, ThreadEvent, RelationType } from 'matrix-js-sdk';
 +import {
@@ -902,6 +902,10 @@ index 0000000000..03183beca7
 +
 +  return (
 +    <Box
++      id="cinny-threads-panel"
++      role="region"
++      aria-label="Threads panel"
++      tabIndex={-1}
 +      direction="Column"
 +      style={{
 +        width: `${width}px`,
