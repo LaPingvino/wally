@@ -890,10 +890,10 @@ index 50a89418e6..e117518676 100644
              </Header>
 diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
 new file mode 100644
-index 0000000000..1a8cf1ebae
+index 0000000000..f4f13f71d2
 --- /dev/null
 +++ b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,152 @@
 +import React, { useCallback, useRef } from 'react';
 +import {
 +  Box,
@@ -958,10 +958,6 @@ index 0000000000..1a8cf1ebae
 +  const [open, setOpen] = useAtom(keyboardShortcutsHelpAtom);
 +  const triggerRef = useRef<HTMLElement | null>(null);
 +
-+  const handleOpen = useCallback(() => {
-+    triggerRef.current = document.activeElement as HTMLElement | null;
-+  }, []);
-+
 +  const handleClose = useCallback(() => {
 +    setOpen(false);
 +    setTimeout(() => {
@@ -974,9 +970,9 @@ index 0000000000..1a8cf1ebae
 +
 +  if (!open) return null;
 +
-+  // Record trigger when first rendered (open just became true)
++  // Capture the triggering element synchronously (before FocusTrap moves focus)
 +  if (!triggerRef.current) {
-+    handleOpen();
++    triggerRef.current = document.activeElement as HTMLElement | null;
 +  }
 +
 +  const groupedShortcuts = shortcuts.reduce(
@@ -993,9 +989,10 @@ index 0000000000..1a8cf1ebae
 +      <OverlayCenter>
 +        <FocusTrap
 +          focusTrapOptions={{
-+            initialFocus: false,
++            returnFocusOnDeactivate: false,
 +            onDeactivate: handleClose,
 +            clickOutsideDeactivates: true,
++            allowOutsideClick: true,
 +            escapeDeactivates: stopPropagation,
 +          }}
 +        >
@@ -1013,7 +1010,7 @@ index 0000000000..1a8cf1ebae
 +                  <Icon src={Icons.Cross} size="200" />
 +                </IconButton>
 +              </Box>
-+              <Scroll style={{ maxHeight: '60vh' }}>
++              <Scroll tabIndex={0} aria-label="Keyboard shortcuts list" style={{ maxHeight: '60vh' }}>
 +                <Box direction="Column" gap="300">
 +                  {Object.entries(groupedShortcuts).map(([category, items]) => (
 +                    <section key={category} aria-label={`${category} shortcuts`}>
