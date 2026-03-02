@@ -2172,7 +2172,7 @@ index 62ef9c4bd7..cafe4896c6 100644
            </Text>
          </Box>
 diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
-index d9205076b2..ac1dd68294 100644
+index d9205076b2..9fb2b24118 100644
 --- a/src/app/features/room/MembersDrawer.tsx
 +++ b/src/app/features/room/MembersDrawer.tsx
 @@ -1,7 +1,9 @@
@@ -2244,7 +2244,7 @@ index d9205076b2..ac1dd68294 100644
        variant="Background"
        radii="400"
        onClick={onClick}
-@@ -244,8 +257,102 @@
+@@ -244,11 +257,105 @@
      openUserRoomProfile(room.roomId, space?.roomId, userId, btn.getBoundingClientRect(), 'Left');
    };
  
@@ -2310,32 +2310,23 @@ index d9205076b2..ac1dd68294 100644
 +        return;
 +      }
 +
-+      // Type-ahead: jump to first member whose name starts with typed character.
++      // Typing redirects to the search bar — focus the input and inject the character.
 +      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
 +        evt.preventDefault();
-+        const char = evt.key.toLowerCase();
-+        const currentIdx = PLTagOrRoomMember.findIndex(
-+          (m) => 'userId' in m && m.userId === currentUserId
-+        );
-+        const currentPos = currentIdx >= 0 ? memberIndices.indexOf(currentIdx) : -1;
-+        const startPos = currentPos >= 0 ? currentPos + 1 : 0;
-+        for (let i = 0; i < memberIndices.length; i++) {
-+          const pos = (startPos + i) % memberIndices.length;
-+          const item = PLTagOrRoomMember[memberIndices[pos]];
-+          if (item && 'userId' in item) {
-+            const name =
-+              getMemberDisplayName(room, item.userId) ??
-+              getMxIdLocalPart(item.userId) ??
-+              item.userId;
-+            if (name.toLowerCase().startsWith(char)) {
-+              focusMember(memberIndices[pos]);
-+              return;
++        const input = searchInputRef.current;
++        if (input) {
++          input.focus();
++          const key = evt.key;
++          requestAnimationFrame(() => {
++            if (document.activeElement === input) {
++              input.setRangeText(key, input.selectionStart ?? 0, input.selectionEnd ?? 0, 'end');
++              input.dispatchEvent(new Event('input', { bubbles: true }));
 +            }
-+          }
++          });
 +        }
 +      }
 +    },
-+    [memberIndices, PLTagOrRoomMember, focusMember, room]
++    [memberIndices, PLTagOrRoomMember, focusMember]
 +  );
 +
    return (
@@ -2347,6 +2338,18 @@ index d9205076b2..ac1dd68294 100644
        className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
        shrink="No"
        direction="Column"
++      onFocus={(evt) => {
++        // F6 (supertab) focuses this container directly — redirect immediately to the first
++        // member button so the user can navigate the list right away with arrow keys.
++        if (evt.target !== evt.currentTarget) return;
++        const firstMember = evt.currentTarget.querySelector<HTMLElement>(
++          '[data-user-id][tabindex="0"]'
++        );
++        firstMember?.focus();
++      }}
+     >
+       <MemberDrawerHeader room={room} />
+       <Box className={css.MemberDrawerContentBase} grow="Yes">
 @@ -378,10 +485,20 @@
  
              <Box className={css.MembersGroup} direction="Column" gap="100">
