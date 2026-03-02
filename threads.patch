@@ -382,10 +382,10 @@ index d1678b65b3..69c87646c9 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 0000000000..76425cabb6
+index 0000000000..af92cf9d6f
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,301 @@
 +/**
 + * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
 + * infrastructure as the main room view.
@@ -401,7 +401,7 @@ index 0000000000..76425cabb6
 + *   └──────────────────────────────────────────────────┘
 + */
 +import React, { useRef, useState, useEffect } from 'react';
-+import { Box, Text, config, toRem } from 'folds';
++import { Box, Spinner, Text, config, toRem } from 'folds';
 +import { Room, MatrixEvent, ThreadEvent } from 'matrix-js-sdk';
 +import { useEditor } from '../../components/editor';
 +import { RoomTimeline } from './RoomTimeline';
@@ -653,7 +653,8 @@ index 0000000000..76425cabb6
 +  if (!threadReady) {
 +    return (
 +      <Page>
-+        <Box grow="Yes" justifyContent="Center" alignItems="Center">
++        <Box grow="Yes" justifyContent="Center" alignItems="Center" gap="300" direction="Column">
++          <Spinner size="600" variant="Secondary" />
 +          <Text size="T300" priority="300">Loading thread…</Text>
 +        </Box>
 +      </Page>
@@ -688,14 +689,15 @@ index 0000000000..76425cabb6
 +}
 diff --git a/src/app/features/room/ThreadsDrawer.tsx b/src/app/features/room/ThreadsDrawer.tsx
 new file mode 100644
-index 0000000000..81c3558857
+index 0000000000..38cb344eea
 --- /dev/null
 +++ b/src/app/features/room/ThreadsDrawer.tsx
-@@ -0,0 +1,274 @@
-+import React, { useCallback, useEffect, useState } from 'react';
+@@ -0,0 +1,322 @@
++import React, { KeyboardEventHandler, useCallback, useEffect, useState } from 'react';
 +import { Room, MatrixEvent, RoomEvent, ThreadEvent, RelationType } from 'matrix-js-sdk';
 +import {
 +  Box,
++  Spinner,
 +  Text,
 +  Icon,
 +  Icons,
@@ -703,6 +705,7 @@ index 0000000000..81c3558857
 +  config,
 +  toRem,
 +} from 'folds';
++import { isKeyHotkey } from 'is-hotkey';
 +import { atom, useAtom } from 'jotai';
 +import { useMatrixClient } from '../../hooks/useMatrixClient';
 +import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
@@ -762,8 +765,9 @@ index 0000000000..81c3558857
 +  entry: ThreadEntry;
 +  room: Room;
 +  onClick: () => void;
++  tabIndex?: number;
 +};
-+function ThreadItem({ entry, room, onClick }: ThreadItemProps) {
++function ThreadItem({ entry, room, onClick, tabIndex: tabIndexProp }: ThreadItemProps) {
 +  const { rootEvent, replyCount } = entry;
 +  const mx = useMatrixClient();
 +  const useAuthentication = useMediaAuthentication();
@@ -781,6 +785,8 @@ index 0000000000..81c3558857
 +    <button
 +      type="button"
 +      onClick={onClick}
++      data-thread-id={entry.id}
++      tabIndex={tabIndexProp ?? 0}
 +      style={{
 +        display: 'flex',
 +        gap: config.space.S200,
@@ -861,6 +867,36 @@ index 0000000000..81c3558857
 +
 +  const [threads, setThreads] = useState<ThreadEntry[]>(getThreads);
 +  const [loading, setLoading] = useState(true);
++  const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
++
++  const handleThreadListKeyDown: KeyboardEventHandler<HTMLDivElement> = useCallback(
++    (evt) => {
++      const target = evt.target as HTMLElement;
++      const threadId = target.getAttribute('data-thread-id');
++      if (!threadId) return;
++      const isDown = isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent);
++      const isUp = isKeyHotkey('arrowup', evt as unknown as KeyboardEvent);
++      const isHome = isKeyHotkey('home', evt as unknown as KeyboardEvent);
++      const isEnd = isKeyHotkey('end', evt as unknown as KeyboardEvent);
++      if (!isDown && !isUp && !isHome && !isEnd) return;
++      evt.preventDefault();
++      const buttons = Array.from(
++        (evt.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-thread-id]')
++      );
++      const currentIdx = buttons.findIndex((b) => b.getAttribute('data-thread-id') === threadId);
++      let nextIdx: number;
++      if (isHome) nextIdx = 0;
++      else if (isEnd) nextIdx = buttons.length - 1;
++      else if (isDown) nextIdx = Math.min(currentIdx + 1, buttons.length - 1);
++      else nextIdx = Math.max(currentIdx - 1, 0);
++      const next = buttons[nextIdx];
++      if (next) {
++        setFocusedThreadId(next.getAttribute('data-thread-id'));
++        next.focus();
++      }
++    },
++    []
++  );
 +
 +  // Fetch all historical threads on mount via SDK (works when server supports MSC3856).
 +  // Falls back to showing whatever the timeline scan or local sync state has.
@@ -940,9 +976,17 @@ index 0000000000..81c3558857
 +          <ThreadView room={room} threadRootId={selectedThreadId} />
 +        </Box>
 +      ) : (
-+        <div style={{ flex: 1, overflowY: 'auto' }}>
++        <div
++          style={{ flex: 1, overflowY: 'auto' }}
++          onKeyDown={handleThreadListKeyDown}
++          onFocus={(evt) => {
++            const threadId = (evt.target as HTMLElement).getAttribute('data-thread-id');
++            if (threadId) setFocusedThreadId(threadId);
++          }}
++        >
 +          {loading ? (
-+            <Box style={{ padding: config.space.S400 }} justifyContent="Center">
++            <Box style={{ padding: config.space.S400 }} justifyContent="Center" alignItems="Center" gap="300">
++              <Spinner size="300" variant="Secondary" />
 +              <Text size="T300" priority="300">Loading threads…</Text>
 +            </Box>
 +          ) : threads.length === 0 ? (
@@ -952,12 +996,17 @@ index 0000000000..81c3558857
 +              </Text>
 +            </Box>
 +          ) : (
-+            threads.map((entry) => (
++            threads.map((entry, idx) => (
 +              <ThreadItem
 +                key={entry.id}
 +                entry={entry}
 +                room={room}
 +                onClick={() => setSelectedThreadId(entry.id)}
++                tabIndex={
++                  focusedThreadId
++                    ? entry.id === focusedThreadId ? 0 : -1
++                    : idx === 0 ? 0 : -1
++                }
 +              />
 +            ))
 +          )}

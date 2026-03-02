@@ -1919,7 +1919,7 @@ index c6aff741d6..a12a381665 100644
                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                      {onTogglePin && (
 diff --git a/src/app/features/lobby/Lobby.tsx b/src/app/features/lobby/Lobby.tsx
-index 4b19e5163c..76e8c68b22 100644
+index 4b19e5163c..9bcbeab529 100644
 --- a/src/app/features/lobby/Lobby.tsx
 +++ b/src/app/features/lobby/Lobby.tsx
 @@ -1,4 +1,4 @@
@@ -1957,10 +1957,10 @@ index 4b19e5163c..76e8c68b22 100644
 +  const handleLobbyKeyDown: KeyboardEventHandler<HTMLElement> = useCallback(
 +    (evt) => {
 +      if (lobbyNavItems.length === 0) return;
-+      // Only handle plain arrow/home/end keys (not when a button inside has focus
-+      // and handles the event itself — check the event target isn't a button).
++      // Only intercept keys when focus is on the lobby container or a room-nav button.
 +      const target = evt.target as HTMLElement;
-+      if (target !== evt.currentTarget && target.tagName === 'BUTTON') return;
++      const isRoomButton = target.hasAttribute('data-room-id');
++      if (!isRoomButton && target !== evt.currentTarget) return;
 +
 +      const isDown = isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent);
 +      const isUp = isKeyHotkey('arrowup', evt as unknown as KeyboardEvent);
@@ -2172,7 +2172,7 @@ index 62ef9c4bd7..cafe4896c6 100644
            </Text>
          </Box>
 diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
-index d9205076b2..2c13ad54a3 100644
+index d9205076b2..ac1dd68294 100644
 --- a/src/app/features/room/MembersDrawer.tsx
 +++ b/src/app/features/room/MembersDrawer.tsx
 @@ -1,7 +1,9 @@
@@ -2210,25 +2210,27 @@ index d9205076b2..2c13ad54a3 100644
                >
                  <Icon src={Icons.Cross} />
                </IconButton>
-@@ -109,6 +113,8 @@
+@@ -109,6 +113,9 @@
    onClick: MouseEventHandler<HTMLButtonElement>;
    pressed?: boolean;
    typing?: boolean;
 +  focused?: boolean;
 +  optionId?: string;
++  tabIndex?: number;
  };
  function MemberItem({
    mx,
-@@ -118,6 +124,8 @@
+@@ -118,6 +125,9 @@
    onClick,
    pressed,
    typing,
 +  focused,
 +  optionId,
++  tabIndex: tabIndexProp,
  }: MemberItemProps) {
    const name =
      getMemberDisplayName(room, member.userId) ?? getMxIdLocalPart(member.userId) ?? member.userId;
-@@ -128,9 +136,12 @@
+@@ -128,9 +138,12 @@
  
    return (
      <MenuItem
@@ -2238,11 +2240,11 @@ index d9205076b2..2c13ad54a3 100644
 -      aria-pressed={pressed}
 +      aria-selected={pressed || focused}
        data-user-id={member.userId}
-+      tabIndex={-1}
++      tabIndex={tabIndexProp ?? -1}
        variant="Background"
        radii="400"
        onClick={onClick}
-@@ -244,8 +255,125 @@
+@@ -244,8 +257,102 @@
      openUserRoomProfile(room.roomId, space?.roomId, userId, btn.getBoundingClientRect(), 'Left');
    };
  
@@ -2262,75 +2264,60 @@ index d9205076b2..2c13ad54a3 100644
 +    if (focusedVirtIndex >= PLTagOrRoomMember.length) setFocusedVirtIndex(-1);
 +  }, [PLTagOrRoomMember.length, focusedVirtIndex]);
 +
-+  const focusedMember =
-+    focusedVirtIndex >= 0 ? PLTagOrRoomMember[focusedVirtIndex] : undefined;
-+  const focusedUserId =
-+    focusedMember && 'userId' in focusedMember ? focusedMember.userId : undefined;
-+
-+  const handleListFocus = useCallback(() => {
-+    if (focusedVirtIndex < 0 && memberIndices.length > 0) {
-+      const idx = memberIndices[0];
++  const focusMember = useCallback(
++    (idx: number) => {
 +      setFocusedVirtIndex(idx);
 +      virtualizer.scrollToIndex(idx, { align: 'auto' });
-+    }
-+  }, [focusedVirtIndex, memberIndices, virtualizer]);
++      const member = PLTagOrRoomMember[idx];
++      if (member && 'userId' in member) {
++        const { userId } = member;
++        requestAnimationFrame(() =>
++          requestAnimationFrame(() => {
++            const btn = document.querySelector<HTMLElement>(`[data-user-id="${userId}"]`);
++            btn?.focus({ preventScroll: true });
++          })
++        );
++      }
++    },
++    [PLTagOrRoomMember, virtualizer]
++  );
 +
 +  const handleListKeyDown: KeyboardEventHandler<HTMLDivElement> = useCallback(
 +    (evt) => {
 +      if (memberIndices.length === 0) return;
-+      const currentPos =
-+        focusedVirtIndex >= 0 ? memberIndices.indexOf(focusedVirtIndex) : -1;
++      // Only handle keys from a focused member button (or the listbox container itself).
++      const target = evt.target as HTMLElement;
++      const currentUserId = target.getAttribute('data-user-id');
++      if (!currentUserId) return;
 +
-+      if (isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent)) {
++      const isDown = isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent);
++      const isUp = isKeyHotkey('arrowup', evt as unknown as KeyboardEvent);
++      const isHome = isKeyHotkey('home', evt as unknown as KeyboardEvent);
++      const isEnd = isKeyHotkey('end', evt as unknown as KeyboardEvent);
++
++      if (isDown || isUp || isHome || isEnd) {
 +        evt.preventDefault();
-+        const nextPos =
-+          currentPos < 0 ? 0 : Math.min(currentPos + 1, memberIndices.length - 1);
-+        const idx = memberIndices[nextPos];
-+        setFocusedVirtIndex(idx);
-+        virtualizer.scrollToIndex(idx, { align: 'auto' });
-+        return;
-+      }
-+      if (isKeyHotkey('arrowup', evt as unknown as KeyboardEvent)) {
-+        evt.preventDefault();
-+        const nextPos =
-+          currentPos < 0
-+            ? memberIndices.length - 1
-+            : Math.max(currentPos - 1, 0);
-+        const idx = memberIndices[nextPos];
-+        setFocusedVirtIndex(idx);
-+        virtualizer.scrollToIndex(idx, { align: 'auto' });
-+        return;
-+      }
-+      if (isKeyHotkey('home', evt as unknown as KeyboardEvent)) {
-+        evt.preventDefault();
-+        const idx = memberIndices[0];
-+        setFocusedVirtIndex(idx);
-+        virtualizer.scrollToIndex(idx, { align: 'start' });
-+        return;
-+      }
-+      if (isKeyHotkey('end', evt as unknown as KeyboardEvent)) {
-+        evt.preventDefault();
-+        const idx = memberIndices[memberIndices.length - 1];
-+        setFocusedVirtIndex(idx);
-+        virtualizer.scrollToIndex(idx, { align: 'end' });
-+        return;
-+      }
-+      if (
-+        (isKeyHotkey('enter', evt as unknown as KeyboardEvent) ||
-+          isKeyHotkey('space', evt as unknown as KeyboardEvent)) &&
-+        focusedUserId
-+      ) {
-+        evt.preventDefault();
-+        const btn = document.querySelector<HTMLButtonElement>(
-+          `[data-user-id="${focusedUserId}"]`
++        const currentIdx = PLTagOrRoomMember.findIndex(
++          (m) => 'userId' in m && m.userId === currentUserId
 +        );
-+        if (btn) btn.click();
++        const currentPos = currentIdx >= 0 ? memberIndices.indexOf(currentIdx) : -1;
++        let nextPos: number;
++        if (isHome) nextPos = 0;
++        else if (isEnd) nextPos = memberIndices.length - 1;
++        else if (isDown) nextPos = currentPos < 0 ? 0 : Math.min(currentPos + 1, memberIndices.length - 1);
++        else nextPos = currentPos < 0 ? memberIndices.length - 1 : Math.max(currentPos - 1, 0);
++        focusMember(memberIndices[nextPos]);
 +        return;
 +      }
++
 +      // Type-ahead: jump to first member whose name starts with typed character.
 +      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
 +        evt.preventDefault();
 +        const char = evt.key.toLowerCase();
++        const currentIdx = PLTagOrRoomMember.findIndex(
++          (m) => 'userId' in m && m.userId === currentUserId
++        );
++        const currentPos = currentIdx >= 0 ? memberIndices.indexOf(currentIdx) : -1;
 +        const startPos = currentPos >= 0 ? currentPos + 1 : 0;
 +        for (let i = 0; i < memberIndices.length; i++) {
 +          const pos = (startPos + i) % memberIndices.length;
@@ -2341,22 +2328,14 @@ index d9205076b2..2c13ad54a3 100644
 +              getMxIdLocalPart(item.userId) ??
 +              item.userId;
 +            if (name.toLowerCase().startsWith(char)) {
-+              setFocusedVirtIndex(memberIndices[pos]);
-+              virtualizer.scrollToIndex(memberIndices[pos], { align: 'auto' });
++              focusMember(memberIndices[pos]);
 +              return;
 +            }
 +          }
 +        }
 +      }
 +    },
-+    [
-+      memberIndices,
-+      focusedVirtIndex,
-+      focusedUserId,
-+      PLTagOrRoomMember,
-+      virtualizer,
-+      room,
-+    ]
++    [memberIndices, PLTagOrRoomMember, focusMember, room]
 +  );
 +
    return (
@@ -2368,46 +2347,51 @@ index d9205076b2..2c13ad54a3 100644
        className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
        shrink="No"
        direction="Column"
-@@ -378,10 +506,21 @@
+@@ -378,10 +485,20 @@
  
              <Box className={css.MembersGroup} direction="Column" gap="100">
                <div
 -                style={{
 -                  position: 'relative',
 -                  height: virtualizer.getTotalSize(),
--                }}
 +                role="listbox"
 +                aria-label="Members"
 +                aria-orientation="vertical"
-+                aria-activedescendant={
-+                  focusedUserId ? `member-option-${focusedUserId}` : undefined
-+                }
-+                tabIndex={0}
 +                onKeyDown={handleListKeyDown}
 +                onFocus={(evt) => {
-+                  if (evt.target === evt.currentTarget) handleListFocus();
-+                }}
-+                onMouseDown={(evt) => {
-+                  if (evt.target === evt.currentTarget) evt.preventDefault();
-+                }}
++                  // Sync focusedVirtIndex when any member button receives focus.
++                  const userId = (evt.target as HTMLElement).getAttribute('data-user-id');
++                  if (!userId) return;
++                  const idx = PLTagOrRoomMember.findIndex(
++                    (m) => 'userId' in m && m.userId === userId
++                  );
++                  if (idx >= 0) setFocusedVirtIndex(idx);
+                 }}
 +                style={{ position: 'relative', height: virtualizer.getTotalSize() }}
                >
                  {virtualizer.getVirtualItems().map((vItem) => {
                    const tagOrMember = PLTagOrRoomMember[vItem.index];
-@@ -402,6 +541,7 @@
+@@ -402,6 +519,13 @@
                      );
                    }
  
 +                  const isFocused = focusedVirtIndex === vItem.index;
++                  // Roving tabindex: first member starts as tabIndex=0 (Tab entry point),
++                  // then whichever member last had focus keeps tabIndex=0.
++                  const memberTabIndex =
++                    focusedVirtIndex >= 0
++                      ? isFocused ? 0 : -1
++                      : vItem.index === memberIndices[0] ? 0 : -1;
                    return (
                      <div
                        style={{
-@@ -422,6 +562,8 @@
+@@ -422,6 +546,9 @@
                          typing={typingMembers.some(
                            (receipt) => receipt.userId === tagOrMember.userId
                          )}
 +                        focused={isFocused}
 +                        optionId={`member-option-${tagOrMember.userId}`}
++                        tabIndex={memberTabIndex}
                        />
                      </div>
                    );
@@ -3232,7 +3216,7 @@ index 0000000000..c63b43ef4c 100644
  export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
    const mx = useMatrixClient();
 -<<<<<<< conflict 1 of 3
--+++++++ zmnruntx d5cd4cab "patch-03: pronouns, timezone, extended profile fields"
+-+++++++ zmnruntx 4588a907 "patch-03: pronouns, timezone, extended profile fields"
    const userId = mx.getUserId() as string;
  
    const [accountDataTypes, setAccountDataKeys] = useState(() =>
@@ -3262,7 +3246,7 @@ index 0000000000..c63b43ef4c 100644
    const submitAccountData: AccountDataSubmitCallback = useCallback(
      async (type, content) => {
 -<<<<<<< conflict 2 of 3
--+++++++ zmnruntx d5cd4cab "patch-03: pronouns, timezone, extended profile fields"
+-+++++++ zmnruntx 4588a907 "patch-03: pronouns, timezone, extended profile fields"
        await mx.setAccountData(type as keyof AccountDataEvents, content);
      },
      [mx]
@@ -3439,7 +3423,7 @@ index 0000000000..c63b43ef4c 100644
 ->>>>>>> conflict 2 of 3 ends
                        />
 -<<<<<<< conflict 3 of 3
--+++++++ zmnruntx d5cd4cab "patch-03: pronouns, timezone, extended profile fields"
+-+++++++ zmnruntx 4588a907 "patch-03: pronouns, timezone, extended profile fields"
                      </SequenceCard>
                      {developerTools && (
                        <SequenceCard
@@ -5940,7 +5924,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk 280007f3 "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 54661ca0 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: boolean;
@@ -5963,7 +5947,7 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk 280007f3 "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 54661ca0 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: false,
