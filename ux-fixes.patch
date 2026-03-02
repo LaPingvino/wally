@@ -204,9 +204,16 @@ index f8647d1865..17c59a5f82 100644
            <Route path={_INVITES_PATH} element={<Invites />} />
          </Route>
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf10906..29857b38c3 100644
+index 04edf10906..9883994cff 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
+@@ -1,5 +1,5 @@
+ import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+-import { useAtom, useAtomValue } from 'jotai';
++import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+ import {
+   Avatar,
+   Box,
 @@ -7,6 +7,7 @@
    Icon,
    IconButton,
@@ -301,7 +308,7 @@ index 04edf10906..29857b38c3 100644
    const virtualizer = useVirtualizer({
      count: sortedDirects.length,
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963df..1309dc1d24 100644
+index d87db963df..8ea1e0d4a5 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -7,6 +7,7 @@
@@ -312,9 +319,12 @@ index d87db963df..1309dc1d24 100644
    Menu,
    MenuItem,
    PopOut,
-@@ -18,7 +19,7 @@
+@@ -16,9 +17,9 @@
+   toRem,
+ } from 'folds';
  import { useVirtualizer } from '@tanstack/react-virtual';
- import { useAtom, useAtomValue } from 'jotai';
+-import { useAtom, useAtomValue } from 'jotai';
++import { useAtom, useAtomValue, useSetAtom } from 'jotai';
  import FocusTrap from 'focus-trap-react';
 -import { factoryRoomIdByActivity, factoryRoomIdByAtoZ } from '../../../utils/sort';
 +import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst } from '../../../utils/sort';
@@ -1034,9 +1044,18 @@ index 5d13a9ab65..101589de53 100644
    const handleInboxClick = () => {
      if (screenSize === ScreenSize.Mobile) {
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..048810f92c 100644
+index 3f60d2a957..018d13c53c 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
+@@ -6,7 +6,7 @@
+   useRef,
+   useState,
+ } from 'react';
+-import { useAtom, useAtomValue } from 'jotai';
++import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+ import {
+   Avatar,
+   Box,
 @@ -53,7 +53,8 @@
  import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
  import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';

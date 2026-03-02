@@ -1919,24 +1919,38 @@ index c6aff741d6..a12a381665 100644
                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                      {onTogglePin && (
 diff --git a/src/app/features/lobby/Lobby.tsx b/src/app/features/lobby/Lobby.tsx
-index 4b19e5163c..9bcbeab529 100644
+index 4b19e5163c..522a7fd3ef 100644
 --- a/src/app/features/lobby/Lobby.tsx
 +++ b/src/app/features/lobby/Lobby.tsx
-@@ -1,4 +1,4 @@
+@@ -1,7 +1,7 @@
 -import React, { MouseEventHandler, useCallback, useMemo, useRef, useState } from 'react';
 +import React, { KeyboardEventHandler, MouseEventHandler, useCallback, useMemo, useRef, useState } from 'react';
  import { Box, Chip, Icon, IconButton, Icons, Line, Scroll, Spinner, Text, config } from 'folds';
  import { useVirtualizer } from '@tanstack/react-virtual';
- import { useAtom, useAtomValue } from 'jotai';
-@@ -56,6 +56,7 @@
+-import { useAtom, useAtomValue } from 'jotai';
++import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+ import { useNavigate } from 'react-router-dom';
+ import { JoinRule, RestrictedAllowType, Room } from 'matrix-js-sdk';
+ import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
+@@ -56,6 +56,8 @@
  import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
  import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
  import { getRoomCreatorsForRoomId } from '../../hooks/useRoomCreators';
 +import { isKeyHotkey } from 'is-hotkey';
++import { searchModalAtom, searchModalInitialCharAtom } from '../../state/searchModal';
  
  const useCanDropLobbyItem = (
    space: Room,
-@@ -408,6 +409,63 @@
+@@ -151,6 +153,8 @@
+ export function Lobby() {
+   const navigate = useNavigate();
+   const mx = useMatrixClient();
++  const setSearchModal = useSetAtom(searchModalAtom);
++  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
+   const mDirects = useAtomValue(mDirectAtom);
+   const allRooms = useAtomValue(allRoomsAtom);
+   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
+@@ -408,6 +412,71 @@
      closedCategories.has(categoryId)
    );
  
@@ -1961,6 +1975,14 @@ index 4b19e5163c..9bcbeab529 100644
 +      const target = evt.target as HTMLElement;
 +      const isRoomButton = target.hasAttribute('data-room-id');
 +      if (!isRoomButton && target !== evt.currentTarget) return;
++
++      // Printable char: redirect to global search modal with the typed character
++      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
++        evt.preventDefault();
++        setSearchInitialChar(evt.key);
++        setSearchModal(true);
++        return;
++      }
 +
 +      const isDown = isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent);
 +      const isUp = isKeyHotkey('arrowup', evt as unknown as KeyboardEvent);
@@ -1994,13 +2016,13 @@ index 4b19e5163c..9bcbeab529 100644
 +        })
 +      );
 +    },
-+    [lobbyNavItems, virtualizer]
++    [lobbyNavItems, virtualizer, setSearchModal, setSearchInitialChar]
 +  );
 +
    const handleOpenRoom: MouseEventHandler<HTMLButtonElement> = (evt) => {
      const rId = evt.currentTarget.getAttribute('data-room-id');
      if (!rId) return;
-@@ -435,7 +493,15 @@
+@@ -435,7 +504,15 @@
              showProfile={!onTop}
              powerLevels={roomsPowerLevels.get(space.roomId) ?? {}}
            />
@@ -3035,10 +3057,19 @@ index 7572a71bf4..31d6b65e3e 100644
              </IconButton>
            </Box>
 diff --git a/src/app/features/search/Search.tsx b/src/app/features/search/Search.tsx
-index fcd6233a28..4e47594161 100644
+index fcd6233a28..0343f41335 100644
 --- a/src/app/features/search/Search.tsx
 +++ b/src/app/features/search/Search.tsx
-@@ -44,13 +44,20 @@
+@@ -26,7 +26,7 @@
+   useState,
+ } from 'react';
+ import { isKeyHotkey } from 'is-hotkey';
+-import { useAtom, useAtomValue } from 'jotai';
++import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+ import { Room } from 'matrix-js-sdk';
+ import { useDirects, useOrphanSpaces, useRooms, useSpaces } from '../../state/hooks/roomList';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+@@ -44,17 +44,24 @@
    getDirectRoomAvatarUrl,
    getRoomAvatarUrl,
    guessPerfectParent,
@@ -3060,7 +3091,22 @@ index fcd6233a28..4e47594161 100644
  import { roomToParentsAtom } from '../../state/room/roomToParents';
  import { roomToUnreadAtom } from '../../state/room/roomToUnread';
  import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
-@@ -154,6 +161,21 @@
+-import { searchModalAtom } from '../../state/searchModal';
++import { searchModalAtom, searchModalInitialCharAtom } from '../../state/searchModal';
+ import { useKeyDown } from '../../hooks/useKeyDown';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+ import { KeySymbol } from '../../utils/key-symbol';
+@@ -144,6 +151,9 @@
+ 
+   const [searchRoomType, setSearchRoomType] = useState<SearchRoomType>();
+ 
++  const initialChar = useAtomValue(searchModalInitialCharAtom);
++  const resetInitialChar = useSetAtom(searchModalInitialCharAtom);
++
+   const allRoomsSet = useAllJoinedRoomsSet();
+   const getRoom = useGetRoom(allRoomsSet);
+ 
+@@ -154,6 +164,21 @@
    const spaces = useSpaces(mx, allRoomsAtom);
    const directs = useDirects(mx, allRoomsAtom, mDirects);
  
@@ -3082,7 +3128,26 @@ index fcd6233a28..4e47594161 100644
    const topActiveRooms = useTopActiveRooms(searchRoomType, rooms, directs, spaces);
    const targetRooms = useSearchTargetRooms(searchRoomType, rooms, directs, spaces);
  
-@@ -222,7 +244,8 @@
+@@ -174,6 +199,18 @@
+   const roomsToRender = result ? result.items : topActiveRooms;
+   const listFocus = useListFocusIndex(roomsToRender.length, 0);
+ 
++  // Inject a pre-typed character when the modal is opened by a keyboard shortcut
++  // (e.g. typing in the room list redirects here). Runs only on mount.
++  useEffect(() => {
++    if (!initialChar) return;
++    const input = inputRef.current;
++    if (!input) return;
++    input.value = initialChar;
++    resetInitialChar('');
++    search(initialChar);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
+   const queryHighlighRegex = result?.query
+     ? makeHighlightRegex(result.query.split(' '))
+     : undefined;
+@@ -222,7 +259,8 @@
      }
    };
  
@@ -3092,7 +3157,7 @@ index fcd6233a28..4e47594161 100644
      const target = evt.currentTarget;
      const roomId = target.getAttribute('data-room-id');
      const isSpace = target.getAttribute('data-space') === 'true';
-@@ -257,7 +280,7 @@
+@@ -257,7 +295,7 @@
              },
            }}
          >
@@ -3101,7 +3166,7 @@ index fcd6233a28..4e47594161 100644
              <Box
                shrink="No"
                style={{ padding: config.space.S400, paddingBottom: 0 }}
-@@ -265,6 +288,11 @@
+@@ -265,6 +303,11 @@
              >
                <Input
                  ref={inputRef}
@@ -3113,7 +3178,7 @@ index fcd6233a28..4e47594161 100644
                  size="500"
                  variant="Background"
                  radii="400"
-@@ -297,7 +325,7 @@
+@@ -297,7 +340,7 @@
                )}
                {roomsToRender.length > 0 && (
                  <Scroll ref={scrollRef} size="300" hideTrack>
@@ -3122,7 +3187,7 @@ index fcd6233a28..4e47594161 100644
                      {roomsToRender.map((roomId, index) => {
                        const room = getRoom(roomId);
                        if (!room) return null;
-@@ -322,13 +350,15 @@
+@@ -322,13 +365,15 @@
                        return (
                          <MenuItem
                            key={roomId}
@@ -4006,10 +4071,10 @@ index 0000000000..de62d0daec
 +};
 diff --git a/src/app/hooks/useRoomListKeyboard.ts b/src/app/hooks/useRoomListKeyboard.ts
 new file mode 100644
-index 0000000000..82edcf6a5c
+index 0000000000..8144229c7d
 --- /dev/null
 +++ b/src/app/hooks/useRoomListKeyboard.ts
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,125 @@
 +import { useCallback, useEffect, useState } from 'react';
 +import { Virtualizer } from '@tanstack/react-virtual';
 +import { isKeyHotkey } from 'is-hotkey';
@@ -4020,7 +4085,7 @@ index 0000000000..82edcf6a5c
 +  virtualizer: Virtualizer<HTMLDivElement, Element>;
 +  onNavigate: (roomId: string) => void;
 +  enabled?: boolean;
-+  getItemLabel?: (id: string) => string;
++  onTypeChar?: (key: string) => void;
 +}
 +
 +export const useRoomListKeyboard = ({
@@ -4029,7 +4094,7 @@ index 0000000000..82edcf6a5c
 +  virtualizer,
 +  onNavigate,
 +  enabled = true,
-+  getItemLabel,
++  onTypeChar,
 +}: UseRoomListKeyboardOptions) => {
 +  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 +
@@ -4119,22 +4184,13 @@ index 0000000000..82edcf6a5c
 +        return;
 +      }
 +
-+      // Type-ahead: single printable character jumps to first matching room name
-+      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey && getItemLabel) {
++      // Single printable character: redirect to search modal (via onTypeChar callback)
++      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey && onTypeChar) {
 +        evt.preventDefault();
-+        const char = evt.key.toLowerCase();
-+        const startIndex = focusedIndex >= 0 ? focusedIndex + 1 : 0;
-+        for (let i = 0; i < items.length; i++) {
-+          const idx = (startIndex + i) % items.length;
-+          if (getItemLabel(items[idx]).toLowerCase().startsWith(char)) {
-+            setFocusedIndex(idx);
-+            virtualizer.scrollToIndex(idx, { align: 'auto' });
-+            return;
-+          }
-+        }
++        onTypeChar(evt.key);
 +      }
 +    },
-+    [enabled, items, focusedIndex, virtualizer, onNavigate, getItemLabel]
++    [enabled, items, focusedIndex, virtualizer, onNavigate, onTypeChar]
 +  );
 +
 +  return {
@@ -4881,10 +4937,10 @@ index b3f419d805..f2a197756d 100644
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index ad731f6fbc..e17a20a298 100644
+index 534465ff8f..6ac0227e8a 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
-@@ -73,7 +73,7 @@
+@@ -74,7 +74,7 @@
    };
  
    return (
@@ -4893,7 +4949,7 @@ index ad731f6fbc..e17a20a298 100644
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
            onClick={() => setRoomSortOrder('activity')}
-@@ -138,7 +138,7 @@
+@@ -139,7 +139,7 @@
        <PageNavHeader>
          <Box alignItems="Center" grow="Yes" gap="300">
            <Box grow="Yes">
@@ -4902,7 +4958,7 @@ index ad731f6fbc..e17a20a298 100644
                Direct Messages
              </Text>
            </Box>
-@@ -182,7 +182,7 @@
+@@ -183,7 +183,7 @@
        <NavEmptyLayout
          icon={<Icon size="600" src={Icons.Mention} />}
          title={
@@ -4911,22 +4967,25 @@ index ad731f6fbc..e17a20a298 100644
              No Direct Messages
            </Text>
          }
-@@ -248,6 +248,14 @@
+@@ -249,6 +249,17 @@
      getItemKey: (index) => sortedDirects[index],
    });
  
++  const setSearchModal = useSetAtom(searchModalAtom);
++  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
++
 +  const keyboardNav = useRoomListKeyboard({
 +    items: sortedDirects,
 +    selectedRoomId,
 +    virtualizer,
 +    onNavigate: (roomId) => navigate(getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
-+    getItemLabel: (id) => mx.getRoom(id)?.name ?? '',
++    onTypeChar: (key) => { setSearchInitialChar(key); setSearchModal(true); },
 +  });
 +
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -288,39 +296,52 @@
+@@ -289,39 +300,52 @@
                    Chats
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -5163,10 +5222,10 @@ index fddd75aac1..56d09e6392 100644
                  </IconButton>
                )}
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index 3b3e208fe0..35b47e131e 100644
+index 0c2d670f24..0e44d1a5c7 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
-@@ -87,7 +87,7 @@
+@@ -88,7 +88,7 @@
    };
  
    return (
@@ -5175,7 +5234,7 @@ index 3b3e208fe0..35b47e131e 100644
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
            onClick={() => setRoomSortOrder('activity')}
-@@ -152,7 +152,7 @@
+@@ -153,7 +153,7 @@
        <PageNavHeader>
          <Box alignItems="Center" grow="Yes" gap="300">
            <Box grow="Yes">
@@ -5184,7 +5243,7 @@ index 3b3e208fe0..35b47e131e 100644
                Home
              </Text>
            </Box>
-@@ -196,7 +196,7 @@
+@@ -197,7 +197,7 @@
        <NavEmptyLayout
          icon={<Icon size="600" src={Icons.Hash} />}
          title={
@@ -5193,22 +5252,25 @@ index 3b3e208fe0..35b47e131e 100644
              No Rooms
            </Text>
          }
-@@ -274,6 +274,14 @@
+@@ -275,6 +275,17 @@
      getItemKey: (index) => sortedRooms[index],
    });
  
++  const setSearchModal = useSetAtom(searchModalAtom);
++  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
++
 +  const keyboardNav = useRoomListKeyboard({
 +    items: sortedRooms,
 +    selectedRoomId,
 +    virtualizer,
 +    onNavigate: (roomId) => navigate(getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
-+    getItemLabel: (id) => mx.getRoom(id)?.name ?? '',
++    onTypeChar: (key) => { setSearchInitialChar(key); setSearchModal(true); },
 +  });
 +
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
      closedCategories.has(categoryId)
    );
-@@ -368,37 +376,50 @@
+@@ -369,37 +380,50 @@
                    Rooms
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -5635,10 +5697,10 @@ index 017262b5b8..1fcfb35822 100644
              </Text>
            </Box>
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 6878e8bd4d..5aad42cade 100644
+index 47a2ae0c80..038fd51d21 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
-@@ -143,7 +143,7 @@
+@@ -144,7 +144,7 @@
    };
  
    return (
@@ -5647,7 +5709,7 @@ index 6878e8bd4d..5aad42cade 100644
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          {invitePrompt && room && (
            <InviteUserPrompt
-@@ -302,7 +302,7 @@
+@@ -303,7 +303,7 @@
        <PageNavHeader>
          <Box alignItems="Center" grow="Yes" gap="300">
            <Box grow="Yes" alignItems="Center" gap="100">
@@ -5656,7 +5718,7 @@ index 6878e8bd4d..5aad42cade 100644
                {spaceName}
              </Text>
              {joinRules?.join_rule !== JoinRule.Public && <Icon src={Icons.Lock} size="50" />}
-@@ -492,13 +492,34 @@
+@@ -493,13 +493,37 @@
      getItemKey: (index) => hierarchy[index]?.roomId ?? index,
    });
  
@@ -5676,12 +5738,15 @@ index 6878e8bd4d..5aad42cade 100644
 +
 +  const { navigateRoom } = useRoomNavigate();
 +
++  const setSearchModal = useSetAtom(searchModalAtom);
++  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
++
 +  const keyboardNav = useRoomListKeyboard({
 +    items: roomsOnly,
 +    selectedRoomId,
 +    virtualizer,
 +    onNavigate: (roomId) => navigateRoom(roomId),
-+    getItemLabel: (id) => mx.getRoom(id)?.name ?? '',
++    onTypeChar: (key) => { setSearchInitialChar(key); setSearchModal(true); },
 +  });
 +
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
@@ -5694,7 +5759,7 @@ index 6878e8bd4d..5aad42cade 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -550,48 +571,61 @@
+@@ -551,48 +575,61 @@
                position: 'relative',
              }}
            >
@@ -5915,6 +5980,16 @@ index 1ca7e7de12..795b484b1d 100644
      };
    }, [mx, memberships, setRoomsAtom]);
  };
+diff --git a/src/app/state/searchModal.ts b/src/app/state/searchModal.ts
+index 3893e5e30c..a7b0671c63 100644
+--- a/src/app/state/searchModal.ts
++++ b/src/app/state/searchModal.ts
+@@ -1,3 +1,5 @@
+ import { atom } from 'jotai';
+ 
+ export const searchModalAtom = atom<boolean>(false);
++// Set this to a non-empty string before setting searchModalAtom=true to pre-populate the search input.
++export const searchModalInitialCharAtom = atom<string>('');
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
 index 0000000000..ff84aef491 100644
 --- a/src/app/state/settings.ts
@@ -5927,11 +6002,11 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk 54661ca0 "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 7142ec26 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: boolean;
--+++++++ nyzwkvwz 3ee4dba2 "patch-12: UX fixes (room sort, inbox unread, navigation)"
+-+++++++ nyzwkvwz 8b738e02 "patch-12: UX fixes (room sort, inbox unread, navigation)"
 +  issueTracker: boolean;
 +  multiAccount: boolean;
    roomSortOrder: 'activity' | 'az' | 'unread';
@@ -5950,11 +6025,11 @@ index 0000000000..ff84aef491 100644
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: klotnpzn 6eebe858 "patch-01: emoji font (Bahá'í NotoColorEmoji)"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
--\\\\\\\        to: ztqplnqk 54661ca0 "patch-02: Element Call integration + external component files"
+-\\\\\\\        to: ztqplnqk 7142ec26 "patch-02: Element Call integration + external component files"
 -%%%%%%% diff from: lmtsvrro 85fcbd84 "chore(deps): update thollander/actions-comment-pull-request from 2.5.0 to 3.0.1 (#2698)"
 -\\\\\\\        to: xzqtqzyz d4af944a "patch-07: issue tracker (eu.kiefte schema)"
 -+  issueTracker: false,
--+++++++ nyzwkvwz 3ee4dba2 "patch-12: UX fixes (room sort, inbox unread, navigation)"
+-+++++++ nyzwkvwz 8b738e02 "patch-12: UX fixes (room sort, inbox unread, navigation)"
 +  issueTracker: false,
 +  multiAccount: false,
    roomSortOrder: 'activity',

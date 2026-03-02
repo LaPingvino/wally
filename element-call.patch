@@ -2155,12 +2155,13 @@ index 24878d5e6e..1594c0ac14 100644
      </PowerLevelsContextProvider>
    );
 diff --git a/src/app/features/room/RoomView.tsx b/src/app/features/room/RoomView.tsx
-index 0f8375943c..69cc55e6d4 100644
+index 0f8375943c..4160a2144c 100644
 --- a/src/app/features/room/RoomView.tsx
 +++ b/src/app/features/room/RoomView.tsx
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
 -import React, { useCallback, useRef } from 'react';
 +import React, { useCallback, useEffect, useRef } from 'react';
++import { Transforms } from 'slate';
  import { Box, Text, config } from 'folds';
 -import { EventType, Room } from 'matrix-js-sdk';
 +import { EventType, JoinRule, Room } from 'matrix-js-sdk';
@@ -2168,7 +2169,7 @@ index 0f8375943c..69cc55e6d4 100644
  import { ReactEditor } from 'slate-react';
  import { isKeyHotkey } from 'is-hotkey';
  import { useStateEvent } from '../../hooks/useStateEvent';
-@@ -15,13 +16,19 @@
+@@ -15,13 +17,19 @@
  import { RoomInput } from './RoomInput';
  import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
  import { Page } from '../../components/page';
@@ -2189,7 +2190,7 @@ index 0f8375943c..69cc55e6d4 100644
  
  const FN_KEYS_REGEX = /^F\d+$/;
  const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
-@@ -30,10 +37,8 @@
+@@ -30,10 +38,8 @@
      return false;
    }
  
@@ -2200,7 +2201,7 @@ index 0f8375943c..69cc55e6d4 100644
    if (
      code.startsWith('OS') ||
      code.startsWith('Meta') ||
-@@ -53,6 +58,9 @@
+@@ -53,6 +59,9 @@
      return false;
    }
  
@@ -2210,7 +2211,7 @@ index 0f8375943c..69cc55e6d4 100644
    return true;
  };
  
-@@ -70,10 +78,32 @@
+@@ -70,10 +79,32 @@
    const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
    const powerLevels = usePowerLevelsContext();
    const creators = useRoomCreators(room);
@@ -2243,7 +2244,17 @@ index 0f8375943c..69cc55e6d4 100644
    useKeyDown(
      window,
      useCallback(
-@@ -91,52 +121,150 @@
+@@ -85,58 +116,160 @@
+         }
+         if (shouldFocusMessageField(evt) || isKeyHotkey('mod+v', evt)) {
+           ReactEditor.focus(editor);
++          // Also insert the typed character so it isn't swallowed
++          if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
++            Transforms.insertText(editor, evt.key);
++          }
+         }
+       },
+       [editor]
      )
    );
  
@@ -4847,20 +4858,21 @@ index 0000000000..8739c6f674
 +  );
 +}
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf10906..8a6aa2cbd0 100644
+index 04edf10906..20068745b8 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
-@@ -51,6 +51,9 @@
+@@ -51,6 +51,10 @@
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
  import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
 +import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
 +import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
 +import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
++import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
  
  type DirectMenuProps = {
    requestClose: () => void;
-@@ -196,6 +199,7 @@
+@@ -196,6 +200,7 @@
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 38,
      overscan: 10,
@@ -4868,7 +4880,7 @@ index 04edf10906..8a6aa2cbd0 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -253,7 +257,7 @@
+@@ -253,7 +258,7 @@
                    return (
                      <VirtualTile
                        virtualItem={vItem}
@@ -4877,7 +4889,7 @@ index 04edf10906..8a6aa2cbd0 100644
                        ref={virtualizer.measureElement}
                      >
                        <RoomNavItem
-@@ -275,6 +279,7 @@
+@@ -275,6 +280,7 @@
            </Box>
          </PageNavContent>
        )}
@@ -4886,20 +4898,21 @@ index 04edf10906..8a6aa2cbd0 100644
    );
  }
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963df..0540a1fc3e 100644
+index d87db963df..ffd300b2da 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
-@@ -62,6 +62,9 @@
+@@ -62,6 +62,10 @@
    getRoomNotificationMode,
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
 +import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
 +import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 +import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
  import { UseStateProvider } from '../../../components/UseStateProvider';
  import { JoinAddressPrompt } from '../../../components/join-address-prompt';
  import { _RoomSearchParams } from '../../paths';
-@@ -226,6 +229,7 @@
+@@ -226,6 +230,7 @@
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 38,
      overscan: 10,
@@ -4907,7 +4920,7 @@ index d87db963df..0540a1fc3e 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -337,7 +341,7 @@
+@@ -337,7 +342,7 @@
                    return (
                      <VirtualTile
                        virtualItem={vItem}
@@ -4916,7 +4929,7 @@ index d87db963df..0540a1fc3e 100644
                        ref={virtualizer.measureElement}
                      >
                        <RoomNavItem
-@@ -357,6 +361,7 @@
+@@ -357,6 +362,7 @@
            </Box>
          </PageNavContent>
        )}
@@ -4925,20 +4938,21 @@ index d87db963df..0540a1fc3e 100644
    );
  }
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..44de34d037 100644
+index 3f60d2a957..b75a07acfe 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
-@@ -76,6 +76,9 @@
+@@ -76,6 +76,10 @@
    getRoomNotificationMode,
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
 +import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
 +import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
 +import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
++import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
  import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
  import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
  import { useRoomCreators } from '../../../hooks/useRoomCreators';
-@@ -429,6 +432,7 @@
+@@ -429,6 +433,7 @@
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 0,
      overscan: 10,
@@ -4946,7 +4960,7 @@ index 3f60d2a957..44de34d037 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -500,7 +504,7 @@
+@@ -500,7 +505,7 @@
                  return (
                    <VirtualTile
                      virtualItem={vItem}
@@ -4955,7 +4969,7 @@ index 3f60d2a957..44de34d037 100644
                      ref={virtualizer.measureElement}
                    >
                      <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
-@@ -519,7 +523,7 @@
+@@ -519,7 +524,7 @@
                }
  
                return (
@@ -4964,7 +4978,7 @@ index 3f60d2a957..44de34d037 100644
                    <RoomNavItem
                      room={room}
                      selected={selectedRoomId === roomId}
-@@ -534,6 +538,7 @@
+@@ -534,6 +539,7 @@
            </NavCategory>
          </Box>
        </PageNavContent>
