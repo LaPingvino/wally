@@ -1,0 +1,250 @@
+diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
+new file mode 100644
+index 0000000000..a74e39d1e4
+--- /dev/null
++++ b/src/app/features/room/WidgetsDrawer.tsx
+@@ -0,0 +1,195 @@
++/**
++ * WidgetsDrawer — lists and embeds room widgets (im.vector.modular.widgets state events).
++ * Reuses the same SmallWidget / SmallWidgetDriver infrastructure used for Element Call.
++ */
++import React, { useCallback, useEffect, useRef, useState } from 'react';
++import { Room } from 'matrix-js-sdk';
++import {
++  Box,
++  Icon,
++  IconButton,
++  Icons,
++  Text,
++  Chip,
++  config,
++  toRem,
++  color,
++} from 'folds';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { useRoomWidgets, RoomWidget } from '../../hooks/useRoomWidgets';
++import { SmallWidget, createVirtualWidget } from '../call/SmallWidget';
++
++// Substitute Matrix widget template variables in a URL.
++function substituteTemplateVars(url: string, mx: ReturnType<typeof useMatrixClient>, roomId: string): string {
++  const userId = mx.getUserId() ?? '';
++  const displayName = mx.getUser(userId)?.displayName ?? userId;
++  const avatarUrl = mx.getUser(userId)?.avatarUrl ?? '';
++  return url
++    .replace(/\$matrix_room_id/g, encodeURIComponent(roomId))
++    .replace(/\$matrix_user_id/g, encodeURIComponent(userId))
++    .replace(/\$matrix_display_name/g, encodeURIComponent(displayName))
++    .replace(/\$matrix_avatar_url/g, encodeURIComponent(avatarUrl))
++    .replace(/\$matrix_client_origin/g, encodeURIComponent(window.location.origin))
++    .replace(/\$org\.matrix\.msc2873\.client_id/g, encodeURIComponent(userId))
++    .replace(/\$org\.matrix\.msc2873\.client_origin/g, encodeURIComponent(window.location.origin));
++}
++
++type WidgetViewProps = {
++  room: Room;
++  widget: RoomWidget;
++};
++
++function WidgetView({ room, widget }: WidgetViewProps) {
++  const mx = useMatrixClient();
++  const iframeRef = useRef<HTMLIFrameElement>(null);
++  const smallWidgetRef = useRef<SmallWidget | null>(null);
++
++  useEffect(() => {
++    const iframe = iframeRef.current;
++    if (!iframe) return undefined;
++
++    // Stop any existing widget
++    if (smallWidgetRef.current) {
++      smallWidgetRef.current.stopMessaging();
++      smallWidgetRef.current = null;
++    }
++
++    const resolvedUrl = new URL(substituteTemplateVars(widget.url, mx, room.roomId));
++    iframe.src = resolvedUrl.toString();
++
++    const userId = mx.getUserId() ?? '';
++    const app = createVirtualWidget(
++      mx,
++      widget.id,
++      userId,
++      widget.name,
++      widget.type,
++      resolvedUrl,
++      true,
++      widget.data ?? {},
++      room.roomId,
++    );
++
++    const smallWidget = new SmallWidget(app);
++    smallWidgetRef.current = smallWidget;
++    smallWidget.startMessaging(iframe);
++
++    return () => {
++      smallWidget.stopMessaging();
++      if (smallWidgetRef.current === smallWidget) smallWidgetRef.current = null;
++    };
++  }, [mx, room.roomId, widget]);
++
++  return (
++    <iframe
++      ref={iframeRef}
++      title={widget.name}
++      sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads"
++      allow="microphone; camera; fullscreen"
++      style={{
++        flexGrow: 1,
++        border: 'none',
++        minHeight: 0,
++        width: '100%',
++        background: 'var(--bg-surface)',
++      }}
++    />
++  );
++}
++
++type WidgetsDrawerProps = {
++  room: Room;
++  onClose: () => void;
++  width?: number;
++};
++
++export function WidgetsDrawer({ room, onClose, width = 420 }: WidgetsDrawerProps) {
++  const widgets = useRoomWidgets(room);
++  const [selectedId, setSelectedId] = useState<string | null>(null);
++
++  // Auto-select first widget or keep selection if it still exists
++  useEffect(() => {
++    if (widgets.length === 0) {
++      setSelectedId(null);
++      return;
++    }
++    setSelectedId((prev) => {
++      if (prev && widgets.some((w) => w.id === prev)) return prev;
++      return widgets[0].id;
++    });
++  }, [widgets]);
++
++  const selectedWidget = widgets.find((w) => w.id === selectedId) ?? null;
++
++  return (
++    <Box
++      direction="Column"
++      style={{
++        width: toRem(width),
++        minWidth: toRem(280),
++        maxWidth: toRem(600),
++        flexShrink: 0,
++        borderLeft: `1px solid ${color.Surface.ContainerLine}`,
++        overflow: 'hidden',
++      }}
++    >
++      {/* Header */}
++      <Box
++        alignItems="Center"
++        gap="200"
++        style={{
++          padding: `${config.space.S200} ${config.space.S300}`,
++          borderBottom: `1px solid ${color.Surface.ContainerLine}`,
++          flexShrink: 0,
++        }}
++      >
++        <Icon src={Icons.Category} size="200" />
++        <Text size="H5" style={{ flexGrow: 1 }}>
++          Widgets
++        </Text>
++        <IconButton size="300" radii="300" onClick={onClose} aria-label="Close widgets drawer">
++          <Icon src={Icons.Cross} size="200" />
++        </IconButton>
++      </Box>
++
++      {/* Widget selector tabs (shown when more than one widget) */}
++      {widgets.length > 1 && (
++        <Box
++          gap="100"
++          style={{
++            padding: `${config.space.S100} ${config.space.S200}`,
++            borderBottom: `1px solid ${color.Surface.ContainerLine}`,
++            flexShrink: 0,
++            flexWrap: 'wrap',
++          }}
++        >
++          {widgets.map((w) => (
++            <Chip
++              key={w.id}
++              variant={selectedId === w.id ? 'Primary' : 'Surface'}
++              radii="Pill"
++              onClick={() => setSelectedId(w.id)}
++            >
++              <Text size="T200" truncate>
++                {w.name}
++              </Text>
++            </Chip>
++          ))}
++        </Box>
++      )}
++
++      {/* Widget iframe */}
++      {selectedWidget ? (
++        <Box grow="Yes" direction="Column" style={{ minHeight: 0, overflow: 'hidden' }}>
++          <WidgetView key={selectedWidget.id} room={room} widget={selectedWidget} />
++        </Box>
++      ) : (
++        <Box grow="Yes" justifyContent="Center" alignItems="Center">
++          <Text size="T300" priority="300">
++            No widgets in this room.
++          </Text>
++        </Box>
++      )}
++    </Box>
++  );
++}
+diff --git a/src/app/hooks/useRoomWidgets.ts b/src/app/hooks/useRoomWidgets.ts
+new file mode 100644
+index 0000000000..d530ba5445
+--- /dev/null
++++ b/src/app/hooks/useRoomWidgets.ts
+@@ -0,0 +1,43 @@
++import { useEffect, useState } from 'react';
++import { Direction, Room, RoomStateEvent } from 'matrix-js-sdk';
++
++export type RoomWidget = {
++  id: string;
++  type: string;
++  url: string;
++  name: string;
++  data?: Record<string, unknown>;
++  avatarUrl?: string;
++};
++
++const WIDGET_STATE_EVENT = 'im.vector.modular.widgets';
++
++function getWidgets(room: Room): RoomWidget[] {
++  const state = room.getLiveTimeline().getState(Direction.Forward);
++  if (!state) return [];
++  const events = state.getStateEvents(WIDGET_STATE_EVENT);
++  return events
++    .filter((ev) => !!ev.getContent()?.url) // empty url = widget removed
++    .map((ev) => ({
++      id: ev.getStateKey() ?? '',
++      type: ev.getContent().type ?? 'm.custom',
++      url: ev.getContent().url ?? '',
++      name: ev.getContent().name ?? 'Widget',
++      data: ev.getContent().data,
++      avatarUrl: ev.getContent().avatar_url,
++    }));
++}
++
++export function useRoomWidgets(room: Room): RoomWidget[] {
++  const [widgets, setWidgets] = useState<RoomWidget[]>(() => getWidgets(room));
++
++  useEffect(() => {
++    const refresh = () => setWidgets(getWidgets(room));
++    room.on(RoomStateEvent.Events, refresh);
++    return () => {
++      room.off(RoomStateEvent.Events, refresh);
++    };
++  }, [room]);
++
++  return widgets;
++}
