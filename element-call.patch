@@ -784,10 +784,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..a1398ac3af
+index 0000000000..f6b614fb37
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,402 @@
+@@ -0,0 +1,411 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -833,9 +833,13 @@ index 0000000000..a1398ac3af
 +  setParams: any,
 +): URL => {
 +  const baseUrl = window.location.origin;
++  // When no custom URL is configured, use the bundled @element-hq/element-call-embedded
++  // (copied to /public/element-call/ during build by vite-plugin-static-copy).
++  // The /room path suffix is only needed for call.element.io's path-based router;
++  // the embedded build uses query params (embed=true) to reach room view directly.
 +  const url = elementCallUrl
 +    ? new URL(`${elementCallUrl}/room`)
-+    : new URL('/public/element-call/index.html#', baseUrl);
++    : new URL('/public/element-call/index.html', baseUrl);
 +
 +  const params = new URLSearchParams({
 +    embed: 'true',
@@ -853,10 +857,15 @@ index 0000000000..a1398ac3af
 +    baseUrl: mx.baseUrl!,
 +    parentUrl: window.location.origin,
 +  });
-+  // intent controls lobby display: 'join_existing'/'start_call' show lobby;
-+  // omitting intent uses Element Call's default (skipLobby=true = skip lobby).
++  // intent controls defaults: 'join_existing' = show lobby + correct callIntent/audio defaults.
++  // Default case (no intent) triggers appPrompt=true + confineToRoom=false — wrong for widget mode.
 +  if (setParams.intent) {
 +    params.set('intent', setParams.intent);
++  }
++  // skipLobby URL param (in gje(m)) overrides the intent-derived value in the final merge.
++  // Pass true to skip the lobby regardless of intent; omit to let intent decide.
++  if (setParams.skipLobby !== undefined) {
++    params.set('skipLobby', String(setParams.skipLobby));
 +  }
 +
 +  const replacedParams = params.toString().replace(/%24/g, '$');
@@ -1936,7 +1945,7 @@ index 929dd1e919..6883e3631f 100644
                after={<Icon size="50" src={Icons.Cross} />}
              >
 diff --git a/src/app/features/room/Room.tsx b/src/app/features/room/Room.tsx
-index 24878d5e6e..1594c0ac14 100644
+index 24878d5e6e..843ec5239d 100644
 --- a/src/app/features/room/Room.tsx
 +++ b/src/app/features/room/Room.tsx
 @@ -1,4 +1,4 @@
@@ -1945,7 +1954,7 @@ index 24878d5e6e..1594c0ac14 100644
  import { Box, Line } from 'folds';
  import { useParams } from 'react-router-dom';
  import { isKeyHotkey } from 'is-hotkey';
-@@ -13,17 +13,124 @@
+@@ -13,17 +13,127 @@
  import { markAsRead } from '../../utils/notifications';
  import { useMatrixClient } from '../../hooks/useMatrixClient';
  import { useRoomMembers } from '../../hooks/useRoomMembers';
@@ -1954,6 +1963,7 @@ index 24878d5e6e..1594c0ac14 100644
 +import { useCallState } from '../../pages/client/call/CallProvider';
 +import { IssueBoard } from '../issues/IssueBoard';
 +import { ThreadsDrawer, openThreadIdAtom } from './ThreadsDrawer';
++import { WidgetsDrawer } from './WidgetsDrawer';
 +import { useAtom } from 'jotai';
  
  export function Room() {
@@ -1974,12 +1984,14 @@ index 24878d5e6e..1594c0ac14 100644
 +
 +  const [isIssueBoard, setIsIssueBoard] = useState(false);
 +  const [isThreadsDrawer, setIsThreadsDrawer] = useState(false);
++  const [isWidgetsDrawer, setIsWidgetsDrawer] = useState(false);
 +  const [openThreadId] = useAtom(openThreadIdAtom);
 +
 +  // Reset all panel views when navigating to a different room.
 +  useEffect(() => {
 +    setIsIssueBoard(false);
 +    setIsThreadsDrawer(false);
++    setIsWidgetsDrawer(false);
 +  }, [room.roomId]);
 +
 +  // When something (e.g. a timeline thread indicator) requests a thread to be opened,
@@ -2072,7 +2084,7 @@ index 24878d5e6e..1594c0ac14 100644
  
    useKeyDown(
      window,
-@@ -40,13 +147,80 @@
+@@ -40,13 +150,96 @@
    return (
      <PowerLevelsContextProvider value={powerLevels}>
        <Box grow="Yes">
@@ -2083,6 +2095,8 @@ index 24878d5e6e..1594c0ac14 100644
 +            onToggleIssueBoard={() => setIsIssueBoard((b) => !b)}
 +            isThreadsDrawer={isThreadsDrawer}
 +            onToggleThreadsDrawer={handleToggleThreadsDrawer}
++            isWidgetsDrawer={isWidgetsDrawer}
++            onToggleWidgetsDrawer={() => setIsWidgetsDrawer((b) => !b)}
 +          />
 +          <Box grow="Yes" ref={containerRef}>
 +            {isIssueBoard ? (
@@ -2131,6 +2145,20 @@ index 24878d5e6e..1594c0ac14 100644
              <MembersDrawer key={room.roomId} room={room} members={members} />
            </>
          )}
++        {screenSize === ScreenSize.Desktop && isWidgetsDrawer && (
++          <>
++            <div
++              role="separator"
++              style={{
++                width: '6px',
++                cursor: 'col-resize',
++                flexShrink: 0,
++                background: 'var(--bg-surface-border)',
++              }}
++            />
++            <WidgetsDrawer key={room.roomId} room={room} onClose={() => setIsWidgetsDrawer(false)} />
++          </>
++        )}
 +        {screenSize === ScreenSize.Desktop && isThreadsDrawer && (
 +          <>
 +            <div
@@ -2452,7 +2480,7 @@ index 0f8375943c..4160a2144c 100644
    );
  }
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index 9b4bfd237a..732bb4f267 100644
+index 9b4bfd237a..b3657622e1 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -23,8 +23,7 @@
@@ -2549,23 +2577,9 @@ index 9b4bfd237a..732bb4f267 100644
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        {invitePrompt && (
-@@ -220,7 +250,40 @@
-             </>
+@@ -221,6 +251,26 @@
            )}
          </UseStateProvider>
-+        {onToggleThreadsDrawer && (
-+          <MenuItem
-+            onClick={handleToggleThreads}
-+            size="300"
-+            after={<Icon size="100" src={Icons.Message} />}
-+            radii="300"
-+            aria-pressed={isThreadsDrawer}
-+          >
-+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-+              {isThreadsDrawer ? 'Hide Threads' : 'Threads'}
-+            </Text>
-+          </MenuItem>
-+        )}
        </Box>
 +      {/* Experimental: Issue Tracker setup (requires experimental setting + admin rights) */}
 +      {issueTrackerEnabled && canConfigSchema && !hasIssueSchema && (
@@ -2590,7 +2604,7 @@ index 9b4bfd237a..732bb4f267 100644
        <Line variant="Surface" size="300" />
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <UseStateProvider initial={false}>
-@@ -254,7 +317,14 @@
+@@ -254,7 +304,16 @@
    );
  });
  
@@ -2600,13 +2614,15 @@ index 9b4bfd237a..732bb4f267 100644
 +  onToggleIssueBoard?: () => void;
 +  isThreadsDrawer?: boolean;
 +  onToggleThreadsDrawer?: () => void;
++  isWidgetsDrawer?: boolean;
++  onToggleWidgetsDrawer?: () => void;
 +};
 +
-+export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDrawer, onToggleThreadsDrawer }: RoomViewHeaderProps) {
++export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDrawer, onToggleThreadsDrawer, isWidgetsDrawer, onToggleWidgetsDrawer }: RoomViewHeaderProps) {
    const navigate = useNavigate();
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
-@@ -263,12 +333,43 @@
+@@ -263,12 +322,44 @@
    const space = useSpaceOptionally();
    const [menuAnchor, setMenuAnchor] = useState<RectCords>();
    const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
@@ -2621,6 +2637,7 @@ index 9b4bfd237a..732bb4f267 100644
 +  const creators = useRoomCreators(room);
 +  const permissions = useRoomPermissions(creators, powerLevels);
 +  const canCall = permissions.stateEvent('org.matrix.msc3401.call.member', mx.getSafeUserId());
++  const roomWidgets = useRoomWidgets(room);
 +  const canWriteIssues = permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
 +  // Check room creator directly (creatorsSupported returns false for versions 1–11).
 +  const headerCreateEvent = room
@@ -2652,7 +2669,7 @@ index 9b4bfd237a..732bb4f267 100644
    const name = useRoomName(room);
    const topic = useRoomTopic(room);
    const avatarUrl = avatarMxc
-@@ -296,13 +397,16 @@
+@@ -296,13 +387,16 @@
    };
  
    return (
@@ -2671,7 +2688,7 @@ index 9b4bfd237a..732bb4f267 100644
                    <Icon src={Icons.ArrowLeft} />
                  </IconButton>
                </Box>
-@@ -317,11 +421,7 @@
+@@ -317,11 +411,7 @@
                  src={avatarUrl}
                  alt={name}
                  renderFallback={() => (
@@ -2684,7 +2701,7 @@ index 9b4bfd237a..732bb4f267 100644
                  )}
                />
              </Avatar>
-@@ -369,7 +469,105 @@
+@@ -369,7 +459,105 @@
              )}
            </Box>
          </Box>
@@ -2790,7 +2807,7 @@ index 9b4bfd237a..732bb4f267 100644
            {!ecryptedRoom && (
              <TooltipProvider
                position="Bottom"
-@@ -381,12 +579,14 @@
+@@ -381,12 +569,14 @@
                }
              >
                {(triggerRef) => (
@@ -2806,7 +2823,7 @@ index 9b4bfd237a..732bb4f267 100644
            <TooltipProvider
              position="Bottom"
              offset={4}
-@@ -398,10 +598,13 @@
+@@ -398,10 +588,13 @@
            >
              {(triggerRef) => (
                <IconButton
@@ -2820,7 +2837,7 @@ index 9b4bfd237a..732bb4f267 100644
                >
                  {pinnedEvents.length > 0 && (
                    <Badge
-@@ -443,6 +646,8 @@
+@@ -443,6 +636,8 @@
                </FocusTrap>
              }
            />
@@ -2829,7 +2846,7 @@ index 9b4bfd237a..732bb4f267 100644
            {screenSize === ScreenSize.Desktop && (
              <TooltipProvider
                position="Bottom"
-@@ -454,12 +659,47 @@
+@@ -454,12 +649,78 @@
                }
              >
                {(triggerRef) => (
@@ -2847,6 +2864,37 @@ index 9b4bfd237a..732bb4f267 100644
                )}
              </TooltipProvider>
            )}
++
++          {/* Widgets — Desktop, always shown */}
++          {screenSize === ScreenSize.Desktop && onToggleWidgetsDrawer && (
++            <TooltipProvider
++              position="Bottom"
++              offset={4}
++              tooltip={
++                <Tooltip>
++                  <Text>
++                    {isWidgetsDrawer
++                      ? 'Hide Widgets'
++                      : roomWidgets.length > 0
++                      ? `Widgets (${roomWidgets.length})`
++                      : 'Widgets'}
++                  </Text>
++                </Tooltip>
++              }
++            >
++              {(triggerRef) => (
++                <IconButton
++                  fill="None"
++                  ref={triggerRef}
++                  onClick={onToggleWidgetsDrawer}
++                  aria-pressed={isWidgetsDrawer}
++                  aria-label={isWidgetsDrawer ? 'Hide widgets panel' : 'Show widgets panel'}
++                >
++                  <Icon size="400" src={Icons.Category} filled={isWidgetsDrawer} />
++                </IconButton>
++              )}
++            </TooltipProvider>
++          )}
 +
 +          {/* Threads — Desktop, always enabled */}
 +          {screenSize === ScreenSize.Desktop && (
@@ -2878,7 +2926,7 @@ index 9b4bfd237a..732bb4f267 100644
            <TooltipProvider
              position="Bottom"
              align="End"
-@@ -471,7 +711,13 @@
+@@ -471,7 +732,13 @@
              }
            >
              {(triggerRef) => (
@@ -2893,7 +2941,7 @@ index 9b4bfd237a..732bb4f267 100644
                  <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
                </IconButton>
              )}
-@@ -492,7 +738,7 @@
+@@ -492,7 +759,7 @@
                    escapeDeactivates: stopPropagation,
                  }}
                >
@@ -3953,7 +4001,7 @@ index 0000000000..967956474b
 +  );
 +}
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df91..24517f8a5c 100644
+index e0df06df91..784e1214b6 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
@@ -3965,7 +4013,7 @@ index e0df06df91..24517f8a5c 100644
  import { IPusherRequest } from 'matrix-js-sdk';
  import { SequenceCard } from '../../../components/sequence-card';
  import { SequenceCardStyle } from '../styles.css';
-@@ -84,6 +85,118 @@
+@@ -84,6 +85,152 @@
    );
  }
  
@@ -3981,6 +4029,7 @@ index e0df06df91..24517f8a5c 100644
 +function RingtoneUrlInput() {
 +  const [callRingtoneUrl, setCallRingtoneUrl] = useSetting(settingsAtom, 'callRingtoneUrl');
 +  const [draft, setDraft] = useState(callRingtoneUrl ?? '');
++  const fileInputRef = React.useRef<HTMLInputElement>(null);
 +
 +  // Sync when set externally (e.g., "Set as ringtone" from a chat audio message)
 +  useEffect(() => {
@@ -3992,11 +4041,33 @@ index e0df06df91..24517f8a5c 100644
 +    setCallRingtoneUrl(trimmed || null);
 +  };
 +
++  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    if (!file) return;
++    const reader = new FileReader();
++    reader.onload = () => {
++      const dataUrl = reader.result as string;
++      setDraft(dataUrl);
++      setCallRingtoneUrl(dataUrl);
++    };
++    reader.readAsDataURL(file);
++    // Reset so the same file can be re-selected if needed
++    e.target.value = '';
++  };
++
 +  return (
 +    <Box direction="Row" gap="200" alignItems="Center" grow="Yes">
 +      <input
++        ref={fileInputRef}
++        type="file"
++        accept="audio/*"
++        onChange={handleFileChange}
++        aria-hidden="true"
++        style={{ display: 'none' }}
++      />
++      <input
 +        type="url"
-+        value={draft}
++        value={draft.startsWith('data:') ? '(uploaded file)' : draft}
 +        onChange={(e) => setDraft(e.target.value)}
 +        onBlur={commit}
 +        onKeyDown={(e) => {
@@ -4004,6 +4075,7 @@ index e0df06df91..24517f8a5c 100644
 +        }}
 +        placeholder="https://... or mxc://..."
 +        aria-label="Custom ringtone URL"
++        readOnly={draft.startsWith('data:')}
 +        style={{
 +          flexGrow: 1,
 +          minWidth: 0,
@@ -4016,6 +4088,16 @@ index e0df06df91..24517f8a5c 100644
 +          outline: 'none',
 +        }}
 +      />
++      <IconButton
++        size="300"
++        radii="Pill"
++        variant="SurfaceVariant"
++        onClick={() => fileInputRef.current?.click()}
++        aria-label="Upload audio file as ringtone"
++        title="Upload audio file"
++      >
++        <Icon src={Icons.ArrowTop} size="50" />
++      </IconButton>
 +      {callRingtoneUrl && (
 +        <IconButton
 +          size="300"
@@ -4084,13 +4166,13 @@ index e0df06df91..24517f8a5c 100644
  export function SystemNotification() {
    const notifPermission = usePermissionState('notifications', getNotificationState());
    const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
-@@ -151,6 +264,70 @@
+@@ -151,6 +298,70 @@
          direction="Column"
          gap="400"
        >
 +        <SettingTile
 +          title="Custom Ringtone"
-+          description="Paste an audio URL (https:// or mxc://), or click 'Set as ringtone' on any audio message in chat. Leave empty to use the built-in ring."
++          description="Paste an audio URL (https:// or mxc://), upload a file, or click 'Set as ringtone' on any audio message in chat. Leave empty to use the built-in ring."
 +          after={<RingtoneUrlInput />}
 +        />
 +      </SequenceCard>
@@ -4660,10 +4742,10 @@ index 0000000000..9ea05396a6
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..8739c6f674
+index 0000000000..a5e6a9ce99
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,193 @@
+@@ -0,0 +1,195 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -4729,9 +4811,11 @@ index 0000000000..8739c6f674
 +            clientConfig.elementCallUrl ?? '',
 +            widgetId,
 +            {
-+              // When autoJoin is off, pass intent=join_existing so Element Call shows the lobby.
-+              // When autoJoin is on, omit intent; Element Call defaults to skipLobby=true (no lobby).
-+              intent: autoJoin ? undefined : 'join_existing',
++              // Always use intent=join_existing for correct EC defaults (callIntent, audio, etc.).
++              // The default (no-intent) case triggers appPrompt=true + confineToRoom=false — wrong.
++              intent: 'join_existing',
++              // Override skipLobby explicitly when autoJoin is on; omit when off so intent decides.
++              skipLobby: autoJoin ? true : undefined,
 +              returnToLobby: 'true',
 +              perParticipantE2EE: 'true',
 +              theme: themeKind,
@@ -4938,7 +5022,7 @@ index d87db963df..ffd300b2da 100644
    );
  }
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..b75a07acfe 100644
+index 3f60d2a957..faf052a225 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -76,6 +76,10 @@
@@ -4956,7 +5040,7 @@ index 3f60d2a957..b75a07acfe 100644
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 0,
      overscan: 10,
-+    getItemKey: (index) => hierarchy[index]?.roomId ?? index,
++    getItemKey: (index) => displayHierarchy[index]?.roomId ?? index,
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>

@@ -308,7 +308,7 @@ index 0000000000..16f78b3e7b
 +  );
 +}
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index e1a5dc0c0b..e630f9fb50 100644
+index e1a5dc0c0b..7635e1b08f 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
 @@ -13,7 +13,12 @@
@@ -364,7 +364,7 @@ index e1a5dc0c0b..e630f9fb50 100644
  
  function ClientRootLoading() {
    return (
-@@ -127,8 +151,15 @@
+@@ -127,8 +151,16 @@
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -372,7 +372,8 @@ index e1a5dc0c0b..e630f9fb50 100644
 -      window.location.reload();
 +      const slot = sessionStorage.getItem('cinny-account-slot');
 +      if (slot !== null) {
-+        // Secondary account session expired — clear slot and return to main
++        // Secondary account session expired — remove it and return to main
++        removeSecondarySession(parseInt(slot, 10));
 +        sessionStorage.removeItem('cinny-account-slot');
 +        window.location.assign('/');
 +      } else {
@@ -382,7 +383,7 @@ index e1a5dc0c0b..e630f9fb50 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -145,6 +176,17 @@
+@@ -145,6 +177,17 @@
    const [loading, setLoading] = useState(true);
    const { baseUrl } = getFallbackSession() ?? {};
  
@@ -400,7 +401,7 @@ index e1a5dc0c0b..e630f9fb50 100644
    const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
      useCallback(() => {
        const session = getFallbackSession();
-@@ -159,6 +201,15 @@
+@@ -159,6 +202,15 @@
      useCallback((m) => startClient(m), [])
    );
  
@@ -416,7 +417,7 @@ index e1a5dc0c0b..e630f9fb50 100644
    useLogoutListener(mx);
  
    useEffect(() => {
-@@ -176,14 +227,14 @@
+@@ -176,14 +228,14 @@
    useSyncState(
      mx,
      useCallback((state) => {
@@ -433,7 +434,7 @@ index e1a5dc0c0b..e630f9fb50 100644
        {mx && <SyncStatus mx={mx} />}
        {loading && <ClientRootOptions mx={mx} />}
        {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
-@@ -202,6 +253,15 @@
+@@ -202,6 +254,15 @@
                      Retry
                    </Text>
                  </Button>
@@ -449,7 +450,7 @@ index e1a5dc0c0b..e630f9fb50 100644
                </Box>
              </Dialog>
            </Box>
-@@ -211,19 +271,15 @@
+@@ -211,19 +272,15 @@
          <ClientRootLoading />
        ) : (
          <MatrixClientProvider value={mx}>
@@ -478,175 +479,17 @@ index e1a5dc0c0b..e630f9fb50 100644
    );
  }
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index a2e1b68207..b3f419d805 100644
+index a2e1b68207..168bda38b7 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
-@@ -1,9 +1,12 @@
+@@ -1,4 +1,4 @@
 -import React, { useRef } from 'react';
--import { Scroll } from 'folds';
-+import React, { useCallback, useEffect, useRef, useState } from 'react';
-+import { Icon, Icons, Scroll } from 'folds';
++import React, { useEffect, useRef } from 'react';
+ import { Scroll } from 'folds';
  
  import {
-   Sidebar,
-+  SidebarAvatar,
-   SidebarContent,
-+  SidebarItem,
-+  SidebarItemTooltip,
-   SidebarStackSeparator,
-   SidebarStack,
- } from '../../components/sidebar';
-@@ -18,15 +21,148 @@
-   SearchTab,
- } from './sidebar';
- import { CreateTab } from './sidebar/CreateTab';
-+import { getSecondarySessions } from '../../state/sessions';
-+import { useClientConfig } from '../../hooks/useClientConfig';
-+import { AddAccountDialog } from './AddAccountDialog';
-+import { useSetting } from '../../state/hooks/settings';
-+import { settingsAtom } from '../../state/settings';
-+
-+function AccountsTab() {
-+  const { hashRouter } = useClientConfig();
-+  const [showAddAccount, setShowAddAccount] = useState(false);
-+
-+  const slotStr = sessionStorage.getItem('cinny-account-slot');
-+  const currentSlot = slotStr !== null ? parseInt(slotStr, 10) : null;
-+  const isMainActive =
-+    currentSlot === null && !window.location.pathname.startsWith('/account/');
-+
-+  const mainSession = (() => {
-+    const baseUrl = localStorage.getItem('cinny_hs_base_url');
-+    const userId = localStorage.getItem('cinny_user_id');
-+    return baseUrl && userId ? { userId } : null;
-+  })();
-+
-+  const secondarySessions = getSecondarySessions();
-+
-+  const switchToSlot = useCallback(
-+    (slot: number | null) => {
-+      if (slot === null) {
-+        sessionStorage.removeItem('cinny-account-slot');
-+        if (hashRouter?.enabled) {
-+          window.location.reload();
-+        } else {
-+          window.location.assign('/');
-+        }
-+      } else {
-+        sessionStorage.setItem('cinny-account-slot', String(slot));
-+        if (hashRouter?.enabled) {
-+          window.location.reload();
-+        } else {
-+          window.location.assign(`/account/${slot}/`);
-+        }
-+      }
-+    },
-+    [hashRouter]
-+  );
-+
-+  // Alt+Shift+1 = main account, Alt+Shift+2..9 = secondary slots
-+  useEffect(() => {
-+    const totalAccounts = (mainSession ? 1 : 0) + secondarySessions.length;
-+    if (totalAccounts <= 1) return;
-+    const slots: Array<number | null> = [
-+      ...(mainSession ? [null] : []),
-+      ...secondarySessions.map(({ slot }) => slot),
-+    ];
-+    const handleKeyDown = (evt: KeyboardEvent) => {
-+      if (!evt.altKey || !evt.shiftKey || evt.ctrlKey || evt.metaKey) return;
-+      const n = parseInt(evt.key, 10);
-+      if (isNaN(n) || n < 1 || n > 9) return;
-+      const target = slots[n - 1];
-+      if (target !== undefined) {
-+        evt.preventDefault();
-+        switchToSlot(target);
-+      }
-+    };
-+    window.addEventListener('keydown', handleKeyDown);
-+    return () => window.removeEventListener('keydown', handleKeyDown);
-+  }, [mainSession, secondarySessions, switchToSlot]);
-+
-+  if (!mainSession && secondarySessions.length === 0) return null;
-+
-+  return (
-+    <>
-+      <SidebarStack>
-+        {mainSession && (
-+          <SidebarItem active={isMainActive}>
-+            <SidebarItemTooltip tooltip={mainSession.userId}>
-+              {(ref) => (
-+                <SidebarAvatar
-+                  as="button"
-+                  ref={ref}
-+                  onClick={() => switchToSlot(null)}
-+                  aria-label={`Main account: ${mainSession.userId}${isMainActive ? ' (active)' : ''}`}
-+                  aria-pressed={isMainActive}
-+                  aria-keyshortcuts="Alt+Shift+1"
-+                >
-+                  <Icon size="100" src={Icons.User} filled={isMainActive} />
-+                </SidebarAvatar>
-+              )}
-+            </SidebarItemTooltip>
-+          </SidebarItem>
-+        )}
-+        {secondarySessions.map(({ slot, session }, idx) => {
-+          const isActive = currentSlot === slot;
-+          const shortcutN = (mainSession ? 1 : 0) + idx + 1;
-+          return (
-+            <SidebarItem key={slot} active={isActive}>
-+              <SidebarItemTooltip tooltip={session.userId}>
-+                {(ref) => (
-+                  <SidebarAvatar
-+                    as="button"
-+                    ref={ref}
-+                    onClick={() => switchToSlot(slot)}
-+                    aria-label={`Account: ${session.userId}${isActive ? ' (active)' : ''}`}
-+                    aria-pressed={isActive}
-+                    aria-keyshortcuts={`Alt+Shift+${shortcutN}`}
-+                  >
-+                    <Icon size="100" src={Icons.User} filled={isActive} />
-+                  </SidebarAvatar>
-+                )}
-+              </SidebarItemTooltip>
-+            </SidebarItem>
-+          );
-+        })}
-+        <SidebarItem>
-+          <SidebarItemTooltip tooltip="Add Account">
-+            {(ref) => (
-+              <SidebarAvatar
-+                as="button"
-+                ref={ref}
-+                onClick={() => setShowAddAccount(true)}
-+                aria-label="Add account"
-+              >
-+                <Icon size="100" src={Icons.Plus} />
-+              </SidebarAvatar>
-+            )}
-+          </SidebarItemTooltip>
-+        </SidebarItem>
-+      </SidebarStack>
-+      <SidebarStackSeparator />
-+      {showAddAccount && <AddAccountDialog onClose={() => setShowAddAccount(false)} />}
-+    </>
-+  );
-+}
- 
- export function SidebarNav() {
-   const scrollRef = useRef<HTMLDivElement>(null);
-+  const [multiAccount] = useSetting(settingsAtom, 'multiAccount');
- 
-   return (
-     <Sidebar>
-       <SidebarContent
-         scrollable={
-           <Scroll ref={scrollRef} variant="Background" size="0">
-+            {multiAccount && <AccountsTab />}
-             <SidebarStack>
-               <HomeTab />
-               <DirectTab />
 diff --git a/src/app/state/sessions.ts b/src/app/state/sessions.ts
-index a9c34ce916..a2b3b3e239 100644
+index a9c34ce916..956b00bd7c 100644
 --- a/src/app/state/sessions.ts
 +++ b/src/app/state/sessions.ts
 @@ -46,7 +46,14 @@
@@ -664,7 +507,7 @@ index a9c34ce916..a2b3b3e239 100644
    const baseUrl = localStorage.getItem('cinny_hs_base_url');
    const userId = localStorage.getItem('cinny_user_id');
    const deviceId = localStorage.getItem('cinny_device_id');
-@@ -70,6 +77,39 @@
+@@ -70,6 +77,47 @@
   * End of migration code for old session
   */
  
@@ -680,6 +523,14 @@ index a9c34ce916..a2b3b3e239 100644
 +
 +export const addSecondarySession = (session: Session): number => {
 +  const sessions = getSecondarySessions();
++  // If this userId already has a secondary session (e.g. stale from a previous logout
++  // that wasn't fully cleaned up), reuse its slot and update the credentials.
++  const existing = sessions.find((s) => s.session.userId === session.userId);
++  if (existing) {
++    existing.session = session;
++    localStorage.setItem(SECONDARY_SESSIONS_KEY, JSON.stringify(sessions));
++    return existing.slot;
++  }
 +  const usedSlots = new Set(sessions.map((s) => s.slot));
 +  let slot = 1;
 +  while (usedSlots.has(slot)) slot++;

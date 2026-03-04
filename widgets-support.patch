@@ -1,17 +1,19 @@
 diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
 new file mode 100644
-index 0000000000..a74e39d1e4
+index 0000000000..ecea3c1be7
 --- /dev/null
 +++ b/src/app/features/room/WidgetsDrawer.tsx
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,331 @@
 +/**
 + * WidgetsDrawer — lists and embeds room widgets (im.vector.modular.widgets state events).
 + * Reuses the same SmallWidget / SmallWidgetDriver infrastructure used for Element Call.
++ * Excludes natively-handled widgets (e.g. issue tracker) from the generic widget list.
 + */
 +import React, { useCallback, useEffect, useRef, useState } from 'react';
 +import { Room } from 'matrix-js-sdk';
 +import {
 +  Box,
++  Button,
 +  Icon,
 +  IconButton,
 +  Icons,
@@ -103,6 +105,17 @@ index 0000000000..a74e39d1e4
 +  );
 +}
 +
++const inputStyle: React.CSSProperties = {
++  width: '100%',
++  padding: `${config.space.S100} ${config.space.S200}`,
++  border: `1px solid ${color.Surface.ContainerLine}`,
++  borderRadius: '6px',
++  background: 'var(--bg-surface)',
++  color: 'var(--tc-surface-high)',
++  fontSize: '14px',
++  boxSizing: 'border-box',
++};
++
 +type WidgetsDrawerProps = {
 +  room: Room;
 +  onClose: () => void;
@@ -110,8 +123,19 @@ index 0000000000..a74e39d1e4
 +};
 +
 +export function WidgetsDrawer({ room, onClose, width = 420 }: WidgetsDrawerProps) {
++  const mx = useMatrixClient();
 +  const widgets = useRoomWidgets(room);
 +  const [selectedId, setSelectedId] = useState<string | null>(null);
++  const [isAdding, setIsAdding] = useState(false);
++  const [addUrl, setAddUrl] = useState('');
++  const [addName, setAddName] = useState('');
++  const [saving, setSaving] = useState(false);
++
++  // Permission check: can the user send im.vector.modular.widgets state events?
++  const myPL = room.getMember(mx.getSafeUserId() ?? '')?.powerLevel ?? 0;
++  const plContent = room.currentState.getStateEvents('m.room.power_levels', '')?.getContent() as Record<string, unknown> | undefined;
++  const stateDefaultPL = (plContent?.state_default as number | undefined) ?? 50;
++  const canManageWidgets = myPL >= stateDefaultPL;
 +
 +  // Auto-select first widget or keep selection if it still exists
 +  useEffect(() => {
@@ -126,6 +150,40 @@ index 0000000000..a74e39d1e4
 +  }, [widgets]);
 +
 +  const selectedWidget = widgets.find((w) => w.id === selectedId) ?? null;
++
++  const handleAdd = useCallback(async () => {
++    const url = addUrl.trim();
++    if (!url) return;
++    let name = addName.trim();
++    if (!name) {
++      try { name = new URL(url).hostname; } catch { name = 'Widget'; }
++    }
++    const id = `widget-${Date.now()}`;
++    setSaving(true);
++    try {
++      await mx.sendStateEvent(room.roomId, 'im.vector.modular.widgets' as any, {
++        type: 'm.custom',
++        url,
++        name,
++        id,
++      }, id);
++      setAddUrl('');
++      setAddName('');
++      setIsAdding(false);
++    } finally {
++      setSaving(false);
++    }
++  }, [mx, room.roomId, addUrl, addName]);
++
++  const handleRemove = useCallback(async (widgetId: string) => {
++    await mx.sendStateEvent(room.roomId, 'im.vector.modular.widgets' as any, {}, widgetId);
++  }, [mx, room.roomId]);
++
++  const cancelAdd = useCallback(() => {
++    setIsAdding(false);
++    setAddUrl('');
++    setAddName('');
++  }, []);
 +
 +  return (
 +    <Box
@@ -184,16 +242,94 @@ index 0000000000..a74e39d1e4
 +        </Box>
 +      )}
 +
-+      {/* Widget iframe */}
++      {/* Add widget form */}
++      {isAdding && (
++        <Box
++          direction="Column"
++          gap="200"
++          style={{
++            padding: config.space.S300,
++            borderBottom: `1px solid ${color.Surface.ContainerLine}`,
++            flexShrink: 0,
++          }}
++        >
++          <Text size="L400">Add Widget</Text>
++          <input
++            type="url"
++            placeholder="Widget URL (required)"
++            value={addUrl}
++            onChange={(e) => setAddUrl(e.target.value)}
++            style={inputStyle}
++            autoFocus
++          />
++          <input
++            type="text"
++            placeholder="Name (defaults to hostname)"
++            value={addName}
++            onChange={(e) => setAddName(e.target.value)}
++            style={inputStyle}
++            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
++          />
++          <Box gap="200">
++            <Button
++              size="300"
++              variant="Primary"
++              onClick={handleAdd}
++              disabled={!addUrl.trim() || saving}
++            >
++              <Text size="B300">{saving ? 'Adding…' : 'Add'}</Text>
++            </Button>
++            <Button size="300" variant="Secondary" fill="Soft" onClick={cancelAdd}>
++              <Text size="B300">Cancel</Text>
++            </Button>
++          </Box>
++        </Box>
++      )}
++
++      {/* Widget iframe or empty state */}
 +      {selectedWidget ? (
 +        <Box grow="Yes" direction="Column" style={{ minHeight: 0, overflow: 'hidden' }}>
 +          <WidgetView key={selectedWidget.id} room={room} widget={selectedWidget} />
 +        </Box>
-+      ) : (
-+        <Box grow="Yes" justifyContent="Center" alignItems="Center">
++      ) : !isAdding ? (
++        <Box grow="Yes" justifyContent="Center" alignItems="Center" direction="Column" gap="300">
 +          <Text size="T300" priority="300">
 +            No widgets in this room.
 +          </Text>
++          {canManageWidgets && (
++            <Button size="300" variant="Secondary" fill="Soft" onClick={() => setIsAdding(true)}>
++              <Icon src={Icons.Plus} size="100" />
++              <Text size="B300">Add Widget</Text>
++            </Button>
++          )}
++        </Box>
++      ) : null}
++
++      {/* Footer: manage buttons when widgets exist */}
++      {widgets.length > 0 && canManageWidgets && !isAdding && (
++        <Box
++          shrink="No"
++          gap="200"
++          style={{
++            padding: `${config.space.S200} ${config.space.S300}`,
++            borderTop: `1px solid ${color.Surface.ContainerLine}`,
++          }}
++        >
++          <Button size="300" variant="Secondary" fill="Soft" onClick={() => setIsAdding(true)}>
++            <Icon src={Icons.Plus} size="100" />
++            <Text size="B300">Add</Text>
++          </Button>
++          {selectedWidget && (
++            <Button
++              size="300"
++              variant="Critical"
++              fill="Soft"
++              onClick={() => handleRemove(selectedWidget.id)}
++            >
++              <Icon src={Icons.Delete} size="100" />
++              <Text size="B300">Remove</Text>
++            </Button>
++          )}
 +        </Box>
 +      )}
 +    </Box>
@@ -201,10 +337,10 @@ index 0000000000..a74e39d1e4
 +}
 diff --git a/src/app/hooks/useRoomWidgets.ts b/src/app/hooks/useRoomWidgets.ts
 new file mode 100644
-index 0000000000..d530ba5445
+index 0000000000..ed39346c90
 --- /dev/null
 +++ b/src/app/hooks/useRoomWidgets.ts
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,50 @@
 +import { useEffect, useState } from 'react';
 +import { Direction, Room, RoomStateEvent } from 'matrix-js-sdk';
 +
@@ -219,12 +355,19 @@ index 0000000000..d530ba5445
 +
 +const WIDGET_STATE_EVENT = 'im.vector.modular.widgets';
 +
++// Widget IDs that are handled natively by the app and should not appear in the generic drawer.
++export const NATIVE_WIDGET_IDS = new Set(['eu.kiefte.issue-tracker']);
++
 +function getWidgets(room: Room): RoomWidget[] {
 +  const state = room.getLiveTimeline().getState(Direction.Forward);
 +  if (!state) return [];
 +  const events = state.getStateEvents(WIDGET_STATE_EVENT);
 +  return events
-+    .filter((ev) => !!ev.getContent()?.url) // empty url = widget removed
++    .filter((ev) => {
++      if (!ev.getContent()?.url) return false; // empty url = widget removed
++      if (NATIVE_WIDGET_IDS.has(ev.getStateKey() ?? '')) return false; // handled natively
++      return true;
++    })
 +    .map((ev) => ({
 +      id: ev.getStateKey() ?? '',
 +      type: ev.getContent().type ?? 'm.custom',

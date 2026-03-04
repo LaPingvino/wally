@@ -1,5 +1,5 @@
 diff --git a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
-index 028cd560e5..1bc74540c2 100644
+index 028cd560e5..3e7c53f1f4 100644
 --- a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
 +++ b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
 @@ -1,13 +1,22 @@
@@ -28,7 +28,7 @@ index 028cd560e5..1bc74540c2 100644
  import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
  import { BackRouteHandler } from '../../components/BackRouteHandler';
  
-@@ -19,17 +28,59 @@
+@@ -19,17 +28,75 @@
  }: JoinBeforeNavigateProps) {
    const mx = useMatrixClient();
    const allRooms = useAtomValue(allRoomsAtom);
@@ -78,8 +78,24 @@ index 028cd560e5..1bc74540c2 100644
 +    if (roomIdOrAlias.startsWith('!')) {
 +      const room = mx.getRoom(roomIdOrAlias);
 +      if (room && allRooms.includes(room.roomId)) {
-+        autoNavDone.current = true;
-+        navigateTo(room.roomId, eventId);
++        const isSpace = room.isSpaceRoom();
++        const isDM = mDirects.has(room.roomId);
++        const parents = roomToParents.get(room.roomId);
++        const isInSpace = parents && parents.size > 0;
++
++        // Only auto-navigate when we know the correct destination:
++        // - Space rooms and DMs: destination is always clear
++        // - Space-child rooms: only after roomToParents has loaded the parents
++        // - Home rooms: skip auto-nav; HomeRouteRoomProvider re-renders naturally
++        //   when allRoomsAtom updates, so the room appears without a navigate() call.
++        // - Space-child rooms with parents not yet loaded: don't navigate yet.
++        //   This effect retries when roomToParents updates (it's in deps) and
++        //   isInSpace becomes true, preventing a premature navigation to the wrong
++        //   home path that would lock autoNavDone and prevent the correction.
++        if (isSpace || isDM || isInSpace) {
++          autoNavDone.current = true;
++          navigateTo(room.roomId, eventId);
++        }
 +      }
 +    }
 +  }, [mx, roomIdOrAlias, allRooms, mDirects, roomToParents, navigate, eventId]);
@@ -95,7 +111,7 @@ index 028cd560e5..1bc74540c2 100644
    return (
      <Page>
        <PageHeader balance>
-@@ -50,6 +101,13 @@
+@@ -50,6 +117,13 @@
                {roomIdOrAlias}
              </Text>
            </Box>
@@ -1044,7 +1060,7 @@ index 5d13a9ab65..101589de53 100644
    const handleInboxClick = () => {
      if (screenSize === ScreenSize.Mobile) {
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..018d13c53c 100644
+index 3f60d2a957..55785cc356 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -6,7 +6,7 @@
@@ -1074,10 +1090,20 @@ index 3f60d2a957..018d13c53c 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -150,6 +152,37 @@
+@@ -150,6 +152,47 @@
            />
          )}
          <MenuItem
++          onClick={() => setRoomSortOrder('admin')}
++          size="300"
++          after={roomSortOrder === 'admin' ? <Icon size="100" src={Icons.Check} /> : undefined}
++          radii="300"
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            Admin Order
++          </Text>
++        </MenuItem>
++        <MenuItem
 +          onClick={() => setRoomSortOrder('activity')}
 +          size="300"
 +          after={roomSortOrder === 'activity' ? <Icon size="100" src={Icons.Check} /> : undefined}
@@ -1112,7 +1138,7 @@ index 3f60d2a957..018d13c53c 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -394,6 +427,8 @@
+@@ -394,6 +437,8 @@
  
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
  
@@ -1121,7 +1147,7 @@ index 3f60d2a957..018d13c53c 100644
    const getRoom = useCallback(
      (rId: string) => {
        if (allJoinedRooms.has(rId)) {
-@@ -404,6 +439,31 @@
+@@ -404,6 +449,31 @@
      [mx, allJoinedRooms]
    );
  
@@ -1153,7 +1179,7 @@ index 3f60d2a957..018d13c53c 100644
    const hierarchy = useSpaceJoinedHierarchy(
      space.roomId,
      getRoom,
-@@ -418,10 +478,7 @@
+@@ -418,10 +488,7 @@
        },
        [space.roomId, closedCategories, roomToUnread, selectedRoomId]
      ),
@@ -1202,21 +1228,25 @@ index 9cf4bfb963..024e962a8d 100644
  export const SPACE_SETTINGS_PATH = '/space-settings/';
  
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb97..1128dce42f 100644
+index 31ee6ccb97..888edb840a 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -41,6 +41,7 @@
+@@ -41,6 +41,9 @@
    dateFormatString: string;
  
    developerTools: boolean;
++  issueTracker: boolean;
++  multiAccount: boolean;
 +  roomSortOrder: 'activity' | 'az' | 'unread';
  }
  
  const defaultSettings: Settings = {
-@@ -75,6 +76,7 @@
+@@ -75,6 +78,9 @@
    dateFormatString: 'D MMM YYYY',
  
    developerTools: false,
++  issueTracker: false,
++  multiAccount: false,
 +  roomSortOrder: 'activity',
  };
  
