@@ -784,10 +784,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..5293226039
+index 0000000000..7cf3b16a1f
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,414 @@
+@@ -0,0 +1,413 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -990,11 +990,10 @@ index 0000000000..5293226039
 +          if (ev.detail.data.value) {
 +            // If the widget wants to become sticky we wait for the stickyPromise to resolve
 +            if (this.stickyPromise) await this.stickyPromise();
-+            this.messaging.transport.reply(ev.detail, {});
 +          }
-+          // Stop being persistent can be done instantly
-+          // MAKE PERSISTENT HERE
-+          // Send the ack after the widget actually has become sticky.
++          // Always reply — not replying causes a 10-second timeout in EC (e.g. after the lobby
++          // sends UpdateAlwaysOnScreen(false) to release sticky mode).
++          this.messaging.transport.reply(ev.detail, {});
 +        }
 +      },
 +    );
@@ -1204,10 +1203,10 @@ index 0000000000..5293226039
 +});
 diff --git a/src/app/features/call/SmallWidgetDriver.ts b/src/app/features/call/SmallWidgetDriver.ts
 new file mode 100644
-index 0000000000..3dfc01f78a
+index 0000000000..1df08b1684
 --- /dev/null
 +++ b/src/app/features/call/SmallWidgetDriver.ts
-@@ -0,0 +1,563 @@
+@@ -0,0 +1,579 @@
 +/* eslint-disable no-return-await */
 +/* eslint-disable no-param-reassign */
 +/* eslint-disable no-continue */
@@ -1372,19 +1371,35 @@ index 0000000000..3dfc01f78a
 +    }
 +  }
 +
++  // Cache the result so we only call getVersions() once per driver instance
++  private delayedEventsSupported: boolean | undefined;
++
++  private async checkDelayedEventSupport(): Promise<boolean> {
++    if (this.delayedEventsSupported !== undefined) return this.delayedEventsSupported;
++    try {
++      const info = await this.mxClient.getVersions();
++      // MSC4157 revised the original MSC4140 proposal; check both flag names
++      this.delayedEventsSupported =
++        info.unstable_features?.['org.matrix.msc4157'] === true ||
++        info.unstable_features?.['org.matrix.msc4140'] === true;
++    } catch {
++      this.delayedEventsSupported = false;
++    }
++    return this.delayedEventsSupported;
++  }
++
 +  public async validateCapabilities(requested: Set<Capability>): Promise<Set<Capability>> {
 +    const granted = new Set(requested);
-+    // Always strip delayed-event capabilities regardless of server support.
-+    // EC uses delayed events as a membership heartbeat: it creates a delayed leave event
-+    // and periodically updates (refreshes) it via _unstable_updateDelayedEvent.
-+    // In practice the update endpoint is unreliable (partial server support, federation lag,
-+    // Continuwuity quirks) — after 10 failed retries EC's MembershipManager gives up and
-+    // throws "Connection lost", crashing the call UI.
-+    // Without these capabilities EC falls back to regular state events for membership,
-+    // which works on every server and causes no crash on disconnect (stale membership is
-+    // a far lesser issue than a hard crash).
-+    granted.delete(MatrixCapabilities.MSC4157SendDelayedEvent);
-+    granted.delete(MatrixCapabilities.MSC4157UpdateDelayedEvent);
++    // Only grant delayed-event capabilities when the server actually supports them.
++    // If the server doesn't support MSC4157/MSC4140, EC falls back to regular state events
++    // for membership at capability-grant time (the correct fallback level). Granting these
++    // on a server with broken support causes EC's MembershipManager to retry updateDelayedEvent
++    // 10 times then throw "Connection lost", crashing the call.
++    const supportsDelayed = await this.checkDelayedEventSupport();
++    if (!supportsDelayed) {
++      granted.delete(MatrixCapabilities.MSC4157SendDelayedEvent);
++      granted.delete(MatrixCapabilities.MSC4157UpdateDelayedEvent);
++    }
 +    return granted;
 +  }
 +
