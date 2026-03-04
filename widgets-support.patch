@@ -1,9 +1,9 @@
 diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
 new file mode 100644
-index 0000000000..ecea3c1be7
+index 0000000000..1914358188
 --- /dev/null
 +++ b/src/app/features/room/WidgetsDrawer.tsx
-@@ -0,0 +1,331 @@
+@@ -0,0 +1,342 @@
 +/**
 + * WidgetsDrawer — lists and embeds room widgets (im.vector.modular.widgets state events).
 + * Reuses the same SmallWidget / SmallWidgetDriver infrastructure used for Element Call.
@@ -28,7 +28,13 @@ index 0000000000..ecea3c1be7
 +import { SmallWidget, createVirtualWidget } from '../call/SmallWidget';
 +
 +// Substitute Matrix widget template variables in a URL.
-+function substituteTemplateVars(url: string, mx: ReturnType<typeof useMatrixClient>, roomId: string): string {
++// widgetId is passed separately so $matrix_widget_id can also be substituted.
++function substituteTemplateVars(
++  url: string,
++  mx: ReturnType<typeof useMatrixClient>,
++  roomId: string,
++  widgetId: string,
++): string {
 +  const userId = mx.getUserId() ?? '';
 +  const displayName = mx.getUser(userId)?.displayName ?? userId;
 +  const avatarUrl = mx.getUser(userId)?.avatarUrl ?? '';
@@ -37,6 +43,7 @@ index 0000000000..ecea3c1be7
 +    .replace(/\$matrix_user_id/g, encodeURIComponent(userId))
 +    .replace(/\$matrix_display_name/g, encodeURIComponent(displayName))
 +    .replace(/\$matrix_avatar_url/g, encodeURIComponent(avatarUrl))
++    .replace(/\$matrix_widget_id/g, encodeURIComponent(widgetId))
 +    .replace(/\$matrix_client_origin/g, encodeURIComponent(window.location.origin))
 +    .replace(/\$org\.matrix\.msc2873\.client_id/g, encodeURIComponent(userId))
 +    .replace(/\$org\.matrix\.msc2873\.client_origin/g, encodeURIComponent(window.location.origin));
@@ -62,7 +69,11 @@ index 0000000000..ecea3c1be7
 +      smallWidgetRef.current = null;
 +    }
 +
-+    const resolvedUrl = new URL(substituteTemplateVars(widget.url, mx, room.roomId));
++    const resolvedUrl = new URL(substituteTemplateVars(widget.url, mx, room.roomId, widget.id));
++    // The Matrix Widget API requires widgetId and parentUrl as URL params so the widget's
++    // WidgetApi can identify itself and know where to send postMessages.
++    resolvedUrl.searchParams.set('widgetId', widget.id);
++    resolvedUrl.searchParams.set('parentUrl', window.location.origin);
 +    iframe.src = resolvedUrl.toString();
 +
 +    const userId = mx.getUserId() ?? '';

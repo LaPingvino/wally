@@ -784,10 +784,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..f6b614fb37
+index 0000000000..5293226039
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,414 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -931,6 +931,9 @@ index 0000000000..f6b614fb37
 +    );
 +    this.iframe = iframe;
 +    this.messaging = new ClientWidgetApi(this.mockWidget, iframe, driver);
++    // Tell the host API which room is being viewed so read_events uses the
++    // non-deprecated readRoomState / readRoomTimeline driver path.
++    if (this.roomId) this.messaging.setViewedRoomId(this.roomId);
 +
 +    // Emit events during the widget lifecycle
 +    this.messaging.on('preparing', () => this.emit('preparing'));
