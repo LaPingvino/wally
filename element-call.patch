@@ -1201,10 +1201,10 @@ index 0000000000..f6b614fb37
 +});
 diff --git a/src/app/features/call/SmallWidgetDriver.ts b/src/app/features/call/SmallWidgetDriver.ts
 new file mode 100644
-index 0000000000..6f179ef11a
+index 0000000000..3dfc01f78a
 --- /dev/null
 +++ b/src/app/features/call/SmallWidgetDriver.ts
-@@ -0,0 +1,578 @@
+@@ -0,0 +1,563 @@
 +/* eslint-disable no-return-await */
 +/* eslint-disable no-param-reassign */
 +/* eslint-disable no-continue */
@@ -1369,34 +1369,19 @@ index 0000000000..6f179ef11a
 +    }
 +  }
 +
-+  // Cache the result so we only call getVersions() once per driver instance
-+  private delayedEventsSupported: boolean | undefined;
-+
-+  private async checkDelayedEventSupport(): Promise<boolean> {
-+    if (this.delayedEventsSupported !== undefined) return this.delayedEventsSupported;
-+    try {
-+      const info = await this.mxClient.getVersions();
-+      // MSC4157 revised the original MSC4140 proposal; check both flag names
-+      this.delayedEventsSupported =
-+        info.unstable_features?.['org.matrix.msc4157'] === true ||
-+        info.unstable_features?.['org.matrix.msc4140'] === true;
-+    } catch {
-+      this.delayedEventsSupported = false;
-+    }
-+    return this.delayedEventsSupported;
-+  }
-+
 +  public async validateCapabilities(requested: Set<Capability>): Promise<Set<Capability>> {
 +    const granted = new Set(requested);
-+    // Only grant delayed-event capabilities when the server actually supports them.
-+    // If we grant them on a server that doesn't (e.g. Continuwuity), Element Call will
-+    // try to use delayed events, hit a server error, and may not fall back correctly —
-+    // leaving no membership events sent and other clients unable to see the call.
-+    const supportsDelayed = await this.checkDelayedEventSupport();
-+    if (!supportsDelayed) {
-+      granted.delete(MatrixCapabilities.MSC4157SendDelayedEvent);
-+      granted.delete(MatrixCapabilities.MSC4157UpdateDelayedEvent);
-+    }
++    // Always strip delayed-event capabilities regardless of server support.
++    // EC uses delayed events as a membership heartbeat: it creates a delayed leave event
++    // and periodically updates (refreshes) it via _unstable_updateDelayedEvent.
++    // In practice the update endpoint is unreliable (partial server support, federation lag,
++    // Continuwuity quirks) — after 10 failed retries EC's MembershipManager gives up and
++    // throws "Connection lost", crashing the call UI.
++    // Without these capabilities EC falls back to regular state events for membership,
++    // which works on every server and causes no crash on disconnect (stale membership is
++    // a far lesser issue than a hard crash).
++    granted.delete(MatrixCapabilities.MSC4157SendDelayedEvent);
++    granted.delete(MatrixCapabilities.MSC4157UpdateDelayedEvent);
 +    return granted;
 +  }
 +
