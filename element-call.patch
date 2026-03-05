@@ -4475,14 +4475,14 @@ index 0000000000..967956474b
 +  );
 +}
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df91..784e1214b6 100644
+index e0df06df91..8b5c1267cc 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
 -import React, { useCallback } from 'react';
 -import { Box, Text, Switch, Button, color, Spinner } from 'folds';
 +import React, { useCallback, useEffect, useState } from 'react';
-+import { Box, Text, Switch, color, Spinner, Icon, IconButton, Icons, config } from 'folds';
++import { Box, Button, Text, Switch, color, Spinner, Icon, IconButton, Icons, config } from 'folds';
 +
  import { IPusherRequest } from 'matrix-js-sdk';
  import { SequenceCard } from '../../../components/sequence-card';
