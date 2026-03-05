@@ -108,10 +108,10 @@ index 3943f42d19..8b3da2db35 100644
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index 79630990e6..63702aba69 100644
+index 79630990e6..5f37cf83a8 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
-@@ -3,6 +3,19 @@
+@@ -3,6 +3,20 @@
  import { Page, PageHero, PageHeroSection } from '../../components/page';
  import CinnySVG from '../../../../public/res/svg/cinny.svg';
  
@@ -126,12 +126,13 @@ index 79630990e6..63702aba69 100644
 +  { name: 'idb-retry', desc: 'Automatic retry when IndexedDB fails on startup' },
 +  { name: 'issue-widget', desc: 'Issue tracker as an embeddable Matrix Widget API widget' },
 +  { name: 'ux-fixes', desc: 'Room sort options, inbox unread view, and navigation improvements' },
++  { name: 'widgets-support', desc: 'Generic widget drawer for room widgets via the Matrix Widget API' },
 +];
 +
  export function WelcomePage() {
    return (
      <Page>
-@@ -14,11 +27,11 @@
+@@ -14,11 +28,11 @@
        >
          <PageHeroSection>
            <PageHero
@@ -146,7 +147,7 @@ index 79630990e6..63702aba69 100644
                  <a
                    href="https://github.com/cinnyapp/cinny/releases"
                    target="_blank"
-@@ -29,31 +42,58 @@
+@@ -29,31 +43,58 @@
                </span>
              }
            >

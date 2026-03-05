@@ -1,6 +1,6 @@
 diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
 new file mode 100644
-index 0000000000..1914358188
+index 0000000000..039982f679
 --- /dev/null
 +++ b/src/app/features/room/WidgetsDrawer.tsx
 @@ -0,0 +1,342 @@
@@ -148,7 +148,7 @@ index 0000000000..1914358188
 +  const stateDefaultPL = (plContent?.state_default as number | undefined) ?? 50;
 +  const canManageWidgets = myPL >= stateDefaultPL;
 +
-+  // Auto-select first widget or keep selection if it still exists
++  // Keep existing selection if widget still exists; otherwise deselect (no auto-select)
 +  useEffect(() => {
 +    if (widgets.length === 0) {
 +      setSelectedId(null);
@@ -156,7 +156,7 @@ index 0000000000..1914358188
 +    }
 +    setSelectedId((prev) => {
 +      if (prev && widgets.some((w) => w.id === prev)) return prev;
-+      return widgets[0].id;
++      return null;
 +    });
 +  }, [widgets]);
 +
@@ -227,8 +227,8 @@ index 0000000000..1914358188
 +        </IconButton>
 +      </Box>
 +
-+      {/* Widget selector tabs (shown when more than one widget) */}
-+      {widgets.length > 1 && (
++      {/* Widget selector tabs — always shown when widgets exist; click active chip to deselect */}
++      {widgets.length > 0 && (
 +        <Box
 +          gap="100"
 +          style={{
@@ -243,7 +243,7 @@ index 0000000000..1914358188
 +              key={w.id}
 +              variant={selectedId === w.id ? 'Primary' : 'Surface'}
 +              radii="Pill"
-+              onClick={() => setSelectedId(w.id)}
++              onClick={() => setSelectedId((prev) => (prev === w.id ? null : w.id))}
 +            >
 +              <Text size="T200" truncate>
 +                {w.name}
@@ -305,9 +305,9 @@ index 0000000000..1914358188
 +      ) : !isAdding ? (
 +        <Box grow="Yes" justifyContent="Center" alignItems="Center" direction="Column" gap="300">
 +          <Text size="T300" priority="300">
-+            No widgets in this room.
++            {widgets.length > 0 ? 'Select a widget above to load it.' : 'No widgets in this room.'}
 +          </Text>
-+          {canManageWidgets && (
++          {widgets.length === 0 && canManageWidgets && (
 +            <Button size="300" variant="Secondary" fill="Soft" onClick={() => setIsAdding(true)}>
 +              <Icon src={Icons.Plus} size="100" />
 +              <Text size="B300">Add Widget</Text>
@@ -348,10 +348,10 @@ index 0000000000..1914358188
 +}
 diff --git a/src/app/hooks/useRoomWidgets.ts b/src/app/hooks/useRoomWidgets.ts
 new file mode 100644
-index 0000000000..ed39346c90
+index 0000000000..d749b19854
 --- /dev/null
 +++ b/src/app/hooks/useRoomWidgets.ts
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,46 @@
 +import { useEffect, useState } from 'react';
 +import { Direction, Room, RoomStateEvent } from 'matrix-js-sdk';
 +
@@ -366,9 +366,6 @@ index 0000000000..ed39346c90
 +
 +const WIDGET_STATE_EVENT = 'im.vector.modular.widgets';
 +
-+// Widget IDs that are handled natively by the app and should not appear in the generic drawer.
-+export const NATIVE_WIDGET_IDS = new Set(['eu.kiefte.issue-tracker']);
-+
 +function getWidgets(room: Room): RoomWidget[] {
 +  const state = room.getLiveTimeline().getState(Direction.Forward);
 +  if (!state) return [];
@@ -376,7 +373,6 @@ index 0000000000..ed39346c90
 +  return events
 +    .filter((ev) => {
 +      if (!ev.getContent()?.url) return false; // empty url = widget removed
-+      if (NATIVE_WIDGET_IDS.has(ev.getStateKey() ?? '')) return false; // handled natively
 +      return true;
 +    })
 +    .map((ev) => ({
