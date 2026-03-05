@@ -214,10 +214,10 @@ index 0000000000..05081206e7
 +}
 diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
 new file mode 100644
-index 0000000000..704a6849cb
+index 0000000000..ac73af9f8d
 --- /dev/null
 +++ b/src/app/features/room/WidgetsDrawer.tsx
-@@ -0,0 +1,437 @@
+@@ -0,0 +1,435 @@
 +/**
 + * WidgetsDrawer — lists and embeds room widgets (im.vector.modular.widgets state events).
 + * Reuses the same SmallWidget / SmallWidgetDriver infrastructure used for Element Call.
@@ -246,7 +246,6 @@ index 0000000000..704a6849cb
 +import { useToolbarConfig } from '../../hooks/useToolbarConfig';
 +import { ToolbarItemId } from '../../state/toolbarConfig';
 +import { PanelIconPicker } from './PanelIconPicker';
-+import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 +
 +// Global atom — set this to any widget id to auto-select that widget when the drawer opens.
 +// Toolbar shortcut buttons set this before toggling the drawer open.
@@ -299,7 +298,6 @@ index 0000000000..704a6849cb
 +    // WidgetApi can identify itself and know where to send postMessages.
 +    resolvedUrl.searchParams.set('widgetId', widget.id);
 +    resolvedUrl.searchParams.set('parentUrl', window.location.origin);
-+    iframe.src = resolvedUrl.toString();
 +
 +    const userId = mx.getUserId() ?? '';
 +    const app = createVirtualWidget(
@@ -316,7 +314,9 @@ index 0000000000..704a6849cb
 +
 +    const smallWidget = new SmallWidget(app);
 +    smallWidgetRef.current = smallWidget;
++    // Start messaging BEFORE setting iframe.src to avoid ContentLoaded sequence errors.
 +    smallWidget.startMessaging(iframe);
++    iframe.src = resolvedUrl.toString();
 +
 +    return () => {
 +      smallWidget.stopMessaging();
@@ -362,8 +362,6 @@ index 0000000000..704a6849cb
 +
 +export function WidgetsDrawer({ room, onClose, width = 420, isFullWidth, onToggleFullWidth }: WidgetsDrawerProps) {
 +  const mx = useMatrixClient();
-+  const useAuthentication = useMediaAuthentication();
-+  void useAuthentication; // used by PanelIconPicker via renderItemIcon in RoomViewHeader
 +  const widgets = useRoomWidgets(room);
 +  const [selectedId, setSelectedId] = useState<string | null>(null);
 +  const [isAdding, setIsAdding] = useState(false);

@@ -1948,7 +1948,7 @@ index 929dd1e919..6883e3631f 100644
                after={<Icon size="50" src={Icons.Cross} />}
              >
 diff --git a/src/app/features/room/Room.tsx b/src/app/features/room/Room.tsx
-index 24878d5e6e..843ec5239d 100644
+index 24878d5e6e..521239cedd 100644
 --- a/src/app/features/room/Room.tsx
 +++ b/src/app/features/room/Room.tsx
 @@ -1,4 +1,4 @@
@@ -1957,7 +1957,7 @@ index 24878d5e6e..843ec5239d 100644
  import { Box, Line } from 'folds';
  import { useParams } from 'react-router-dom';
  import { isKeyHotkey } from 'is-hotkey';
-@@ -13,17 +13,127 @@
+@@ -13,17 +13,156 @@
  import { markAsRead } from '../../utils/notifications';
  import { useMatrixClient } from '../../hooks/useMatrixClient';
  import { useRoomMembers } from '../../hooks/useRoomMembers';
@@ -1968,6 +1968,15 @@ index 24878d5e6e..843ec5239d 100644
 +import { ThreadsDrawer, openThreadIdAtom } from './ThreadsDrawer';
 +import { WidgetsDrawer } from './WidgetsDrawer';
 +import { useAtom } from 'jotai';
++import { useResizablePanel } from '../../hooks/useResizablePanel';
++import { useToolbarConfig } from '../../hooks/useToolbarConfig';
++
++const PANEL_DIVIDER_STYLE: React.CSSProperties = {
++  width: '6px',
++  cursor: 'col-resize',
++  flexShrink: 0,
++  background: 'var(--bg-surface-border)',
++};
  
  export function Room() {
    const { eventId } = useParams();
@@ -1988,13 +1997,25 @@ index 24878d5e6e..843ec5239d 100644
 +  const [isIssueBoard, setIsIssueBoard] = useState(false);
 +  const [isThreadsDrawer, setIsThreadsDrawer] = useState(false);
 +  const [isWidgetsDrawer, setIsWidgetsDrawer] = useState(false);
++  const [rightPanelFullWidth, setRightPanelFullWidth] = useState(false);
 +  const [openThreadId] = useAtom(openThreadIdAtom);
++
++  const { getEffective, setItem: setToolbarItem } = useToolbarConfig();
++
++  // Resizable panels
++  const { width: threadPanelWidth, onDividerPointerDown: handleThreadDividerPointerDown } =
++    useResizablePanel(320, 200, 600, 'cinny_thread_panel_width');
++  const { width: widgetPanelWidth, onDividerPointerDown: handleWidgetDividerPointerDown } =
++    useResizablePanel(420, 280, 700, 'cinny_widget_panel_width');
++  const { width: memberPanelWidth, onDividerPointerDown: handleMemberDividerPointerDown } =
++    useResizablePanel(266, 180, 500, 'cinny_member_panel_width');
 +
 +  // Reset all panel views when navigating to a different room.
 +  useEffect(() => {
 +    setIsIssueBoard(false);
 +    setIsThreadsDrawer(false);
 +    setIsWidgetsDrawer(false);
++    setRightPanelFullWidth(false);
 +  }, [room.roomId]);
 +
 +  // When something (e.g. a timeline thread indicator) requests a thread to be opened,
@@ -2003,37 +2024,54 @@ index 24878d5e6e..843ec5239d 100644
 +    if (openThreadId) {
 +      setIsThreadsDrawer(true);
 +      setPeopleDrawer(false);
++      setIsWidgetsDrawer(false);
 +    }
 +  }, [openThreadId, setPeopleDrawer]);
-+
-+  const handleThreadDividerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-+    e.preventDefault();
-+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-+    const startX = e.clientX;
-+    const startWidth = threadWidthRef.current;
-+    const onMove = (me: PointerEvent) => {
-+      // Divider is on the LEFT of the thread panel, so dragging left = wider thread
-+      const newWidth = Math.max(200, Math.min(600, startWidth - (me.clientX - startX)));
-+      threadWidthRef.current = newWidth;
-+      setThreadPanelWidth(newWidth);
-+    };
-+    const onUp = () => {
-+      localStorage.setItem(THREAD_WIDTH_KEY, String(threadWidthRef.current));
-+      window.removeEventListener('pointermove', onMove);
-+      window.removeEventListener('pointerup', onUp);
-+    };
-+    window.addEventListener('pointermove', onMove);
-+    window.addEventListener('pointerup', onUp);
-+  }, []);
 +
 +  const handleToggleThreadsDrawer = useCallback(() => {
 +    setIsThreadsDrawer((open) => {
 +      const opening = !open;
-+      // Close members drawer when opening threads to avoid two sidebars
-+      if (opening) setPeopleDrawer(false);
++      if (opening) {
++        setPeopleDrawer(false);
++        setIsWidgetsDrawer(false);
++        if (getEffective('threads').defaultMode === 'fullwidth') setRightPanelFullWidth(true);
++        else setRightPanelFullWidth(false);
++      } else {
++        setRightPanelFullWidth(false);
++      }
 +      return opening;
 +    });
-+  }, [setPeopleDrawer]);
++  }, [setPeopleDrawer, getEffective]);
++
++  const handleToggleWidgetsDrawer = useCallback(() => {
++    setIsWidgetsDrawer((open) => {
++      const opening = !open;
++      if (opening) {
++        setPeopleDrawer(false);
++        setIsThreadsDrawer(false);
++        if (getEffective('widgets').defaultMode === 'fullwidth') setRightPanelFullWidth(true);
++        else setRightPanelFullWidth(false);
++      } else {
++        setRightPanelFullWidth(false);
++      }
++      return opening;
++    });
++  }, [setPeopleDrawer, getEffective]);
++
++  const handleTogglePeopleDrawer = useCallback(() => {
++    setPeopleDrawer((open) => {
++      const opening = !open;
++      if (opening) {
++        setIsThreadsDrawer(false);
++        setIsWidgetsDrawer(false);
++        if (getEffective('members').defaultMode === 'fullwidth') setRightPanelFullWidth(true);
++        else setRightPanelFullWidth(false);
++      } else {
++        setRightPanelFullWidth(false);
++      }
++      return opening;
++    });
++  }, [setPeopleDrawer, getEffective]);
 +
 +  useEffect(() => {
 +    const name = room.name || room.roomId;
@@ -2054,15 +2092,6 @@ index 24878d5e6e..843ec5239d 100644
 +  const containerRef = useRef<HTMLDivElement>(null);
 +  const splitRatioRef = useRef(0.5);
 +  const [splitRatio, setSplitRatio] = useState(0.5);
-+
-+  // Thread panel width — persisted in localStorage
-+  const THREAD_WIDTH_KEY = 'cinny_thread_panel_width';
-+  const getStoredThreadWidth = () => {
-+    const stored = localStorage.getItem(THREAD_WIDTH_KEY);
-+    return stored ? Math.max(200, Math.min(600, Number(stored))) : 320;
-+  };
-+  const threadWidthRef = useRef<number>(getStoredThreadWidth());
-+  const [threadPanelWidth, setThreadPanelWidth] = useState<number>(threadWidthRef.current);
 +
 +  const handleDividerPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
 +    e.preventDefault();
@@ -2087,19 +2116,24 @@ index 24878d5e6e..843ec5239d 100644
  
    useKeyDown(
      window,
-@@ -40,13 +150,96 @@
+@@ -40,13 +179,113 @@
    return (
      <PowerLevelsContextProvider value={powerLevels}>
        <Box grow="Yes">
 -        <RoomView room={room} eventId={eventId} />
-+        <Box grow="Yes" direction="Column">
++        <Box
++          grow="Yes"
++          direction="Column"
++          style={{ display: rightPanelFullWidth && anyRightPanel ? 'none' : 'flex' }}
++        >
 +          <RoomViewHeader
 +            isIssueBoard={isIssueBoard}
 +            onToggleIssueBoard={() => setIsIssueBoard((b) => !b)}
 +            isThreadsDrawer={isThreadsDrawer}
 +            onToggleThreadsDrawer={handleToggleThreadsDrawer}
 +            isWidgetsDrawer={isWidgetsDrawer}
-+            onToggleWidgetsDrawer={() => setIsWidgetsDrawer((b) => !b)}
++            onToggleWidgetsDrawer={handleToggleWidgetsDrawer}
++            onTogglePeopleDrawer={handleTogglePeopleDrawer}
 +          />
 +          <Box grow="Yes" ref={containerRef}>
 +            {isIssueBoard ? (
@@ -2150,35 +2184,47 @@ index 24878d5e6e..843ec5239d 100644
          )}
 +        {screenSize === ScreenSize.Desktop && isWidgetsDrawer && (
 +          <>
-+            <div
-+              role="separator"
-+              style={{
-+                width: '6px',
-+                cursor: 'col-resize',
-+                flexShrink: 0,
-+                background: 'var(--bg-surface-border)',
-+              }}
++            {!rightPanelFullWidth && (
++              <div
++                role="separator"
++                style={PANEL_DIVIDER_STYLE}
++                onPointerDown={handleWidgetDividerPointerDown}
++              />
++            )}
++            <WidgetsDrawer
++              key={room.roomId}
++              room={room}
++              onClose={() => setIsWidgetsDrawer(false)}
++              width={widgetPanelWidth}
++              isFullWidth={rightPanelFullWidth}
++              onToggleFullWidth={() => setRightPanelFullWidth((v) => {
++                const next = !v;
++                setToolbarItem('widgets', { defaultMode: next ? 'fullwidth' : 'sidebar' });
++                return next;
++              })}
 +            />
-+            <WidgetsDrawer key={room.roomId} room={room} onClose={() => setIsWidgetsDrawer(false)} />
 +          </>
 +        )}
 +        {screenSize === ScreenSize.Desktop && isThreadsDrawer && (
 +          <>
-+            <div
-+              role="separator"
-+              style={{
-+                width: '6px',
-+                cursor: 'col-resize',
-+                flexShrink: 0,
-+                background: 'var(--bg-surface-border)',
-+              }}
-+              onPointerDown={handleThreadDividerPointerDown}
-+            />
++            {!rightPanelFullWidth && (
++              <div
++                role="separator"
++                style={PANEL_DIVIDER_STYLE}
++                onPointerDown={handleThreadDividerPointerDown}
++              />
++            )}
 +            <ThreadsDrawer
 +              key={room.roomId}
 +              room={room}
 +              onClose={handleToggleThreadsDrawer}
 +              width={threadPanelWidth}
++              isFullWidth={rightPanelFullWidth}
++              onToggleFullWidth={() => setRightPanelFullWidth((v) => {
++                const next = !v;
++                setToolbarItem('threads', { defaultMode: next ? 'fullwidth' : 'sidebar' });
++                return next;
++              })}
 +            />
 +          </>
 +        )}
@@ -2483,7 +2529,7 @@ index 0f8375943c..4160a2144c 100644
    );
  }
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index 9b4bfd237a..b3657622e1 100644
+index 9b4bfd237a..df91dc33b7 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -23,8 +23,7 @@
@@ -2513,7 +2559,7 @@ index 9b4bfd237a..b3657622e1 100644
  import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
  import { stopPropagation } from '../../utils/keyboard';
  import { getMatrixToRoom } from '../../plugins/matrix-to';
-@@ -69,26 +67,47 @@
+@@ -69,26 +67,62 @@
  import { useRoomCreators } from '../../hooks/useRoomCreators';
  import { useRoomPermissions } from '../../hooks/useRoomPermissions';
  import { InviteUserPrompt } from '../../components/invite-user-prompt';
@@ -2522,6 +2568,19 @@ index 9b4bfd237a..b3657622e1 100644
 +import { useKeyDown } from '../../hooks/useKeyDown';
 +import { isKeyHotkey } from 'is-hotkey';
 +import { getIssueSchema } from '../issues/IssueBoard';
++import { useToolbarConfig } from '../../hooks/useToolbarConfig';
++import { ToolbarItemId } from '../../state/toolbarConfig';
++import { renderItemIcon } from './PanelIconPicker';
++import { activeWidgetIdAtom } from './WidgetsDrawer';
++import { useAtom } from 'jotai';
++
++type UnpinnedItem = {
++  id: ToolbarItemId;
++  label: string;
++  iconSrc?: (filled?: boolean) => React.JSX.Element;
++  active: boolean;
++  onToggle: () => void;
++};
  
  type RoomMenuProps = {
    room: Room;
@@ -2529,9 +2588,11 @@ index 9b4bfd237a..b3657622e1 100644
 +  onOpenIssueBoard?: () => void;
 +  onToggleThreadsDrawer?: () => void;
 +  isThreadsDrawer?: boolean;
++  unpinnedItems?: UnpinnedItem[];
++  onPin?: (id: ToolbarItemId) => void;
  };
 -const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose }, ref) => {
-+const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard, onToggleThreadsDrawer, isThreadsDrawer }, ref) => {
++const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard, onToggleThreadsDrawer, isThreadsDrawer, unpinnedItems, onPin }, ref) => {
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
 +  const [issueTrackerEnabled] = useSetting(settingsAtom, 'issueTracker');
@@ -2562,7 +2623,7 @@ index 9b4bfd237a..b3657622e1 100644
    const handleMarkAsRead = () => {
      markAsRead(mx, room.roomId, hideActivity);
      requestClose();
-@@ -112,6 +131,17 @@
+@@ -112,6 +146,17 @@
      requestClose();
    };
  
@@ -2580,7 +2641,7 @@ index 9b4bfd237a..b3657622e1 100644
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        {invitePrompt && (
-@@ -221,6 +251,26 @@
+@@ -221,6 +266,26 @@
            )}
          </UseStateProvider>
        </Box>
@@ -2607,7 +2668,7 @@ index 9b4bfd237a..b3657622e1 100644
        <Line variant="Surface" size="300" />
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <UseStateProvider initial={false}>
-@@ -254,7 +304,16 @@
+@@ -254,7 +319,17 @@
    );
  });
  
@@ -2619,13 +2680,14 @@ index 9b4bfd237a..b3657622e1 100644
 +  onToggleThreadsDrawer?: () => void;
 +  isWidgetsDrawer?: boolean;
 +  onToggleWidgetsDrawer?: () => void;
++  onTogglePeopleDrawer?: () => void;
 +};
 +
-+export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDrawer, onToggleThreadsDrawer, isWidgetsDrawer, onToggleWidgetsDrawer }: RoomViewHeaderProps) {
++export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDrawer, onToggleThreadsDrawer, isWidgetsDrawer, onToggleWidgetsDrawer, onTogglePeopleDrawer }: RoomViewHeaderProps) {
    const navigate = useNavigate();
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
-@@ -263,12 +322,44 @@
+@@ -263,12 +338,44 @@
    const space = useSpaceOptionally();
    const [menuAnchor, setMenuAnchor] = useState<RectCords>();
    const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
@@ -2672,7 +2734,7 @@ index 9b4bfd237a..b3657622e1 100644
    const name = useRoomName(room);
    const topic = useRoomTopic(room);
    const avatarUrl = avatarMxc
-@@ -296,13 +387,16 @@
+@@ -296,13 +403,16 @@
    };
  
    return (
@@ -2691,7 +2753,7 @@ index 9b4bfd237a..b3657622e1 100644
                    <Icon src={Icons.ArrowLeft} />
                  </IconButton>
                </Box>
-@@ -317,11 +411,7 @@
+@@ -317,11 +427,7 @@
                  src={avatarUrl}
                  alt={name}
                  renderFallback={() => (
@@ -2704,7 +2766,7 @@ index 9b4bfd237a..b3657622e1 100644
                  )}
                />
              </Avatar>
-@@ -369,7 +459,105 @@
+@@ -369,7 +475,106 @@
              )}
            </Box>
          </Box>
@@ -2778,8 +2840,8 @@ index 9b4bfd237a..b3657622e1 100644
 +            </TooltipProvider>
 +          )}
 +
-+          {/* Issue board toggle — hidden when schema absent or insufficient rights */}
-+          {showIssuesButton && (
++          {/* Issue board toggle — hidden when schema absent, insufficient rights, or unpinned */}
++          {showIssuesButton && getEffective('issues').pinned && (
 +            <TooltipProvider
 +              position="Bottom"
 +              offset={4}
@@ -2796,6 +2858,7 @@ index 9b4bfd237a..b3657622e1 100644
 +                  onClick={onToggleIssueBoard}
 +                  aria-pressed={isIssueBoard}
 +                  aria-label={isIssueBoard ? 'Show chat' : 'Issue tracker'}
++                  onContextMenu={handleContextMenu('issues')}
 +                >
 +                  <Icon size="400" src={Icons.CheckTwice} filled={isIssueBoard} />
 +                </IconButton>
@@ -2810,7 +2873,7 @@ index 9b4bfd237a..b3657622e1 100644
            {!ecryptedRoom && (
              <TooltipProvider
                position="Bottom"
-@@ -381,12 +569,14 @@
+@@ -381,12 +586,14 @@
                }
              >
                {(triggerRef) => (
@@ -2826,7 +2889,7 @@ index 9b4bfd237a..b3657622e1 100644
            <TooltipProvider
              position="Bottom"
              offset={4}
-@@ -398,10 +588,13 @@
+@@ -398,10 +605,13 @@
            >
              {(triggerRef) => (
                <IconButton
@@ -2840,7 +2903,7 @@ index 9b4bfd237a..b3657622e1 100644
                >
                  {pinnedEvents.length > 0 && (
                    <Badge
-@@ -443,6 +636,8 @@
+@@ -443,6 +653,8 @@
                </FocusTrap>
              }
            />
@@ -2849,7 +2912,7 @@ index 9b4bfd237a..b3657622e1 100644
            {screenSize === ScreenSize.Desktop && (
              <TooltipProvider
                position="Bottom"
-@@ -454,12 +649,78 @@
+@@ -454,12 +666,175 @@
                }
              >
                {(triggerRef) => (
@@ -2857,10 +2920,11 @@ index 9b4bfd237a..b3657622e1 100644
 +                <IconButton
 +                  fill="None"
 +                  ref={triggerRef}
-+                  onClick={() => setPeopleDrawer((drawer) => !drawer)}
++                  onClick={onTogglePeopleDrawer ?? (() => setPeopleDrawer((d) => !d))}
 +                  aria-label={peopleDrawer ? 'Hide members' : 'Show members'}
 +                  aria-pressed={peopleDrawer}
 +                  aria-keyshortcuts="Alt+P"
++                  onContextMenu={handleContextMenu('members')}
 +                >
                    <Icon size="400" src={Icons.User} />
                  </IconButton>
@@ -2868,8 +2932,8 @@ index 9b4bfd237a..b3657622e1 100644
              </TooltipProvider>
            )}
 +
-+          {/* Widgets — Desktop, always shown */}
-+          {screenSize === ScreenSize.Desktop && onToggleWidgetsDrawer && (
++          {/* Widgets — Desktop, pinnable */}
++          {screenSize === ScreenSize.Desktop && onToggleWidgetsDrawer && getEffective('widgets').pinned && (
 +            <TooltipProvider
 +              position="Bottom"
 +              offset={4}
@@ -2892,6 +2956,7 @@ index 9b4bfd237a..b3657622e1 100644
 +                  onClick={onToggleWidgetsDrawer}
 +                  aria-pressed={isWidgetsDrawer}
 +                  aria-label={isWidgetsDrawer ? 'Hide widgets panel' : 'Show widgets panel'}
++                  onContextMenu={handleContextMenu('widgets')}
 +                >
 +                  <Icon size="400" src={Icons.Category} filled={isWidgetsDrawer} />
 +                </IconButton>
@@ -2899,8 +2964,8 @@ index 9b4bfd237a..b3657622e1 100644
 +            </TooltipProvider>
 +          )}
 +
-+          {/* Threads — Desktop, always enabled */}
-+          {screenSize === ScreenSize.Desktop && (
++          {/* Threads — Desktop, pinnable */}
++          {screenSize === ScreenSize.Desktop && getEffective('threads').pinned && (
 +            <TooltipProvider
 +              position="Bottom"
 +              offset={4}
@@ -2918,6 +2983,7 @@ index 9b4bfd237a..b3657622e1 100644
 +                  aria-pressed={isThreadsDrawer}
 +                  aria-label={isThreadsDrawer ? 'Hide threads panel' : 'Show threads panel'}
 +                  aria-keyshortcuts="Alt+Shift+T"
++                  onContextMenu={handleContextMenu('threads')}
 +                >
 +                  <Icon size="400" src={Icons.Message} filled={isThreadsDrawer} />
 +                </IconButton>
@@ -2925,11 +2991,105 @@ index 9b4bfd237a..b3657622e1 100644
 +            </TooltipProvider>
 +          )}
 +
++          {/* Widget shortcut buttons — pinned individual widget shortcuts */}
++          {widgetShortcutEntries.filter((x) => x.cfg.pinned).map(({ id, cfg, widget }) => (
++            <TooltipProvider
++              key={id}
++              position="Bottom"
++              offset={4}
++              tooltip={
++                <Tooltip>
++                  <Text>{cfg.label ?? widget!.name}</Text>
++                </Tooltip>
++              }
++            >
++              {(triggerRef) => (
++                <IconButton
++                  fill="None"
++                  ref={triggerRef}
++                  size="300"
++                  radii="300"
++                  aria-label={cfg.label ?? widget!.name}
++                  aria-pressed={isWidgetsDrawer}
++                  onClick={() => {
++                    setActiveWidgetId(widget!.id);
++                    if (!isWidgetsDrawer) onToggleWidgetsDrawer?.();
++                  }}
++                  onContextMenu={handleContextMenu(id)}
++                >
++                  {renderItemIcon(cfg.icon, widget!.name, mx, useAuthentication)}
++                </IconButton>
++              )}
++            </TooltipProvider>
++          ))}
++
++          {/* Context menu for panel/widget buttons */}
++          <PopOut
++            anchor={ctxMenu?.anchor}
++            position="Bottom"
++            align="Start"
++            content={
++              ctxMenu ? (
++                <FocusTrap
++                  focusTrapOptions={{
++                    clickOutsideDeactivates: true,
++                    returnFocusOnDeactivate: false,
++                    onDeactivate: () => setCtxMenu(null),
++                  }}
++                >
++                  <Menu style={{ minWidth: toRem(200) }}>
++                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++                      <MenuItem
++                        size="300"
++                        radii="300"
++                        onClick={() => {
++                          setToolbarItem(ctxMenu.id, { pinned: !getEffective(ctxMenu.id).pinned });
++                          setCtxMenu(null);
++                        }}
++                      >
++                        <Box grow="Yes">
++                          <Text size="T300">
++                            {getEffective(ctxMenu.id).pinned ? 'Remove from toolbar' : 'Pin to toolbar'}
++                          </Text>
++                        </Box>
++                      </MenuItem>
++                      <MenuItem
++                        size="300"
++                        radii="300"
++                        onClick={() => {
++                          const cur = getEffective(ctxMenu.id).defaultMode;
++                          setToolbarItem(ctxMenu.id, { defaultMode: cur === 'fullwidth' ? 'sidebar' : 'fullwidth' });
++                          setCtxMenu(null);
++                        }}
++                        after={getEffective(ctxMenu.id).defaultMode === 'fullwidth' ? <Icon src={Icons.CheckTwice} size="100" /> : undefined}
++                      >
++                        <Box grow="Yes">
++                          <Text size="T300">Open full-width by default</Text>
++                        </Box>
++                      </MenuItem>
++                      {ctxMenu.id.startsWith('widget:') && (
++                        <MenuItem
++                          size="300"
++                          radii="300"
++                          onClick={() => { removeToolbarItem(ctxMenu.id); setCtxMenu(null); }}
++                        >
++                          <Box grow="Yes">
++                            <Text size="T300">Remove shortcut</Text>
++                          </Box>
++                        </MenuItem>
++                      )}
++                    </Box>
++                  </Menu>
++                </FocusTrap>
++              ) : <div />
++            }
++          />
++
 +          {/* More options — always rightmost */}
            <TooltipProvider
              position="Bottom"
              align="End"
-@@ -471,7 +732,13 @@
+@@ -471,7 +846,13 @@
              }
            >
              {(triggerRef) => (
@@ -2944,12 +3104,20 @@ index 9b4bfd237a..b3657622e1 100644
                  <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
                </IconButton>
              )}
-@@ -492,7 +759,7 @@
+@@ -492,7 +873,15 @@
                    escapeDeactivates: stopPropagation,
                  }}
                >
 -                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} />
-+                <RoomMenu room={room} requestClose={() => setMenuAnchor(undefined)} onOpenIssueBoard={onToggleIssueBoard} onToggleThreadsDrawer={onToggleThreadsDrawer} isThreadsDrawer={isThreadsDrawer} />
++                <RoomMenu
++                  room={room}
++                  requestClose={() => setMenuAnchor(undefined)}
++                  onOpenIssueBoard={onToggleIssueBoard}
++                  onToggleThreadsDrawer={onToggleThreadsDrawer}
++                  isThreadsDrawer={isThreadsDrawer}
++                  unpinnedItems={allUnpinnedItems}
++                  onPin={(id) => setToolbarItem(id, { pinned: true })}
++                />
                </FocusTrap>
              }
            />
@@ -4745,10 +4913,10 @@ index 0000000000..9ea05396a6
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..a5e6a9ce99
+index 0000000000..a97bbc7bf6
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,203 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -4807,25 +4975,6 @@ index 0000000000..a5e6a9ce99
 +        if (activeCallRoomId && !isActiveCallReady) {
 +          const roomIdToSet = activeCallRoomId;
 +
-+          const widgetId = `element-call-${roomIdToSet}-${Date.now()}`;
-+          const newUrl = getWidgetUrl(
-+            mx,
-+            roomIdToSet,
-+            clientConfig.elementCallUrl ?? '',
-+            widgetId,
-+            {
-+              // Always use intent=join_existing for correct EC defaults (callIntent, audio, etc.).
-+              // The default (no-intent) case triggers appPrompt=true + confineToRoom=false — wrong.
-+              intent: 'join_existing',
-+              // Override skipLobby explicitly when autoJoin is on; omit when off so intent decides.
-+              skipLobby: autoJoin ? true : undefined,
-+              returnToLobby: 'true',
-+              perParticipantE2EE: 'true',
-+              theme: themeKind,
-+              callIntent: 'audio',
-+            },
-+          );
-+
 +          if (
 +            callSmallWidgetRef.current?.roomId &&
 +            activeClientWidget?.roomId &&
@@ -4834,17 +4983,36 @@ index 0000000000..a5e6a9ce99
 +            return;
 +          }
 +
-+          if (
-+            iframeRef.current &&
-+            (!iframeRef.current.src || iframeRef.current.src !== newUrl.toString())
-+          ) {
-+            iframeRef.current.src = newUrl.toString();
-+          }
-+
 +          const iframeElement = iframeRef.current;
 +          if (!iframeElement) {
 +            return;
 +          }
++
++          // Determine room type to pick the correct intent and callType.
++          // Voice rooms (isCallRoom) use 'room_call'; DM rooms (≤2 members) use 'start_call'
++          // with video; regular group rooms use 'start_call' with audio.
++          const room = mx.getRoom(roomIdToSet);
++          const isVoiceRoom = room?.isCallRoom() ?? false;
++          const isDmRoom = !isVoiceRoom && (room?.currentState.getJoinedMemberCount() ?? 0) <= 2;
++          const callIntentParam = isDmRoom ? 'video' : 'audio';
++          const intentParam = isVoiceRoom ? 'room_call' : 'start_call';
++
++          const widgetId = `element-call-${roomIdToSet}-${Date.now()}`;
++          const newUrl = getWidgetUrl(
++            mx,
++            roomIdToSet,
++            clientConfig.elementCallUrl ?? '',
++            widgetId,
++            {
++              intent: intentParam,
++              // Override skipLobby explicitly when autoJoin is on; omit when off so intent decides.
++              skipLobby: autoJoin ? true : undefined,
++              returnToLobby: 'true',
++              perParticipantE2EE: 'true',
++              theme: themeKind,
++              callIntent: callIntentParam,
++            },
++          );
 +
 +          const userId = mx.getUserId() ?? '';
 +          const app = createVirtualWidget(
@@ -4855,13 +5023,17 @@ index 0000000000..a5e6a9ce99
 +            'm.call',
 +            newUrl,
 +            true,
-+            getWidgetData(mx, roomIdToSet, {}, { callIntent: 'audio' }),
++            getWidgetData(mx, roomIdToSet, {}, { callIntent: callIntentParam }),
 +            roomIdToSet,
 +          );
 +
 +          const smallWidget = new SmallWidget(app);
 +          smallWidgetRef.current = smallWidget;
 +
++          // Start messaging BEFORE setting iframe.src — this ensures the ClientWidgetApi
++          // load listener is registered before the iframe navigates. If src is set first and
++          // the embedded bundle loads quickly (e.g. local bundle), EC sends ContentLoaded
++          // before the listener is in place, causing "Improper sequence" → syncApi undefined.
 +          const widgetApiInstance = smallWidget.startMessaging(iframeElement);
 +          widgetApiRef.current = widgetApiInstance;
 +          registerActiveClientWidgetApi(
@@ -4870,6 +5042,10 @@ index 0000000000..a5e6a9ce99
 +            smallWidget,
 +            iframeElement,
 +          );
++
++          if (!iframeElement.src || iframeElement.src !== newUrl.toString()) {
++            iframeElement.src = newUrl.toString();
++          }
 +        }
 +      }
 +    },
