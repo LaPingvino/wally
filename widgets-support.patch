@@ -1,9 +1,223 @@
+diff --git a/src/app/features/room/PanelIconPicker.tsx b/src/app/features/room/PanelIconPicker.tsx
+new file mode 100644
+index 0000000000..05081206e7
+--- /dev/null
++++ b/src/app/features/room/PanelIconPicker.tsx
+@@ -0,0 +1,208 @@
++import React, { useState } from 'react';
++import FocusTrap from 'focus-trap-react';
++import {
++  Box,
++  Icon,
++  IconButton,
++  Icons,
++  IconSrc,
++  Text,
++  config,
++  color,
++  toRem,
++} from 'folds';
++import { MatrixClient } from 'matrix-js-sdk';
++import { mxcUrlToHttp } from '../../utils/matrix';
++import { stopPropagation } from '../../utils/keyboard';
++
++// Render an icon spec to a React element.
++// iconSpec can be:
++//   undefined           → show name initial
++//   'icons:CategoryName'→ folds icon
++//   'emoji:🧩'          → emoji character
++//   'mxc://...'         → media URL (rendered as img)
++//   bare char           → treated as emoji
++export function renderItemIcon(
++  iconSpec: string | undefined,
++  nameInitial: string,
++  mx: MatrixClient,
++  useAuth: boolean
++): React.ReactNode {
++  if (!iconSpec) {
++    return (
++      <Text size="T200" style={{ fontWeight: 700 }}>
++        {nameInitial[0]?.toUpperCase() ?? '?'}
++      </Text>
++    );
++  }
++  if (iconSpec.startsWith('icons:')) {
++    const name = iconSpec.slice(6) as keyof typeof Icons;
++    const src = Icons[name] as IconSrc | undefined;
++    return src ? (
++      <Icon src={src} size="200" />
++    ) : (
++      <Text size="T200">{nameInitial[0]?.toUpperCase() ?? '?'}</Text>
++    );
++  }
++  if (iconSpec.startsWith('mxc://')) {
++    const url = mxcUrlToHttp(mx, iconSpec, useAuth, 20, 20, 'crop');
++    return url ? (
++      <img src={url} alt="" style={{ width: 16, height: 16, objectFit: 'cover', borderRadius: 2 }} />
++    ) : (
++      <Text size="T200">{nameInitial[0]?.toUpperCase() ?? '?'}</Text>
++    );
++  }
++  // emoji: prefix or bare character
++  const char = iconSpec.startsWith('emoji:') ? iconSpec.slice(6) : iconSpec;
++  return <span style={{ fontSize: 14, lineHeight: 1 }}>{char}</span>;
++}
++
++type PanelIconPickerProps = {
++  onSelect: (iconSpec: string | undefined) => void;
++  onClose: () => void;
++};
++
++export function PanelIconPicker({ onSelect, onClose }: PanelIconPickerProps) {
++  const [search, setSearch] = useState('');
++  const [customInput, setCustomInput] = useState('');
++
++  const allIconNames = Object.keys(Icons) as Array<keyof typeof Icons>;
++  const filtered = search
++    ? allIconNames.filter((n) => n.toLowerCase().includes(search.toLowerCase()))
++    : allIconNames;
++
++  const handleCustomSubmit = () => {
++    const val = customInput.trim();
++    if (!val) return;
++    // If it looks like an emoji (not a URL or icon: spec), prefix with emoji:
++    if (!val.startsWith('mxc://') && !val.startsWith('icons:') && !val.startsWith('emoji:')) {
++      onSelect(`emoji:${val}`);
++    } else {
++      onSelect(val);
++    }
++    onClose();
++  };
++
++  return (
++    <FocusTrap
++      focusTrapOptions={{
++        clickOutsideDeactivates: true,
++        returnFocusOnDeactivate: false,
++        onDeactivate: onClose,
++        escapeDeactivates: stopPropagation,
++      }}
++    >
++      <Box
++        direction="Column"
++        style={{
++          background: `var(--bg-surface)`,
++          border: `1px solid ${color.Surface.ContainerLine}`,
++          borderRadius: 8,
++          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
++          width: toRem(260),
++          maxHeight: toRem(360),
++          overflow: 'hidden',
++        }}
++      >
++        {/* Custom emoji / mxc:// input */}
++        <Box
++          direction="Column"
++          gap="100"
++          style={{ padding: config.space.S200, borderBottom: `1px solid ${color.Surface.ContainerLine}` }}
++        >
++          <Text size="L400">Custom icon (emoji or mxc://)</Text>
++          <Box gap="100">
++            <input
++              type="text"
++              placeholder="🧩 or mxc://..."
++              value={customInput}
++              onChange={(e) => setCustomInput(e.target.value)}
++              onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
++              style={{
++                flex: 1,
++                padding: `${config.space.S100} ${config.space.S200}`,
++                border: `1px solid ${color.Surface.ContainerLine}`,
++                borderRadius: 4,
++                background: 'var(--bg-surface)',
++                color: 'var(--tc-surface-high)',
++                fontSize: 13,
++              }}
++              autoFocus
++            />
++            <IconButton
++              size="300"
++              radii="300"
++              onClick={handleCustomSubmit}
++              aria-label="Use this icon"
++            >
++              <Icon src={Icons.Check} size="100" />
++            </IconButton>
++          </Box>
++        </Box>
++
++        {/* Icon grid search */}
++        <Box style={{ padding: `${config.space.S100} ${config.space.S200}`, borderBottom: `1px solid ${color.Surface.ContainerLine}` }}>
++          <input
++            type="search"
++            placeholder="Search icons…"
++            value={search}
++            onChange={(e) => setSearch(e.target.value)}
++            style={{
++              width: '100%',
++              padding: `${config.space.S100} ${config.space.S200}`,
++              border: `1px solid ${color.Surface.ContainerLine}`,
++              borderRadius: 4,
++              background: 'var(--bg-surface)',
++              color: 'var(--tc-surface-high)',
++              fontSize: 13,
++              boxSizing: 'border-box',
++            }}
++          />
++        </Box>
++
++        {/* Scrollable icon grid */}
++        <Box
++          style={{
++            overflowY: 'auto',
++            padding: config.space.S100,
++            display: 'grid',
++            gridTemplateColumns: 'repeat(auto-fill, minmax(32px, 1fr))',
++            gap: 4,
++            flex: 1,
++          }}
++        >
++          {filtered.map((name) => (
++            <IconButton
++              key={name}
++              size="300"
++              radii="300"
++              onClick={() => { onSelect(`icons:${name}`); onClose(); }}
++              aria-label={name}
++              title={name}
++            >
++              <Icon src={Icons[name]} size="200" />
++            </IconButton>
++          ))}
++        </Box>
++
++        {/* Footer: clear button */}
++        <Box
++          style={{
++            padding: `${config.space.S100} ${config.space.S200}`,
++            borderTop: `1px solid ${color.Surface.ContainerLine}`,
++          }}
++        >
++          <IconButton
++            size="300"
++            radii="300"
++            onClick={() => { onSelect(undefined); onClose(); }}
++            aria-label="Clear icon (revert to name initial)"
++          >
++            <Icon src={Icons.Cross} size="100" />
++          </IconButton>
++          <Text size="T200" style={{ marginLeft: 8 }}>Clear (use name initial)</Text>
++        </Box>
++      </Box>
++    </FocusTrap>
++  );
++}
 diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
 new file mode 100644
-index 0000000000..039982f679
+index 0000000000..704a6849cb
 --- /dev/null
 +++ b/src/app/features/room/WidgetsDrawer.tsx
-@@ -0,0 +1,342 @@
+@@ -0,0 +1,437 @@
 +/**
 + * WidgetsDrawer — lists and embeds room widgets (im.vector.modular.widgets state events).
 + * Reuses the same SmallWidget / SmallWidgetDriver infrastructure used for Element Call.
@@ -22,10 +236,21 @@ index 0000000000..039982f679
 +  config,
 +  toRem,
 +  color,
++  PopOut,
++  RectCords,
 +} from 'folds';
++import { atom, useAtom } from 'jotai';
 +import { useMatrixClient } from '../../hooks/useMatrixClient';
 +import { useRoomWidgets, RoomWidget } from '../../hooks/useRoomWidgets';
 +import { SmallWidget, createVirtualWidget } from '../call/SmallWidget';
++import { useToolbarConfig } from '../../hooks/useToolbarConfig';
++import { ToolbarItemId } from '../../state/toolbarConfig';
++import { PanelIconPicker } from './PanelIconPicker';
++import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++
++// Global atom — set this to any widget id to auto-select that widget when the drawer opens.
++// Toolbar shortcut buttons set this before toggling the drawer open.
++export const activeWidgetIdAtom = atom<string | null>(null);
 +
 +// Substitute Matrix widget template variables in a URL.
 +// widgetId is passed separately so $matrix_widget_id can also be substituted.
@@ -131,16 +356,34 @@ index 0000000000..039982f679
 +  room: Room;
 +  onClose: () => void;
 +  width?: number;
++  isFullWidth?: boolean;
++  onToggleFullWidth?: () => void;
 +};
 +
-+export function WidgetsDrawer({ room, onClose, width = 420 }: WidgetsDrawerProps) {
++export function WidgetsDrawer({ room, onClose, width = 420, isFullWidth, onToggleFullWidth }: WidgetsDrawerProps) {
 +  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  void useAuthentication; // used by PanelIconPicker via renderItemIcon in RoomViewHeader
 +  const widgets = useRoomWidgets(room);
 +  const [selectedId, setSelectedId] = useState<string | null>(null);
 +  const [isAdding, setIsAdding] = useState(false);
 +  const [addUrl, setAddUrl] = useState('');
 +  const [addName, setAddName] = useState('');
 +  const [saving, setSaving] = useState(false);
++
++  // Toolbar config integration
++  const { config: toolbarConfig, setItem: setToolbarItem } = useToolbarConfig();
++  const [iconPickerAnchor, setIconPickerAnchor] = useState<RectCords | null>(null);
++  const [iconPickerWidget, setIconPickerWidget] = useState<RoomWidget | null>(null);
++
++  // Subscribe to activeWidgetIdAtom — when set, auto-select that widget
++  const [activeWidgetId, setActiveWidgetId] = useAtom(activeWidgetIdAtom);
++  useEffect(() => {
++    if (activeWidgetId) {
++      setSelectedId(activeWidgetId);
++      setActiveWidgetId(null);
++    }
++  }, [activeWidgetId, setActiveWidgetId]);
 +
 +  // Permission check: can the user send im.vector.modular.widgets state events?
 +  const myPL = room.getMember(mx.getSafeUserId() ?? '')?.powerLevel ?? 0;
@@ -196,17 +439,40 @@ index 0000000000..039982f679
 +    setAddName('');
 +  }, []);
 +
++  const openIconPicker = useCallback((w: RoomWidget, anchor: RectCords) => {
++    setIconPickerWidget(w);
++    setIconPickerAnchor(anchor);
++  }, []);
++
++  const handleIconSelect = useCallback((iconSpec: string | undefined) => {
++    if (!iconPickerWidget) return;
++    const toolbarId = `widget:${iconPickerWidget.id}` as ToolbarItemId;
++    setToolbarItem(toolbarId, {
++      pinned: true,
++      order: Date.now() % 10000,
++      defaultMode: 'sidebar',
++      icon: iconSpec,
++      label: iconPickerWidget.name,
++    });
++    setIconPickerAnchor(null);
++    setIconPickerWidget(null);
++  }, [iconPickerWidget, setToolbarItem]);
++
 +  return (
 +    <Box
 +      direction="Column"
-+      style={{
-+        width: toRem(width),
-+        minWidth: toRem(280),
-+        maxWidth: toRem(600),
-+        flexShrink: 0,
-+        borderLeft: `1px solid ${color.Surface.ContainerLine}`,
-+        overflow: 'hidden',
-+      }}
++      style={
++        isFullWidth
++          ? { flex: 1, minWidth: 0, overflow: 'hidden', borderLeft: `1px solid ${color.Surface.ContainerLine}` }
++          : {
++              width: toRem(width),
++              minWidth: toRem(280),
++              maxWidth: toRem(600),
++              flexShrink: 0,
++              borderLeft: `1px solid ${color.Surface.ContainerLine}`,
++              overflow: 'hidden',
++            }
++      }
 +    >
 +      {/* Header */}
 +      <Box
@@ -222,6 +488,16 @@ index 0000000000..039982f679
 +        <Text size="H5" style={{ flexGrow: 1 }}>
 +          Widgets
 +        </Text>
++        {onToggleFullWidth && (
++          <IconButton
++            size="300"
++            radii="300"
++            onClick={onToggleFullWidth}
++            aria-label={isFullWidth ? 'Side by side' : 'Full width'}
++          >
++            <Icon src={isFullWidth ? Icons.ArrowGoRight : Icons.ArrowGoLeft} size="200" />
++          </IconButton>
++        )}
 +        <IconButton size="300" radii="300" onClick={onClose} aria-label="Close widgets drawer">
 +          <Icon src={Icons.Cross} size="200" />
 +        </IconButton>
@@ -238,20 +514,53 @@ index 0000000000..039982f679
 +            flexWrap: 'wrap',
 +          }}
 +        >
-+          {widgets.map((w) => (
-+            <Chip
-+              key={w.id}
-+              variant={selectedId === w.id ? 'Primary' : 'Surface'}
-+              radii="Pill"
-+              onClick={() => setSelectedId((prev) => (prev === w.id ? null : w.id))}
-+            >
-+              <Text size="T200" truncate>
-+                {w.name}
-+              </Text>
-+            </Chip>
-+          ))}
++          {widgets.map((w) => {
++            const toolbarId = `widget:${w.id}` as ToolbarItemId;
++            const isPinned = !!toolbarConfig[toolbarId];
++            return (
++              <Box key={w.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
++                <Chip
++                  variant={selectedId === w.id ? 'Primary' : 'Surface'}
++                  radii="Pill"
++                  onClick={() => setSelectedId((prev) => (prev === w.id ? null : w.id))}
++                >
++                  <Text size="T200" truncate>
++                    {w.name}
++                  </Text>
++                </Chip>
++                {!isPinned && (
++                  <IconButton
++                    size="300"
++                    radii="300"
++                    onClick={(e) => {
++                      openIconPicker(w, (e.currentTarget as HTMLElement).getBoundingClientRect());
++                    }}
++                    aria-label={`Add ${w.name} to toolbar`}
++                    title="Add to toolbar"
++                  >
++                    <Icon src={Icons.Pin} size="100" />
++                  </IconButton>
++                )}
++              </Box>
++            );
++          })}
 +        </Box>
 +      )}
++
++      {/* Icon picker popout */}
++      <PopOut
++        anchor={iconPickerAnchor ?? undefined}
++        position="Bottom"
++        align="Start"
++        content={
++          iconPickerWidget ? (
++            <PanelIconPicker
++              onSelect={handleIconSelect}
++              onClose={() => { setIconPickerAnchor(null); setIconPickerWidget(null); }}
++            />
++          ) : <div />
++        }
++      />
 +
 +      {/* Add widget form */}
 +      {isAdding && (
@@ -398,3 +707,96 @@ index 0000000000..d749b19854
 +
 +  return widgets;
 +}
+diff --git a/src/app/hooks/useToolbarConfig.ts b/src/app/hooks/useToolbarConfig.ts
+new file mode 100644
+index 0000000000..68e66b8761
+--- /dev/null
++++ b/src/app/hooks/useToolbarConfig.ts
+@@ -0,0 +1,41 @@
++import { useCallback } from 'react';
++import { useAtom } from 'jotai';
++import {
++  toolbarConfigAtom,
++  getEffectiveItem,
++  ToolbarItemConfig,
++  ToolbarItemId,
++} from '../state/toolbarConfig';
++
++export function useToolbarConfig() {
++  const [config, setConfig] = useAtom(toolbarConfigAtom);
++
++  const setItem = useCallback(
++    (id: ToolbarItemId, patch: Partial<ToolbarItemConfig>) => {
++      setConfig((prev) => {
++        const next = { ...prev, [id]: { ...getEffectiveItem(prev, id), ...patch } };
++        localStorage.setItem('cinny_toolbar_config', JSON.stringify(next));
++        return next;
++      });
++    },
++    [setConfig]
++  );
++
++  const removeItem = useCallback(
++    (id: ToolbarItemId) => {
++      setConfig((prev) => {
++        const { [id]: _, ...rest } = prev as Record<string, ToolbarItemConfig>;
++        localStorage.setItem('cinny_toolbar_config', JSON.stringify(rest));
++        return rest as typeof prev;
++      });
++    },
++    [setConfig]
++  );
++
++  const getEffective = useCallback(
++    (id: ToolbarItemId) => getEffectiveItem(config, id),
++    [config]
++  );
++
++  return { config, setItem, removeItem, getEffective };
++}
+diff --git a/src/app/state/toolbarConfig.ts b/src/app/state/toolbarConfig.ts
+new file mode 100644
+index 0000000000..24599a45d0
+--- /dev/null
++++ b/src/app/state/toolbarConfig.ts
+@@ -0,0 +1,40 @@
++import { atom } from 'jotai';
++
++export type PanelId = 'members' | 'threads' | 'widgets' | 'issues';
++export type ToolbarItemId = PanelId | `widget:${string}`;
++
++export type ToolbarItemConfig = {
++  pinned: boolean; // true = toolbar, false = ··· overflow
++  order: number; // lower = further left in toolbar / top in overflow
++  defaultMode: 'sidebar' | 'fullwidth';
++  icon?: string; // 'icons:Category' | 'emoji:🧩' | 'mxc://...' | undefined→name initial
++  label?: string; // widget shortcut label override
++};
++
++export type ToolbarConfig = Partial<Record<ToolbarItemId, ToolbarItemConfig>>;
++
++export const PANEL_DEFAULTS: Record<PanelId, ToolbarItemConfig> = {
++  members: { pinned: true, order: 40, defaultMode: 'sidebar' },
++  threads: { pinned: true, order: 30, defaultMode: 'sidebar' },
++  widgets: { pinned: true, order: 20, defaultMode: 'sidebar' },
++  issues: { pinned: true, order: 10, defaultMode: 'sidebar' },
++};
++
++export function getEffectiveItem(config: ToolbarConfig, id: ToolbarItemId): ToolbarItemConfig {
++  const defaults = PANEL_DEFAULTS[id as PanelId] ?? {
++    pinned: true,
++    order: 50,
++    defaultMode: 'sidebar' as const,
++  };
++  return { ...defaults, ...config[id] };
++}
++
++function loadConfig(): ToolbarConfig {
++  try {
++    return JSON.parse(localStorage.getItem('cinny_toolbar_config') ?? '{}');
++  } catch {
++    return {};
++  }
++}
++
++export const toolbarConfigAtom = atom<ToolbarConfig>(loadConfig());
