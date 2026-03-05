@@ -4475,7 +4475,7 @@ index 0000000000..967956474b
 +  );
 +}
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df91..8b5c1267cc 100644
+index e0df06df91..9cf01c5f9e 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -1,5 +1,6 @@
@@ -4640,7 +4640,7 @@ index e0df06df91..8b5c1267cc 100644
  export function SystemNotification() {
    const notifPermission = usePermissionState('notifications', getNotificationState());
    const [showNotifications, setShowNotifications] = useSetting(settingsAtom, 'showNotifications');
-@@ -151,6 +298,70 @@
+@@ -151,6 +298,74 @@
          direction="Column"
          gap="400"
        >
@@ -4681,12 +4681,16 @@ index e0df06df91..8b5c1267cc 100644
 +        gap="400"
 +      >
 +        <SettingTile
-+          title="Unread Inbox Notifications (Experimental)"
-+          description="Send a system notification when new rooms appear in your Unread inbox."
++          title="Unread Inbox Notifications"
++          description={
++            !showNotifications && notifPermission === 'granted'
++              ? 'Enable "Desktop Notifications" above to use this feature.'
++              : 'Send a desktop notification when rooms with unread messages appear in your Unread inbox. Unlike the notification above, this fires for all unread rooms, not just mentions.'
++          }
 +          after={
 +            <Switch
-+              disabled={notifPermission === 'denied'}
-+              value={inboxUnreadNotifications}
++              disabled={notifPermission === 'denied' || !showNotifications}
++              value={inboxUnreadNotifications && showNotifications}
 +              onChange={(v) => {
 +                if (v && notifPermission === 'prompt') requestNotificationPermission();
 +                setInboxUnreadNotifications(v);
@@ -4694,7 +4698,7 @@ index e0df06df91..8b5c1267cc 100644
 +            />
 +          }
 +        />
-+        {inboxUnreadNotifications && (
++        {inboxUnreadNotifications && showNotifications && (
 +          <SettingTile
 +            title="Notification Batch Interval"
 +            description="Minimum time between unread notifications. 'Immediately' fires within ~1 second."
