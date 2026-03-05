@@ -784,10 +784,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..b0ffad75a9
+index 0000000000..e1a980eab9
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,433 @@
+@@ -0,0 +1,441 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -1002,6 +1002,14 @@ index 0000000000..b0ffad75a9
 +    this.client.on(ClientEvent.Event, this.onEvent);
 +    this.client.on(MatrixEventEvent.Decrypted, this.onEventDecrypted);
 +    this.client.on(ClientEvent.ToDeviceEvent, this.onToDeviceEvent);
++    // EC sends io.element.join after successfully joining the RTC session.
++    // Without a handler, ClientWidgetApi replies with "Unknown action" error.
++    // EC catches this gracefully (just logs), but we noop it cleanly to avoid noise.
++    this.messaging.on('action:io.element.join', (ev: CustomEvent) => {
++      ev.preventDefault();
++      this.messaging?.transport.reply(ev.detail, {});
++    });
++
 +    this.messaging.on(
 +      `action:${WidgetApiFromWidgetAction.UpdateAlwaysOnScreen}`,
 +      async (ev: CustomEvent<IStickyActionRequest>) => {
@@ -1806,6 +1814,281 @@ index 0000000000..1df08b1684
 +      : undefined;
 +  }
 +}
+diff --git a/src/app/features/call/__tests__/SmallWidget.test.ts b/src/app/features/call/__tests__/SmallWidget.test.ts
+new file mode 100644
+index 0000000000..db9c8e1071
+--- /dev/null
++++ b/src/app/features/call/__tests__/SmallWidget.test.ts
+@@ -0,0 +1,180 @@
++import { describe, it, expect, beforeEach } from 'vitest';
++import { getCallIntentParams, getWidgetUrl } from '../SmallWidget';
++import type { MatrixClient } from 'matrix-js-sdk';
++import type { Room } from 'matrix-js-sdk';
++
++// Minimal Room mock
++function makeRoom(isVoice: boolean, memberCount: number): Room {
++  return {
++    isCallRoom: () => isVoice,
++    currentState: { getJoinedMemberCount: () => memberCount },
++  } as unknown as Room;
++}
++
++// Minimal MatrixClient mock
++const mockMx = {
++  getUserId: () => '@alice:example.com',
++  getDeviceId: () => 'ALICEDEVICE',
++  getUser: () => ({ displayName: 'Alice', avatarUrl: '' }),
++  baseUrl: 'https://matrix.example.com',
++} as unknown as MatrixClient;
++
++describe('getCallIntentParams', () => {
++  it('returns join_existing + audio for voice rooms', () => {
++    expect(getCallIntentParams(makeRoom(true, 10))).toEqual({
++      intent: 'join_existing',
++      callIntentParam: 'audio',
++    });
++  });
++
++  it('returns start_call + video for DM rooms (2 members)', () => {
++    expect(getCallIntentParams(makeRoom(false, 2))).toEqual({
++      intent: 'start_call',
++      callIntentParam: 'video',
++    });
++  });
++
++  it('returns start_call + video for 1-member room edge case', () => {
++    expect(getCallIntentParams(makeRoom(false, 1))).toEqual({
++      intent: 'start_call',
++      callIntentParam: 'video',
++    });
++  });
++
++  it('returns start_call + audio for group rooms (3+ members)', () => {
++    expect(getCallIntentParams(makeRoom(false, 3))).toEqual({
++      intent: 'start_call',
++      callIntentParam: 'audio',
++    });
++  });
++
++  it('defaults to start_call + audio for null room', () => {
++    expect(getCallIntentParams(null)).toEqual({
++      intent: 'start_call',
++      callIntentParam: 'audio',
++    });
++  });
++
++  it('defaults to start_call + audio for undefined room', () => {
++    expect(getCallIntentParams(undefined)).toEqual({
++      intent: 'start_call',
++      callIntentParam: 'audio',
++    });
++  });
++
++  it('voice room with 2 members still uses join_existing (voice room type takes priority)', () => {
++    expect(getCallIntentParams(makeRoom(true, 2))).toEqual({
++      intent: 'join_existing',
++      callIntentParam: 'audio',
++    });
++  });
++});
++
++describe('getWidgetUrl', () => {
++  beforeEach(() => {
++    // happy-dom sets window.location.origin to 'http://localhost'
++    // so the local bundle path resolves correctly
++  });
++
++  it('includes required embed params', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {
++      intent: 'start_call',
++      callIntent: 'video',
++    });
++    expect(url.searchParams.get('embed')).toBe('true');
++    expect(url.searchParams.get('appPrompt')).toBe('false');
++    expect(url.searchParams.get('confineToRoom')).toBe('true');
++    expect(url.searchParams.get('widgetId')).toBe('w-1');
++  });
++
++  it('sets correct intent param', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {
++      intent: 'room_call',
++    });
++    expect(url.searchParams.get('intent')).toBe('room_call');
++  });
++
++  it('omits intent when not provided', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {});
++    expect(url.searchParams.has('intent')).toBe(false);
++  });
++
++  it('sets skipLobby=true when provided', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {
++      skipLobby: true,
++    });
++    expect(url.searchParams.get('skipLobby')).toBe('true');
++  });
++
++  it('omits skipLobby when undefined', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {
++      skipLobby: undefined,
++    });
++    expect(url.searchParams.has('skipLobby')).toBe(false);
++  });
++
++  it('uses custom elementCallUrl with /room suffix', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.example.com', 'w-1', {});
++    expect(url.hostname).toBe('call.example.com');
++    expect(url.pathname).toBe('/room');
++  });
++
++  it('uses local bundle path when no custom URL', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', '', 'w-1', {});
++    expect(url.pathname).toBe('/public/element-call/index.html');
++  });
++
++  it('includes roomId, userId, deviceId, baseUrl', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {});
++    expect(url.searchParams.get('roomId')).toBe('!room:example.com');
++    expect(url.searchParams.get('userId')).toBe('@alice:example.com');
++    expect(url.searchParams.get('deviceId')).toBe('ALICEDEVICE');
++    expect(url.searchParams.get('baseUrl')).toBe('https://matrix.example.com');
++  });
++
++  it('sets callIntent param', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {
++      callIntent: 'video',
++    });
++    expect(url.searchParams.get('callIntent')).toBe('video');
++  });
++
++  it('defaults callIntent to video when not specified', () => {
++    const url = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {});
++    expect(url.searchParams.get('callIntent')).toBe('video');
++  });
++
++  // VITAL: each user's EC instance must use their OWN homeserver's baseUrl so that
++  // Element Call can discover the LiveKit focus from that user's .well-known/matrix/client
++  // (org.matrix.msc4143.rtc_foci). Without this, all users would use a single hardcoded HS
++  // and calls would fail for users whose HS doesn't have LiveKit configured.
++  it('baseUrl uses the MatrixClient baseUrl, not a hardcoded value', () => {
++    const userOnOtherServer = {
++      getUserId: () => '@bob:other.example.org',
++      getDeviceId: () => 'BOBDEVICE',
++      getUser: () => ({ displayName: 'Bob', avatarUrl: '' }),
++      baseUrl: 'https://matrix.other.example.org',
++    } as unknown as MatrixClient;
++
++    const urlAlice = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {});
++    const urlBob = getWidgetUrl(userOnOtherServer, '!room:example.com', 'https://call.element.io', 'w-1', {});
++
++    expect(urlAlice.searchParams.get('baseUrl')).toBe('https://matrix.example.com');
++    expect(urlBob.searchParams.get('baseUrl')).toBe('https://matrix.other.example.org');
++  });
++
++  it('userId uses the MatrixClient userId, not a hardcoded value', () => {
++    const userOnOtherServer = {
++      getUserId: () => '@bob:other.example.org',
++      getDeviceId: () => 'BOBDEVICE',
++      getUser: () => ({ displayName: 'Bob', avatarUrl: '' }),
++      baseUrl: 'https://matrix.other.example.org',
++    } as unknown as MatrixClient;
++
++    const urlAlice = getWidgetUrl(mockMx, '!room:example.com', 'https://call.element.io', 'w-1', {});
++    const urlBob = getWidgetUrl(userOnOtherServer, '!room:example.com', 'https://call.element.io', 'w-1', {});
++
++    expect(urlAlice.searchParams.get('userId')).toBe('@alice:example.com');
++    expect(urlBob.searchParams.get('userId')).toBe('@bob:other.example.org');
++  });
++});
+diff --git a/src/app/features/call/__tests__/SmallWidgetDriver.test.ts b/src/app/features/call/__tests__/SmallWidgetDriver.test.ts
+new file mode 100644
+index 0000000000..0b2c9182d8
+--- /dev/null
++++ b/src/app/features/call/__tests__/SmallWidgetDriver.test.ts
+@@ -0,0 +1,83 @@
++import { describe, it, expect, vi } from 'vitest';
++import { MatrixCapabilities, WidgetKind } from 'matrix-widget-api';
++import { SmallWidgetDriver } from '../SmallWidgetDriver';
++import type { MatrixClient } from 'matrix-js-sdk';
++
++function makeDriver(getVersions: () => Promise<unknown>) {
++  const mockMx = {
++    getSafeUserId: () => '@alice:example.com',
++    getDeviceId: () => 'ALICEDEVICE',
++    getVersions,
++  } as unknown as MatrixClient;
++
++  return new SmallWidgetDriver(
++    mockMx,
++    [],
++    {} as any,
++    WidgetKind.Room,
++    true,
++    '!room:example.com',
++  );
++}
++
++const DELAYED_CAPS = new Set([
++  MatrixCapabilities.MSC4157SendDelayedEvent,
++  MatrixCapabilities.MSC4157UpdateDelayedEvent,
++]);
++
++describe('SmallWidgetDriver.validateCapabilities', () => {
++  it('grants delayed-event caps when server supports MSC4157', async () => {
++    const driver = makeDriver(() =>
++      Promise.resolve({ unstable_features: { 'org.matrix.msc4157': true } }),
++    );
++    const result = await driver.validateCapabilities(new Set(DELAYED_CAPS));
++    expect(result.has(MatrixCapabilities.MSC4157SendDelayedEvent)).toBe(true);
++    expect(result.has(MatrixCapabilities.MSC4157UpdateDelayedEvent)).toBe(true);
++  });
++
++  it('grants delayed-event caps when server supports MSC4140 (legacy flag)', async () => {
++    const driver = makeDriver(() =>
++      Promise.resolve({ unstable_features: { 'org.matrix.msc4140': true } }),
++    );
++    const result = await driver.validateCapabilities(new Set(DELAYED_CAPS));
++    expect(result.has(MatrixCapabilities.MSC4157SendDelayedEvent)).toBe(true);
++  });
++
++  it('strips delayed-event caps when server has no MSC4157/MSC4140', async () => {
++    const driver = makeDriver(() => Promise.resolve({ unstable_features: {} }));
++    const result = await driver.validateCapabilities(new Set(DELAYED_CAPS));
++    expect(result.has(MatrixCapabilities.MSC4157SendDelayedEvent)).toBe(false);
++    expect(result.has(MatrixCapabilities.MSC4157UpdateDelayedEvent)).toBe(false);
++  });
++
++  it('strips delayed-event caps when unstable_features is missing', async () => {
++    const driver = makeDriver(() => Promise.resolve({}));
++    const result = await driver.validateCapabilities(new Set(DELAYED_CAPS));
++    expect(result.has(MatrixCapabilities.MSC4157SendDelayedEvent)).toBe(false);
++  });
++
++  it('strips delayed-event caps when getVersions() throws', async () => {
++    const driver = makeDriver(() => Promise.reject(new Error('Network error')));
++    const result = await driver.validateCapabilities(new Set(DELAYED_CAPS));
++    expect(result.has(MatrixCapabilities.MSC4157SendDelayedEvent)).toBe(false);
++    expect(result.has(MatrixCapabilities.MSC4157UpdateDelayedEvent)).toBe(false);
++  });
++
++  it('passes through unrelated capabilities unchanged', async () => {
++    const driver = makeDriver(() => Promise.resolve({ unstable_features: {} }));
++    const caps = new Set([MatrixCapabilities.AlwaysOnScreen, MatrixCapabilities.Screenshots]);
++    const result = await driver.validateCapabilities(caps);
++    expect(result.has(MatrixCapabilities.AlwaysOnScreen)).toBe(true);
++    expect(result.has(MatrixCapabilities.Screenshots)).toBe(true);
++  });
++
++  it('caches the getVersions() result across multiple calls', async () => {
++    const getVersions = vi.fn().mockResolvedValue({
++      unstable_features: { 'org.matrix.msc4157': true },
++    });
++    const driver = makeDriver(getVersions);
++    await driver.validateCapabilities(new Set(DELAYED_CAPS));
++    await driver.validateCapabilities(new Set(DELAYED_CAPS));
++    expect(getVersions).toHaveBeenCalledTimes(1);
++  });
++});
 diff --git a/src/app/features/create-room/CreateRoom.tsx b/src/app/features/create-room/CreateRoom.tsx
 index 05c5c2e385..b1f1fdf761 100644
 --- a/src/app/features/create-room/CreateRoom.tsx
@@ -4933,10 +5216,10 @@ index 0000000000..9ea05396a6
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..7aab2390fc
+index 0000000000..a75ac9a00d
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,204 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -5010,7 +5293,11 @@ index 0000000000..7aab2390fc
 +          }
 +
 +          // Determine room type to pick the correct intent and callType.
-+          const { intent: intentParam, callIntentParam } = getCallIntentParams(mx.getRoom(roomIdToSet));
++          const room = mx.getRoom(roomIdToSet);
++          const { intent: intentParam, callIntentParam } = getCallIntentParams(room);
++          // Only use per-participant E2EE if the room has Matrix encryption enabled.
++          // Like gomuks: passing false overrides EC's own default of true for unencrypted rooms.
++          const isRoomEncrypted = !!room?.currentState.getStateEvents('m.room.encryption', '');
 +
 +          const widgetId = `element-call-${roomIdToSet}-${Date.now()}`;
 +          const newUrl = getWidgetUrl(
@@ -5023,7 +5310,7 @@ index 0000000000..7aab2390fc
 +              // Override skipLobby explicitly when autoJoin is on; omit when off so intent decides.
 +              skipLobby: autoJoin ? true : undefined,
 +              returnToLobby: 'true',
-+              perParticipantE2EE: 'true',
++              perParticipantE2EE: isRoomEncrypted ? 'true' : 'false',
 +              theme: themeKind,
 +              callIntent: callIntentParam,
 +            },
@@ -5037,7 +5324,11 @@ index 0000000000..7aab2390fc
 +            'Element Call',
 +            'm.call',
 +            newUrl,
-+            true,
++            // waitForIframeLoad: false — EC sends ContentLoaded when its React app is ready,
++            // which triggers capabilities negotiation at the right time. With true, capabilities
++            // are negotiated on iframe load (before EC is ready) and ContentLoaded gets an error
++            // reply, leaving the widget channel partially broken and causing blank screen on join.
++            false,
 +            getWidgetData(mx, roomIdToSet, {}, { callIntent: callIntentParam }),
 +            roomIdToSet,
 +          );
@@ -5045,10 +5336,8 @@ index 0000000000..7aab2390fc
 +          const smallWidget = new SmallWidget(app);
 +          smallWidgetRef.current = smallWidget;
 +
-+          // Start messaging BEFORE setting iframe.src — this ensures the ClientWidgetApi
-+          // load listener is registered before the iframe navigates. If src is set first and
-+          // the embedded bundle loads quickly (e.g. local bundle), EC sends ContentLoaded
-+          // before the listener is in place, causing "Improper sequence" → syncApi undefined.
++          // Start messaging BEFORE setting iframe.src — ensures the ClientWidgetApi
++          // message listener is registered before the iframe navigates.
 +          const widgetApiInstance = smallWidget.startMessaging(iframeElement);
 +          widgetApiRef.current = widgetApiInstance;
 +          registerActiveClientWidgetApi(
@@ -5404,3 +5693,17 @@ index dfa02fc4eb..3cff0dbf81 100644
        src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
        dest: '',
        rename: 'pdf.worker.min.js',
+diff --git a/vitest.config.ts b/vitest.config.ts
+new file mode 100644
+index 0000000000..aa3ab472a1
+--- /dev/null
++++ b/vitest.config.ts
+@@ -0,0 +1,8 @@
++import { defineConfig } from 'vitest/config';
++
++export default defineConfig({
++  test: {
++    environment: 'happy-dom',
++    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
++  },
++});

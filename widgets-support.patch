@@ -214,7 +214,7 @@ index 0000000000..05081206e7
 +}
 diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
 new file mode 100644
-index 0000000000..ac73af9f8d
+index 0000000000..ce58c7bc43
 --- /dev/null
 +++ b/src/app/features/room/WidgetsDrawer.tsx
 @@ -0,0 +1,435 @@
@@ -307,7 +307,7 @@ index 0000000000..ac73af9f8d
 +      widget.name,
 +      widget.type,
 +      resolvedUrl,
-+      true,
++      false, // waitForIframeLoad: false — let widget signal readiness via ContentLoaded
 +      widget.data ?? {},
 +      room.roomId,
 +    );
