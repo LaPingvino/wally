@@ -784,10 +784,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..7cf3b16a1f
+index 0000000000..b0ffad75a9
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,413 @@
+@@ -0,0 +1,433 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -805,6 +805,7 @@ index 0000000000..7cf3b16a1f
 +  MatrixClient,
 +  MatrixEvent,
 +  MatrixEventEvent,
++  Room,
 +} from 'matrix-js-sdk';
 +import {
 +  ClientWidgetApi,
@@ -818,6 +819,25 @@ index 0000000000..7cf3b16a1f
 +} from 'matrix-widget-api';
 +import { CinnyWidget } from './CinnyWidget';
 +import { SmallWidgetDriver } from './SmallWidgetDriver';
++
++/**
++ * Returns the appropriate EC `intent` and `callIntent` URL params for a room.
++ * - Voice rooms (`isCallRoom()`): `join_existing` intent, `audio` callType (persistent channel).
++ * - DM rooms (≤2 joined members): `start_call` intent, `video` callType (1:1 video call).
++ * - Group rooms: `start_call` intent, `audio` callType.
++ */
++export function getCallIntentParams(room: Room | null | undefined): {
++  intent: 'join_existing' | 'start_call';
++  callIntentParam: 'audio' | 'video';
++} {
++  const isVoiceRoom = room?.isCallRoom() ?? false;
++  // Require room to be non-null: unknown/missing room should not be treated as a DM.
++  const isDmRoom = room != null && !isVoiceRoom && room.currentState.getJoinedMemberCount() <= 2;
++  return {
++    intent: isVoiceRoom ? 'join_existing' : 'start_call',
++    callIntentParam: isDmRoom ? 'video' : 'audio',
++  };
++}
 +
 +/**
 + * Generates the URL for the Element Call widget.
@@ -4913,10 +4933,10 @@ index 0000000000..9ea05396a6
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..a97bbc7bf6
+index 0000000000..7aab2390fc
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,203 @@
+@@ -0,0 +1,198 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -4926,6 +4946,7 @@ index 0000000000..a97bbc7bf6
 +  SmallWidget,
 +  getWidgetData,
 +  getWidgetUrl,
++  getCallIntentParams,
 +} from '../../../features/call/SmallWidget';
 +import { useMatrixClient } from '../../../hooks/useMatrixClient';
 +import { useClientConfig } from '../../../hooks/useClientConfig';
@@ -4989,13 +5010,7 @@ index 0000000000..a97bbc7bf6
 +          }
 +
 +          // Determine room type to pick the correct intent and callType.
-+          // Voice rooms (isCallRoom) use 'room_call'; DM rooms (≤2 members) use 'start_call'
-+          // with video; regular group rooms use 'start_call' with audio.
-+          const room = mx.getRoom(roomIdToSet);
-+          const isVoiceRoom = room?.isCallRoom() ?? false;
-+          const isDmRoom = !isVoiceRoom && (room?.currentState.getJoinedMemberCount() ?? 0) <= 2;
-+          const callIntentParam = isDmRoom ? 'video' : 'audio';
-+          const intentParam = isVoiceRoom ? 'room_call' : 'start_call';
++          const { intent: intentParam, callIntentParam } = getCallIntentParams(mx.getRoom(roomIdToSet));
 +
 +          const widgetId = `element-call-${roomIdToSet}-${Date.now()}`;
 +          const newUrl = getWidgetUrl(
