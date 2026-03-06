@@ -784,10 +784,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..e1a980eab9
+index 0000000000..ea5e6643d4
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,441 @@
+@@ -0,0 +1,438 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -1002,13 +1002,10 @@ index 0000000000..e1a980eab9
 +    this.client.on(ClientEvent.Event, this.onEvent);
 +    this.client.on(MatrixEventEvent.Decrypted, this.onEventDecrypted);
 +    this.client.on(ClientEvent.ToDeviceEvent, this.onToDeviceEvent);
-+    // EC sends io.element.join after successfully joining the RTC session.
-+    // Without a handler, ClientWidgetApi replies with "Unknown action" error.
-+    // EC catches this gracefully (just logs), but we noop it cleanly to avoid noise.
-+    this.messaging.on('action:io.element.join', (ev: CustomEvent) => {
-+      ev.preventDefault();
-+      this.messaging?.transport.reply(ev.detail, {});
-+    });
++    // NOTE: io.element.join is intentionally NOT handled here.
++    // CallProvider.tsx handles it (sets isActiveCallReady + replies once).
++    // Having a handler here too would cause a double-reply, potentially
++    // corrupting EC's widget-api state machine after the lobby join.
 +
 +    this.messaging.on(
 +      `action:${WidgetApiFromWidgetAction.UpdateAlwaysOnScreen}`,
@@ -4838,10 +4835,10 @@ index 146f039bf9..9d972e6936 100644
  }
 diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
 new file mode 100644
-index 0000000000..9ea05396a6
+index 0000000000..87014483a0
 --- /dev/null
 +++ b/src/app/pages/client/call/CallProvider.tsx
-@@ -0,0 +1,378 @@
+@@ -0,0 +1,375 @@
 +import React, {
 +  createContext,
 +  useState,
@@ -4869,9 +4866,9 @@ index 0000000000..9ea05396a6
 +
 +const WIDGET_MEDIA_STATE_UPDATE_ACTION = 'io.element.device_mute';
 +const WIDGET_HANGUP_ACTION = 'im.vector.hangup';
-+const WIDGET_ON_SCREEN_ACTION = 'set_always_on_screen';
 +const WIDGET_JOIN_ACTION = 'io.element.join';
 +const WIDGET_TILE_UPDATE = 'io.element.tile_layout';
++// NOTE: set_always_on_screen is handled by SmallWidget.ts (stickyPromise support).
 +
 +interface CallContextState {
 +  activeCallRoomId: string | null;
@@ -5078,10 +5075,9 @@ index 0000000000..9ea05396a6
 +      /* eslint-enable camelcase */
 +    };
 +
-+    const handleOnScreenStateUpdate = (ev: CustomEvent) => {
-+      ev.preventDefault();
-+      activeClientWidgetApi.transport.reply(ev.detail, {});
-+    };
++    // NOTE: set_always_on_screen is intentionally NOT handled here.
++    // SmallWidget.ts handles it (with stickyPromise support + single reply).
++    // Having a handler here too causes a double-reply after EC joins the lobby.
 +
 +    const handleOnTileLayout = (ev: CustomEvent) => {
 +      ev.preventDefault();
@@ -5130,14 +5126,12 @@ index 0000000000..9ea05396a6
 +    activeClientWidgetApi.on(`action:${WIDGET_HANGUP_ACTION}`, handleHangup);
 +    activeClientWidgetApi.on(`action:${WIDGET_MEDIA_STATE_UPDATE_ACTION}`, handleMediaStateUpdate);
 +    activeClientWidgetApi.on(`action:${WIDGET_TILE_UPDATE}`, handleOnTileLayout);
-+    activeClientWidgetApi.on(`action:${WIDGET_ON_SCREEN_ACTION}`, handleOnScreenStateUpdate);
 +    activeClientWidgetApi.on(`action:${WIDGET_JOIN_ACTION}`, handleJoin);
 +
 +    return () => {
 +      activeClientWidgetApi.off(`action:${WIDGET_HANGUP_ACTION}`, handleHangup);
 +      activeClientWidgetApi.off(`action:${WIDGET_MEDIA_STATE_UPDATE_ACTION}`, handleMediaStateUpdate);
 +      activeClientWidgetApi.off(`action:${WIDGET_TILE_UPDATE}`, handleOnTileLayout);
-+      activeClientWidgetApi.off(`action:${WIDGET_ON_SCREEN_ACTION}`, handleOnScreenStateUpdate);
 +      activeClientWidgetApi.off(`action:${WIDGET_JOIN_ACTION}`, handleJoin);
 +    };
 +  }, [
