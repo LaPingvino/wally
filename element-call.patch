@@ -372,10 +372,10 @@ index 0000000000..ef470ca518
 +});
 diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
 new file mode 100644
-index 0000000000..08a739af69
+index 0000000000..f721c7a98c
 --- /dev/null
 +++ b/src/app/features/call/CallView.tsx
-@@ -0,0 +1,315 @@
+@@ -0,0 +1,303 @@
 +import { EventType, Room } from 'matrix-js-sdk';
 +import React, {
 +  useContext,
@@ -575,16 +575,6 @@ index 0000000000..08a739af69
 +    room,
 +  ]);
 +
-+  // Re-apply positioning once EC signals it has joined (io.element.join → isActiveCallReady).
-+  // The initial applyFixedPositioningToIframe (above) fires when isActiveCallRoom becomes true,
-+  // but at that moment the host div may not yet have its final layout dimensions.
-+  // By the time EC's lobby → in-call transition completes, the flex layout is settled.
-+  useEffect(() => {
-+    if (isActiveCallReady && isActiveCallRoom) {
-+      applyFixedPositioningToIframe();
-+    }
-+  }, [isActiveCallReady, isActiveCallRoom, applyFixedPositioningToIframe]);
-+
 +  const handleJoinVCClick: MouseEventHandler<HTMLElement> = (evt) => {
 +    if (!canJoin) return;
 +
@@ -625,9 +615,7 @@ index 0000000000..08a739af69
 +      <div
 +        ref={iframeHostRef}
 +        style={{
-+          // flex-grow: 1 reliably fills the flex column container; height: 100% can
-+          // fail to resolve if the container's height is derived from flex-grow.
-+          flexGrow: 1,
++          height: '100%',
 +          width: '100%',
 +          position: 'relative',
 +          pointerEvents: 'none',
@@ -4847,10 +4835,10 @@ index 146f039bf9..9d972e6936 100644
  }
 diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
 new file mode 100644
-index 0000000000..87014483a0
+index 0000000000..918543817f
 --- /dev/null
 +++ b/src/app/pages/client/call/CallProvider.tsx
-@@ -0,0 +1,375 @@
+@@ -0,0 +1,382 @@
 +import React, {
 +  createContext,
 +  useState,
@@ -4893,8 +4881,8 @@ index 0000000000..87014483a0
 +  registerActiveClientWidgetApi: (
 +    roomId: string | null,
 +    clientWidgetApi: ClientWidgetApi | null,
-+    clientWidget: SmallWidget,
-+    activeClientIframeRef: HTMLIFrameElement
++    clientWidget: SmallWidget | null,
++    activeClientIframeRef: HTMLIFrameElement | null
 +  ) => void;
 +  sendWidgetAction: <T extends IWidgetApiRequestData = IWidgetApiRequestData>(
 +    action: WidgetApiToWidgetAction | string,
@@ -4905,6 +4893,7 @@ index 0000000000..87014483a0
 +  isChatOpen: boolean;
 +  isCallViewOpen: boolean;
 +  isActiveCallReady: boolean;
++  resetActiveCallReady: () => void;
 +  toggleAudio: () => Promise<void>;
 +  toggleVideo: () => Promise<void>;
 +  toggleChat: () => Promise<void>;
@@ -5169,6 +5158,10 @@ index 0000000000..87014483a0
 +    setIsChatOpenState(newState);
 +  }, [isChatOpen]);
 +
++  const resetActiveCallReady = useCallback(() => {
++    setIsActiveCallReady(false);
++  }, []);
++
 +  const toggleCallView = useCallback(() => {
 +    setIsCallViewOpenState((prev) => !prev);
 +  }, []);
@@ -5189,6 +5182,7 @@ index 0000000000..87014483a0
 +      isAudioEnabled,
 +      isVideoEnabled,
 +      isActiveCallReady,
++      resetActiveCallReady,
 +      toggleAudio,
 +      toggleVideo,
 +      toggleChat,
@@ -5209,6 +5203,7 @@ index 0000000000..87014483a0
 +      isAudioEnabled,
 +      isVideoEnabled,
 +      isActiveCallReady,
++      resetActiveCallReady,
 +      toggleAudio,
 +      toggleVideo,
 +      toggleChat,
@@ -5228,10 +5223,10 @@ index 0000000000..87014483a0
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..a75ac9a00d
+index 0000000000..d511a8b65f
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,236 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -5261,6 +5256,9 @@ index 0000000000..a75ac9a00d
 +  const callIframeRef = useRef<HTMLIFrameElement | null>(null);
 +  const callWidgetApiRef = useRef<ClientWidgetApi | null>(null);
 +  const callSmallWidgetRef = useRef<SmallWidget | null>(null);
++  // After a non-voice room lobby join, reload EC with join_existing for proper in-call view.
++  const hasReloadedAfterLobbyRef = useRef(false);
++  const postLobbyIntentRef = useRef<'join_existing' | null>(null);
 +
 +  const {
 +    activeCallRoomId,
@@ -5269,6 +5267,7 @@ index 0000000000..a75ac9a00d
 +    isActiveCallReady,
 +    registerActiveClientWidgetApi,
 +    activeClientWidget,
++    resetActiveCallReady,
 +  } = useCallState();
 +  const mx = useMatrixClient();
 +  const clientConfig = useClientConfig();
@@ -5286,6 +5285,7 @@ index 0000000000..a75ac9a00d
 +      iframeRef: React.MutableRefObject<HTMLIFrameElement | null>,
 +      autoJoin: boolean,
 +      themeKind: ThemeKind | null,
++      intentOverride?: 'join_existing',
 +    ) => {
 +      if (mx?.getUserId()) {
 +        if (activeCallRoomId && !isActiveCallReady) {
@@ -5307,6 +5307,7 @@ index 0000000000..a75ac9a00d
 +          // Determine room type to pick the correct intent and callType.
 +          const room = mx.getRoom(roomIdToSet);
 +          const { intent: intentParam, callIntentParam } = getCallIntentParams(room);
++          const effectiveIntent = intentOverride ?? intentParam;
 +          // Only use per-participant E2EE if the room has Matrix encryption enabled.
 +          // Like gomuks: passing false overrides EC's own default of true for unencrypted rooms.
 +          const isRoomEncrypted = !!room?.currentState.getStateEvents('m.room.encryption', '');
@@ -5318,9 +5319,9 @@ index 0000000000..a75ac9a00d
 +            clientConfig.elementCallUrl ?? '',
 +            widgetId,
 +            {
-+              intent: intentParam,
-+              // Override skipLobby explicitly when autoJoin is on; omit when off so intent decides.
-+              skipLobby: autoJoin ? true : undefined,
++              intent: effectiveIntent,
++              // Skip lobby when rejoining existing session; or when autoJoin is on.
++              skipLobby: intentOverride === 'join_existing' ? true : (autoJoin ? true : undefined),
 +              returnToLobby: 'true',
 +              perParticipantE2EE: isRoomEncrypted ? 'true' : 'false',
 +              theme: themeKind,
@@ -5376,9 +5377,35 @@ index 0000000000..a75ac9a00d
 +    ],
 +  );
 +
++  // After a non-voice room lobby join, reload EC with intent=join_existing so the in-call
++  // view renders properly. (EC with start_call shows only the control bar after the lobby
++  // transition; reloading with join_existing finds the just-created session and shows the
++  // full in-call grid — identical to what happens when the user refreshes the page.)
++  useEffect(() => {
++    if (!activeCallRoomId) {
++      hasReloadedAfterLobbyRef.current = false;
++      return;
++    }
++    if (isActiveCallReady && !hasReloadedAfterLobbyRef.current) {
++      const room = mx?.getRoom(activeCallRoomId);
++      // Voice rooms already use join_existing and work correctly; skip reload for them.
++      if (room && !room.isCallRoom()) {
++        hasReloadedAfterLobbyRef.current = true;
++        callSmallWidgetRef.current?.stopMessaging();
++        callWidgetApiRef.current = null;
++        callSmallWidgetRef.current = null;
++        registerActiveClientWidgetApi(activeCallRoomId, null, null, null);
++        postLobbyIntentRef.current = 'join_existing';
++        resetActiveCallReady();
++      }
++    }
++  }, [isActiveCallReady, activeCallRoomId, mx, registerActiveClientWidgetApi, resetActiveCallReady]);
++
 +  useEffect(() => {
 +    if (activeCallRoomId) {
-+      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, callAutoJoin, theme.kind); // callAutoJoin=false → lobby shown, true → skip lobby
++      const intentOverride = postLobbyIntentRef.current ?? undefined;
++      postLobbyIntentRef.current = null;
++      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, callAutoJoin, theme.kind, intentOverride);
 +    }
 +  }, [
 +    theme,
