@@ -372,10 +372,10 @@ index 0000000000..ef470ca518
 +});
 diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
 new file mode 100644
-index 0000000000..80988d6d2b
+index 0000000000..08a739af69
 --- /dev/null
 +++ b/src/app/features/call/CallView.tsx
-@@ -0,0 +1,303 @@
+@@ -0,0 +1,315 @@
 +import { EventType, Room } from 'matrix-js-sdk';
 +import React, {
 +  useContext,
@@ -575,6 +575,16 @@ index 0000000000..80988d6d2b
 +    room,
 +  ]);
 +
++  // Re-apply positioning once EC signals it has joined (io.element.join → isActiveCallReady).
++  // The initial applyFixedPositioningToIframe (above) fires when isActiveCallRoom becomes true,
++  // but at that moment the host div may not yet have its final layout dimensions.
++  // By the time EC's lobby → in-call transition completes, the flex layout is settled.
++  useEffect(() => {
++    if (isActiveCallReady && isActiveCallRoom) {
++      applyFixedPositioningToIframe();
++    }
++  }, [isActiveCallReady, isActiveCallRoom, applyFixedPositioningToIframe]);
++
 +  const handleJoinVCClick: MouseEventHandler<HTMLElement> = (evt) => {
 +    if (!canJoin) return;
 +
@@ -615,8 +625,10 @@ index 0000000000..80988d6d2b
 +      <div
 +        ref={iframeHostRef}
 +        style={{
++          // flex-grow: 1 reliably fills the flex column container; height: 100% can
++          // fail to resolve if the container's height is derived from flex-grow.
++          flexGrow: 1,
 +          width: '100%',
-+          height: '100%',
 +          position: 'relative',
 +          pointerEvents: 'none',
 +          // Show as soon as the call is active so the EC lobby iframe is visible.
