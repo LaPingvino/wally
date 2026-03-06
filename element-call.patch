@@ -5223,10 +5223,10 @@ index 0000000000..918543817f
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..d511a8b65f
+index 0000000000..ee8a20f75f
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,236 @@
+@@ -0,0 +1,241 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -5378,27 +5378,32 @@ index 0000000000..d511a8b65f
 +  );
 +
 +  // After a non-voice room lobby join, reload EC with intent=join_existing so the in-call
-+  // view renders properly. (EC with start_call shows only the control bar after the lobby
-+  // transition; reloading with join_existing finds the just-created session and shows the
-+  // full in-call grid — identical to what happens when the user refreshes the page.)
++  // view renders properly. EC with start_call shows only the control bar after the lobby
++  // transition because the call member state event hasn't propagated yet. We delay ~1.5s
++  // to allow the state event to reach the room, then reload so EC finds the existing session
++  // and auto-joins with skipLobby=true — identical to what happens after a page refresh.
 +  useEffect(() => {
 +    if (!activeCallRoomId) {
 +      hasReloadedAfterLobbyRef.current = false;
-+      return;
++      return undefined;
 +    }
 +    if (isActiveCallReady && !hasReloadedAfterLobbyRef.current) {
 +      const room = mx?.getRoom(activeCallRoomId);
 +      // Voice rooms already use join_existing and work correctly; skip reload for them.
 +      if (room && !room.isCallRoom()) {
 +        hasReloadedAfterLobbyRef.current = true;
-+        callSmallWidgetRef.current?.stopMessaging();
-+        callWidgetApiRef.current = null;
-+        callSmallWidgetRef.current = null;
-+        registerActiveClientWidgetApi(activeCallRoomId, null, null, null);
-+        postLobbyIntentRef.current = 'join_existing';
-+        resetActiveCallReady();
++        const reloadTimer = setTimeout(() => {
++          callSmallWidgetRef.current?.stopMessaging();
++          callWidgetApiRef.current = null;
++          callSmallWidgetRef.current = null;
++          registerActiveClientWidgetApi(activeCallRoomId, null, null, null);
++          postLobbyIntentRef.current = 'join_existing';
++          resetActiveCallReady();
++        }, 1500);
++        return () => clearTimeout(reloadTimer);
 +      }
 +    }
++    return undefined;
 +  }, [isActiveCallReady, activeCallRoomId, mx, registerActiveClientWidgetApi, resetActiveCallReady]);
 +
 +  useEffect(() => {
