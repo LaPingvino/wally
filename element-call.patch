@@ -1231,10 +1231,10 @@ index 0000000000..e1a980eab9
 +});
 diff --git a/src/app/features/call/SmallWidgetDriver.ts b/src/app/features/call/SmallWidgetDriver.ts
 new file mode 100644
-index 0000000000..1df08b1684
+index 0000000000..045fbb799b
 --- /dev/null
 +++ b/src/app/features/call/SmallWidgetDriver.ts
-@@ -0,0 +1,579 @@
+@@ -0,0 +1,581 @@
 +/* eslint-disable no-return-await */
 +/* eslint-disable no-param-reassign */
 +/* eslint-disable no-continue */
@@ -1262,7 +1262,7 @@ index 0000000000..1df08b1684
 +  type IWidgetApiErrorResponseDataDetails,
 +  type ISearchUserDirectoryResult,
 +  type IGetMediaConfigResult,
-+  type UpdateDelayedEventAction,
++  UpdateDelayedEventAction,
 +  OpenIDRequestState,
 +  SimpleObservable,
 +  IOpenIDUpdate,
@@ -1561,16 +1561,18 @@ index 0000000000..1df08b1684
 +
 +  /**
 +   * @experimental Part of MSC4140 & MSC4157
++   * ClientWidgetApi dispatches to these three specific methods (not updateDelayedEvent).
 +   */
-+  public async updateDelayedEvent(
-+    delayId: string,
-+    action: UpdateDelayedEventAction
-+  ): Promise<void> {
-+    const client = this.mxClient;
++  public async cancelScheduledDelayedEvent(delayId: string): Promise<void> {
++    await this.mxClient._unstable_updateDelayedEvent(delayId, UpdateDelayedEventAction.Cancel);
++  }
 +
-+    if (!client) throw new Error('Not in a room or not attached to a client');
++  public async restartScheduledDelayedEvent(delayId: string): Promise<void> {
++    await this.mxClient._unstable_updateDelayedEvent(delayId, UpdateDelayedEventAction.Restart);
++  }
 +
-+    await client._unstable_updateDelayedEvent(delayId, action);
++  public async sendScheduledDelayedEvent(delayId: string): Promise<void> {
++    await this.mxClient._unstable_updateDelayedEvent(delayId, UpdateDelayedEventAction.Send);
 +  }
 +
 +  /**
