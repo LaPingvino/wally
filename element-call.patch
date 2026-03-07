@@ -784,10 +784,10 @@ index 0000000000..6594d3c600
 +}
 diff --git a/src/app/features/call/SmallWidget.ts b/src/app/features/call/SmallWidget.ts
 new file mode 100644
-index 0000000000..ea5e6643d4
+index 0000000000..8223dc3f7b
 --- /dev/null
 +++ b/src/app/features/call/SmallWidget.ts
-@@ -0,0 +1,438 @@
+@@ -0,0 +1,441 @@
 +/*
 + * Copyright 2024 New Vector Ltd.
 + * Copyright 2020-2023 The Matrix.org Foundation C.I.C.
@@ -1156,9 +1156,12 @@ index 0000000000..ea5e6643d4
 +   * Stops the widget messaging and cleans up resources.
 +   */
 +  stopMessaging() {
++    this.client.off(ClientEvent.Event, this.onEvent);
++    this.client.off(MatrixEventEvent.Decrypted, this.onEventDecrypted);
++    this.client.off(ClientEvent.ToDeviceEvent, this.onToDeviceEvent);
 +    if (this.messaging) {
-+      this.messaging.stop(); // Example if a stop method exists
-+      this.messaging.removeAllListeners(); // Remove listeners attached by SmallWidget
++      this.messaging.stop();
++      this.messaging.removeAllListeners();
 +      this.messaging = null;
 +    }
 +  }
