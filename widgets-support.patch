@@ -1,33 +1,189 @@
 diff --git a/src/app/features/room/PanelIconPicker.tsx b/src/app/features/room/PanelIconPicker.tsx
 new file mode 100644
-index 0000000000..05081206e7
+index 0000000000..cd177b4b59
 --- /dev/null
 +++ b/src/app/features/room/PanelIconPicker.tsx
-@@ -0,0 +1,208 @@
-+import React, { useState } from 'react';
-+import FocusTrap from 'focus-trap-react';
-+import {
-+  Box,
-+  Icon,
-+  IconButton,
-+  Icons,
-+  IconSrc,
-+  Text,
-+  config,
-+  color,
-+  toRem,
-+} from 'folds';
+@@ -0,0 +1,205 @@
++import React, { useState, useMemo } from 'react';
 +import { MatrixClient } from 'matrix-js-sdk';
++import { Box, Icon, Icons, IconSrc, Text, config, color } from 'folds';
 +import { mxcUrlToHttp } from '../../utils/matrix';
-+import { stopPropagation } from '../../utils/keyboard';
 +
-+// Render an icon spec to a React element.
-+// iconSpec can be:
-+//   undefined           → show name initial
-+//   'icons:CategoryName'→ folds icon
-+//   'emoji:🧩'          → emoji character
-+//   'mxc://...'         → media URL (rendered as img)
-+//   bare char           → treated as emoji
++type PanelIconPickerProps = {
++  onSelect: (iconSpec: string | undefined) => void;
++  onClose: () => void;
++};
++
++const inputStyle: React.CSSProperties = {
++  width: '100%',
++  padding: `${config.space.S100} ${config.space.S200}`,
++  border: `1px solid ${color.Surface.ContainerLine}`,
++  borderRadius: '6px',
++  background: 'var(--bg-surface)',
++  color: 'var(--tc-surface-high)',
++  fontSize: '13px',
++  boxSizing: 'border-box',
++};
++
++const ALL_ICONS = Object.entries(Icons) as [string, IconSrc][];
++
++export function PanelIconPicker({ onSelect, onClose }: PanelIconPickerProps) {
++  const [search, setSearch] = useState('');
++  const [customInput, setCustomInput] = useState('');
++
++  const filteredIcons = useMemo(
++    () =>
++      search
++        ? ALL_ICONS.filter(([name]) => name.toLowerCase().includes(search.toLowerCase()))
++        : ALL_ICONS,
++    [search]
++  );
++
++  const handleCustomApply = () => {
++    const val = customInput.trim();
++    if (!val) return;
++    if (val.startsWith('mxc://')) {
++      onSelect(val);
++    } else {
++      onSelect(`emoji:${val}`);
++    }
++  };
++
++  return (
++    <Box
++      direction="Column"
++      gap="200"
++      style={{
++        padding: config.space.S300,
++        background: 'var(--bg-surface)',
++        border: `1px solid ${color.Surface.ContainerLine}`,
++        borderRadius: '8px',
++        width: '260px',
++        boxShadow: '0 4px 16px rgba(0,0,0,0.16)',
++      }}
++    >
++      <Box alignItems="Center" justifyContent="SpaceBetween">
++        <Text size="L400">Pick Icon</Text>
++        <button
++          type="button"
++          onClick={onClose}
++          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
++          aria-label="Close icon picker"
++        >
++          <Icon src={Icons.Cross} size="100" />
++        </button>
++      </Box>
++
++      {/* Emoji or mxc:// custom input */}
++      <Box gap="100" alignItems="Center">
++        <input
++          style={{ ...inputStyle, flex: 1 }}
++          placeholder="Emoji or mxc:// URL"
++          value={customInput}
++          onChange={(e) => setCustomInput(e.target.value)}
++          onKeyDown={(e) => { if (e.key === 'Enter') handleCustomApply(); }}
++        />
++        <button
++          type="button"
++          onClick={handleCustomApply}
++          disabled={!customInput.trim()}
++          style={{
++            padding: `${config.space.S100} ${config.space.S200}`,
++            border: `1px solid ${color.Surface.ContainerLine}`,
++            borderRadius: '6px',
++            background: 'var(--bg-primary)',
++            color: 'var(--tc-primary-high)',
++            cursor: 'pointer',
++            fontSize: '13px',
++          }}
++        >
++          Use
++        </button>
++      </Box>
++
++      {/* Search box for folds icons */}
++      <input
++        style={inputStyle}
++        placeholder="Search icons…"
++        value={search}
++        onChange={(e) => setSearch(e.target.value)}
++        autoFocus
++      />
++
++      {/* Icon grid */}
++      <div
++        style={{
++          display: 'grid',
++          gridTemplateColumns: 'repeat(6, 1fr)',
++          gap: 4,
++          maxHeight: 200,
++          overflowY: 'auto',
++          padding: 2,
++        }}
++      >
++        {filteredIcons.map(([name, src]) => (
++          <button
++            key={name}
++            type="button"
++            title={name}
++            onClick={() => onSelect(`icons:${name}`)}
++            style={{
++              display: 'flex',
++              alignItems: 'center',
++              justifyContent: 'center',
++              width: 32,
++              height: 32,
++              border: '1px solid transparent',
++              borderRadius: '6px',
++              background: 'none',
++              cursor: 'pointer',
++              padding: 0,
++            }}
++            onMouseEnter={(e) => {
++              (e.currentTarget as HTMLElement).style.background = 'var(--bg-surface-hover, rgba(0,0,0,0.06))';
++            }}
++            onMouseLeave={(e) => {
++              (e.currentTarget as HTMLElement).style.background = 'none';
++            }}
++          >
++            <Icon src={src as IconSrc} size="100" />
++          </button>
++        ))}
++        {filteredIcons.length === 0 && (
++          <Text size="T200" style={{ gridColumn: '1/-1', padding: config.space.S100, color: 'var(--tc-surface-low)' }}>
++            No icons found
++          </Text>
++        )}
++      </div>
++
++      {/* Clear button */}
++      <button
++        type="button"
++        onClick={() => onSelect(undefined)}
++        style={{
++          padding: `${config.space.S100} ${config.space.S200}`,
++          border: `1px solid ${color.Surface.ContainerLine}`,
++          borderRadius: '6px',
++          background: 'none',
++          cursor: 'pointer',
++          fontSize: '13px',
++          color: 'var(--tc-surface-high)',
++          width: '100%',
++        }}
++      >
++        Clear (use name initial)
++      </button>
++    </Box>
++  );
++}
++
++/**
++ * Renders an icon for a toolbar item based on its iconSpec string.
++ * - undefined / null → name initial letter
++ * - 'icons:CategoryName' → folds Icon component
++ * - 'mxc://...' → img tag via mxcUrlToHttp
++ * - 'emoji:🧩' or bare character → inline span
++ */
 +export function renderItemIcon(
 +  iconSpec: string | undefined,
 +  nameInitial: string,
@@ -35,182 +191,23 @@ index 0000000000..05081206e7
 +  useAuth: boolean
 +): React.ReactNode {
 +  if (!iconSpec) {
-+    return (
-+      <Text size="T200" style={{ fontWeight: 700 }}>
-+        {nameInitial[0]?.toUpperCase() ?? '?'}
-+      </Text>
-+    );
++    return <Text size="T200">{nameInitial[0]?.toUpperCase() ?? '?'}</Text>;
 +  }
 +  if (iconSpec.startsWith('icons:')) {
-+    const name = iconSpec.slice(6) as keyof typeof Icons;
-+    const src = Icons[name] as IconSrc | undefined;
-+    return src ? (
-+      <Icon src={src} size="200" />
-+    ) : (
-+      <Text size="T200">{nameInitial[0]?.toUpperCase() ?? '?'}</Text>
-+    );
++    const key = iconSpec.slice(6) as keyof typeof Icons;
++    const src = Icons[key] as IconSrc | undefined;
++    return src ? <Icon src={src} size="200" /> : <Text size="T200">{nameInitial[0]}</Text>;
 +  }
 +  if (iconSpec.startsWith('mxc://')) {
 +    const url = mxcUrlToHttp(mx, iconSpec, useAuth, 20, 20, 'crop');
 +    return url ? (
 +      <img src={url} alt="" style={{ width: 16, height: 16, objectFit: 'cover', borderRadius: 2 }} />
 +    ) : (
-+      <Text size="T200">{nameInitial[0]?.toUpperCase() ?? '?'}</Text>
++      <Text size="T200">{nameInitial[0]}</Text>
 +    );
 +  }
-+  // emoji: prefix or bare character
 +  const char = iconSpec.startsWith('emoji:') ? iconSpec.slice(6) : iconSpec;
 +  return <span style={{ fontSize: 14, lineHeight: 1 }}>{char}</span>;
-+}
-+
-+type PanelIconPickerProps = {
-+  onSelect: (iconSpec: string | undefined) => void;
-+  onClose: () => void;
-+};
-+
-+export function PanelIconPicker({ onSelect, onClose }: PanelIconPickerProps) {
-+  const [search, setSearch] = useState('');
-+  const [customInput, setCustomInput] = useState('');
-+
-+  const allIconNames = Object.keys(Icons) as Array<keyof typeof Icons>;
-+  const filtered = search
-+    ? allIconNames.filter((n) => n.toLowerCase().includes(search.toLowerCase()))
-+    : allIconNames;
-+
-+  const handleCustomSubmit = () => {
-+    const val = customInput.trim();
-+    if (!val) return;
-+    // If it looks like an emoji (not a URL or icon: spec), prefix with emoji:
-+    if (!val.startsWith('mxc://') && !val.startsWith('icons:') && !val.startsWith('emoji:')) {
-+      onSelect(`emoji:${val}`);
-+    } else {
-+      onSelect(val);
-+    }
-+    onClose();
-+  };
-+
-+  return (
-+    <FocusTrap
-+      focusTrapOptions={{
-+        clickOutsideDeactivates: true,
-+        returnFocusOnDeactivate: false,
-+        onDeactivate: onClose,
-+        escapeDeactivates: stopPropagation,
-+      }}
-+    >
-+      <Box
-+        direction="Column"
-+        style={{
-+          background: `var(--bg-surface)`,
-+          border: `1px solid ${color.Surface.ContainerLine}`,
-+          borderRadius: 8,
-+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-+          width: toRem(260),
-+          maxHeight: toRem(360),
-+          overflow: 'hidden',
-+        }}
-+      >
-+        {/* Custom emoji / mxc:// input */}
-+        <Box
-+          direction="Column"
-+          gap="100"
-+          style={{ padding: config.space.S200, borderBottom: `1px solid ${color.Surface.ContainerLine}` }}
-+        >
-+          <Text size="L400">Custom icon (emoji or mxc://)</Text>
-+          <Box gap="100">
-+            <input
-+              type="text"
-+              placeholder="🧩 or mxc://..."
-+              value={customInput}
-+              onChange={(e) => setCustomInput(e.target.value)}
-+              onKeyDown={(e) => { if (e.key === 'Enter') handleCustomSubmit(); }}
-+              style={{
-+                flex: 1,
-+                padding: `${config.space.S100} ${config.space.S200}`,
-+                border: `1px solid ${color.Surface.ContainerLine}`,
-+                borderRadius: 4,
-+                background: 'var(--bg-surface)',
-+                color: 'var(--tc-surface-high)',
-+                fontSize: 13,
-+              }}
-+              autoFocus
-+            />
-+            <IconButton
-+              size="300"
-+              radii="300"
-+              onClick={handleCustomSubmit}
-+              aria-label="Use this icon"
-+            >
-+              <Icon src={Icons.Check} size="100" />
-+            </IconButton>
-+          </Box>
-+        </Box>
-+
-+        {/* Icon grid search */}
-+        <Box style={{ padding: `${config.space.S100} ${config.space.S200}`, borderBottom: `1px solid ${color.Surface.ContainerLine}` }}>
-+          <input
-+            type="search"
-+            placeholder="Search icons…"
-+            value={search}
-+            onChange={(e) => setSearch(e.target.value)}
-+            style={{
-+              width: '100%',
-+              padding: `${config.space.S100} ${config.space.S200}`,
-+              border: `1px solid ${color.Surface.ContainerLine}`,
-+              borderRadius: 4,
-+              background: 'var(--bg-surface)',
-+              color: 'var(--tc-surface-high)',
-+              fontSize: 13,
-+              boxSizing: 'border-box',
-+            }}
-+          />
-+        </Box>
-+
-+        {/* Scrollable icon grid */}
-+        <Box
-+          style={{
-+            overflowY: 'auto',
-+            padding: config.space.S100,
-+            display: 'grid',
-+            gridTemplateColumns: 'repeat(auto-fill, minmax(32px, 1fr))',
-+            gap: 4,
-+            flex: 1,
-+          }}
-+        >
-+          {filtered.map((name) => (
-+            <IconButton
-+              key={name}
-+              size="300"
-+              radii="300"
-+              onClick={() => { onSelect(`icons:${name}`); onClose(); }}
-+              aria-label={name}
-+              title={name}
-+            >
-+              <Icon src={Icons[name]} size="200" />
-+            </IconButton>
-+          ))}
-+        </Box>
-+
-+        {/* Footer: clear button */}
-+        <Box
-+          style={{
-+            padding: `${config.space.S100} ${config.space.S200}`,
-+            borderTop: `1px solid ${color.Surface.ContainerLine}`,
-+          }}
-+        >
-+          <IconButton
-+            size="300"
-+            radii="300"
-+            onClick={() => { onSelect(undefined); onClose(); }}
-+            aria-label="Clear icon (revert to name initial)"
-+          >
-+            <Icon src={Icons.Cross} size="100" />
-+          </IconButton>
-+          <Text size="T200" style={{ marginLeft: 8 }}>Clear (use name initial)</Text>
-+        </Box>
-+      </Box>
-+    </FocusTrap>
-+  );
 +}
 diff --git a/src/app/features/room/WidgetsDrawer.tsx b/src/app/features/room/WidgetsDrawer.tsx
 new file mode 100644
@@ -710,17 +707,18 @@ index 0000000000..d749b19854
 +}
 diff --git a/src/app/hooks/useToolbarConfig.ts b/src/app/hooks/useToolbarConfig.ts
 new file mode 100644
-index 0000000000..68e66b8761
+index 0000000000..60b17d85ac
 --- /dev/null
 +++ b/src/app/hooks/useToolbarConfig.ts
-@@ -0,0 +1,41 @@
-+import { useCallback } from 'react';
+@@ -0,0 +1,42 @@
 +import { useAtom } from 'jotai';
++import { useCallback } from 'react';
 +import {
 +  toolbarConfigAtom,
 +  getEffectiveItem,
-+  ToolbarItemConfig,
 +  ToolbarItemId,
++  ToolbarItemConfig,
++  ToolbarConfig,
 +} from '../state/toolbarConfig';
 +
 +export function useToolbarConfig() {
@@ -742,7 +740,7 @@ index 0000000000..68e66b8761
 +      setConfig((prev) => {
 +        const { [id]: _, ...rest } = prev as Record<string, ToolbarItemConfig>;
 +        localStorage.setItem('cinny_toolbar_config', JSON.stringify(rest));
-+        return rest as typeof prev;
++        return rest as ToolbarConfig;
 +      });
 +    },
 +    [setConfig]
@@ -757,21 +755,21 @@ index 0000000000..68e66b8761
 +}
 diff --git a/src/app/state/toolbarConfig.ts b/src/app/state/toolbarConfig.ts
 new file mode 100644
-index 0000000000..24599a45d0
+index 0000000000..307a2c4478
 --- /dev/null
 +++ b/src/app/state/toolbarConfig.ts
-@@ -0,0 +1,40 @@
+@@ -0,0 +1,36 @@
 +import { atom } from 'jotai';
 +
 +export type PanelId = 'members' | 'threads' | 'widgets' | 'issues';
 +export type ToolbarItemId = PanelId | `widget:${string}`;
 +
 +export type ToolbarItemConfig = {
-+  pinned: boolean; // true = toolbar, false = ··· overflow
-+  order: number; // lower = further left in toolbar / top in overflow
++  pinned: boolean;
++  order: number;
 +  defaultMode: 'sidebar' | 'fullwidth';
-+  icon?: string; // 'icons:Category' | 'emoji:🧩' | 'mxc://...' | undefined→name initial
-+  label?: string; // widget shortcut label override
++  icon?: string;
++  label?: string;
 +};
 +
 +export type ToolbarConfig = Partial<Record<ToolbarItemId, ToolbarItemConfig>>;
@@ -784,11 +782,7 @@ index 0000000000..24599a45d0
 +};
 +
 +export function getEffectiveItem(config: ToolbarConfig, id: ToolbarItemId): ToolbarItemConfig {
-+  const defaults = PANEL_DEFAULTS[id as PanelId] ?? {
-+    pinned: true,
-+    order: 50,
-+    defaultMode: 'sidebar' as const,
-+  };
++  const defaults = PANEL_DEFAULTS[id as PanelId] ?? { pinned: true, order: 50, defaultMode: 'sidebar' };
 +  return { ...defaults, ...config[id] };
 +}
 +
