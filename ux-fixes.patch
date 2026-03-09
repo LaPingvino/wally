@@ -517,6 +517,70 @@ index 67d6021a3e..9b7c21a810 100644
                    </Box>
                  </NavItemContent>
                </NavLink>
+diff --git a/src/app/pages/client/inbox/Invites.tsx b/src/app/pages/client/inbox/Invites.tsx
+index 20518e5686..3b93142a47 100644
+--- a/src/app/pages/client/inbox/Invites.tsx
++++ b/src/app/pages/client/inbox/Invites.tsx
+@@ -429,7 +429,22 @@
+ }: KnownInvitesProps) {
+   return (
+     <Box direction="Column" gap="200">
+-      <Text size="H4">Primary</Text>
++      <Box gap="200" justifyContent="SpaceBetween" alignItems="Center">
++        <Text as="h2" size="H4">Primary</Text>
++        <Box>
++          {invites.length > 0 && (
++            <Chip
++              variant="SurfaceVariant"
++              onClick={acceptAll}
++              before={accepting && <Spinner size="50" variant="Secondary" fill="Soft" />}
++              disabled={accepting}
++              radii="Pill"
++            >
++              <Text size="T200">Accept All</Text>
++            </Chip>
++          )}
++        </Box>
++      </Box>
+       {invites.length > 0 ? (
+         <Box direction="Column" gap="100">
+           {invites.map((invite) => (
+@@ -488,7 +503,7 @@
+   return (
+     <Box direction="Column" gap="200">
+       <Box gap="200" justifyContent="SpaceBetween" alignItems="Center">
+-        <Text size="H4">Public</Text>
++        <Text as="h2" size="H4">Public</Text>
+         <Box>
+           {invites.length > 0 && (
+             <Chip
+@@ -585,7 +600,7 @@
+ 
+   return (
+     <Box direction="Column" gap="200">
+-      <Text size="H4">Spam</Text>
++      <Text as="h2" size="H4">Spam</Text>
+       {invites.length > 0 ? (
+         <Box direction="Column" gap="100">
+           <SequenceCard
+@@ -753,7 +768,7 @@
+             {screenSize === ScreenSize.Mobile && (
+               <BackRouteHandler>
+                 {(onBack) => (
+-                  <IconButton onClick={onBack}>
++                  <IconButton onClick={onBack} aria-label="Go back">
+                     <Icon src={Icons.ArrowLeft} />
+                   </IconButton>
+                 )}
+@@ -762,7 +777,7 @@
+           </Box>
+           <Box alignItems="Center" gap="200">
+             {screenSize !== ScreenSize.Mobile && <Icon size="400" src={Icons.Mail} />}
+-            <Text size="H3" truncate>
++            <Text as="h1" size="H3" truncate>
+               Invites
+             </Text>
+           </Box>
 diff --git a/src/app/pages/client/inbox/Notifications.tsx b/src/app/pages/client/inbox/Notifications.tsx
 index 4cc94d918d..50fd9d99b6 100644
 --- a/src/app/pages/client/inbox/Notifications.tsx
