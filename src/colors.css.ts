@@ -197,6 +197,148 @@ const darkThemeData = {
 
 export const darkTheme = createTheme(color, darkThemeData);
 
+export const ashTheme = createTheme(color, {
+  ...darkThemeData,
+  // Neutral grey palette inspired by Discord's Ash theme (#2E2E34 brand ref,
+  // #DADDDA text). Pattern: R≈G, B slightly higher (≈+6), steps of ~10.
+  Background: {
+    Container: '#1E1E24',
+    ContainerHover: '#28282E',
+    ContainerActive: '#323238',
+    ContainerLine: '#3C3C43',
+    OnContainer: '#DADDDA',
+  },
+
+  Surface: {
+    Container: '#28282E',
+    ContainerHover: '#323238',
+    ContainerActive: '#3C3C43',
+    ContainerLine: '#46464E',
+    OnContainer: '#DADDDA',
+  },
+
+  SurfaceVariant: {
+    Container: '#323238',
+    ContainerHover: '#3C3C43',
+    ContainerActive: '#46464E',
+    ContainerLine: '#505059',
+    OnContainer: '#DADDDA',
+  },
+
+  Secondary: {
+    Main: '#DADDDA',
+    MainHover: '#C3C6C3',
+    MainActive: '#B7BAB7',
+    MainLine: '#ABAEAB',
+    OnMain: '#1E1E24',
+    Container: '#3C3C43',
+    ContainerHover: '#46464E',
+    ContainerActive: '#505059',
+    ContainerLine: '#5A5A63',
+    OnContainer: '#DADDDA',
+  },
+});
+
+export const sepiaTheme = createTheme(color, {
+  // Background is the sidebar/outer layer — noticeably darker than Surface
+  // so the two-tone layout reads clearly.
+  Background: {
+    Container: '#E0CFA8',
+    ContainerHover: '#D7C69C',
+    ContainerActive: '#CEBD90',
+    ContainerLine: '#C0AE80',
+    OnContainer: '#1E1509',
+  },
+
+  // Surface is the main chat/content area — light parchment.
+  Surface: {
+    Container: '#F5EDD8',
+    ContainerHover: '#EDE4CC',
+    ContainerActive: '#E5DBBF',
+    ContainerLine: '#D6CAB0',
+    OnContainer: '#1E1509',
+  },
+
+  SurfaceVariant: {
+    Container: '#EDE4CC',
+    ContainerHover: '#E5DBBF',
+    ContainerActive: '#DCCEAC',
+    ContainerLine: '#CCBF98',
+    OnContainer: '#1E1509',
+  },
+
+  Primary: {
+    Main: '#7A4E1A',
+    MainHover: '#6D4516',
+    MainActive: '#663F13',
+    MainLine: '#5E3910',
+    OnMain: '#FFFFFF',
+    Container: '#E5D0B0',
+    ContainerHover: '#DEC7A2',
+    ContainerActive: '#D7BE94',
+    ContainerLine: '#CEB585',
+    OnContainer: '#5E3F1A',
+  },
+
+  Secondary: {
+    Main: '#1E1509',
+    MainHover: '#2C1F0C',
+    MainActive: '#3A2B14',
+    MainLine: '#44331A',
+    OnMain: '#F5EDD8',
+    Container: '#D0C4A0',
+    ContainerHover: '#C6B890',
+    ContainerActive: '#BCAD81',
+    ContainerLine: '#AFA170',
+    OnContainer: '#1E1509',
+  },
+
+  Success: {
+    Main: '#2D7A4F',
+    MainHover: '#296E47',
+    MainActive: '#276843',
+    MainLine: '#24623F',
+    OnMain: '#FFFFFF',
+    Container: '#C5DFD0',
+    ContainerHover: '#B8D7C6',
+    ContainerActive: '#ABCEBB',
+    ContainerLine: '#9EC6B1',
+    OnContainer: '#1F5536',
+  },
+
+  Warning: {
+    Main: '#9A5200',
+    MainHover: '#8B4A00',
+    MainActive: '#824500',
+    MainLine: '#7A4000',
+    OnMain: '#FFFFFF',
+    Container: '#E8D4B8',
+    ContainerHover: '#E0C9A6',
+    ContainerActive: '#D9BE94',
+    ContainerLine: '#D1B382',
+    OnContainer: '#6B3900',
+  },
+
+  Critical: {
+    Main: '#B52B2B',
+    MainHover: '#A32727',
+    MainActive: '#9A2525',
+    MainLine: '#912222',
+    OnMain: '#FFFFFF',
+    Container: '#EDD0C8',
+    ContainerHover: '#E7C3BA',
+    ContainerActive: '#E1B6AC',
+    ContainerLine: '#DAA89E',
+    OnContainer: '#7E1E1E',
+  },
+
+  Other: {
+    FocusRing: 'rgba(44, 31, 12, 0.5)',
+    Shadow: 'rgba(44, 31, 12, 0.2)',
+    Overlay: 'rgba(44, 31, 12, 0.5)',
+  },
+});
+
 export const butterTheme = createTheme(color, {
   ...darkThemeData,
   Background: {
