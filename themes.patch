@@ -1,0 +1,196 @@
+diff --git a/src/app/hooks/useTheme.ts b/src/app/hooks/useTheme.ts
+index cdbb9dba31..d8a3f2f5a5 100644
+--- a/src/app/hooks/useTheme.ts
++++ b/src/app/hooks/useTheme.ts
+@@ -1,7 +1,7 @@
+ import { lightTheme } from 'folds';
+ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+ import { onDarkFontWeight, onLightFontWeight } from '../../config.css';
+-import { butterTheme, darkTheme, silverTheme } from '../../colors.css';
++import { ashTheme, butterTheme, darkTheme, sepiaTheme, silverTheme } from '../../colors.css';
+ import { settingsAtom } from '../state/settings';
+ import { useSetting } from '../state/hooks/settings';
+ 
+@@ -37,9 +37,22 @@
+   kind: ThemeKind.Dark,
+   classNames: ['butter-theme', butterTheme, onDarkFontWeight, 'prism-dark'],
+ };
++export const AshTheme: Theme = {
++  id: 'ash-theme',
++  kind: ThemeKind.Dark,
++  classNames: ['ash-theme', ashTheme, onDarkFontWeight, 'prism-dark'],
++};
++export const SepiaTheme: Theme = {
++  id: 'sepia-theme',
++  kind: ThemeKind.Light,
++  classNames: ['sepia-theme', sepiaTheme, onLightFontWeight, 'prism-light'],
++};
+ 
+ export const useThemes = (): Theme[] => {
+-  const themes: Theme[] = useMemo(() => [LightTheme, SilverTheme, DarkTheme, ButterTheme], []);
++  const themes: Theme[] = useMemo(
++    () => [LightTheme, SilverTheme, SepiaTheme, DarkTheme, ButterTheme, AshTheme],
++    []
++  );
+ 
+   return themes;
+ };
+@@ -49,8 +62,10 @@
+     () => ({
+       [LightTheme.id]: 'Light',
+       [SilverTheme.id]: 'Silver',
++      [SepiaTheme.id]: 'Sepia',
+       [DarkTheme.id]: 'Dark',
+       [ButterTheme.id]: 'Butter',
++      [AshTheme.id]: 'Ash',
+     }),
+     []
+   );
+diff --git a/src/colors.css.ts b/src/colors.css.ts
+index 268cbf788a..f10f8d0ecd 100644
+--- a/src/colors.css.ts
++++ b/src/colors.css.ts
+@@ -197,6 +197,143 @@
+ 
+ export const darkTheme = createTheme(color, darkThemeData);
+ 
++export const ashTheme = createTheme(color, {
++  ...darkThemeData,
++  Background: {
++    Container: '#18191F',
++    ContainerHover: '#23252D',
++    ContainerActive: '#2E3039',
++    ContainerLine: '#3A3D47',
++    OnContainer: '#DCE0EA',
++  },
++
++  Surface: {
++    Container: '#23252D',
++    ContainerHover: '#2E3039',
++    ContainerActive: '#3A3D47',
++    ContainerLine: '#454955',
++    OnContainer: '#DCE0EA',
++  },
++
++  SurfaceVariant: {
++    Container: '#2E3039',
++    ContainerHover: '#3A3D47',
++    ContainerActive: '#454955',
++    ContainerLine: '#525663',
++    OnContainer: '#DCE0EA',
++  },
++
++  Secondary: {
++    Main: '#DCE0EA',
++    MainHover: '#C4C9D6',
++    MainActive: '#B8BECB',
++    MainLine: '#ABB2C0',
++    OnMain: '#18191F',
++    Container: '#3A3D47',
++    ContainerHover: '#454955',
++    ContainerActive: '#525663',
++    ContainerLine: '#5F6472',
++    OnContainer: '#DCE0EA',
++  },
++});
++
++export const sepiaTheme = createTheme(color, {
++  Background: {
++    Container: '#EEE3C8',
++    ContainerHover: '#E5D9BA',
++    ContainerActive: '#DAD0AC',
++    ContainerLine: '#CEC49D',
++    OnContainer: '#2C1F0C',
++  },
++
++  Surface: {
++    Container: '#F5EDD8',
++    ContainerHover: '#EDE4CC',
++    ContainerActive: '#E5DBBF',
++    ContainerLine: '#DAD0AF',
++    OnContainer: '#2C1F0C',
++  },
++
++  SurfaceVariant: {
++    Container: '#EDE4CC',
++    ContainerHover: '#E5DBBF',
++    ContainerActive: '#DAD0AF',
++    ContainerLine: '#CFC59F',
++    OnContainer: '#2C1F0C',
++  },
++
++  Primary: {
++    Main: '#8B5E2A',
++    MainHover: '#7D5526',
++    MainActive: '#764F23',
++    MainLine: '#6E4920',
++    OnMain: '#FFFFFF',
++    Container: '#E5D0B0',
++    ContainerHover: '#DEC7A2',
++    ContainerActive: '#D7BE94',
++    ContainerLine: '#CEB585',
++    OnContainer: '#5E3F1A',
++  },
++
++  Secondary: {
++    Main: '#2C1F0C',
++    MainHover: '#3A2B14',
++    MainActive: '#44331A',
++    MainLine: '#4E3C20',
++    OnMain: '#F5EDD8',
++    Container: '#D0C4A0',
++    ContainerHover: '#C6B890',
++    ContainerActive: '#BCAD81',
++    ContainerLine: '#B2A272',
++    OnContainer: '#1E1509',
++  },
++
++  Success: {
++    Main: '#2D7A4F',
++    MainHover: '#296E47',
++    MainActive: '#276843',
++    MainLine: '#24623F',
++    OnMain: '#FFFFFF',
++    Container: '#C5DFD0',
++    ContainerHover: '#B8D7C6',
++    ContainerActive: '#ABCEBB',
++    ContainerLine: '#9EC6B1',
++    OnContainer: '#1F5536',
++  },
++
++  Warning: {
++    Main: '#9A5200',
++    MainHover: '#8B4A00',
++    MainActive: '#824500',
++    MainLine: '#7A4000',
++    OnMain: '#FFFFFF',
++    Container: '#E8D4B8',
++    ContainerHover: '#E0C9A6',
++    ContainerActive: '#D9BE94',
++    ContainerLine: '#D1B382',
++    OnContainer: '#6B3900',
++  },
++
++  Critical: {
++    Main: '#B52B2B',
++    MainHover: '#A32727',
++    MainActive: '#9A2525',
++    MainLine: '#912222',
++    OnMain: '#FFFFFF',
++    Container: '#EDD0C8',
++    ContainerHover: '#E7C3BA',
++    ContainerActive: '#E1B6AC',
++    ContainerLine: '#DAA89E',
++    OnContainer: '#7E1E1E',
++  },
++
++  Other: {
++    FocusRing: 'rgba(44, 31, 12, 0.5)',
++    Shadow: 'rgba(44, 31, 12, 0.2)',
++    Overlay: 'rgba(44, 31, 12, 0.5)',
++  },
++});
++
+ export const butterTheme = createTheme(color, {
+   ...darkThemeData,
+   Background: {
