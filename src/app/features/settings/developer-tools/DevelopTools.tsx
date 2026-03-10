@@ -50,6 +50,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
   const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
   const [multiAccount, setMultiAccount] = useSetting(settingsAtom, 'multiAccount');
+  const [perMessageProfiles, setPerMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
   const [globalExpand, setGlobalExpand] = useState(false);
   const [profileExpand, setProfileExpand] = useState(false);
@@ -161,6 +162,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                             variant="Primary"
                             value={multiAccount}
                             onChange={setMultiAccount}
+                          />
+                        }
+                      />
+                      <SettingTile
+                        title="Per-Message Profiles (Personas)"
+                        description="Send messages under a named persona (MSC4144). The real sender is always visible as 'via @user:server'."
+                        after={
+                          <Switch
+                            variant="Primary"
+                            value={perMessageProfiles}
+                            onChange={setPerMessageProfiles}
                           />
                         }
                       />

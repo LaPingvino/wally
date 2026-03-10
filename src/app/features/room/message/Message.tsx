@@ -53,12 +53,11 @@ import {
   getMemberDisplayName,
 } from '../../../utils/room';
 import {
-  getCanonicalAliasOrRoomId,
   getMxIdLocalPart,
-  isRoomAlias,
   mxcUrlToHttp,
 } from '../../../utils/matrix';
 import { MessageLayout, MessageSpacing } from '../../../state/settings';
+import { getPerMsgProfile } from '../../../state/personas';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
 import * as css from './styles.css';
@@ -337,8 +336,6 @@ export const MessageCopyLinkItem = as<
     onClose?: () => void;
   }
 >(({ room, mEvent, onClose, ...props }, ref) => {
-  const mx = useMatrixClient();
-
   const handleCopy = () => {
     const eventId = mEvent.getId();
     if (!eventId) return;
@@ -741,9 +738,15 @@ export const Message = as<'div', MessageProps>(
     const [menuAnchor, setMenuAnchor] = useState<RectCords>();
     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
 
+    const perMsgProfile = getPerMsgProfile(mEvent.getContent() as Record<string, unknown>);
     const senderDisplayName =
-      getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
-    const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
+      perMsgProfile?.displayname ||
+      (getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId);
+    // avatar_url: empty string means "no avatar"; undefined means fall back to member
+    const senderAvatarMxc =
+      perMsgProfile !== undefined
+        ? perMsgProfile.avatar_url || undefined
+        : getMemberAvatarMxc(room, senderId);
 
     const tagColor = memberPowerTag?.color
       ? accessibleTagColors?.get(memberPowerTag.color)
@@ -776,7 +779,18 @@ export const Message = as<'div', MessageProps>(
               truncate
             >
               <UsernameBold>{senderDisplayName}</UsernameBold>
-              <InlinePronouns userId={senderId} />
+              {perMsgProfile?.pronouns ? (
+                <span style={{ opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>
+                  {' '}({perMsgProfile.pronouns})
+                </span>
+              ) : (
+                <InlinePronouns userId={senderId} />
+              )}
+              {perMsgProfile && (
+                <span style={{ opacity: 0.5, fontWeight: 'normal', fontSize: '0.8em' }}>
+                  {' '}via {senderId}
+                </span>
+              )}
             </Text>
           </Username>
           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
