@@ -1,9 +1,9 @@
 diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
 new file mode 100644
-index 0000000000..693dd3fcec
+index 0000000000..e9fc380204
 --- /dev/null
 +++ b/src/app/widget/IssueBoardWidget.tsx
-@@ -0,0 +1,1313 @@
+@@ -0,0 +1,1338 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { IRoomEvent, WidgetApi, WidgetApiToWidgetAction } from 'matrix-widget-api';
 +
@@ -30,7 +30,8 @@ index 0000000000..693dd3fcec
 +  stateKey: string;
 +  eventId: string;
 +  content: IssueContent;
-+  sender: string;
++  sender: string;      // latest editor (last changed by)
++  creatorId: string;   // original creator
 +  ts: number;
 +}
 +
@@ -554,6 +555,8 @@ index 0000000000..693dd3fcec
 +  isNew: boolean;
 +  canDelete: boolean;
 +  issueKey: string | null;
++  creatorId?: string;
++  lastChangedById?: string;
 +  reactions: ReactionMap;
 +  comments: IRoomEvent[];
 +  currentUserId: string;
@@ -566,6 +569,7 @@ index 0000000000..693dd3fcec
 +
 +function IssueForm({
 +  schema, initial, isNew, canDelete, issueKey,
++  creatorId, lastChangedById,
 +  reactions, comments, currentUserId,
 +  onSave, onDelete, onCancel, onReact, onComment,
 +}: IssueFormProps) {
@@ -641,6 +645,15 @@ index 0000000000..693dd3fcec
 +          <button onClick={onCancel} style={{ ...s.btn, border: 'none', background: 'none', fontSize: 18, padding: '0 4px' }} aria-label="Close">✕</button>
 +        </div>
 +        <div style={s.dialogBody}>
++          {/* Creator / last changed metadata */}
++          {!isNew && creatorId && (
++            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8, fontSize: 12, color: '#777' }}>
++              <span>Created by <strong>{shortUserId(creatorId)}</strong></span>
++              {lastChangedById && lastChangedById !== creatorId && (
++                <span>Last changed by <strong>{shortUserId(lastChangedById)}</strong></span>
++              )}
++            </div>
++          )}
 +          {/* Form fields */}
 +          {schema.fields.map((field, idx) => {
 +            const val = String(form[field.key] ?? '');
@@ -972,14 +985,21 @@ index 0000000000..693dd3fcec
 +    let cancelled = false;
 +    async function load() {
 +      try {
-+        const [schemaEvents, issueEvents, plEvents, commentEvents, reactionEvents] = await Promise.all([
++        const [schemaEvents, issueEvents, plEvents, commentEvents, reactionEvents, issueHistoryEvents] = await Promise.all([
 +          widgetApi.readStateEvents('eu.kiefte.issues.schema', 1),
 +          widgetApi.readStateEvents('eu.kiefte.issue', 10000),
 +          widgetApi.readStateEvents('m.room.power_levels', 1),
 +          (widgetApi as any).readRoomEvents('m.room.message', 2000).catch(() => [] as IRoomEvent[]),
 +          (widgetApi as any).readRoomEvents('m.reaction', 5000).catch(() => [] as IRoomEvent[]),
++          (widgetApi as any).readRoomEvents('eu.kiefte.issue', 10000).catch(() => [] as IRoomEvent[]),
 +        ]);
 +        if (cancelled) return;
++
++        // Build creatorId map: first sender per state key from timeline history
++        const creatorMap = new Map<string, string>();
++        for (const e of (issueHistoryEvents as IRoomEvent[]).sort((a, b) => a.origin_server_ts - b.origin_server_ts)) {
++          if (e.state_key && !creatorMap.has(e.state_key)) creatorMap.set(e.state_key, e.sender);
++        }
 +
 +        const rawSchema = (schemaEvents[0]?.content as any);
 +        setSchema(rawSchema?.fields ? (rawSchema as IssueSchema) : null);
@@ -992,6 +1012,7 @@ index 0000000000..693dd3fcec
 +              eventId: e.event_id ?? '',
 +              content: e.content as IssueContent,
 +              sender: e.sender,
++              creatorId: creatorMap.get(e.state_key!) ?? e.sender,
 +              ts: e.origin_server_ts,
 +            }))
 +        );
@@ -1038,6 +1059,7 @@ index 0000000000..693dd3fcec
 +          setIssues(prev => prev.filter(i => i.stateKey !== event.state_key));
 +        } else {
 +          setIssues(prev => {
++            const existing = prev.find(i => i.stateKey === event.state_key!);
 +            const rest = prev.filter(i => i.stateKey !== event.state_key!);
 +            return [
 +              ...rest,
@@ -1046,6 +1068,7 @@ index 0000000000..693dd3fcec
 +                eventId: event.event_id ?? '',
 +                content: c,
 +                sender: event.sender,
++                creatorId: existing?.creatorId ?? event.sender,
 +                ts: event.origin_server_ts,
 +              },
 +            ];
@@ -1294,6 +1317,8 @@ index 0000000000..693dd3fcec
 +          isNew={editing === 'new'}
 +          canDelete={canWrite && editing !== 'new'}
 +          issueKey={editingKey}
++          creatorId={editing !== 'new' ? editing.creatorId : undefined}
++          lastChangedById={editing !== 'new' && editing.sender !== editing.creatorId ? editing.sender : undefined}
 +          reactions={reactionsByIssue.get(editingKey ?? '') ?? new Map()}
 +          comments={editingComments}
 +          currentUserId={userId}
@@ -1319,10 +1344,10 @@ index 0000000000..693dd3fcec
 +}
 diff --git a/src/widget.tsx b/src/widget.tsx
 new file mode 100644
-index 0000000000..67794bd890
+index 0000000000..f961cc4d18
 --- /dev/null
 +++ b/src/widget.tsx
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,98 @@
 +import React from 'react';
 +import { createRoot } from 'react-dom/client';
 +import { WidgetApi } from 'matrix-widget-api';
@@ -1340,7 +1365,8 @@ index 0000000000..67794bd890
 +widgetApi.requestCapabilityToSendState('eu.kiefte.issues.schema');
 +widgetApi.requestCapabilityToReceiveState('m.room.power_levels');
 +
-+// Timeline event capabilities for comments, reactions, and mentions
++// Timeline event capabilities for comments, reactions, and issue history
++widgetApi.requestCapabilityToReceiveEvent('eu.kiefte.issue');
 +widgetApi.requestCapabilityToReceiveEvent('m.room.message');
 +widgetApi.requestCapabilityToSendEvent('m.room.message');
 +widgetApi.requestCapabilityToReceiveEvent('m.reaction');

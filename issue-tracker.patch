@@ -1,9 +1,9 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 0000000000..cea4e2b786
+index 0000000000..f48a5d1e02
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,1867 @@
+@@ -0,0 +1,1910 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixClient, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
@@ -56,7 +56,7 @@ index 0000000000..cea4e2b786
 +
 +// An issue entry carries the state event (for editing/deleting) plus the
 +// effective content to display (last non-redacted version if redacted).
-+type IssueEntry = { event: MatrixEvent; content: IssueContent; redacted: boolean };
++type IssueEntry = { event: MatrixEvent; content: IssueContent; redacted: boolean; creatorId: string; lastChangedById: string };
 +
 +type ViewMode = { type: 'kanban'; fieldKey: string } | { type: 'list' };
 +
@@ -105,13 +105,26 @@ index 0000000000..cea4e2b786
 +  if (!stateEvents || stateEvents.length === 0) return [];
 +
 +  const timelineEvents = room.getUnfilteredTimelineSet().getLiveTimeline().getEvents();
++
++  // Build a map of stateKey → earliest sender (creator) from timeline
++  const creatorMap = new Map<string, string>();
++  for (const e of timelineEvents) {
++    if (e.getType() === 'eu.kiefte.issue') {
++      const sk = e.getStateKey()!;
++      if (!creatorMap.has(sk)) creatorMap.set(sk, e.getSender() ?? '');
++    }
++  }
++
 +  const result: IssueEntry[] = [];
 +
 +  for (const event of stateEvents) {
 +    const stateKey = event.getStateKey()!;
++    // Fall back to current event's sender if not found in timeline (e.g. before pagination)
++    const creatorId = creatorMap.get(stateKey) ?? event.getSender() ?? '';
++    const lastChangedById = event.getSender() ?? creatorId;
 +    if (!event.isRedacted()) {
 +      const content = event.getContent() as IssueContent;
-+      if (!content._deleted) result.push({ event, content, redacted: false });
++      if (!content._deleted) result.push({ event, content, redacted: false, creatorId, lastChangedById });
 +    } else {
 +      // Find last non-redacted, non-deleted version in the timeline
 +      for (let i = timelineEvents.length - 1; i >= 0; i--) {
@@ -123,7 +136,7 @@ index 0000000000..cea4e2b786
 +        ) {
 +          const c = e.getContent() as IssueContent;
 +          if (!c._deleted) {
-+            result.push({ event, content: c, redacted: true });
++            result.push({ event, content: c, redacted: true, creatorId, lastChangedById: e.getSender() ?? creatorId });
 +            break;
 +          }
 +        }
@@ -850,13 +863,15 @@ index 0000000000..cea4e2b786
 +  initial?: IssueContent;
 +  room: Room;
 +  issueId?: string;
++  creatorId?: string;
++  lastChangedById?: string;
 +  onSave: (content: IssueContent) => Promise<void>;
 +  onCancel: () => void;
 +  canDelete?: boolean;
 +  onDelete?: () => Promise<void>;
 +}
 +
-+function IssueForm({ schema, initial, room, issueId, onSave, onCancel, canDelete, onDelete }: IssueFormProps) {
++function IssueForm({ schema, initial, room, issueId, creatorId, lastChangedById, onSave, onCancel, canDelete, onDelete }: IssueFormProps) {
 +  const titleId = 'issue-form-title';
 +  const [values, setValues] = useState<IssueContent>(() => ({ ...initial }));
 +  const [saving, setSaving] = useState(false);
@@ -900,6 +915,20 @@ index 0000000000..cea4e2b786
 +      </Header>
 +
 +      <Scroll style={{ maxHeight: '70vh' }}>
++        {creatorId && (
++          <Box gap="300" alignItems="Center" style={{ flexWrap: 'wrap', padding: config.space.S200 + ' ' + config.space.S400 + ' 0' }}>
++            <Box gap="100" alignItems="Center">
++              <Text size="T200" priority="300">Created by</Text>
++              <Text size="T200"><MemberDisplay room={room} userId={creatorId} /></Text>
++            </Box>
++            {lastChangedById && lastChangedById !== creatorId && (
++              <Box gap="100" alignItems="Center">
++                <Text size="T200" priority="300">Last changed by</Text>
++                <Text size="T200"><MemberDisplay room={room} userId={lastChangedById} /></Text>
++              </Box>
++            )}
++          </Box>
++        )}
 +        <form id="issue-form" onSubmit={handleSubmit}>
 +          <Box direction="Column" gap="300" style={{ padding: config.space.S400 }}>
 +            {schema.fields.map((field) => (
@@ -1026,7 +1055,7 @@ index 0000000000..cea4e2b786
 +  entry: IssueEntry; schema: IssueSchema; room: Room; canWrite: boolean; onEdit: () => void;
 +  isSelected?: boolean; onToggleSelect?: () => void; showCheckbox?: boolean;
 +}) {
-+  const { content, redacted } = entry;
++  const { content, redacted, creatorId, lastChangedById } = entry;
 +  const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
 +  const title = titleField ? ((content[titleField.key] as string) ?? '(untitled)') : '(untitled)';
 +  const otherFields = schema.fields.filter((f) => f !== titleField);
@@ -1067,6 +1096,18 @@ index 0000000000..cea4e2b786
 +          ))}
 +        </Box>
 +      )}
++      <Box gap="200" style={{ flexWrap: 'wrap', padding: '0 ' + config.space.S300 }}>
++        <Box gap="100" alignItems="Center">
++          <Text size="T200" priority="300">Created by</Text>
++          <Text size="T200"><MemberDisplay room={room} userId={creatorId} /></Text>
++        </Box>
++        {lastChangedById !== creatorId && (
++          <Box gap="100" alignItems="Center">
++            <Text size="T200" priority="300">Last changed by</Text>
++            <Text size="T200"><MemberDisplay room={room} userId={lastChangedById} /></Text>
++          </Box>
++        )}
++      </Box>
 +      <IssueActivity room={room} issueId={entry.event.getStateKey()!} defaultFolded />
 +      {schema.fields.filter((f) => f.type === 'follow').map((f) => {
 +        const pats = String(content[f.key] ?? '').split(',').map((p) => p.trim()).filter(Boolean);
@@ -1835,6 +1876,8 @@ index 0000000000..cea4e2b786
 +            {schema && editing !== null && (
 +              <IssueForm schema={schema} initial={initialContent} room={room}
 +                issueId={editing !== 'new' ? editing.event.getStateKey()! : undefined}
++                creatorId={editing !== 'new' ? editing.creatorId : undefined}
++                lastChangedById={editing !== 'new' ? editing.lastChangedById : undefined}
 +                onSave={handleSaveIssue} onCancel={closeEdit}
 +                canDelete={editing !== 'new' && canWriteIssues}
 +                onDelete={editing !== 'new' ? handleDeleteIssue : undefined} />
