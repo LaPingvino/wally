@@ -9,6 +9,8 @@ import React, {
 } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
+import { activePersonaAtom, personaId, PER_MSG_PROFILE_UNSTABLE } from '../../state/personas';
+import { PersonaPicker } from './PersonaPicker';
 import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
 import { Transforms, Editor } from 'slate';
@@ -133,6 +135,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
     const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
+    const [perMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
     const direct = useIsDirectRoom();
     const commands = useCommands(mx, room);
     const emojiBtnRef = useRef<HTMLButtonElement>(null);
@@ -177,6 +180,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       useState<AutocompleteQuery<AutocompletePrefix>>();
 
     const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
+    const activePersona = useAtomValue(activePersonaAtom);
 
     const handleFiles = useCallback(
       async (files: File[]) => {
@@ -295,7 +299,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       });
       handleCancelUpload(uploads);
       const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
-      contents.forEach((content) => mx.sendMessage(roomId, content as any));
+      contents.forEach((content) => {
+        const c = content as Record<string, unknown>;
+        if (activePersona && perMessageProfiles) {
+          c[PER_MSG_PROFILE_UNSTABLE] = {
+            id: personaId(activePersona),
+            displayname: activePersona.displayname,
+            ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
+            ...(activePersona.pronouns ? { pronouns: activePersona.pronouns } : {}),
+          };
+        }
+        mx.sendMessage(roomId, c as any);
+      });
     };
 
     const submit = useCallback(() => {
@@ -386,12 +401,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           content['m.relates_to'].is_falling_back = false;
         }
       }
+      if (activePersona && perMessageProfiles) {
+        // Send unstable Beeper key (MSC4144 not yet merged into spec).
+        content[PER_MSG_PROFILE_UNSTABLE] = {
+          id: personaId(activePersona),
+          displayname: activePersona.displayname,
+          ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
+          ...(activePersona.pronouns ? { pronouns: activePersona.pronouns } : {}),
+        };
+      }
       mx.sendMessage(roomId, content as any);
       resetEditor(editor);
       resetEditorHistory(editor);
       setReplyDraft(undefined);
       sendTypingStatus(false);
-    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
+    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona]);
 
     const handleKeyDown: KeyboardEventHandler = useCallback(
       (evt) => {
@@ -683,7 +707,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   </PopOut>
                 )}
               </UseStateProvider>
-              <IconButton onClick={submit} variant="SurfaceVariant" size="300" radii="300">
+              {perMessageProfiles && <PersonaPicker />}
+              <IconButton onClick={submit} aria-label="Send message" variant="SurfaceVariant" size="300" radii="300">
                 <Icon src={Icons.Send} />
               </IconButton>
             </>

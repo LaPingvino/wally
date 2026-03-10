@@ -86,6 +86,7 @@ import {
 } from '../../utils/room';
 import { useSetting } from '../../state/hooks/settings';
 import { MessageLayout, settingsAtom } from '../../state/settings';
+import { getPerMsgProfile } from '../../state/personas';
 import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
 import { Reactions, Message, Event, EncryptedContent } from './message';
 import { useMemberEventParser } from '../../hooks/useMemberEventParser';
@@ -1838,12 +1839,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
       dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
     }
 
+    const prevProfile = prevEvent
+      ? getPerMsgProfile(prevEvent.getContent() as Record<string, unknown>)
+      : undefined;
+    const currProfile = getPerMsgProfile(mEvent.getContent() as Record<string, unknown>);
+    // Two messages group only if they share the same per-message profile identity.
+    // Identity = profile id (if present) or undefined (= sender's account profile).
+    const sameProfile = prevProfile?.id === currProfile?.id;
+
     const collapsed =
       isPrevRendered &&
       !dayDivider &&
       (!newDivider || eventSender === mx.getUserId()) &&
       prevEvent !== undefined &&
       prevEvent.getSender() === eventSender &&
+      sameProfile &&
       prevEvent.getType() === mEvent.getType() &&
       minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
 

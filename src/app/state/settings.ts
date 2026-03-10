@@ -57,6 +57,7 @@ export interface Settings {
   issueTracker: boolean;
   multiAccount: boolean;
   roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
+  perMessageProfiles: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -100,6 +101,7 @@ const defaultSettings: Settings = {
   issueTracker: false,
   multiAccount: false,
   roomSortOrder: 'activity',
+  perMessageProfiles: false,
 };
 
 export const getSettings = () => {
