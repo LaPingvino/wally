@@ -1,3 +1,15 @@
+diff --git a/.gitignore b/.gitignore
+index 1af58a970d..b475aead7d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -4,4 +4,5 @@
+ devAssets
+ 
+ .DS_Store
+-.idea
+\ No newline at end of file
++.idea
++public/font/NotoColorEmoji.Bahai.v0.0.1.ttf
 diff --git a/package-lock.json b/package-lock.json
 index 26bad8eccd..3846e58b6a 100644
 --- a/package-lock.json
