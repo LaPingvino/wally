@@ -8120,36 +8120,6 @@ index 2a51baec41..3c35ec50da 100644
              <TooltipProvider
                position="Bottom"
                offset={4}
-diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 78d46090c9..77f418f6fb 100644
---- a/src/app/features/room/message/Message.tsx
-+++ b/src/app/features/room/message/Message.tsx
-@@ -53,9 +53,7 @@
-   getMemberDisplayName,
- } from '../../../utils/room';
- import {
--  getCanonicalAliasOrRoomId,
-   getMxIdLocalPart,
--  isRoomAlias,
-   mxcUrlToHttp,
- } from '../../../utils/matrix';
- import { MessageLayout, MessageSpacing } from '../../../state/settings';
-@@ -327,14 +325,10 @@
-     onClose?: () => void;
-   }
- >(({ room, mEvent, onClose, ...props }, ref) => {
--  const mx = useMatrixClient();
--
-   const handleCopy = () => {
--    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
-     const eventId = mEvent.getId();
--    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
-     if (!eventId) return;
--    copyToClipboard(getMatrixToRoomEvent(roomIdOrAlias, eventId, viaServers));
-+    copyToClipboard(getMatrixToRoomEvent(room.roomId, eventId, getViaServers(room)));
-     onClose?.();
-   };
- 
 diff --git a/src/app/features/settings/Settings.tsx b/src/app/features/settings/Settings.tsx
 index 6bee63958c..5a957abf93 100644
 --- a/src/app/features/settings/Settings.tsx

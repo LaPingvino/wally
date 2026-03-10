@@ -335,10 +335,16 @@ index d1678b65b3..77ade540ee 100644
        minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
  
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c29d..fada68ebf9 100644
+index 9324e1c29d..54cd762cdb 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
-@@ -59,6 +59,7 @@
+@@ -53,12 +53,11 @@
+   getMemberDisplayName,
+ } from '../../../utils/room';
+ import {
+-  getCanonicalAliasOrRoomId,
+   getMxIdLocalPart,
+-  isRoomAlias,
    mxcUrlToHttp,
  } from '../../../utils/matrix';
  import { MessageLayout, MessageSpacing } from '../../../state/settings';
@@ -346,7 +352,23 @@ index 9324e1c29d..fada68ebf9 100644
  import { useMatrixClient } from '../../../hooks/useMatrixClient';
  import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
  import * as css from './styles.css';
-@@ -730,9 +731,17 @@
+@@ -324,14 +323,10 @@
+     onClose?: () => void;
+   }
+ >(({ room, mEvent, onClose, ...props }, ref) => {
+-  const mx = useMatrixClient();
+-
+   const handleCopy = () => {
+-    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
+     const eventId = mEvent.getId();
+-    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
+     if (!eventId) return;
+-    copyToClipboard(getMatrixToRoomEvent(roomIdOrAlias, eventId, viaServers));
++    copyToClipboard(getMatrixToRoomEvent(room.roomId, eventId, getViaServers(room)));
+     onClose?.();
+   };
+ 
+@@ -730,9 +725,15 @@
      const [menuAnchor, setMenuAnchor] = useState<RectCords>();
      const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
  
@@ -355,9 +377,7 @@ index 9324e1c29d..fada68ebf9 100644
 -      getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
 -    const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
 +      perMsgProfile?.displayname ||
-+      getMemberDisplayName(room, senderId) ??
-+      getMxIdLocalPart(senderId) ??
-+      senderId;
++      (getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId);
 +    // avatar_url: empty string means "no avatar"; undefined means fall back to member
 +    const senderAvatarMxc =
 +      perMsgProfile !== undefined
