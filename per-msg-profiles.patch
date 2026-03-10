@@ -315,14 +315,14 @@ index 0000000000..9a1b01ce78
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index ae46d2d098..77ca039426 100644
+index ae46d2d098..2ef027a1ae 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -9,6 +9,8 @@
  } from 'react';
  import { useAtom, useAtomValue } from 'jotai';
  import { isKeyHotkey } from 'is-hotkey';
-+import { activePersonaAtom, personaId, PER_MSG_PROFILE_KEY, PER_MSG_PROFILE_UNSTABLE } from '../../state/personas';
++import { activePersonaAtom, personaId, PER_MSG_PROFILE_UNSTABLE } from '../../state/personas';
 +import { PersonaPicker } from './PersonaPicker';
  import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
  import { ReactEditor } from 'slate-react';
@@ -335,19 +335,17 @@ index ae46d2d098..77ca039426 100644
  
      const handleFiles = useCallback(
        async (files: File[]) => {
-@@ -372,12 +375,22 @@
+@@ -372,12 +375,20 @@
            content['m.relates_to'].is_falling_back = false;
          }
        }
 +      if (activePersona) {
-+        const profilePayload = {
++        // Send unstable Beeper key (MSC4144 not yet merged into spec).
++        content[PER_MSG_PROFILE_UNSTABLE] = {
 +          id: personaId(activePersona),
 +          displayname: activePersona.displayname,
 +          ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
 +        };
-+        // Send unstable Beeper key first (widely deployed); stable MSC4144 key alongside.
-+        content[PER_MSG_PROFILE_UNSTABLE] = profilePayload;
-+        content[PER_MSG_PROFILE_KEY] = profilePayload;
 +      }
        mx.sendMessage(roomId, content as any);
        resetEditor(editor);
@@ -359,7 +357,7 @@ index ae46d2d098..77ca039426 100644
  
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
-@@ -669,6 +682,7 @@
+@@ -669,6 +680,7 @@
                    </PopOut>
                  )}
                </UseStateProvider>
@@ -455,7 +453,7 @@ index 9324e1c29d..54cd762cdb 100644
        ? accessibleTagColors?.get(memberPowerTag.color)
 diff --git a/src/app/state/personas.ts b/src/app/state/personas.ts
 new file mode 100644
-index 0000000000..c6bfcd601f
+index 0000000000..9750caaf7b
 --- /dev/null
 +++ b/src/app/state/personas.ts
 @@ -0,0 +1,58 @@
@@ -466,7 +464,7 @@ index 0000000000..c6bfcd601f
 +  avatar_url?: string;
 +};
 +
-+// Stable MSC4144 key + unstable Beeper prefix (read both, send both — unstable first for broad compat)
++// MSC4144 not yet merged — send unstable Beeper key only; read both for forward-compat
 +export const PER_MSG_PROFILE_KEY = 'm.per_message_profile';
 +export const PER_MSG_PROFILE_UNSTABLE = 'com.beeper.per_message_profile';
 +
