@@ -108,32 +108,33 @@ index 3943f42d19..8b3da2db35 100644
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index 79630990e6..49a98a57c4 100644
+index 79630990e6..aa4a98ab51 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
-@@ -3,6 +3,21 @@
+@@ -3,6 +3,22 @@
  import { Page, PageHero, PageHeroSection } from '../../components/page';
  import CinnySVG from '../../../../public/res/svg/cinny.svg';
  
 +const PATCHES: Array<{ name: string; desc: string }> = [
-+  { name: 'emoji-font', desc: 'Custom emoji font with Bahá\'í symbols' },
-+  { name: 'element-call', desc: 'Voice and video calling via Element Call, with configurable ringtone and auto-join settings' },
-+  { name: 'pronouns', desc: 'Pronouns, timezone, and extended profile fields' },
-+  { name: 'accessibility', desc: 'ARIA roles, keyboard shortcuts, notification sounds, and screen-reader labels on all login forms' },
-+  { name: 'issue-tracker', desc: 'Schema-driven issue board stored in Matrix room state' },
-+  { name: 'multi-account', desc: 'Multiple Matrix accounts open simultaneously' },
-+  { name: 'threads', desc: 'Thread panel for viewing and replying to threads' },
-+  { name: 'idb-retry', desc: 'Automatic retry when IndexedDB fails on startup' },
-+  { name: 'issue-widget', desc: 'Issue tracker as an embeddable Matrix Widget API widget' },
-+  { name: 'ux-fixes', desc: 'Room sort options, inbox unread view, and navigation improvements' },
-+  { name: 'widgets-support', desc: 'Generic widget drawer for room widgets via the Matrix Widget API' },
-+  { name: 'themes', desc: 'Ash (dark neutral grey) and Sepia (warm parchment) themes' },
++  { name: "emoji-font", desc: "Custom emoji font with Bah\u00e1'\u00ed symbols" },
++  { name: "element-call", desc: "Voice and video calling via Element Call, with configurable ringtone and auto-join settings" },
++  { name: "pronouns", desc: "Pronouns, timezone, and extended profile fields" },
++  { name: "accessibility", desc: "ARIA roles, keyboard shortcuts, notification sounds, and screen-reader labels on all login forms" },
++  { name: "issue-tracker", desc: "Schema-driven issue board stored in Matrix room state" },
++  { name: "multi-account", desc: "Multiple Matrix accounts open simultaneously" },
++  { name: "threads", desc: "Thread panel for viewing and replying to threads" },
++  { name: "idb-retry", desc: "Automatic retry when IndexedDB fails on startup" },
++  { name: "issue-widget", desc: "Issue tracker as an embeddable Matrix Widget API widget" },
++  { name: "ux-fixes", desc: "Room sort options, inbox unread view, and navigation improvements" },
++  { name: "widgets-support", desc: "Generic widget drawer for room widgets via the Matrix Widget API" },
++  { name: "themes", desc: "Ash (dark neutral grey) and Sepia (warm parchment) themes" },
++  { name: "per-msg-profiles", desc: "Per-message profiles (MSC4144): send messages as a persona, display sender personas inline" },
 +];
 +
  export function WelcomePage() {
    return (
      <Page>
-@@ -14,11 +29,11 @@
+@@ -14,11 +30,11 @@
        >
          <PageHeroSection>
            <PageHero
@@ -148,7 +149,7 @@ index 79630990e6..49a98a57c4 100644
                  <a
                    href="https://github.com/cinnyapp/cinny/releases"
                    target="_blank"
-@@ -29,31 +44,58 @@
+@@ -29,31 +45,58 @@
                </span>
              }
            >

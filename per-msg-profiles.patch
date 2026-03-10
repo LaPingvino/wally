@@ -1,0 +1,432 @@
+diff --git a/src/app/features/room/PersonaPicker.tsx b/src/app/features/room/PersonaPicker.tsx
+new file mode 100644
+index 0000000000..f1f78c7819
+--- /dev/null
++++ b/src/app/features/room/PersonaPicker.tsx
+@@ -0,0 +1,246 @@
++import React, { KeyboardEventHandler, useState } from 'react';
++import { useAtom } from 'jotai';
++import FocusTrap from 'focus-trap-react';
++import {
++  Box,
++  Icon,
++  IconButton,
++  Icons,
++  Input,
++  Menu,
++  MenuItem,
++  PopOut,
++  RectCords,
++  Text,
++  config,
++} from 'folds';
++import { activePersonaAtom, savedPersonasAtom, Persona } from '../../state/personas';
++import { stopPropagation } from '../../utils/keyboard';
++
++function PersonaForm({
++  initial,
++  onSave,
++  onCancel,
++}: {
++  initial?: Persona;
++  onSave: (p: Persona) => void;
++  onCancel: () => void;
++}) {
++  const [name, setName] = useState(initial?.displayname ?? '');
++  const [avatar, setAvatar] = useState(initial?.avatar_url ?? '');
++
++  const save = () => {
++    const displayname = name.trim();
++    if (!displayname) return;
++    onSave({ displayname, avatar_url: avatar.trim() || undefined });
++  };
++
++  const onKeyDown: KeyboardEventHandler = (e) => {
++    if (e.key === 'Enter') save();
++    if (e.key === 'Escape') onCancel();
++  };
++
++  return (
++    <Box direction="Column" gap="200" style={{ padding: config.space.S100 }}>
++      <Input
++        size="300"
++        placeholder="Display name"
++        value={name}
++        onChange={(e) => setName(e.target.value)}
++        onKeyDown={onKeyDown}
++        // eslint-disable-next-line jsx-a11y/no-autofocus
++        autoFocus
++      />
++      <Input
++        size="300"
++        placeholder="Avatar URL (mxc:// or https://, optional)"
++        value={avatar}
++        onChange={(e) => setAvatar(e.target.value)}
++        onKeyDown={onKeyDown}
++      />
++      <Box gap="200">
++        <IconButton size="300" variant="Primary" radii="300" onClick={save} aria-label="Save">
++          <Icon src={Icons.Check} />
++        </IconButton>
++        <IconButton size="300" variant="Surface" radii="300" onClick={onCancel} aria-label="Cancel">
++          <Icon src={Icons.Cross} />
++        </IconButton>
++      </Box>
++    </Box>
++  );
++}
++
++export function PersonaPicker() {
++  const [activePersona, setActivePersona] = useAtom(activePersonaAtom);
++  const [savedPersonas, setSavedPersonas] = useAtom(savedPersonasAtom);
++  const [menuCords, setMenuCords] = useState<RectCords>();
++  const [editIdx, setEditIdx] = useState<number | null>(null);
++  const [addMode, setAddMode] = useState(false);
++
++  const openMenu = (evt: React.MouseEvent<HTMLButtonElement>) => {
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++  const closeMenu = () => {
++    setMenuCords(undefined);
++    setAddMode(false);
++    setEditIdx(null);
++  };
++
++  const activate = (p: Persona) => {
++    setActivePersona(p);
++    closeMenu();
++  };
++  const deactivate = () => {
++    setActivePersona(null);
++    closeMenu();
++  };
++
++  const handleSaveNew = (p: Persona) => {
++    // Add to saved list (avoid exact duplicates)
++    if (!savedPersonas.some((s) => s.displayname === p.displayname)) {
++      setSavedPersonas([...savedPersonas, p]);
++    }
++    setActivePersona(p);
++    setAddMode(false);
++    closeMenu();
++  };
++
++  const handleSaveEdit = (idx: number, p: Persona) => {
++    const updated = savedPersonas.map((s, i) => (i === idx ? p : s));
++    setSavedPersonas(updated);
++    // Update active persona if we just edited the active one
++    if (activePersona?.displayname === savedPersonas[idx].displayname) {
++      setActivePersona(p);
++    }
++    setEditIdx(null);
++  };
++
++  const deletePersona = (idx: number) => {
++    const p = savedPersonas[idx];
++    setSavedPersonas(savedPersonas.filter((_, i) => i !== idx));
++    if (activePersona?.displayname === p.displayname) setActivePersona(null);
++  };
++
++  const isActive = !!activePersona;
++
++  return (
++    <>
++      <IconButton
++        aria-label={isActive ? `Persona: ${activePersona.displayname}` : 'Set persona'}
++        aria-pressed={isActive}
++        variant="SurfaceVariant"
++        size="300"
++        radii="300"
++        onClick={openMenu}
++      >
++        <Icon src={Icons.User} filled={isActive} />
++      </IconButton>
++      <PopOut
++        anchor={menuCords}
++        offset={8}
++        position="Top"
++        align="End"
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: closeMenu,
++              clickOutsideDeactivates: true,
++              escapeDeactivates: stopPropagation,
++            }}
++          >
++            <Menu style={{ minWidth: '220px', maxWidth: '300px' }}>
++              <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++                {/* Default profile */}
++                <MenuItem
++                  size="300"
++                  variant={!activePersona ? 'Primary' : 'Surface'}
++                  radii="300"
++                  onClick={deactivate}
++                  before={!activePersona ? <Icon size="100" src={Icons.Check} /> : undefined}
++                >
++                  <Text size="T300">Default (your profile)</Text>
++                </MenuItem>
++
++                {/* Saved personas */}
++                {savedPersonas.map((p, i) =>
++                  editIdx === i ? (
++                    // eslint-disable-next-line react/no-array-index-key
++                    <PersonaForm
++                      key={i}
++                      initial={p}
++                      onSave={(edited) => handleSaveEdit(i, edited)}
++                      onCancel={() => setEditIdx(null)}
++                    />
++                  ) : (
++                    // eslint-disable-next-line react/no-array-index-key
++                    <Box key={i} gap="100" alignItems="Center">
++                      <MenuItem
++                        style={{ flexGrow: 1, minWidth: 0 }}
++                        size="300"
++                        variant={activePersona?.displayname === p.displayname ? 'Primary' : 'Surface'}
++                        radii="300"
++                        onClick={() => activate(p)}
++                        before={
++                          activePersona?.displayname === p.displayname ? (
++                            <Icon size="100" src={Icons.Check} />
++                          ) : undefined
++                        }
++                      >
++                        <Text size="T300" truncate>
++                          {p.displayname}
++                        </Text>
++                      </MenuItem>
++                      <IconButton
++                        size="300"
++                        variant="SurfaceVariant"
++                        radii="300"
++                        onClick={() => {
++                          setEditIdx(i);
++                          setAddMode(false);
++                        }}
++                        aria-label={`Edit ${p.displayname}`}
++                      >
++                        <Icon size="100" src={Icons.Pencil} />
++                      </IconButton>
++                      <IconButton
++                        size="300"
++                        variant="SurfaceVariant"
++                        radii="300"
++                        onClick={() => deletePersona(i)}
++                        aria-label={`Delete ${p.displayname}`}
++                      >
++                        <Icon size="100" src={Icons.Delete} />
++                      </IconButton>
++                    </Box>
++                  )
++                )}
++
++                {/* Add new persona */}
++                {addMode ? (
++                  <PersonaForm
++                    onSave={handleSaveNew}
++                    onCancel={() => setAddMode(false)}
++                  />
++                ) : (
++                  <MenuItem
++                    size="300"
++                    variant="Surface"
++                    radii="300"
++                    onClick={() => {
++                      setAddMode(true);
++                      setEditIdx(null);
++                    }}
++                    before={<Icon size="100" src={Icons.Plus} />}
++                  >
++                    <Text size="T300">Add persona...</Text>
++                  </MenuItem>
++                )}
++              </Box>
++            </Menu>
++          </FocusTrap>
++        }
++      />
++    </>
++  );
++}
+diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
+index ae46d2d098..6e13559595 100644
+--- a/src/app/features/room/RoomInput.tsx
++++ b/src/app/features/room/RoomInput.tsx
+@@ -9,6 +9,8 @@
+ } from 'react';
+ import { useAtom, useAtomValue } from 'jotai';
+ import { isKeyHotkey } from 'is-hotkey';
++import { activePersonaAtom, personaId, PER_MSG_PROFILE_KEY } from '../../state/personas';
++import { PersonaPicker } from './PersonaPicker';
+ import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
+ import { ReactEditor } from 'slate-react';
+ import { Transforms, Editor } from 'slate';
+@@ -175,6 +177,7 @@
+       useState<AutocompleteQuery<AutocompletePrefix>>();
+ 
+     const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
++    const activePersona = useAtomValue(activePersonaAtom);
+ 
+     const handleFiles = useCallback(
+       async (files: File[]) => {
+@@ -372,12 +375,19 @@
+           content['m.relates_to'].is_falling_back = false;
+         }
+       }
++      if (activePersona) {
++        content[PER_MSG_PROFILE_KEY] = {
++          id: personaId(activePersona),
++          displayname: activePersona.displayname,
++          ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
++        };
++      }
+       mx.sendMessage(roomId, content as any);
+       resetEditor(editor);
+       resetEditorHistory(editor);
+       setReplyDraft(undefined);
+       sendTypingStatus(false);
+-    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
++    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona]);
+ 
+     const handleKeyDown: KeyboardEventHandler = useCallback(
+       (evt) => {
+@@ -669,6 +679,7 @@
+                   </PopOut>
+                 )}
+               </UseStateProvider>
++              <PersonaPicker />
+               <IconButton onClick={submit} variant="SurfaceVariant" size="300" radii="300">
+                 <Icon src={Icons.Send} />
+               </IconButton>
+diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
+index d1678b65b3..77ade540ee 100644
+--- a/src/app/features/room/RoomTimeline.tsx
++++ b/src/app/features/room/RoomTimeline.tsx
+@@ -85,6 +85,7 @@
+ } from '../../utils/room';
+ import { useSetting } from '../../state/hooks/settings';
+ import { MessageLayout, settingsAtom } from '../../state/settings';
++import { getPerMsgProfile } from '../../state/personas';
+ import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
+ import { Reactions, Message, Event, EncryptedContent } from './message';
+ import { useMemberEventParser } from '../../hooks/useMemberEventParser';
+@@ -1596,12 +1597,21 @@
+       dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
+     }
+ 
++    const prevProfile = prevEvent
++      ? getPerMsgProfile(prevEvent.getContent() as Record<string, unknown>)
++      : undefined;
++    const currProfile = getPerMsgProfile(mEvent.getContent() as Record<string, unknown>);
++    // Two messages group only if they share the same per-message profile identity.
++    // Identity = profile id (if present) or undefined (= sender's account profile).
++    const sameProfile = prevProfile?.id === currProfile?.id;
++
+     const collapsed =
+       isPrevRendered &&
+       !dayDivider &&
+       (!newDivider || eventSender === mx.getUserId()) &&
+       prevEvent !== undefined &&
+       prevEvent.getSender() === eventSender &&
++      sameProfile &&
+       prevEvent.getType() === mEvent.getType() &&
+       minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
+ 
+diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
+index 9324e1c29d..fada68ebf9 100644
+--- a/src/app/features/room/message/Message.tsx
++++ b/src/app/features/room/message/Message.tsx
+@@ -59,6 +59,7 @@
+   mxcUrlToHttp,
+ } from '../../../utils/matrix';
+ import { MessageLayout, MessageSpacing } from '../../../state/settings';
++import { getPerMsgProfile } from '../../../state/personas';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+ import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
+ import * as css from './styles.css';
+@@ -730,9 +731,17 @@
+     const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
+ 
++    const perMsgProfile = getPerMsgProfile(mEvent.getContent() as Record<string, unknown>);
+     const senderDisplayName =
+-      getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+-    const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
++      perMsgProfile?.displayname ||
++      getMemberDisplayName(room, senderId) ??
++      getMxIdLocalPart(senderId) ??
++      senderId;
++    // avatar_url: empty string means "no avatar"; undefined means fall back to member
++    const senderAvatarMxc =
++      perMsgProfile !== undefined
++        ? perMsgProfile.avatar_url || undefined
++        : getMemberAvatarMxc(room, senderId);
+ 
+     const tagColor = memberPowerTag?.color
+       ? accessibleTagColors?.get(memberPowerTag.color)
+diff --git a/src/app/state/personas.ts b/src/app/state/personas.ts
+new file mode 100644
+index 0000000000..909334128f
+--- /dev/null
++++ b/src/app/state/personas.ts
+@@ -0,0 +1,58 @@
++import { atom } from 'jotai';
++
++export type Persona = {
++  displayname: string;
++  avatar_url?: string;
++};
++
++// Stable MSC4144 key + unstable Beeper prefix (read both, send stable)
++export const PER_MSG_PROFILE_KEY = 'm.per_message_profile';
++export const PER_MSG_PROFILE_UNSTABLE = 'com.beeper.per_message_profile';
++
++/** Derive a stable grouping id from a persona's displayname. */
++export function personaId(p: Persona): string {
++  return p.displayname;
++}
++
++/** Read per-message profile from event content (stable key preferred). */
++export function getPerMsgProfile(
++  content: Record<string, unknown>
++): { id?: string; displayname?: string; avatar_url?: string } | undefined {
++  return (content[PER_MSG_PROFILE_KEY] ??
++    content[PER_MSG_PROFILE_UNSTABLE]) as
++    | { id?: string; displayname?: string; avatar_url?: string }
++    | undefined;
++}
++
++function load<T>(key: string, fallback: T): T {
++  try {
++    const raw = localStorage.getItem(key);
++    return raw ? (JSON.parse(raw) as T) : fallback;
++  } catch {
++    return fallback;
++  }
++}
++
++const STORAGE_ACTIVE = 'wally_active_persona';
++const STORAGE_SAVED = 'wally_saved_personas';
++
++const baseActive = atom<Persona | null>(load<Persona | null>(STORAGE_ACTIVE, null));
++/** Currently active persona (null = use account profile). Persisted to localStorage. */
++export const activePersonaAtom = atom(
++  (get) => get(baseActive),
++  (_get, set, next: Persona | null) => {
++    set(baseActive, next);
++    if (next) localStorage.setItem(STORAGE_ACTIVE, JSON.stringify(next));
++    else localStorage.removeItem(STORAGE_ACTIVE);
++  }
++);
++
++const baseSaved = atom<Persona[]>(load<Persona[]>(STORAGE_SAVED, []));
++/** All saved personas for quick selection. Persisted to localStorage. */
++export const savedPersonasAtom = atom(
++  (get) => get(baseSaved),
++  (_get, set, next: Persona[]) => {
++    set(baseSaved, next);
++    localStorage.setItem(STORAGE_SAVED, JSON.stringify(next));
++  }
++);
