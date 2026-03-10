@@ -7955,6 +7955,18 @@ index 521239cedd..35c604b598 100644
            </>
          )}
          {screenSize === ScreenSize.Desktop && isWidgetsDrawer && (
+diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
+index 8c742cf8e7..b2f045c267 100644
+--- a/src/app/features/room/RoomInput.tsx
++++ b/src/app/features/room/RoomInput.tsx
+@@ -135,6 +135,7 @@
+     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
+     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+     const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
++    const [perMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
+     const direct = useIsDirectRoom();
+     const commands = useCommands(mx, room);
+     const emojiBtnRef = useRef<HTMLButtonElement>(null);
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
 index c0de372513..7be8301212 100644
 --- a/src/app/features/room/RoomTimeline.tsx

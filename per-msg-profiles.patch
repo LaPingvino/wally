@@ -323,7 +323,7 @@ index 0000000000..d36b07e876
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index ae46d2d098..7d081ed8dd 100644
+index ae46d2d098..0dc3c2a8f4 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -9,6 +9,8 @@
@@ -347,7 +347,7 @@ index ae46d2d098..7d081ed8dd 100644
            content['m.relates_to'].is_falling_back = false;
          }
        }
-+      if (activePersona) {
++      if (activePersona && perMessageProfiles) {
 +        // Send unstable Beeper key (MSC4144 not yet merged into spec).
 +        content[PER_MSG_PROFILE_UNSTABLE] = {
 +          id: personaId(activePersona),
@@ -366,14 +366,16 @@ index ae46d2d098..7d081ed8dd 100644
  
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
-@@ -669,6 +681,7 @@
+@@ -669,7 +681,8 @@
                    </PopOut>
                  )}
                </UseStateProvider>
-+              <PersonaPicker />
-               <IconButton onClick={submit} variant="SurfaceVariant" size="300" radii="300">
+-              <IconButton onClick={submit} variant="SurfaceVariant" size="300" radii="300">
++              {perMessageProfiles && <PersonaPicker />}
++              <IconButton onClick={submit} aria-label="Send message" variant="SurfaceVariant" size="300" radii="300">
                  <Icon src={Icons.Send} />
                </IconButton>
+             </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
 index d1678b65b3..77ade540ee 100644
 --- a/src/app/features/room/RoomTimeline.tsx
@@ -409,7 +411,7 @@ index d1678b65b3..77ade540ee 100644
        minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
  
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c29d..1c2c953f96 100644
+index 9324e1c29d..514f919eaa 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -53,12 +53,11 @@
@@ -460,7 +462,7 @@ index 9324e1c29d..1c2c953f96 100644
  
      const tagColor = memberPowerTag?.color
        ? accessibleTagColors?.get(memberPowerTag.color)
-@@ -765,6 +766,11 @@
+@@ -765,6 +766,16 @@
                truncate
              >
                <UsernameBold>{senderDisplayName}</UsernameBold>
@@ -469,9 +471,54 @@ index 9324e1c29d..1c2c953f96 100644
 +                  {' '}({perMsgProfile.pronouns})
 +                </span>
 +              )}
++              {perMsgProfile && (
++                <span style={{ opacity: 0.5, fontWeight: 'normal', fontSize: '0.8em' }}>
++                  {' '}via {senderId}
++                </span>
++              )}
              </Text>
            </Username>
            {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
+diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
+index a3f04567b6..7899760d4b 100644
+--- a/src/app/features/settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
+@@ -20,6 +20,7 @@
+ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+   const mx = useMatrixClient();
+   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
++  const [perMessageProfiles, setPerMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
+   const [expand, setExpend] = useState(false);
+   const [accountDataType, setAccountDataType] = useState<string | null>();
+ 
+@@ -62,6 +63,27 @@
+           <PageContent>
+             <Box direction="Column" gap="700">
+               <Box direction="Column" gap="100">
++                <Text size="L400">Features</Text>
++                <SequenceCard
++                  className={SequenceCardStyle}
++                  variant="SurfaceVariant"
++                  direction="Column"
++                  gap="400"
++                >
++                  <SettingTile
++                    title="Per-Message Profiles (Personas)"
++                    description="Send messages under a named persona (MSC4144). The real sender is always visible as 'via @user:server'."
++                    after={
++                      <Switch
++                        variant="Primary"
++                        value={perMessageProfiles}
++                        onChange={setPerMessageProfiles}
++                      />
++                    }
++                  />
++                </SequenceCard>
++              </Box>
++              <Box direction="Column" gap="100">
+                 <Text size="L400">Options</Text>
+                 <SequenceCard
+                   className={SequenceCardStyle}
 diff --git a/src/app/state/personas.ts b/src/app/state/personas.ts
 new file mode 100644
 index 0000000000..874eaff73c
@@ -537,3 +584,23 @@ index 0000000000..874eaff73c
 +    localStorage.setItem(STORAGE_SAVED, JSON.stringify(next));
 +  }
 +);
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 31ee6ccb97..b7c2362cc2 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -41,6 +41,7 @@
+   dateFormatString: string;
+ 
+   developerTools: boolean;
++  perMessageProfiles: boolean;
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -75,6 +76,7 @@
+   dateFormatString: 'D MMM YYYY',
+ 
+   developerTools: false,
++  perMessageProfiles: false,
+ };
+ 
+ export const getSettings = () => {
