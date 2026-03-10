@@ -47,83 +47,88 @@ index cdbb9dba31..d8a3f2f5a5 100644
      []
    );
 diff --git a/src/colors.css.ts b/src/colors.css.ts
-index 268cbf788a..f10f8d0ecd 100644
+index 268cbf788a..ab0f39f900 100644
 --- a/src/colors.css.ts
 +++ b/src/colors.css.ts
-@@ -197,6 +197,143 @@
+@@ -197,6 +197,148 @@
  
  export const darkTheme = createTheme(color, darkThemeData);
  
 +export const ashTheme = createTheme(color, {
 +  ...darkThemeData,
++  // Neutral grey palette inspired by Discord's Ash theme (#2E2E34 brand ref,
++  // #DADDDA text). Pattern: R≈G, B slightly higher (≈+6), steps of ~10.
 +  Background: {
-+    Container: '#18191F',
-+    ContainerHover: '#23252D',
-+    ContainerActive: '#2E3039',
-+    ContainerLine: '#3A3D47',
-+    OnContainer: '#DCE0EA',
++    Container: '#1E1E24',
++    ContainerHover: '#28282E',
++    ContainerActive: '#323238',
++    ContainerLine: '#3C3C43',
++    OnContainer: '#DADDDA',
 +  },
 +
 +  Surface: {
-+    Container: '#23252D',
-+    ContainerHover: '#2E3039',
-+    ContainerActive: '#3A3D47',
-+    ContainerLine: '#454955',
-+    OnContainer: '#DCE0EA',
++    Container: '#28282E',
++    ContainerHover: '#323238',
++    ContainerActive: '#3C3C43',
++    ContainerLine: '#46464E',
++    OnContainer: '#DADDDA',
 +  },
 +
 +  SurfaceVariant: {
-+    Container: '#2E3039',
-+    ContainerHover: '#3A3D47',
-+    ContainerActive: '#454955',
-+    ContainerLine: '#525663',
-+    OnContainer: '#DCE0EA',
++    Container: '#323238',
++    ContainerHover: '#3C3C43',
++    ContainerActive: '#46464E',
++    ContainerLine: '#505059',
++    OnContainer: '#DADDDA',
 +  },
 +
 +  Secondary: {
-+    Main: '#DCE0EA',
-+    MainHover: '#C4C9D6',
-+    MainActive: '#B8BECB',
-+    MainLine: '#ABB2C0',
-+    OnMain: '#18191F',
-+    Container: '#3A3D47',
-+    ContainerHover: '#454955',
-+    ContainerActive: '#525663',
-+    ContainerLine: '#5F6472',
-+    OnContainer: '#DCE0EA',
++    Main: '#DADDDA',
++    MainHover: '#C3C6C3',
++    MainActive: '#B7BAB7',
++    MainLine: '#ABAEAB',
++    OnMain: '#1E1E24',
++    Container: '#3C3C43',
++    ContainerHover: '#46464E',
++    ContainerActive: '#505059',
++    ContainerLine: '#5A5A63',
++    OnContainer: '#DADDDA',
 +  },
 +});
 +
 +export const sepiaTheme = createTheme(color, {
++  // Background is the sidebar/outer layer — noticeably darker than Surface
++  // so the two-tone layout reads clearly.
 +  Background: {
-+    Container: '#EEE3C8',
-+    ContainerHover: '#E5D9BA',
-+    ContainerActive: '#DAD0AC',
-+    ContainerLine: '#CEC49D',
-+    OnContainer: '#2C1F0C',
++    Container: '#E0CFA8',
++    ContainerHover: '#D7C69C',
++    ContainerActive: '#CEBD90',
++    ContainerLine: '#C0AE80',
++    OnContainer: '#1E1509',
 +  },
 +
++  // Surface is the main chat/content area — light parchment.
 +  Surface: {
 +    Container: '#F5EDD8',
 +    ContainerHover: '#EDE4CC',
 +    ContainerActive: '#E5DBBF',
-+    ContainerLine: '#DAD0AF',
-+    OnContainer: '#2C1F0C',
++    ContainerLine: '#D6CAB0',
++    OnContainer: '#1E1509',
 +  },
 +
 +  SurfaceVariant: {
 +    Container: '#EDE4CC',
 +    ContainerHover: '#E5DBBF',
-+    ContainerActive: '#DAD0AF',
-+    ContainerLine: '#CFC59F',
-+    OnContainer: '#2C1F0C',
++    ContainerActive: '#DCCEAC',
++    ContainerLine: '#CCBF98',
++    OnContainer: '#1E1509',
 +  },
 +
 +  Primary: {
-+    Main: '#8B5E2A',
-+    MainHover: '#7D5526',
-+    MainActive: '#764F23',
-+    MainLine: '#6E4920',
++    Main: '#7A4E1A',
++    MainHover: '#6D4516',
++    MainActive: '#663F13',
++    MainLine: '#5E3910',
 +    OnMain: '#FFFFFF',
 +    Container: '#E5D0B0',
 +    ContainerHover: '#DEC7A2',
@@ -133,15 +138,15 @@ index 268cbf788a..f10f8d0ecd 100644
 +  },
 +
 +  Secondary: {
-+    Main: '#2C1F0C',
-+    MainHover: '#3A2B14',
-+    MainActive: '#44331A',
-+    MainLine: '#4E3C20',
++    Main: '#1E1509',
++    MainHover: '#2C1F0C',
++    MainActive: '#3A2B14',
++    MainLine: '#44331A',
 +    OnMain: '#F5EDD8',
 +    Container: '#D0C4A0',
 +    ContainerHover: '#C6B890',
 +    ContainerActive: '#BCAD81',
-+    ContainerLine: '#B2A272',
++    ContainerLine: '#AFA170',
 +    OnContainer: '#1E1509',
 +  },
 +
