@@ -1,10 +1,10 @@
 diff --git a/src/app/features/room/PersonaPicker.tsx b/src/app/features/room/PersonaPicker.tsx
 new file mode 100644
-index 0000000000..f1f78c7819
+index 0000000000..9a1b01ce78
 --- /dev/null
 +++ b/src/app/features/room/PersonaPicker.tsx
-@@ -0,0 +1,246 @@
-+import React, { KeyboardEventHandler, useState } from 'react';
+@@ -0,0 +1,310 @@
++import React, { KeyboardEventHandler, useRef, useState } from 'react';
 +import { useAtom } from 'jotai';
 +import FocusTrap from 'focus-trap-react';
 +import {
@@ -22,6 +22,7 @@ index 0000000000..f1f78c7819
 +} from 'folds';
 +import { activePersonaAtom, savedPersonasAtom, Persona } from '../../state/personas';
 +import { stopPropagation } from '../../utils/keyboard';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
 +
 +function PersonaForm({
 +  initial,
@@ -32,8 +33,48 @@ index 0000000000..f1f78c7819
 +  onSave: (p: Persona) => void;
 +  onCancel: () => void;
 +}) {
++  const mx = useMatrixClient();
 +  const [name, setName] = useState(initial?.displayname ?? '');
 +  const [avatar, setAvatar] = useState(initial?.avatar_url ?? '');
++  const [uploading, setUploading] = useState(false);
++  const fileInputRef = useRef<HTMLInputElement>(null);
++
++  const uploadAndSetMxc = async (blob: Blob, filename: string) => {
++    setUploading(true);
++    try {
++      const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
++      if (result.content_uri) setAvatar(result.content_uri);
++    } catch {
++      // leave avatar unchanged on error
++    } finally {
++      setUploading(false);
++    }
++  };
++
++  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    if (!file) return;
++    e.target.value = '';
++    uploadAndSetMxc(file, file.name);
++  };
++
++  // On blur of the URL field, convert https:// to mxc:// by fetching + uploading
++  const handleAvatarBlur = async () => {
++    const url = avatar.trim();
++    if (!url.startsWith('https://') && !url.startsWith('http://')) return;
++    setUploading(true);
++    try {
++      const resp = await fetch(url);
++      const blob = await resp.blob();
++      const filename = url.split('/').pop()?.split('?')[0] ?? 'avatar';
++      const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
++      if (result.content_uri) setAvatar(result.content_uri);
++    } catch {
++      // leave as-is if fetch/upload fails
++    } finally {
++      setUploading(false);
++    }
++  };
 +
 +  const save = () => {
 +    const displayname = name.trim();
@@ -48,24 +89,47 @@ index 0000000000..f1f78c7819
 +
 +  return (
 +    <Box direction="Column" gap="200" style={{ padding: config.space.S100 }}>
++      <input
++        ref={fileInputRef}
++        type="file"
++        accept="image/*"
++        style={{ display: 'none' }}
++        onChange={handleFileChange}
++      />
 +      <Input
 +        size="300"
 +        placeholder="Display name"
 +        value={name}
-+        onChange={(e) => setName(e.target.value)}
++        onChange={(e) => setName((e.target as HTMLInputElement).value)}
 +        onKeyDown={onKeyDown}
 +        // eslint-disable-next-line jsx-a11y/no-autofocus
 +        autoFocus
 +      />
-+      <Input
-+        size="300"
-+        placeholder="Avatar URL (mxc:// or https://, optional)"
-+        value={avatar}
-+        onChange={(e) => setAvatar(e.target.value)}
-+        onKeyDown={onKeyDown}
-+      />
++      <Box gap="200" alignItems="Center">
++        <Input
++          style={{ flexGrow: 1 }}
++          size="300"
++          placeholder={uploading ? 'Uploading…' : 'Avatar URL (mxc://, optional)'}
++          value={uploading ? '' : avatar}
++          readOnly={uploading}
++          onChange={(e) => setAvatar((e.target as HTMLInputElement).value)}
++          onBlur={handleAvatarBlur}
++          onKeyDown={onKeyDown}
++        />
++        <IconButton
++          size="300"
++          variant="SurfaceVariant"
++          radii="300"
++          onClick={() => fileInputRef.current?.click()}
++          aria-label="Upload avatar image"
++          title="Upload image"
++          disabled={uploading}
++        >
++          <Icon src={Icons.Attachment} size="100" />
++        </IconButton>
++      </Box>
 +      <Box gap="200">
-+        <IconButton size="300" variant="Primary" radii="300" onClick={save} aria-label="Save">
++        <IconButton size="300" variant="Primary" radii="300" onClick={save} aria-label="Save" disabled={uploading}>
 +          <Icon src={Icons.Check} />
 +        </IconButton>
 +        <IconButton size="300" variant="Surface" radii="300" onClick={onCancel} aria-label="Cancel">
