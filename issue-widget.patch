@@ -1,9 +1,9 @@
 diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
 new file mode 100644
-index 0000000000..7c1f677d0f
+index 0000000000..693dd3fcec
 --- /dev/null
 +++ b/src/app/widget/IssueBoardWidget.tsx
-@@ -0,0 +1,1289 @@
+@@ -0,0 +1,1313 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { IRoomEvent, WidgetApi, WidgetApiToWidgetAction } from 'matrix-widget-api';
 +
@@ -201,6 +201,7 @@ index 0000000000..7c1f677d0f
 +    padding: '6px 12px',
 +    borderBottom: '1px solid #f0f0f0',
 +    verticalAlign: 'top' as const,
++    wordBreak: 'break-word' as const,
 +  },
 +  trHover: {
 +    cursor: 'pointer',
@@ -848,9 +849,11 @@ index 0000000000..7c1f677d0f
 +  reactionsByIssue: Map<string, ReactionMap>;
 +  commentCountByIssue: Map<string, number>;
 +  onEdit: ((issue: WidgetIssue) => void) | undefined;
++  hiddenColumns: Set<string>;
++  onHideColumn: (label: string) => void;
 +}
 +
-+function KanbanView({ issues, schema, kanbanField, reactionsByIssue, commentCountByIssue, onEdit }: KanbanViewProps) {
++function KanbanView({ issues, schema, kanbanField, reactionsByIssue, commentCountByIssue, onEdit, hiddenColumns, onHideColumn }: KanbanViewProps) {
 +  const titleField = schema.fields.find(f => f.key === 'title') ?? schema.fields[0];
 +  const metaFields = schema.fields.filter(f => f !== titleField && f !== kanbanField).slice(0, 2);
 +
@@ -871,6 +874,8 @@ index 0000000000..7c1f677d0f
 +    return result;
 +  }, [issues, kanbanField]);
 +
++  const visibleColumns = columns.filter(col => !hiddenColumns.has(col.label));
++
 +  if (issues.length === 0) {
 +    return (
 +      <div style={{ ...s.centered, flexDirection: 'column', gap: 8 }}>
@@ -882,11 +887,20 @@ index 0000000000..7c1f677d0f
 +
 +  return (
 +    <div style={s.kanbanScroll}>
-+      {columns.map(col => (
++      {visibleColumns.map(col => (
 +        <div key={col.label} style={s.kanbanCol}>
 +          <div style={s.kanbanColHeader}>
 +            <span>{col.label}</span>
-+            <span style={{ color: '#999', fontSize: 12 }}>{col.issues.length}</span>
++            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
++              <span style={{ color: '#999', fontSize: 12 }}>{col.issues.length}</span>
++              <button
++                type="button"
++                aria-label={'Hide ' + col.label + ' column'}
++                onClick={() => onHideColumn(col.label)}
++                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '0 2px',
++                  color: 'inherit', opacity: 0.5, fontSize: '0.9em', lineHeight: 1 }}
++              >✕</button>
++            </span>
 +          </div>
 +          <div style={s.kanbanColBody}>
 +            {col.issues.map(issue => {
@@ -943,6 +957,9 @@ index 0000000000..7c1f677d0f
 +  const [view, setView] = useState<'list' | 'kanban'>('list');
 +  const [editing, setEditing] = useState<WidgetIssue | 'new' | null>(null);
 +  const [editingSchema, setEditingSchema] = useState(false);
++  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
++  const hideColumn = (label: string) => setHiddenColumns(prev => new Set([...prev, label]));
++  const showColumn = (label: string) => setHiddenColumns(prev => { const next = new Set(prev); next.delete(label); return next; });
 +
 +  // Timeline feed state
 +  const [comments, setComments] = useState<IRoomEvent[]>([]);
@@ -1225,6 +1242,11 @@ index 0000000000..7c1f677d0f
 +              >
 +                Kanban
 +              </button>
++              {view === 'kanban' && hiddenColumns.size > 0 && [...hiddenColumns].map(label => (
++                <button key={label} onClick={() => showColumn(label)} style={s.btn} aria-label={'Show ' + label + ' column'}>
++                  {label}
++                </button>
++              ))}
 +            </>
 +          )}
 +          {canWrite && (
@@ -1250,6 +1272,8 @@ index 0000000000..7c1f677d0f
 +            reactionsByIssue={reactionsByIssue}
 +            commentCountByIssue={commentCountByIssue}
 +            onEdit={canWrite ? setEditing : undefined}
++            hiddenColumns={hiddenColumns}
++            onHideColumn={hideColumn}
 +          />
 +        ) : (
 +          <ListView

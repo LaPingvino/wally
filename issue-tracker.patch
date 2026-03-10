@@ -1,9 +1,9 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 0000000000..2e3a3a18ff
+index 0000000000..cea4e2b786
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,1833 @@
+@@ -0,0 +1,1867 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixClient, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
@@ -318,7 +318,7 @@ index 0000000000..2e3a3a18ff
 +  if (!str) return null;
 +  if (field.type === 'user') return <MemberDisplay room={room} userId={str} />;
 +  if (field.type === 'date') return <Text size="T200">{formatDate(str)}</Text>;
-+  return <Text size="T200">{str}</Text>;
++  return <Text size="T200" style={{ wordBreak: 'break-word' }}>{str}</Text>;
 +}
 +
 +// ── Activity / Reactions ───────────────────────────────────────────────────────
@@ -1048,7 +1048,7 @@ index 0000000000..2e3a3a18ff
 +            />
 +          )}
 +          {redacted && <Text size="T200" style={{ color: color.Warning.Main }} title="Current state redacted — showing last known version">⚠️</Text>}
-+          <Text size="T300" as="h3" style={{ margin: 0, fontWeight: 'bold' }}>{title}</Text>
++          <Text size="T300" as="h3" style={{ margin: 0, fontWeight: 'bold', wordBreak: 'break-word' }}>{title}</Text>
 +          {threadCount > 0 && <Text size="T200" priority="300">{'\uD83D\uDCAC'} {threadCount}</Text>}
 +        </Box>
 +        {canWrite && !showCheckbox && (
@@ -1403,6 +1403,7 @@ index 0000000000..2e3a3a18ff
 +  const [filterValue, setFilterValue] = useState('');
 +  const [filterDateFrom, setFilterDateFrom] = useState('');
 +  const [filterDateTo, setFilterDateTo] = useState('');
++  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
 +
 +  const editTriggerRef = useRef<HTMLButtonElement>(null);
 +  const schemaTriggerRef = useRef<HTMLButtonElement>(null);
@@ -1580,10 +1581,12 @@ index 0000000000..2e3a3a18ff
 +        entries: issues.filter((entry) => !kanbanField.values?.includes(entry.content[kanbanField.key] as string)) },
 +    ].filter((col) => col.entries.length > 0 || kanbanField.values?.includes(col.key));
 +
++    const visibleColumns = columns.filter((col) => !hiddenColumns.has(col.key));
++
 +    return (
 +      <div style={{ flexGrow: 1, overflow: 'auto' }} role="region" aria-label="Issue board">
 +        <Box gap="300" style={{ padding: config.space.S300, minHeight: '100%', alignItems: 'flex-start' }}>
-+          {columns.map((col) => {
++          {visibleColumns.map((col) => {
 +            const colHeadingId = 'issue-col-heading-' + col.key;
 +            return (
 +              <section key={col.key} aria-labelledby={colHeadingId}
@@ -1591,7 +1594,16 @@ index 0000000000..2e3a3a18ff
 +                  borderRadius: config.radii.R300, padding: config.space.S300, display: 'flex', flexDirection: 'column', gap: config.space.S200 }}>
 +                <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
 +                  <Text id={colHeadingId} as="h3" size="H6">{col.label.replace(/_/g, ' ')}</Text>
-+                  <Text size="T200" priority="300" aria-label={col.entries.length + ' issues'}>{col.entries.length}</Text>
++                  <Box alignItems="Center" gap="100">
++                    <Text size="T200" priority="300" aria-label={col.entries.length + ' issues'}>{col.entries.length}</Text>
++                    <button
++                      type="button"
++                      aria-label={'Hide ' + col.label + ' column'}
++                      onClick={() => setHiddenColumns((prev) => new Set([...prev, col.key]))}
++                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 4px',
++                        color: 'inherit', opacity: 0.5, fontSize: '0.9em', lineHeight: 1 }}
++                    >✕</button>
++                  </Box>
 +                </Box>
 +                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: config.space.S200 }}>
 +                  {col.entries.map((entry) => {
@@ -1711,20 +1723,42 @@ index 0000000000..2e3a3a18ff
 +        )}
 +      </Box>
 +
-+      {/* Secondary toolbar: kanban group-by selector (when in kanban with multiple enum fields) */}
-+      {effectiveViewMode.type === 'kanban' && enumFields.length > 1 && (
-+        <Box shrink="No" alignItems="Center" gap="200"
-+          style={{ padding: config.space.S100 + ' ' + config.space.S400, borderBottom: '1px solid ' + color.Surface.ContainerLine, background: color.SurfaceVariant.Container }}>
-+          <Text size="T200">Group by:</Text>
-+          <select
-+            value={effectiveViewMode.fieldKey}
-+            onChange={(e) => switchView({ type: 'kanban', fieldKey: e.target.value })}
-+            aria-label="Kanban grouping field"
-+            style={inlineSelectStyle}>
-+            {enumFields.map((f) => (
-+              <option key={f.key} value={f.key}>{f.label}</option>
-+            ))}
-+          </select>
++      {/* Secondary toolbar: kanban group-by selector + hidden column restore buttons */}
++      {effectiveViewMode.type === 'kanban' && (enumFields.length > 1 || hiddenColumns.size > 0) && (
++        <Box shrink="No" alignItems="Center" gap="200" style={{ flexWrap: 'wrap',
++          padding: config.space.S100 + ' ' + config.space.S400, borderBottom: '1px solid ' + color.Surface.ContainerLine, background: color.SurfaceVariant.Container }}>
++          {enumFields.length > 1 && (
++            <>
++              <Text size="T200">Group by:</Text>
++              <select
++                value={effectiveViewMode.fieldKey}
++                onChange={(e) => switchView({ type: 'kanban', fieldKey: e.target.value })}
++                aria-label="Kanban grouping field"
++                style={inlineSelectStyle}>
++                {enumFields.map((f) => (
++                  <option key={f.key} value={f.key}>{f.label}</option>
++                ))}
++              </select>
++            </>
++          )}
++          {hiddenColumns.size > 0 && (() => {
++            const kanbanField = effectiveViewMode.type === 'kanban'
++              ? schema.fields.find((f) => f.key === effectiveViewMode.fieldKey)
++              : undefined;
++            const allCols = [
++              ...(kanbanField?.values ?? []).map((v) => ({ key: v, label: v })),
++              { key: '__uncategorized__', label: 'Uncategorized' },
++            ];
++            return allCols
++              .filter((col) => hiddenColumns.has(col.key))
++              .map((col) => (
++                <Button key={col.key} size="300" variant="Secondary" fill="Soft"
++                  onClick={() => setHiddenColumns((prev) => { const next = new Set(prev); next.delete(col.key); return next; })}
++                  aria-label={'Show ' + col.label + ' column'}>
++                  <Text>{col.label.replace(/_/g, ' ')}</Text>
++                </Button>
++              ));
++          })()}
 +        </Box>
 +      )}
 +
