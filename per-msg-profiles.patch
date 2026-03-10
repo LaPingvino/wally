@@ -1,9 +1,9 @@
 diff --git a/src/app/features/room/PersonaPicker.tsx b/src/app/features/room/PersonaPicker.tsx
 new file mode 100644
-index 0000000000..9a1b01ce78
+index 0000000000..d36b07e876
 --- /dev/null
 +++ b/src/app/features/room/PersonaPicker.tsx
-@@ -0,0 +1,310 @@
+@@ -0,0 +1,318 @@
 +import React, { KeyboardEventHandler, useRef, useState } from 'react';
 +import { useAtom } from 'jotai';
 +import FocusTrap from 'focus-trap-react';
@@ -36,6 +36,7 @@ index 0000000000..9a1b01ce78
 +  const mx = useMatrixClient();
 +  const [name, setName] = useState(initial?.displayname ?? '');
 +  const [avatar, setAvatar] = useState(initial?.avatar_url ?? '');
++  const [pronouns, setPronouns] = useState(initial?.pronouns ?? '');
 +  const [uploading, setUploading] = useState(false);
 +  const fileInputRef = useRef<HTMLInputElement>(null);
 +
@@ -79,7 +80,7 @@ index 0000000000..9a1b01ce78
 +  const save = () => {
 +    const displayname = name.trim();
 +    if (!displayname) return;
-+    onSave({ displayname, avatar_url: avatar.trim() || undefined });
++    onSave({ displayname, avatar_url: avatar.trim() || undefined, pronouns: pronouns.trim() || undefined });
 +  };
 +
 +  const onKeyDown: KeyboardEventHandler = (e) => {
@@ -128,6 +129,13 @@ index 0000000000..9a1b01ce78
 +          <Icon src={Icons.Attachment} size="100" />
 +        </IconButton>
 +      </Box>
++      <Input
++        size="300"
++        placeholder="Pronouns (optional, e.g. they/them)"
++        value={pronouns}
++        onChange={(e) => setPronouns((e.target as HTMLInputElement).value)}
++        onKeyDown={onKeyDown}
++      />
 +      <Box gap="200">
 +        <IconButton size="300" variant="Primary" radii="300" onClick={save} aria-label="Save" disabled={uploading}>
 +          <Icon src={Icons.Check} />
@@ -315,7 +323,7 @@ index 0000000000..9a1b01ce78
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index ae46d2d098..2ef027a1ae 100644
+index ae46d2d098..7d081ed8dd 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -9,6 +9,8 @@
@@ -335,7 +343,7 @@ index ae46d2d098..2ef027a1ae 100644
  
      const handleFiles = useCallback(
        async (files: File[]) => {
-@@ -372,12 +375,20 @@
+@@ -372,12 +375,21 @@
            content['m.relates_to'].is_falling_back = false;
          }
        }
@@ -345,6 +353,7 @@ index ae46d2d098..2ef027a1ae 100644
 +          id: personaId(activePersona),
 +          displayname: activePersona.displayname,
 +          ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
++          ...(activePersona.pronouns ? { pronouns: activePersona.pronouns } : {}),
 +        };
 +      }
        mx.sendMessage(roomId, content as any);
@@ -357,7 +366,7 @@ index ae46d2d098..2ef027a1ae 100644
  
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
-@@ -669,6 +680,7 @@
+@@ -669,6 +681,7 @@
                    </PopOut>
                  )}
                </UseStateProvider>
@@ -400,7 +409,7 @@ index d1678b65b3..77ade540ee 100644
        minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
  
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c29d..54cd762cdb 100644
+index 9324e1c29d..1c2c953f96 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -53,12 +53,11 @@
@@ -451,17 +460,30 @@ index 9324e1c29d..54cd762cdb 100644
  
      const tagColor = memberPowerTag?.color
        ? accessibleTagColors?.get(memberPowerTag.color)
+@@ -765,6 +766,11 @@
+               truncate
+             >
+               <UsernameBold>{senderDisplayName}</UsernameBold>
++              {perMsgProfile?.pronouns && (
++                <span style={{ opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>
++                  {' '}({perMsgProfile.pronouns})
++                </span>
++              )}
+             </Text>
+           </Username>
+           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
 diff --git a/src/app/state/personas.ts b/src/app/state/personas.ts
 new file mode 100644
-index 0000000000..9750caaf7b
+index 0000000000..874eaff73c
 --- /dev/null
 +++ b/src/app/state/personas.ts
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,59 @@
 +import { atom } from 'jotai';
 +
 +export type Persona = {
 +  displayname: string;
 +  avatar_url?: string;
++  pronouns?: string;
 +};
 +
 +// MSC4144 not yet merged — send unstable Beeper key only; read both for forward-compat
@@ -476,10 +498,10 @@ index 0000000000..9750caaf7b
 +/** Read per-message profile from event content (stable key preferred). */
 +export function getPerMsgProfile(
 +  content: Record<string, unknown>
-+): { id?: string; displayname?: string; avatar_url?: string } | undefined {
++): { id?: string; displayname?: string; avatar_url?: string; pronouns?: string } | undefined {
 +  return (content[PER_MSG_PROFILE_KEY] ??
 +    content[PER_MSG_PROFILE_UNSTABLE]) as
-+    | { id?: string; displayname?: string; avatar_url?: string }
++    | { id?: string; displayname?: string; avatar_url?: string; pronouns?: string }
 +    | undefined;
 +}
 +

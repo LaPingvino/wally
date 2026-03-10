@@ -1123,6 +1123,38 @@ index 767a967ee4..1a618a68ef 100644
 +    </CollapsibleCard>
    );
  }
+diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
+index 9324e1c29d..ebffe30a37 100644
+--- a/src/app/features/room/message/Message.tsx
++++ b/src/app/features/room/message/Message.tsx
+@@ -79,6 +79,19 @@
+ import { PowerIcon } from '../../../components/power';
+ import colorMXID from '../../../../util/colorMXID';
+ import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
++import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
++
++function InlinePronouns({ userId }: { userId: string }) {
++  const [profile] = useExtendedProfile(userId);
++  const pronouns = profile?.['io.fsky.nyx.pronouns'];
++  if (!pronouns?.length) return null;
++  const summary = pronouns.map((p) => p.summary).join(', ');
++  return (
++    <span style={{ opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>
++      {' '}({summary})
++    </span>
++  );
++}
+ 
+ export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
+ 
+@@ -765,6 +778,7 @@
+               truncate
+             >
+               <UsernameBold>{senderDisplayName}</UsernameBold>
++              <InlinePronouns userId={senderId} />
+             </Text>
+           </Username>
+           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
 diff --git a/src/app/features/settings/Settings.tsx b/src/app/features/settings/Settings.tsx
 index 5e1a20f4ac..fc8e1a7ffc 100644
 --- a/src/app/features/settings/Settings.tsx
