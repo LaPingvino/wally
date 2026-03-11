@@ -57,7 +57,7 @@ index ae46d2d098..20dca577a0 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d1678b65b3..4f9e811a91 100644
+index d1678b65b3..0996e1261d 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -228,6 +228,7 @@
@@ -308,16 +308,29 @@ index d1678b65b3..4f9e811a91 100644
    );
  
    useLiveEventArrive(
-@@ -612,7 +706,7 @@
+@@ -611,11 +705,18 @@
+         // keep paginating timeline and conditionally mark as read
          // otherwise we update timeline without paginating
          // so timeline can be updated with evt like: edits, reactions etc
++        if (threadId) {
++          // Thread mode: rebuild synthetic timeline from main room timeline
++          // (the new event is now in the main timeline, so getInitialTimeline picks it up).
++          setTimeline(getInitialTimeline(room, threadId));
++          if (atBottomRef.current) {
++            scrollToBottomRef.current.count += 1;
++            scrollToBottomRef.current.smooth = true;
++          }
++          return;
++        }
          if (atBottomRef.current) {
--          if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
-+          if (!threadId && document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
-             // Check if the document is in focus (user is actively viewing the app),
-             // and either there are no unread messages or the latest message is from the current user.
-             // If either condition is met, trigger the markAsRead function to send a read receipt.
-@@ -640,8 +734,9 @@
+           if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
+-            // Check if the document is in focus (user is actively viewing the app),
+-            // and either there are no unread messages or the latest message is from the current user.
+-            // If either condition is met, trigger the markAsRead function to send a read receipt.
+             requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
+           }
+ 
+@@ -640,8 +741,9 @@
            setUnreadInfo(getRoomUnreadInfo(room));
          }
        },
@@ -329,17 +342,32 @@ index d1678b65b3..4f9e811a91 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,11 +773,20 @@
+@@ -677,12 +779,33 @@
+   useLiveTimelineRefresh(
      room,
      useCallback(() => {
-       if (liveTimelineLinked) {
+-      if (liveTimelineLinked) {
 -        setTimeline(getInitialTimeline(room));
-+        setTimeline(getInitialTimeline(room, threadId));
-       }
+-      }
 -    }, [room, liveTimelineLinked])
-+    }, [room, threadId, liveTimelineLinked])
++      // Always reinitialize: TimelineRefresh signals the SDK replaced the live
++      // timeline chain, so any stored range/indices against the old chain are
++      // invalid regardless of liveTimelineLinked state.
++      setTimeline(getInitialTimeline(room, threadId));
++      setAtBottom(true);
++      scrollToBottomRef.current.count += 1;
++      scrollToBottomRef.current.smooth = false;
++    }, [room, threadId])
    );
  
++  // Self-heal: if the range fell behind the live end while at the bottom
++  // (e.g. events arrived between a TimelineRefresh and re-render), snap back.
++  useEffect(() => {
++    if (liveTimelineLinked && !rangeAtEnd && atBottom) {
++      setTimeline(getInitialTimeline(room, threadId));
++    }
++  }, [liveTimelineLinked, rangeAtEnd, atBottom, room, threadId]);
++
 +  // Thread mode: if liveTimelineLinked becomes false (synthetic timeline ref went stale),
 +  // re-scan main room timeline to rebuild. No dependency on SDK Thread objects.
 +  useEffect(() => {
@@ -352,7 +380,7 @@ index d1678b65b3..4f9e811a91 100644
    // Stay at bottom when room editor resize
    useResizeObserver(
      useMemo(() => {
-@@ -886,7 +990,7 @@
+@@ -886,7 +1009,7 @@
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
