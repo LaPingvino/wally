@@ -1,5 +1,5 @@
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index ae46d2d098..20dca577a0 100644
+index f88ccf9382..94eee2a8f5 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -123,9 +123,10 @@
@@ -57,10 +57,10 @@ index ae46d2d098..20dca577a0 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d1678b65b3..0996e1261d 100644
+index 39d7e50a60..2e9726a868 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
-@@ -228,6 +228,7 @@
+@@ -229,6 +229,7 @@
    eventId?: string;
    roomInputRef: RefObject<HTMLElement>;
    editor: Editor;
@@ -68,7 +68,7 @@ index d1678b65b3..0996e1261d 100644
  };
  
  const PAGINATION_LIMIT = 80;
-@@ -272,7 +273,8 @@
+@@ -273,7 +274,8 @@
    mx: MatrixClient,
    timeline: Timeline,
    setTimeline: Dispatch<SetStateAction<Timeline>>,
@@ -78,7 +78,7 @@ index d1678b65b3..0996e1261d 100644
  ) => {
    const timelineRef = useRef(timeline);
    timelineRef.current = timeline;
-@@ -289,7 +291,9 @@
+@@ -290,7 +292,9 @@
        const topTimeline = linkedTimelines[0];
        const timelineMatch = (mt: EventTimeline) => (t: EventTimeline) => t === mt;
  
@@ -89,7 +89,7 @@ index d1678b65b3..0996e1261d 100644
        const topTmIndex = newLTimelines.findIndex(timelineMatch(topTimeline));
        const topAddedTm = topTmIndex === -1 ? [] : newLTimelines.slice(0, topTmIndex);
  
-@@ -297,16 +301,22 @@
+@@ -298,16 +302,22 @@
          timelineToEventsCount(newLTimelines[topTmIndex]) - timelinesEventsCount[0];
        const offsetRange = getTimelinesEventsCount(topAddedTm) + (backwards ? topTmAddedEvt : 0);
  
@@ -121,7 +121,7 @@ index d1678b65b3..0996e1261d 100644
      };
  
      return async (backwards: boolean) => {
-@@ -357,12 +367,43 @@
+@@ -358,12 +368,43 @@
          recalibratePagination(lTimelines, timelinesEventsCount, backwards);
        }
      };
@@ -167,7 +167,7 @@ index d1678b65b3..0996e1261d 100644
      const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
        mEvent,
        eventRoom,
-@@ -384,7 +425,7 @@
+@@ -385,7 +426,7 @@
        room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
        room.removeListener(RoomEvent.Redaction, handleRedaction);
      };
@@ -176,7 +176,7 @@ index d1678b65b3..0996e1261d 100644
  };
  
  const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
-@@ -401,7 +442,39 @@
+@@ -402,7 +443,39 @@
    }, [room, onRefresh]);
  };
  
@@ -217,7 +217,7 @@ index d1678b65b3..0996e1261d 100644
    const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
    const evLength = getTimelinesEventsCount(linkedTimelines);
    return {
-@@ -418,6 +491,19 @@
+@@ -419,6 +492,19 @@
    linkedTimelines: [],
  });
  
@@ -237,7 +237,7 @@ index d1678b65b3..0996e1261d 100644
  const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
    const readUptoEventId = room.getEventReadUpTo(room.client.getUserId() ?? '');
    if (!readUptoEventId) return undefined;
-@@ -430,7 +516,7 @@
+@@ -431,7 +517,7 @@
    };
  };
  
@@ -246,7 +246,7 @@ index d1678b65b3..0996e1261d 100644
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-@@ -453,7 +539,8 @@
+@@ -454,7 +540,8 @@
    const ignoredUsersList = useIgnoredUsers();
    const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
  
@@ -256,7 +256,7 @@ index d1678b65b3..0996e1261d 100644
    const powerLevels = usePowerLevelsContext();
    const creators = useRoomCreators(room);
  
-@@ -486,7 +573,7 @@
+@@ -487,7 +574,7 @@
  
    const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
  
@@ -265,7 +265,7 @@ index d1678b65b3..0996e1261d 100644
    const readUptoEventIdRef = useRef<string>();
    if (unreadInfo) {
      readUptoEventIdRef.current = unreadInfo.readUptoEventId;
-@@ -535,11 +622,17 @@
+@@ -536,11 +623,17 @@
    const parseMemberEvent = useMemberEventParser();
  
    const [timeline, setTimeline] = useState<Timeline>(() =>
@@ -285,7 +285,7 @@ index d1678b65b3..0996e1261d 100644
    const canPaginateBack =
      typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
    const rangeAtStart = timeline.range.start === 0;
-@@ -551,7 +644,8 @@
+@@ -552,7 +645,8 @@
      mx,
      timeline,
      setTimeline,
@@ -295,7 +295,7 @@ index d1678b65b3..0996e1261d 100644
    );
  
    const getScrollElement = useCallback(() => scrollRef.current, []);
-@@ -597,10 +691,10 @@
+@@ -598,10 +692,10 @@
      ),
      useCallback(() => {
        if (!alive()) return;
@@ -308,7 +308,7 @@ index d1678b65b3..0996e1261d 100644
    );
  
    useLiveEventArrive(
-@@ -611,11 +705,18 @@
+@@ -612,11 +706,18 @@
          // keep paginating timeline and conditionally mark as read
          // otherwise we update timeline without paginating
          // so timeline can be updated with evt like: edits, reactions etc
@@ -330,7 +330,7 @@ index d1678b65b3..0996e1261d 100644
              requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
            }
  
-@@ -640,8 +741,9 @@
+@@ -641,8 +742,9 @@
            setUnreadInfo(getRoomUnreadInfo(room));
          }
        },
@@ -342,7 +342,7 @@ index d1678b65b3..0996e1261d 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -677,12 +779,33 @@
+@@ -678,12 +780,33 @@
    useLiveTimelineRefresh(
      room,
      useCallback(() => {
@@ -380,7 +380,7 @@ index d1678b65b3..0996e1261d 100644
    // Stay at bottom when room editor resize
    useResizeObserver(
      useMemo(() => {
-@@ -886,7 +1009,7 @@
+@@ -887,7 +1010,7 @@
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }

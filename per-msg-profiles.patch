@@ -323,7 +323,7 @@ index 0000000000..d36b07e876
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index ae46d2d098..dcb8fdbffa 100644
+index f88ccf9382..e0a686e7fb 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -9,6 +9,8 @@
@@ -405,10 +405,10 @@ index ae46d2d098..dcb8fdbffa 100644
                </IconButton>
              </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index d1678b65b3..77ade540ee 100644
+index 39d7e50a60..577fba4d42 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
-@@ -85,6 +85,7 @@
+@@ -86,6 +86,7 @@
  } from '../../utils/room';
  import { useSetting } from '../../state/hooks/settings';
  import { MessageLayout, settingsAtom } from '../../state/settings';
@@ -416,7 +416,7 @@ index d1678b65b3..77ade540ee 100644
  import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
  import { Reactions, Message, Event, EncryptedContent } from './message';
  import { useMemberEventParser } from '../../hooks/useMemberEventParser';
-@@ -1596,12 +1597,21 @@
+@@ -1648,12 +1649,21 @@
        dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
      }
  
@@ -439,7 +439,7 @@ index d1678b65b3..77ade540ee 100644
        minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
  
 diff --git a/src/app/features/room/RoomView.tsx b/src/app/features/room/RoomView.tsx
-index 0f8375943c..1c8319bf7a 100644
+index a4f0d7af68..b2f29f9ff8 100644
 --- a/src/app/features/room/RoomView.tsx
 +++ b/src/app/features/room/RoomView.tsx
 @@ -1,6 +1,8 @@
@@ -447,7 +447,7 @@ index 0f8375943c..1c8319bf7a 100644
 +import React, { useCallback, useEffect, useRef } from 'react';
 +import { Transforms } from 'slate';
  import { Box, Text, config } from 'folds';
--import { EventType, Room } from 'matrix-js-sdk';
+-import { EventType } from 'matrix-js-sdk';
 +import { EventType, JoinRule, Room } from 'matrix-js-sdk';
 +import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
  import { ReactEditor } from 'slate-react';
@@ -459,7 +459,6 @@ index 0f8375943c..1c8319bf7a 100644
  import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
 +import * as followingCss from './RoomViewFollowing.css';
  import { Page } from '../../components/page';
--import { RoomViewHeader } from './RoomViewHeader';
 +import { useAtomValue, useSetAtom } from 'jotai';
 +import { activePersonaAtom } from '../../state/personas';
  import { useKeyDown } from '../../hooks/useKeyDown';
@@ -469,7 +468,8 @@ index 0f8375943c..1c8319bf7a 100644
  import { useSetting } from '../../state/hooks/settings';
  import { useRoomPermissions } from '../../hooks/useRoomPermissions';
  import { useRoomCreators } from '../../hooks/useRoomCreators';
-+import { useIsDirectRoom } from '../../hooks/useRoom';
+-import { useRoom } from '../../hooks/useRoom';
++import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
 +import { useRoomUnread } from '../../state/hooks/unread';
 +import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 +import { announce } from '../../utils/announce';
@@ -477,18 +477,7 @@ index 0f8375943c..1c8319bf7a 100644
  
  const FN_KEYS_REGEX = /^F\d+$/;
  const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
-@@ -30,10 +40,8 @@
-     return false;
-   }
- 
--  // do not focus on F keys
-   if (FN_KEYS_REGEX.test(code)) return false;
- 
--  // do not focus on numlock/scroll lock
-   if (
-     code.startsWith('OS') ||
-     code.startsWith('Meta') ||
-@@ -53,6 +61,9 @@
+@@ -51,6 +61,9 @@
      return false;
    }
  
@@ -498,16 +487,16 @@ index 0f8375943c..1c8319bf7a 100644
    return true;
  };
  
-@@ -61,6 +72,8 @@
+@@ -59,6 +72,8 @@
    const roomViewRef = useRef<HTMLDivElement>(null);
  
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
 +  const [perMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
 +  const activePersona = useAtomValue(activePersonaAtom);
  
+   const room = useRoom();
    const { roomId } = room;
-   const editor = useEditor();
-@@ -70,10 +83,32 @@
+@@ -69,10 +84,32 @@
    const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
    const powerLevels = usePowerLevelsContext();
    const creators = useRoomCreators(room);
@@ -540,7 +529,7 @@ index 0f8375943c..1c8319bf7a 100644
    useKeyDown(
      window,
      useCallback(
-@@ -85,58 +120,172 @@
+@@ -84,57 +121,172 @@
          }
          if (shouldFocusMessageField(evt) || isKeyHotkey('mod+v', evt)) {
            ReactEditor.focus(editor);
@@ -653,7 +642,6 @@ index 0f8375943c..1c8319bf7a 100644
 +
    return (
 -    <Page ref={roomViewRef}>
--      <RoomViewHeader />
 -      <Box grow="Yes" direction="Column">
 -        <RoomTimeline
 -          key={roomId}
@@ -760,7 +748,7 @@ index 0f8375943c..1c8319bf7a 100644
    );
  }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c29d..514f919eaa 100644
+index 2d87e9bde0..514f919eaa 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -53,12 +53,11 @@
@@ -777,23 +765,16 @@ index 9324e1c29d..514f919eaa 100644
  import { useMatrixClient } from '../../../hooks/useMatrixClient';
  import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
  import * as css from './styles.css';
-@@ -324,14 +323,10 @@
+@@ -324,8 +323,6 @@
      onClose?: () => void;
    }
  >(({ room, mEvent, onClose, ...props }, ref) => {
 -  const mx = useMatrixClient();
 -
    const handleCopy = () => {
--    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, room.roomId);
      const eventId = mEvent.getId();
--    const viaServers = isRoomAlias(roomIdOrAlias) ? undefined : getViaServers(room);
      if (!eventId) return;
--    copyToClipboard(getMatrixToRoomEvent(roomIdOrAlias, eventId, viaServers));
-+    copyToClipboard(getMatrixToRoomEvent(room.roomId, eventId, getViaServers(room)));
-     onClose?.();
-   };
- 
-@@ -730,9 +725,15 @@
+@@ -728,9 +725,15 @@
      const [menuAnchor, setMenuAnchor] = useState<RectCords>();
      const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
  
@@ -811,7 +792,7 @@ index 9324e1c29d..514f919eaa 100644
  
      const tagColor = memberPowerTag?.color
        ? accessibleTagColors?.get(memberPowerTag.color)
-@@ -765,6 +766,16 @@
+@@ -763,6 +766,16 @@
                truncate
              >
                <UsernameBold>{senderDisplayName}</UsernameBold>

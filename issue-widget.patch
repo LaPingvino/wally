@@ -1447,10 +1447,10 @@ index 0000000000..f961cc4d18
 +  );
 +}, 4000);
 diff --git a/vite.config.js b/vite.config.js
-index dfa02fc4eb..e3c4dbac13 100644
+index a5af94d8b9..19d282c216 100644
 --- a/vite.config.js
 +++ b/vite.config.js
-@@ -126,6 +126,10 @@
+@@ -133,6 +133,10 @@
      copyPublicDir: false,
      rollupOptions: {
        plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],

@@ -191,7 +191,7 @@ index ad34e3f458..ad768ea8f1 100644
      atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems))
    );
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index f8647d1865..17c59a5f82 100644
+index 4de42081f5..bc5ee9da26 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
 @@ -28,6 +28,7 @@
@@ -211,7 +211,7 @@ index f8647d1865..17c59a5f82 100644
  import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
  import { Room } from '../features/room';
  import { Lobby } from '../features/lobby';
-@@ -287,6 +288,7 @@
+@@ -292,6 +293,7 @@
                element={<WelcomePage />}
              />
            )}
@@ -582,7 +582,7 @@ index 20518e5686..3b93142a47 100644
              </Text>
            </Box>
 diff --git a/src/app/pages/client/inbox/Notifications.tsx b/src/app/pages/client/inbox/Notifications.tsx
-index 4cc94d918d..50fd9d99b6 100644
+index 9592224f8c..4943987b97 100644
 --- a/src/app/pages/client/inbox/Notifications.tsx
 +++ b/src/app/pages/client/inbox/Notifications.tsx
 @@ -13,7 +13,7 @@
@@ -602,7 +602,7 @@ index 4cc94d918d..50fd9d99b6 100644
  import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
  import { SequenceCard } from '../../../components/sequence-card';
  import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
-@@ -568,6 +569,7 @@
+@@ -573,6 +574,7 @@
    const mDirects = useAtomValue(mDirectAtom);
  
    const { navigateRoom } = useRoomNavigate();
@@ -610,7 +610,7 @@ index 4cc94d918d..50fd9d99b6 100644
    const [searchParams, setSearchParams] = useSearchParams();
    const notificationsSearchParams = useNotificationsSearchParams(searchParams);
    const scrollRef = useRef<HTMLDivElement>(null);
-@@ -617,6 +619,16 @@
+@@ -622,6 +624,16 @@
      loadTimeline();
    }, [loadTimeline]);
  
@@ -627,7 +627,7 @@ index 4cc94d918d..50fd9d99b6 100644
    const lastVItem = vItems[vItems.length - 1];
    const lastVItemIndex: number | undefined = lastVItem?.index;
    useEffect(() => {
-@@ -765,20 +777,41 @@
+@@ -770,20 +782,41 @@
                      ))}
                    </Box>
                  )}
@@ -1220,7 +1220,7 @@ index 5d13a9ab65..d94819e4e4 100644
    );
  }
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..55785cc356 100644
+index 2a7c619939..833485b466 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -6,7 +6,7 @@
@@ -1242,7 +1242,7 @@ index 3f60d2a957..55785cc356 100644
  import { allRoomsAtom } from '../../../state/room-list/roomList';
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
-@@ -93,6 +94,7 @@
+@@ -94,6 +95,7 @@
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const [developerTools] = useSetting(settingsAtom, 'developerTools');
@@ -1250,7 +1250,7 @@ index 3f60d2a957..55785cc356 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -150,6 +152,47 @@
+@@ -151,6 +153,47 @@
            />
          )}
          <MenuItem
@@ -1298,16 +1298,16 @@ index 3f60d2a957..55785cc356 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -394,6 +437,8 @@
+@@ -395,6 +438,8 @@
  
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
  
 +  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
 +
    const getRoom = useCallback(
-     (rId: string) => {
+     (rId: string): Room | undefined => {
        if (allJoinedRooms.has(rId)) {
-@@ -404,6 +449,31 @@
+@@ -405,6 +450,31 @@
      [mx, allJoinedRooms]
    );
  
@@ -1339,9 +1339,9 @@ index 3f60d2a957..55785cc356 100644
    const hierarchy = useSpaceJoinedHierarchy(
      space.roomId,
      getRoom,
-@@ -418,10 +488,7 @@
+@@ -419,10 +489,7 @@
        },
-       [space.roomId, closedCategories, roomToUnread, selectedRoomId]
+       [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
      ),
 -    useCallback(
 -      (sId) => closedCategories.has(makeNavCategoryId(space.roomId, sId)),

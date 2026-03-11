@@ -62,7 +62,7 @@ index 27adadbade..0d1e28774f 100644
        </Box>
      </Box>
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
-index f7af2d6aab..1947e87592 100644
+index f536d12ef8..00f87c3239 100644
 --- a/src/app/features/settings/about/About.tsx
 +++ b/src/app/features/settings/about/About.tsx
 @@ -39,22 +39,22 @@
@@ -78,7 +78,7 @@ index f7af2d6aab..1947e87592 100644
                      <Box gap="100" alignItems="End">
 -                      <Text size="H3">Cinny</Text>
 +                      <Text size="H3" as="h2">Wally</Text>
-                       <Text size="T200">v4.10.5</Text>
+                       <Text size="T200">v4.11.1</Text>
                      </Box>
 -                    <Text>Yet another matrix client.</Text>
 +                    <Text>A Cinny fork.</Text>
@@ -108,7 +108,7 @@ index 3943f42d19..8b3da2db35 100644
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index 79630990e6..aa4a98ab51 100644
+index b3ec2eb443..e6673468dd 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
 @@ -3,6 +3,22 @@

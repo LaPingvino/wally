@@ -1,18 +1,18 @@
 diff --git a/package-lock.json b/package-lock.json
-index 0546686657..26bad8eccd 100644
+index 399f03a928..c2ca9ad638 100644
 --- a/package-lock.json
 +++ b/package-lock.json
-@@ -62,7 +62,8 @@
-         "slate-dom": "0.112.2",
-         "slate-history": "0.110.3",
-         "slate-react": "0.112.1",
+@@ -63,7 +63,8 @@
+         "slate-dom": "0.123.0",
+         "slate-history": "0.113.1",
+         "slate-react": "0.123.0",
 -        "ua-parser-js": "1.0.35"
 +        "ua-parser-js": "1.0.35",
 +        "zod": "4.3.6"
        },
        "devDependencies": {
-         "@esbuild-plugins/node-globals-polyfill": "0.2.3",
-@@ -12117,6 +12118,15 @@
+         "@element-hq/element-call-embedded": "0.16.3",
+@@ -12105,6 +12106,15 @@
        "funding": {
          "url": "https://github.com/sponsors/sindresorhus"
        }
@@ -29,19 +29,20 @@ index 0546686657..26bad8eccd 100644
    }
  }
 diff --git a/package.json b/package.json
-index de8ee72da9..694c5e6ff8 100644
+index ba2cd751ea..d03973f2a7 100644
 --- a/package.json
 +++ b/package.json
-@@ -73,7 +73,8 @@
-     "slate-dom": "0.112.2",
-     "slate-history": "0.110.3",
-     "slate-react": "0.112.1",
+@@ -75,7 +75,9 @@
+     "slate-dom": "0.123.0",
+     "slate-history": "0.113.1",
+     "slate-react": "0.123.0",
 -    "ua-parser-js": "1.0.35"
 +    "ua-parser-js": "1.0.35",
 +    "zod": "4.3.6"
++>>>>>>> conflict 1 of 1 ends
    },
    "devDependencies": {
-     "@esbuild-plugins/node-globals-polyfill": "0.2.3",
+     "@element-hq/element-call-embedded": "0.16.3",
 diff --git a/src/app/components/AccountDataEditor.tsx b/src/app/components/AccountDataEditor.tsx
 index 2dbaf1f1f2..ef8d01a149 100644
 --- a/src/app/components/AccountDataEditor.tsx
@@ -235,7 +236,7 @@ index 0000000000..95c0296455
 +  );
 +}
 diff --git a/src/app/components/user-profile/UserChips.tsx b/src/app/components/user-profile/UserChips.tsx
-index 53e6618b5a..f809c5a867 100644
+index 8288063421..4d906e6ff2 100644
 --- a/src/app/components/user-profile/UserChips.tsx
 +++ b/src/app/components/user-profile/UserChips.tsx
 @@ -1,4 +1,4 @@
@@ -1124,7 +1125,7 @@ index 767a967ee4..1a618a68ef 100644
    );
  }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9324e1c29d..ebffe30a37 100644
+index 2d87e9bde0..8b109bbabc 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -79,6 +79,19 @@
@@ -1147,7 +1148,7 @@ index 9324e1c29d..ebffe30a37 100644
  
  export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
  
-@@ -765,6 +778,7 @@
+@@ -763,6 +776,7 @@
                truncate
              >
                <UsernameBold>{senderDisplayName}</UsernameBold>

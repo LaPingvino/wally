@@ -68,19 +68,19 @@ index 52ec7f206e..b2470310ea 100644
                        <ReactQueryDevtools initialIsOpen={false} />
                      </QueryClientProvider>
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index f8647d1865..e0c7612667 100644
+index 4de42081f5..76294ba32c 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
-@@ -69,7 +69,7 @@
- import { SearchModalRenderer } from '../features/search';
- import { getFallbackSession } from '../state/sessions';
+@@ -71,7 +71,7 @@
+ import { CallStatusRenderer } from './CallStatusRenderer';
+ import { CallEmbedProvider } from '../components/CallEmbedProvider';
  
 -export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
 +export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize, basePath?: string) => {
    const { hashRouter } = clientConfig;
    const mobile = screenSize === ScreenSize.Mobile;
  
-@@ -299,6 +299,6 @@
+@@ -304,6 +304,6 @@
      return createHashRouter(routes, { basename: hashRouter.basename });
    }
    return createBrowserRouter(routes, {
@@ -308,7 +308,7 @@ index 0000000000..16f78b3e7b
 +  );
 +}
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index e1a5dc0c0b..7635e1b08f 100644
+index 93f0526e35..068dcc699c 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
 @@ -13,7 +13,12 @@
@@ -325,7 +325,7 @@ index e1a5dc0c0b..7635e1b08f 100644
  import FocusTrap from 'focus-trap-react';
  import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
  import {
-@@ -24,17 +29,36 @@
+@@ -24,11 +29,9 @@
    startClient,
  } from '../../../client/initMatrix';
  import { SplashScreen } from '../../components/splash-screen';
@@ -337,9 +337,10 @@ index e1a5dc0c0b..7635e1b08f 100644
  import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
  import { useSyncState } from '../../hooks/useSyncState';
  import { stopPropagation } from '../../utils/keyboard';
- import { SyncStatus } from './SyncStatus';
+@@ -36,6 +39,27 @@
  import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
  import { getFallbackSession } from '../../state/sessions';
+ import { AutoDiscovery } from './AutoDiscovery';
 +import { specVersions, SpecVersions as SpecVersionsData } from '../../cs-api';
 +import { SpecVersionsProvider } from '../../hooks/useSpecVersions';
 +import type { ServerConfigs } from '../../components/ServerConfigsLoader';
@@ -364,7 +365,7 @@ index e1a5dc0c0b..7635e1b08f 100644
  
  function ClientRootLoading() {
    return (
-@@ -127,8 +151,16 @@
+@@ -128,8 +152,16 @@
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -383,9 +384,9 @@ index e1a5dc0c0b..7635e1b08f 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -145,6 +177,17 @@
+@@ -146,6 +178,17 @@
    const [loading, setLoading] = useState(true);
-   const { baseUrl } = getFallbackSession() ?? {};
+   const { baseUrl, userId } = getFallbackSession() ?? {};
  
 +  // Fetch spec versions in parallel with initClient — children use empty fallback until resolved
 +  const [specVersionsData, setSpecVersionsData] = useState<SpecVersionsData>({ versions: [] });
@@ -401,7 +402,7 @@ index e1a5dc0c0b..7635e1b08f 100644
    const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
      useCallback(() => {
        const session = getFallbackSession();
-@@ -159,6 +202,15 @@
+@@ -160,6 +203,15 @@
      useCallback((m) => startClient(m), [])
    );
  
@@ -417,7 +418,7 @@ index e1a5dc0c0b..7635e1b08f 100644
    useLogoutListener(mx);
  
    useEffect(() => {
-@@ -176,14 +228,14 @@
+@@ -177,7 +229,7 @@
    useSyncState(
      mx,
      useCallback((state) => {
@@ -426,56 +427,70 @@ index e1a5dc0c0b..7635e1b08f 100644
          setLoading(false);
        }
      }, [])
-   );
+@@ -185,18 +237,12 @@
  
    return (
--    <SpecVersions baseUrl={baseUrl!}>
-+    <SpecVersionsProvider value={specVersionsData}>
-       {mx && <SyncStatus mx={mx} />}
-       {loading && <ClientRootOptions mx={mx} />}
-       {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
-@@ -202,6 +254,15 @@
-                     Retry
-                   </Text>
-                 </Button>
-+                <Button
-+                  variant="Secondary"
-+                  fill="Soft"
-+                  onClick={mx ? () => clearCacheAndReload(mx) : clearLoginData}
-+                >
-+                  <Text as="span" size="B400">
-+                    Clear Cache
-+                  </Text>
-+                </Button>
-               </Box>
-             </Dialog>
-           </Box>
-@@ -211,19 +272,15 @@
-         <ClientRootLoading />
-       ) : (
-         <MatrixClientProvider value={mx}>
--          <ServerConfigsLoader>
--            {(serverConfigs) => (
--              <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
--                <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
--                  <AuthMetadataProvider value={serverConfigs.authMetadata}>
--                    {children}
--                  </AuthMetadataProvider>
--                </MediaConfigProvider>
--              </CapabilitiesProvider>
--            )}
--          </ServerConfigsLoader>
-+          <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
-+            <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
-+              <AuthMetadataProvider value={serverConfigs.authMetadata}>
-+                {children}
-+              </AuthMetadataProvider>
-+            </MediaConfigProvider>
-+          </CapabilitiesProvider>
-         </MatrixClientProvider>
-       )}
--    </SpecVersions>
-+    </SpecVersionsProvider>
+     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
+-      <SpecVersions baseUrl={baseUrl!}>
++      <SpecVersionsProvider value={specVersionsData}>
+         {mx && <SyncStatus mx={mx} />}
+         {loading && <ClientRootOptions mx={mx} />}
+         {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
+           <SplashScreen>
+-            <Box
+-              direction="Column"
+-              grow="Yes"
+-              alignItems="Center"
+-              justifyContent="Center"
+-              gap="400"
+-            >
++            <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
+               <Dialog>
+                 <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
+                   {loadState.status === AsyncStatus.Error && (
+@@ -210,6 +256,15 @@
+                       Retry
+                     </Text>
+                   </Button>
++                  <Button
++                    variant="Secondary"
++                    fill="Soft"
++                    onClick={mx ? () => clearCacheAndReload(mx) : clearLoginData}
++                  >
++                    <Text as="span" size="B400">
++                      Clear Cache
++                    </Text>
++                  </Button>
+                 </Box>
+               </Dialog>
+             </Box>
+@@ -219,20 +274,16 @@
+           <ClientRootLoading />
+         ) : (
+           <MatrixClientProvider value={mx}>
+-            <ServerConfigsLoader>
+-              {(serverConfigs) => (
+-                <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
+-                  <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
+-                    <AuthMetadataProvider value={serverConfigs.authMetadata}>
+-                      {children}
+-                    </AuthMetadataProvider>
+-                  </MediaConfigProvider>
+-                </CapabilitiesProvider>
+-              )}
+-            </ServerConfigsLoader>
++            <CapabilitiesProvider value={serverConfigs.capabilities ?? {}}>
++              <MediaConfigProvider value={serverConfigs.mediaConfig ?? {}}>
++                <AuthMetadataProvider value={serverConfigs.authMetadata}>
++                  {children}
++                </AuthMetadataProvider>
++              </MediaConfigProvider>
++            </CapabilitiesProvider>
+           </MatrixClientProvider>
+         )}
+-      </SpecVersions>
++      </SpecVersionsProvider>
+     </AutoDiscovery>
    );
  }
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx

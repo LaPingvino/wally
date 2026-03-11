@@ -1,41 +1,3 @@
-diff --git a/package.json b/package.json
-index de8ee72da9..82fea445fe 100644
---- a/package.json
-+++ b/package.json
-@@ -55,6 +55,7 @@
-     "linkify-react": "4.3.2",
-     "linkifyjs": "4.3.2",
-     "matrix-js-sdk": "38.2.0",
-+    "matrix-widget-api": "1.17.0",
-     "millify": "6.1.0",
-     "pdfjs-dist": "4.2.67",
-     "prismjs": "1.30.0",
-@@ -76,6 +77,7 @@
-     "ua-parser-js": "1.0.35"
-   },
-   "devDependencies": {
-+    "@element-hq/element-call-embedded": "0.16.3",
-     "@esbuild-plugins/node-globals-polyfill": "0.2.3",
-     "@rollup/plugin-inject": "5.0.3",
-     "@rollup/plugin-wasm": "6.1.1",
-diff --git a/src/app/components/create-room/CreateRoomKindSelector.tsx b/src/app/components/create-room/CreateRoomKindSelector.tsx
-index 096954fbcb..ebc55e7ff6 100644
---- a/src/app/components/create-room/CreateRoomKindSelector.tsx
-+++ b/src/app/components/create-room/CreateRoomKindSelector.tsx
-@@ -2,12 +2,8 @@
- import { Box, Text, Icon, Icons, config, IconSrc } from 'folds';
- import { SequenceCard } from '../sequence-card';
- import { SettingTile } from '../setting-tile';
-+import { CreateRoomKind } from './types';
- 
--export enum CreateRoomKind {
--  Private = 'private',
--  Restricted = 'restricted',
--  Public = 'public',
--}
- type CreateRoomKindSelectorProps = {
-   value?: CreateRoomKind;
-   onSelect: (value: CreateRoomKind) => void;
 diff --git a/src/app/components/create-room/CreateRoomVoiceSelector.tsx b/src/app/components/create-room/CreateRoomVoiceSelector.tsx
 new file mode 100644
 index 0000000000..f3862db297
@@ -107,58 +69,22 @@ index 0000000000..f3862db297
 +    </Box>
 +  );
 +}
-diff --git a/src/app/components/create-room/index.ts b/src/app/components/create-room/index.ts
-index ffd9cb3d33..a9c603b2f0 100644
---- a/src/app/components/create-room/index.ts
-+++ b/src/app/components/create-room/index.ts
-@@ -3,3 +3,4 @@
- export * from './RoomVersionSelector';
- export * from './utils';
- export * from './AdditionalCreatorInput';
-+export * from './types';
-diff --git a/src/app/components/create-room/types.ts b/src/app/components/create-room/types.ts
-new file mode 100644
-index 0000000000..e35af47aaf
---- /dev/null
-+++ b/src/app/components/create-room/types.ts
-@@ -0,0 +1,10 @@
-+export enum CreateRoomVoice {
-+  TextRoom = 'text',
-+  VoiceRoom = 'voice',
-+}
-+
-+export enum CreateRoomKind {
-+  Private = 'private',
-+  Restricted = 'restricted',
-+  Public = 'public',
-+}
 diff --git a/src/app/components/create-room/utils.ts b/src/app/components/create-room/utils.ts
-index d0a45c3d96..467de37e48 100644
+index f3e699aa38..e88f8faeba 100644
 --- a/src/app/components/create-room/utils.ts
 +++ b/src/app/components/create-room/utils.ts
-@@ -7,10 +7,11 @@
-   Room,
- } from 'matrix-js-sdk';
- import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
--import { CreateRoomKind } from './CreateRoomKindSelector';
+@@ -10,6 +10,7 @@
  import { RoomType, StateEvent } from '../../../types/matrix/room';
  import { getViaServers } from '../../plugins/via-servers';
  import { getMxIdServer } from '../../utils/matrix';
 +import { IPowerLevels } from '../../hooks/usePowerLevels';
-+import { CreateRoomKind } from './types';
+ import { CreateRoomAccess } from './types';
  
  export const createRoomCreationContent = (
-   type: RoomType | undefined,
-@@ -86,6 +87,44 @@
+@@ -98,6 +99,38 @@
    },
  });
  
-+export const createRoomCallState = () => ({
-+  type: 'org.matrix.msc3401.call',
-+  state_key: '',
-+  content: {},
-+});
-+
 +export const createPowerLevelContentOverrides = (
 +  base: IPowerLevels,
 +  overrides: Partial<IPowerLevels>
@@ -194,7 +120,7 @@ index d0a45c3d96..467de37e48 100644
  export type CreateRoomData = {
    version: string;
    type?: RoomType;
-@@ -98,6 +137,7 @@
+@@ -110,6 +143,7 @@
    knock: boolean;
    allowFederation: boolean;
    additionalCreators?: string[];
@@ -202,15 +128,9 @@ index d0a45c3d96..467de37e48 100644
  };
  export const createRoom = async (mx: MatrixClient, data: CreateRoomData): Promise<string> => {
    const initialState: ICreateRoomStateEvent[] = [];
-@@ -110,8 +150,23 @@
-     initialState.push(createRoomParentState(data.parent));
-   }
+@@ -128,6 +162,17 @@
  
-+  if (data.type === RoomType.Call) {
-+    initialState.push(createRoomCallState());
-+  }
-+
-   initialState.push(createRoomJoinRulesState(data.kind, data.parent, data.knock));
+   initialState.push(createRoomJoinRulesState(data.access, data.parent, data.knock));
  
 +  // For call rooms, set MSC3401 power levels at creation time (avoids a separate state event call)
 +  const callPowerLevels: IPowerLevels | undefined =
@@ -226,9 +146,9 @@ index d0a45c3d96..467de37e48 100644
    const options: ICreateRoomOpts = {
      room_version: data.version,
      name: data.name,
-@@ -123,6 +178,7 @@
-       data.additionalCreators
-     ),
+@@ -141,6 +186,7 @@
+     power_level_content_override:
+       data.type === RoomType.Call ? createVoiceRoomPowerLevelsOverride() : undefined,
      initial_state: initialState,
 +    ...(callPowerLevels ? { power_level_content_override: callPowerLevels } : {}),
    };
@@ -296,34 +216,17 @@ index 478486a4bd..0c8470a44c 100644
            <Icon src={mute ? Icons.VolumeMute : Icons.VolumeHigh} size="50" />
          </IconButton>
 diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
-index 23f3998d88..1ee72d4aa5 100644
+index cbcd626a27..1ee72d4aa5 100644
 --- a/src/app/components/room-avatar/RoomAvatar.tsx
 +++ b/src/app/components/room-avatar/RoomAvatar.tsx
-@@ -2,7 +2,7 @@
- import { AvatarFallback, AvatarImage, Icon, Icons, color } from 'folds';
- import React, { ComponentProps, ReactEventHandler, ReactNode, forwardRef, useState } from 'react';
- import * as css from './RoomAvatar.css';
--import { joinRuleToIconSrc } from '../../utils/room';
-+import { getRoomIconSrc } from '../../utils/room';
- import colorMXID from '../../../util/colorMXID';
- 
- type RoomAvatarProps = {
-@@ -44,13 +44,10 @@
- export const RoomIcon = forwardRef<
-   SVGSVGElement,
+@@ -46,7 +46,8 @@
    Omit<ComponentProps<typeof Icon>, 'src'> & {
--    joinRule: JoinRule;
--    space?: boolean;
-+    joinRule?: JoinRule;
-+    roomType?: string;
+     joinRule?: JoinRule;
+     roomType?: string;
 +    locked?: boolean;
    }
-->(({ joinRule, space, ...props }, ref) => (
--  <Icon
--    src={joinRuleToIconSrc(Icons, joinRule, space || false) ?? Icons.Hash}
--    {...props}
--    ref={ref}
--  />
+->(({ joinRule, roomType, ...props }, ref) => (
+-  <Icon src={getRoomIconSrc(Icons, roomType, joinRule)} {...props} ref={ref} />
 +>(({ joinRule, roomType, locked, ...props }, ref) => (
 +  <Icon src={getRoomIconSrc(Icons, roomType, joinRule, locked)} {...props} ref={ref} />
  ));
@@ -371,11 +274,15 @@ index 0000000000..ef470ca518
 +  },
 +});
 diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
-new file mode 100644
-index 0000000000..f721c7a98c
---- /dev/null
+index 7c7bec6cc0..67c047cca0 100644
+--- a/src/app/features/call/CallView.tsx
 +++ b/src/app/features/call/CallView.tsx
-@@ -0,0 +1,303 @@
+@@ -1,150 +1,303 @@
+-import React, { RefObject, useRef } from 'react';
+-import { Badge, Box, color, Header, Scroll, Text, toRem } from 'folds';
+-import { useCallEmbed, useCallJoined, useCallEmbedPlacementSync } from '../../hooks/useCallEmbed';
+-import { ContainerColor } from '../../styles/ContainerColor.css';
+-import { PrescreenControls } from './PrescreenControls';
 +import { EventType, Room } from 'matrix-js-sdk';
 +import React, {
 +  useContext,
@@ -401,7 +308,63 @@ index 0000000000..f721c7a98c
 +import * as css from './CallView.css';
 +import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 +import { useRoomCreators } from '../../hooks/useRoomCreators';
-+import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
+ import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
+-import { useRoom } from '../../hooks/useRoom';
+-import { useRoomCreators } from '../../hooks/useRoomCreators';
+-import { useRoomPermissions } from '../../hooks/useRoomPermissions';
+-import { useMatrixClient } from '../../hooks/useMatrixClient';
+-import { StateEvent } from '../../../types/matrix/room';
+-import { useCallMembers, useCallSession } from '../../hooks/useCall';
+-import { CallMemberRenderer } from './CallMemberCard';
+-import * as css from './styles.css';
+-import { CallControls } from './CallControls';
+-import { useLivekitSupport } from '../../hooks/useLivekitSupport';
+-
+-function LivekitServerMissingMessage() {
+-  return (
+-    <Text style={{ margin: 'auto', color: color.Critical.Main }} size="L400" align="Center">
+-      Your homeserver does not support calling. But you can still join call started by others.
+-    </Text>
+-  );
+-}
+-
+-function JoinMessage({
+-  hasParticipant,
+-  livekitSupported,
+-}: {
+-  hasParticipant?: boolean;
+-  livekitSupported?: boolean;
+-}) {
+-  if (hasParticipant) return null;
+-
+-  if (livekitSupported === false) {
+-    return <LivekitServerMissingMessage />;
+-  }
+-
+-  return (
+-    <Text style={{ margin: 'auto' }} size="L400" align="Center">
+-      Voice chat’s empty — Be the first to hop in!
+-    </Text>
+-  );
+-}
+-
+-function NoPermissionMessage() {
+-  return (
+-    <Text style={{ margin: 'auto' }} size="L400" align="Center">
+-      You don&#39;t have permission to join!
+-    </Text>
+-  );
+-}
+-
+-function AlreadyInCallMessage() {
+-  return (
+-    <Text style={{ margin: 'auto', color: color.Warning.Main }} size="L400" align="Center">
+-      Already in another call — End the current call to join!
+-    </Text>
+-  );
+-}
+-
+-function CallPrescreen() {
 +import { useRoomName } from '../../hooks/useRoomMeta';
 +
 +type OriginalStyles = {
@@ -435,15 +398,27 @@ index 0000000000..f721c7a98c
 +  const iframeHostRef = useRef<HTMLDivElement>(null);
 +
 +  const originalIframeStylesRef = useRef<OriginalStyles | null>(null);
-+  const mx = useMatrixClient();
+   const mx = useMatrixClient();
+-  const room = useRoom();
+-  const livekitSupported = useLivekitSupport();
 +
 +  const [visibleCallNames, setVisibleCallNames] = useState('');
-+
-+  const powerLevels = usePowerLevelsContext();
-+  const creators = useRoomCreators(room);
-+
+ 
+   const powerLevels = usePowerLevelsContext();
+   const creators = useRoomCreators(room);
+ 
 +  const roomName = useRoomName(room);
-+  const permissions = useRoomPermissions(creators, powerLevels);
+   const permissions = useRoomPermissions(creators, powerLevels);
+-  const hasPermission = permissions.event(StateEvent.GroupCallMemberPrefix, mx.getSafeUserId());
+-
+-  const callSession = useCallSession(room);
+-  const callMembers = useCallMembers(room, callSession);
+-  const hasParticipant = callMembers.length > 0;
+-
+-  const callEmbed = useCallEmbed();
+-  const inOtherCall = callEmbed && callEmbed.roomId !== room.roomId;
+-
+-  const canJoin = hasPermission && (livekitSupported || hasParticipant);
 +  const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 +
 +  const {
@@ -605,8 +580,22 @@ index 0000000000..f721c7a98c
 +      );
 +    }
 +  }, [memberDisplayNames]);
-+
-+  return (
+ 
+   return (
+-    <Scroll variant="Surface" hideTrack>
+-      <Box className={css.CallViewContent} alignItems="Center" justifyContent="Center">
+-        <Box style={{ maxWidth: toRem(382), width: '100%' }} direction="Column" gap="100">
+-          {hasParticipant && (
+-            <Header size="300">
+-              <Box grow="Yes" alignItems="Center">
+-                <Text size="L400">Participant</Text>
+-              </Box>
+-              <Badge variant="Critical" fill="Solid" size="400">
+-                <Text as="span" size="L400" truncate>
+-                  {callMembers.length} Live
+-                </Text>
+-              </Badge>
+-            </Header>
 +    <Box
 +      grow="Yes"
 +      direction="Column"
@@ -673,12 +662,65 @@ index 0000000000..f721c7a98c
 +            </Box>
 +          ) : (
 +            <Text size="B500">{canJoin ? 'Join Voice' : 'Channel Locked'}</Text>
-+          )}
+           )}
+-          <CallMemberRenderer members={callMembers} />
+-          <PrescreenControls canJoin={canJoin} />
+-          <Box className={css.PrescreenMessage} alignItems="Center">
+-            {!inOtherCall &&
+-              (hasPermission ? (
+-                <JoinMessage hasParticipant={hasParticipant} livekitSupported={livekitSupported} />
+-              ) : (
+-                <NoPermissionMessage />
+-              ))}
+-            {inOtherCall && <AlreadyInCallMessage />}
+-          </Box>
+-        </Box>
 +        </Button>
-+      </Box>
+       </Box>
+-    </Scroll>
+-  );
+-}
+-
+-type CallJoinedProps = {
+-  containerRef: RefObject<HTMLDivElement>;
+-  joined: boolean;
+-};
+-function CallJoined({ joined, containerRef }: CallJoinedProps) {
+-  const callEmbed = useCallEmbed();
+-
+-  return (
+-    <Box grow="Yes" direction="Column">
+-      <Box grow="Yes" ref={containerRef} />
+-      {callEmbed && joined && <CallControls callEmbed={callEmbed} />}
+-    </Box>
+-  );
+-}
+-
+-export function CallView() {
+-  const room = useRoom();
+-  const callContainerRef = useRef<HTMLDivElement>(null);
+-  useCallEmbedPlacementSync(callContainerRef);
+-
+-  const callEmbed = useCallEmbed();
+-  const callJoined = useCallJoined(callEmbed);
+-
+-  const currentJoined = callEmbed?.roomId === room.roomId && callJoined;
+-
+-  return (
+-    <Box
+-      className={ContainerColor({ variant: 'Surface' })}
+-      style={{ minWidth: toRem(280) }}
+-      grow="Yes"
+-    >
+-      {!currentJoined && <CallPrescreen />}
+-      <CallJoined joined={currentJoined} containerRef={callContainerRef} />
+-    </Box>
+-  );
+-}
 +    </Box>
 +  );
 +}
+\ No newline at end of file
 diff --git a/src/app/features/call/CallViewUser.tsx b/src/app/features/call/CallViewUser.tsx
 new file mode 100644
 index 0000000000..776fead601
@@ -2092,91 +2134,35 @@ index 0000000000..0b2c9182d8
 +  });
 +});
 diff --git a/src/app/features/create-room/CreateRoom.tsx b/src/app/features/create-room/CreateRoom.tsx
-index 05c5c2e385..b1f1fdf761 100644
+index 94799f6ea0..1993c8349d 100644
 --- a/src/app/features/create-room/CreateRoom.tsx
 +++ b/src/app/features/create-room/CreateRoom.tsx
-@@ -1,5 +1,5 @@
- import React, { FormEventHandler, useCallback, useEffect, useState } from 'react';
--import { MatrixError, Room } from 'matrix-js-sdk';
-+import { MatrixError, Room, JoinRule } from 'matrix-js-sdk';
- import {
-   Box,
-   Button,
-@@ -37,20 +37,40 @@
-   CreateRoomKindSelector,
-   RoomVersionSelector,
+@@ -39,7 +39,8 @@
    useAdditionalCreators,
-+  CreateRoomVoice,
+   CreateRoomType,
  } from '../../components/create-room';
--
--const getCreateRoomKindToIcon = (kind: CreateRoomKind) => {
--  if (kind === CreateRoomKind.Private) return Icons.HashLock;
--  if (kind === CreateRoomKind.Restricted) return Icons.Hash;
--  return Icons.HashGlobe;
+-import { RoomType } from '../../../types/matrix/room';
 +import { RoomType, StateEvent } from '../../../types/matrix/room';
 +import { IPowerLevels } from '../../hooks/usePowerLevels';
-+import { CreateRoomVoiceSelector } from '../../components/create-room/CreateRoomVoiceSelector';
-+import { getRoomIconSrc } from '../../utils/room';
-+
-+const getCreateRoomKindToIcon = (kind: CreateRoomKind, voice?: CreateRoomVoice) => {
-+  const isVoiceRoom = voice === CreateRoomVoice.VoiceRoom;
-+
-+  let joinRule: JoinRule = JoinRule.Public;
-+  if (kind === CreateRoomKind.Restricted) joinRule = JoinRule.Restricted;
-+  if (kind === CreateRoomKind.Private) joinRule = JoinRule.Knock;
-+
-+  return getRoomIconSrc(Icons, isVoiceRoom ? RoomType.Call : undefined, joinRule);
-+};
-+
-+const getCreateRoomVoiceToIcon = (kind: CreateRoomVoice) => {
-+  if (kind === CreateRoomVoice.VoiceRoom) return Icons.VolumeHigh;
-+  return Icons.Hash;
- };
+ import { CreateRoomTypeSelector } from '../../components/create-room/CreateRoomTypeSelector';
+ import { getRoomIconSrc } from '../../utils/room';
  
- type CreateRoomFormProps = {
-   defaultKind?: CreateRoomKind;
-+  defaultVoice?: CreateRoomVoice;
-   space?: Room;
-   onCreate?: (roomId: string) => void;
- };
--export function CreateRoomForm({ defaultKind, space, onCreate }: CreateRoomFormProps) {
-+export function CreateRoomForm({
-+  defaultKind,
-+  defaultVoice,
-+  space,
-+  onCreate,
-+}: CreateRoomFormProps) {
-   const mx = useMatrixClient();
-   const alive = useAlive();
- 
-@@ -64,6 +84,7 @@
- 
-   const allowRestricted = space && restrictedSupported(selectedRoomVersion);
- 
-+  const [voice, setVoice] = useState(defaultVoice ?? CreateRoomVoice.TextRoom);
-   const [kind, setKind] = useState(
-     defaultKind ?? allowRestricted ? CreateRoomKind.Restricted : CreateRoomKind.Private
-   );
-@@ -116,8 +137,18 @@
-       roomKnock = knock;
+@@ -137,7 +138,13 @@
      }
  
-+    let roomType;
+     let roomType: RoomType | undefined;
+-    if (type === CreateRoomType.VoiceRoom) roomType = RoomType.Call;
 +    const powerOverrides: IPowerLevels = {
 +      events: {},
 +    };
-+    if (voice === CreateRoomVoice.VoiceRoom) {
++    if (type === CreateRoomType.VoiceRoom) {
 +      roomType = RoomType.Call;
 +      powerOverrides.events![StateEvent.GroupCallMemberPrefix] = 0;
 +    }
-+
+ 
      create({
        version: selectedRoomVersion,
-+      type: roomType,
-       parent: space,
-       kind,
-       name: roomName,
-@@ -127,6 +158,7 @@
+@@ -151,6 +158,7 @@
        knock: roomKnock,
        allowFederation: federation,
        additionalCreators: allowAdditionalCreators ? additionalCreators : undefined,
@@ -2184,76 +2170,8 @@ index 05c5c2e385..b1f1fdf761 100644
      }).then((roomId) => {
        if (alive()) {
          onCreate?.(roomId);
-@@ -137,20 +169,29 @@
-   return (
-     <Box as="form" onSubmit={handleSubmit} grow="Yes" direction="Column" gap="500">
-       <Box direction="Column" gap="100">
-+        <Text size="L400">Type</Text>
-+        <CreateRoomVoiceSelector
-+          value={voice}
-+          onSelect={setVoice}
-+          disabled={disabled}
-+          getIcon={getCreateRoomVoiceToIcon}
-+        />
-+      </Box>
-+      <Box direction="Column" gap="100">
-         <Text size="L400">Access</Text>
-         <CreateRoomKindSelector
-           value={kind}
-           onSelect={setKind}
-           canRestrict={allowRestricted}
-           disabled={disabled}
--          getIcon={getCreateRoomKindToIcon}
-+          getIcon={(roomKind) => getCreateRoomKindToIcon(roomKind, voice)}
-         />
-       </Box>
-       <Box shrink="No" direction="Column" gap="100">
-         <Text size="L400">Name</Text>
-         <Input
-           required
--          before={<Icon size="100" src={getCreateRoomKindToIcon(kind)} />}
-+          before={<Icon size="100" src={getCreateRoomKindToIcon(kind, voice)} />}
-           name="nameInput"
-           autoFocus
-           size="500"
-diff --git a/src/app/features/message-search/SearchFilters.tsx b/src/app/features/message-search/SearchFilters.tsx
-index 929dd1e919..6883e3631f 100644
---- a/src/app/features/message-search/SearchFilters.tsx
-+++ b/src/app/features/message-search/SearchFilters.tsx
-@@ -29,7 +29,7 @@
- import FocusTrap from 'focus-trap-react';
- import { useVirtualizer } from '@tanstack/react-virtual';
- import { useMatrixClient } from '../../hooks/useMatrixClient';
--import { joinRuleToIconSrc } from '../../utils/room';
-+import { getRoomIconSrc } from '../../utils/room';
- import { factoryRoomIdByAtoZ } from '../../utils/sort';
- import {
-   SearchItemStrGetter,
-@@ -274,9 +274,7 @@
-                             before={
-                               <Icon
-                                 size="50"
--                                src={
--                                  joinRuleToIconSrc(Icons, room.getJoinRule(), false) ?? Icons.Hash
--                                }
-+                                src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())}
-                               />
-                             }
-                           >
-@@ -392,10 +390,7 @@
-               onClick={() => onSelectedRoomsChange(selectedRooms.filter((rId) => rId !== roomId))}
-               radii="Pill"
-               before={
--                <Icon
--                  size="50"
--                  src={joinRuleToIconSrc(Icons, room.getJoinRule(), false) ?? Icons.Hash}
--                />
-+                <Icon size="50" src={getRoomIconSrc(Icons, room.getType(), room.getJoinRule())} />
-               }
-               after={<Icon size="50" src={Icons.Cross} />}
-             >
 diff --git a/src/app/features/room/Room.tsx b/src/app/features/room/Room.tsx
-index 24878d5e6e..521239cedd 100644
+index 5e5d7d7840..ad0993f299 100644
 --- a/src/app/features/room/Room.tsx
 +++ b/src/app/features/room/Room.tsx
 @@ -1,4 +1,4 @@
@@ -2262,12 +2180,12 @@ index 24878d5e6e..521239cedd 100644
  import { Box, Line } from 'folds';
  import { useParams } from 'react-router-dom';
  import { isKeyHotkey } from 'is-hotkey';
-@@ -13,17 +13,156 @@
- import { markAsRead } from '../../utils/notifications';
- import { useMatrixClient } from '../../hooks/useMatrixClient';
+@@ -16,20 +16,154 @@
  import { useRoomMembers } from '../../hooks/useRoomMembers';
-+import { CallView } from '../call/CallView';
-+import { RoomViewHeader } from './RoomViewHeader';
+ import { CallView } from '../call/CallView';
+ import { RoomViewHeader } from './RoomViewHeader';
+-import { callChatAtom } from '../../state/callEmbed';
+-import { CallChatView } from './CallChatView';
 +import { useCallState } from '../../pages/client/call/CallProvider';
 +import { IssueBoard } from '../issues/IssueBoard';
 +import { ThreadsDrawer, openThreadIdAtom } from './ThreadsDrawer';
@@ -2294,6 +2212,7 @@ index 24878d5e6e..521239cedd 100644
    const screenSize = useScreenSizeContext();
    const powerLevels = usePowerLevels(room);
 -  const members = useRoomMembers(mx, room.roomId);
+-  const chat = useAtomValue(callChatAtom);
 +  const members = useRoomMembers(mx, room?.roomId);
 +
 +  const { activeCallRoomId, isCallViewOpen, isChatOpen } = useCallState();
@@ -2421,11 +2340,31 @@ index 24878d5e6e..521239cedd 100644
  
    useKeyDown(
      window,
-@@ -40,13 +179,113 @@
+@@ -48,37 +182,113 @@
    return (
      <PowerLevelsContextProvider value={powerLevels}>
        <Box grow="Yes">
--        <RoomView room={room} eventId={eventId} />
+-        {callView && (screenSize === ScreenSize.Desktop || !chat) && (
+-          <Box grow="Yes" direction="Column">
+-            <RoomViewHeader callView />
+-            <Box grow="Yes">
+-              <CallView />
+-            </Box>
+-          </Box>
+-        )}
+-        {!callView && (
+-          <Box grow="Yes" direction="Column">
+-            <RoomViewHeader />
+-            <Box grow="Yes">
+-              <RoomView eventId={eventId} />
+-            </Box>
+-          </Box>
+-        )}
+-
+-        {callView && chat && (
+-          <>
+-            {screenSize === ScreenSize.Desktop && (
+-              <Line variant="Background" direction="Vertical" size="300" />
 +        <Box
 +          grow="Yes"
 +          direction="Column"
@@ -2478,10 +2417,14 @@ index 24878d5e6e..521239cedd 100644
 +                  <RoomView room={room} eventId={eventId} />
 +                </Box>
 +              </>
-+            )}
+             )}
+-            <CallChatView />
+-          </>
+-        )}
+-        {!callView && screenSize === ScreenSize.Desktop && isDrawer && (
 +          </Box>
 +        </Box>
-         {screenSize === ScreenSize.Desktop && isDrawer && (
++        {screenSize === ScreenSize.Desktop && isDrawer && (
            <>
              <Line variant="Background" direction="Vertical" size="300" />
              <MembersDrawer key={room.roomId} room={room} members={members} />
@@ -2537,42 +2480,26 @@ index 24878d5e6e..521239cedd 100644
      </PowerLevelsContextProvider>
    );
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index 9b4bfd237a..df91dc33b7 100644
+index a19058d26f..d0b7e9c022 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
-@@ -23,8 +23,7 @@
+@@ -23,7 +23,8 @@
    Spinner,
  } from 'folds';
  import { useNavigate } from 'react-router-dom';
--import { JoinRule, Room } from 'matrix-js-sdk';
--import { useAtomValue } from 'jotai';
+-import { Room } from 'matrix-js-sdk';
 +import { EventTimeline, Room } from 'matrix-js-sdk';
- 
++
  import { useStateEvent } from '../../hooks/useStateEvent';
  import { PageHeader } from '../../components/page';
-@@ -33,7 +32,7 @@
- import { RoomTopicViewer } from '../../components/room-topic-viewer';
- import { StateEvent } from '../../../types/matrix/room';
- import { useMatrixClient } from '../../hooks/useMatrixClient';
--import { useRoom } from '../../hooks/useRoom';
-+import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
- import { useSetting } from '../../state/hooks/settings';
- import { settingsAtom } from '../../state/settings';
- import { useSpaceOptionally } from '../../hooks/useSpace';
-@@ -48,7 +47,6 @@
- import { copyToClipboard } from '../../utils/dom';
- import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
- import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
--import { mDirectAtom } from '../../state/mDirectList';
- import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
- import { stopPropagation } from '../../utils/keyboard';
- import { getMatrixToRoom } from '../../plugins/matrix-to';
-@@ -69,26 +67,62 @@
+ import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
+@@ -66,28 +67,62 @@
  import { useRoomCreators } from '../../hooks/useRoomCreators';
  import { useRoomPermissions } from '../../hooks/useRoomPermissions';
  import { InviteUserPrompt } from '../../components/invite-user-prompt';
 +import { useCallState } from '../../pages/client/call/CallProvider';
-+import { ContainerColor } from '../../styles/ContainerColor.css';
+ import { ContainerColor } from '../../styles/ContainerColor.css';
+-import { RoomSettingsPage } from '../../state/roomSettings';
 +import { useKeyDown } from '../../hooks/useKeyDown';
 +import { isKeyHotkey } from 'is-hotkey';
 +import { getIssueSchema } from '../issues/IssueBoard';
@@ -2631,7 +2558,7 @@ index 9b4bfd237a..df91dc33b7 100644
    const handleMarkAsRead = () => {
      markAsRead(mx, room.roomId, hideActivity);
      requestClose();
-@@ -112,6 +146,17 @@
+@@ -111,6 +146,17 @@
      requestClose();
    };
  
@@ -2649,7 +2576,7 @@ index 9b4bfd237a..df91dc33b7 100644
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        {invitePrompt && (
-@@ -221,6 +266,26 @@
+@@ -220,6 +266,26 @@
            )}
          </UseStateProvider>
        </Box>
@@ -2676,11 +2603,11 @@ index 9b4bfd237a..df91dc33b7 100644
        <Line variant="Surface" size="300" />
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <UseStateProvider initial={false}>
-@@ -254,7 +319,17 @@
+@@ -253,7 +319,17 @@
    );
  });
  
--export function RoomViewHeader() {
+-export function RoomViewHeader({ callView }: { callView?: boolean }) {
 +type RoomViewHeaderProps = {
 +  isIssueBoard?: boolean;
 +  onToggleIssueBoard?: () => void;
@@ -2695,13 +2622,10 @@ index 9b4bfd237a..df91dc33b7 100644
    const navigate = useNavigate();
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
-@@ -263,12 +338,44 @@
-   const space = useSpaceOptionally();
-   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+@@ -264,10 +340,40 @@
    const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
--  const mDirects = useAtomValue(mDirectAtom);
-+  const direct = useIsDirectRoom();
-+
+   const direct = useIsDirectRoom();
+ 
 +  const { isChatOpen, isCallViewOpen, toggleChat, toggleCallView, setActiveCallRoomId, hangUp, activeCallRoomId } = useCallState();
 +  // NOTE: isActiveCall hides the phone button and shows the chat toggle for active calls.
 +  const isActiveCall = activeCallRoomId === room.roomId;
@@ -2733,53 +2657,28 @@ index 9b4bfd237a..df91dc33b7 100644
 +    hangUp();
 +    setActiveCallRoomId(room.roomId, true);
 +  };
- 
++
    const pinnedEvents = useRoomPinnedEvents(room);
    const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
-   const ecryptedRoom = !!encryptionEvent;
--  const avatarMxc = useRoomAvatar(room, mDirects.has(room.roomId));
-+  const avatarMxc = useRoomAvatar(room, direct);
+-  const encryptedRoom = !!encryptionEvent;
+-  const avatarMxc = useRoomAvatar(room, direct);
    const name = useRoomName(room);
    const topic = useRoomTopic(room);
    const avatarUrl = avatarMxc
-@@ -296,13 +403,16 @@
-   };
- 
-   return (
--    <PageHeader balance={screenSize === ScreenSize.Mobile}>
-+    <PageHeader
-+      className={ContainerColor({ variant: 'Surface' })}
-+      balance={screenSize === ScreenSize.Mobile}
-+    >
-       <Box grow="Yes" gap="300">
-         {screenSize === ScreenSize.Mobile && (
+@@ -314,7 +420,7 @@
            <BackRouteHandler>
              {(onBack) => (
                <Box shrink="No" alignItems="Center">
--                <IconButton onClick={onBack}>
+-                <IconButton fill="None" onClick={onBack}>
 +                <IconButton fill="None" onClick={onBack} aria-label="Go back">
                    <Icon src={Icons.ArrowLeft} />
                  </IconButton>
                </Box>
-@@ -317,11 +427,7 @@
-                 src={avatarUrl}
-                 alt={name}
-                 renderFallback={() => (
--                  <RoomIcon
--                    size="200"
--                    joinRule={room.getJoinRule() ?? JoinRule.Restricted}
--                    filled
--                  />
-+                  <RoomIcon size="200" joinRule={room.getJoinRule()} roomType={room.getType()} />
-                 )}
-               />
-             </Avatar>
-@@ -369,7 +475,106 @@
-             )}
-           </Box>
+@@ -379,7 +485,105 @@
          </Box>
-+
+ 
          <Box shrink="No">
+-          {!encryptedRoom && (
 +          {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
 +              Wobble here (left side of group) is less noticeable than at the right. */}
 +
@@ -2878,14 +2777,15 @@ index 9b4bfd237a..df91dc33b7 100644
 +              The … menu is always the rightmost button; its position never changes. */}
 +
 +          {/* Search — greyed when issue board covers the chat */}
-           {!ecryptedRoom && (
++          {!ecryptedRoom && (
              <TooltipProvider
                position="Bottom"
-@@ -381,12 +586,14 @@
+               offset={4}
+@@ -390,12 +594,14 @@
                }
              >
                {(triggerRef) => (
--                <IconButton ref={triggerRef} onClick={handleSearchClick}>
+-                <IconButton fill="None" ref={triggerRef} onClick={handleSearchClick}>
 +                <IconButton fill="None" ref={triggerRef} disabled={isIssueBoard} onClick={handleSearchClick} aria-label="Search room" aria-keyshortcuts="Alt+F">
                    <Icon size="400" src={Icons.Search} />
                  </IconButton>
@@ -2897,11 +2797,9 @@ index 9b4bfd237a..df91dc33b7 100644
            <TooltipProvider
              position="Bottom"
              offset={4}
-@@ -398,10 +605,13 @@
-           >
-             {(triggerRef) => (
+@@ -409,9 +615,11 @@
                <IconButton
-+                fill="None"
+                 fill="None"
                  style={{ position: 'relative' }}
 +                disabled={isIssueBoard}
                  onClick={handleOpenPinMenu}
@@ -2911,20 +2809,19 @@ index 9b4bfd237a..df91dc33b7 100644
                >
                  {pinnedEvents.length > 0 && (
                    <Badge
-@@ -443,6 +653,8 @@
-               </FocusTrap>
+@@ -454,6 +662,7 @@
              }
            />
-+
+ 
 +          {/* Members — Desktop, always enabled */}
            {screenSize === ScreenSize.Desktop && (
              <TooltipProvider
                position="Bottom"
-@@ -454,12 +666,175 @@
+@@ -469,13 +678,175 @@
                }
              >
                {(triggerRef) => (
--                <IconButton ref={triggerRef} onClick={() => setPeopleDrawer((drawer) => !drawer)}>
+-                <IconButton fill="None" ref={triggerRef} onClick={handleMemberToggle}>
 +                <IconButton
 +                  fill="None"
 +                  ref={triggerRef}
@@ -2939,7 +2836,7 @@ index 9b4bfd237a..df91dc33b7 100644
                )}
              </TooltipProvider>
            )}
-+
+ 
 +          {/* Widgets — Desktop, pinnable */}
 +          {screenSize === ScreenSize.Desktop && onToggleWidgetsDrawer && getEffective('widgets').pinned && (
 +            <TooltipProvider
@@ -3097,22 +2994,15 @@ index 9b4bfd237a..df91dc33b7 100644
            <TooltipProvider
              position="Bottom"
              align="End"
-@@ -471,7 +846,13 @@
-             }
-           >
-             {(triggerRef) => (
--              <IconButton onClick={handleOpenMenu} ref={triggerRef} aria-pressed={!!menuAnchor}>
-+              <IconButton
-+                fill="None"
-+                onClick={handleOpenMenu}
-+                ref={triggerRef}
-+                aria-pressed={!!menuAnchor}
+@@ -492,6 +863,7 @@
+                 onClick={handleOpenMenu}
+                 ref={triggerRef}
+                 aria-pressed={!!menuAnchor}
 +                aria-label="More options"
-+              >
+               >
                  <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
                </IconButton>
-             )}
-@@ -492,7 +873,15 @@
+@@ -513,7 +885,15 @@
                    escapeDeactivates: stopPropagation,
                  }}
                >
@@ -3668,7 +3558,7 @@ index 0000000000..94bd355119
 +  );
 +}
 diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
-index 33b21bff24..66e541a6dc 100644
+index b317b13abd..212692eccc 100644
 --- a/src/app/features/room-nav/RoomNavItem.tsx
 +++ b/src/app/features/room-nav/RoomNavItem.tsx
 @@ -1,5 +1,5 @@
@@ -3679,7 +3569,7 @@ index 33b21bff24..66e541a6dc 100644
  import {
    Avatar,
    Box,
-@@ -16,10 +16,13 @@
+@@ -16,11 +16,13 @@
    RectCords,
    Badge,
    Spinner,
@@ -3688,33 +3578,36 @@ index 33b21bff24..66e541a6dc 100644
  } from 'folds';
  import { useFocusWithin, useHover } from 'react-aria';
  import FocusTrap from 'focus-trap-react';
+-import { useAtom, useAtomValue } from 'jotai';
 -import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 +import { useNavigate } from 'react-router-dom';
 +import { NavButton, NavItem, NavItemContent, NavItemOptions } from '../../components/nav';
  import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
  import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
  import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
-@@ -51,6 +54,11 @@
+@@ -52,13 +54,6 @@
  import { useRoomCreators } from '../../hooks/useRoomCreators';
  import { useRoomPermissions } from '../../hooks/useRoomPermissions';
  import { InviteUserPrompt } from '../../components/invite-user-prompt';
-+import { useCallState } from '../../pages/client/call/CallProvider';
-+import { useCallMembers } from '../../hooks/useCallMemberships';
-+import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-+import { RoomNavUser } from './RoomNavUser';
-+import { useRoomName } from '../../hooks/useRoomMeta';
+-import { useRoomName } from '../../hooks/useRoomMeta';
+-import { useCallMembers, useCallSession } from '../../hooks/useCall';
+-import { useCallEmbed, useCallStart } from '../../hooks/useCallEmbed';
+-import { callChatAtom } from '../../state/callEmbed';
+-import { useCallPreferencesAtom } from '../../state/hooks/callPreferences';
+-import { useAutoDiscoveryInfo } from '../../hooks/useAutoDiscoveryInfo';
+-import { livekitSupport } from '../../hooks/useLivekitSupport';
  
  type RoomNavItemMenuProps = {
    room: Room;
-@@ -208,6 +216,7 @@
+@@ -216,6 +211,7 @@
      );
    }
  );
 +RoomNavItemMenu.displayName = 'RoomNavItemMenu';
  
- type RoomNavItemProps = {
-   room: Room;
-@@ -216,6 +225,9 @@
+ function CallChatToggle() {
+   const [chat, setChat] = useAtom(callChatAtom);
+@@ -242,6 +238,9 @@
    notificationMode?: RoomNotificationMode;
    showAvatar?: boolean;
    direct?: boolean;
@@ -3724,7 +3617,7 @@ index 33b21bff24..66e541a6dc 100644
  };
  export function RoomNavItem({
    room,
-@@ -224,6 +236,9 @@
+@@ -250,6 +249,9 @@
    direct,
    notificationMode,
    linkPath,
@@ -3734,7 +3627,7 @@ index 33b21bff24..66e541a6dc 100644
  }: RoomNavItemProps) {
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
-@@ -236,6 +251,29 @@
+@@ -262,8 +264,29 @@
      (receipt) => receipt.userId !== mx.getUserId()
    );
  
@@ -3753,8 +3646,8 @@ index 33b21bff24..66e541a6dc 100644
 +
 +  const powerLevels = usePowerLevels(room);
 +  const creators = useRoomCreators(room);
-+  const roomName = useRoomName(room);
-+
+   const roomName = useRoomName(room);
+ 
 +  const permissions = useRoomPermissions(creators, powerLevels);
 +  const canJoinCall = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 +
@@ -3764,7 +3657,7 @@ index 33b21bff24..66e541a6dc 100644
    const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
      evt.preventDefault();
      setMenuAnchor({
-@@ -250,109 +288,246 @@
+@@ -278,153 +301,228 @@
      setMenuAnchor(evt.currentTarget.getBoundingClientRect());
    };
  
@@ -3796,24 +3689,29 @@ index 33b21bff24..66e541a6dc 100644
 +  };
 +
    const optionsVisible = hover || !!menuAnchor;
-+  const ariaLabel = [
-+    roomName,
-+    room.isCallRoom()
-+      ? [
-+          'Call Room',
-+          isActiveCall && 'Currently in Call',
-+          callMemberships.length && `${callMemberships.length} in Call`,
-+        ]
-+      : direct
-+        ? 'Direct Message'
-+        : room.getJoinRule() === JoinRule.Public
-+          ? 'Public Room'
-+          : 'Group Room',
-+    unread?.total && `${unread.total} Messages`,
-+  ]
-+    .flat()
-+    .filter(Boolean)
-+    .join(', ');
+-  const callSession = useCallSession(room);
+-  const callMembers = useCallMembers(room, callSession);
+-  const startCall = useCallStart(direct);
+-  const callEmbed = useCallEmbed();
+-  const callPref = useAtomValue(useCallPreferencesAtom());
+-  const autoDiscoveryInfo = useAutoDiscoveryInfo();
+-
+-  const handleStartCall: MouseEventHandler<HTMLAnchorElement> = (evt) => {
+-    // Do not join if no livekit support or call is not started by others
+-    if (!livekitSupport(autoDiscoveryInfo) && callMembers.length === 0) {
+-      return;
+-    }
+-
+-    // Do not join if already in call
+-    if (callEmbed) {
+-      return;
+-    }
+-    // Start call in second click
+-    if (selected) {
+-      evt.preventDefault();
+-      startCall(room, callPref);
+-    }
+-  };
  
    return (
 -    <NavItem
@@ -3826,7 +3724,7 @@ index 33b21bff24..66e541a6dc 100644
 -      {...hoverProps}
 -      {...focusWithinProps}
 -    >
--      <NavLink to={linkPath}>
+-      <NavLink to={linkPath} onClick={room.isCallRoom() ? handleStartCall : undefined}>
 -        <NavItemContent>
 -          <Box as="span" grow="Yes" alignItems="Center" gap="200">
 -            <Avatar size="200" radii="400">
@@ -3838,25 +3736,28 @@ index 33b21bff24..66e541a6dc 100644
 -                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
 -                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
 -                  }
--                  alt={room.name}
+-                  alt={roomName}
 -                  renderFallback={() => (
 -                    <Text as="span" size="H6">
--                      {nameInitials(room.name)}
+-                      {nameInitials(roomName)}
 -                    </Text>
 -                  )}
 -                />
 -              ) : (
 -                <RoomIcon
--                  style={{ opacity: unread ? config.opacity.P500 : config.opacity.P300 }}
+-                  style={{
+-                    opacity: unread ? config.opacity.P500 : config.opacity.P300,
+-                  }}
 -                  filled={selected}
 -                  size="100"
 -                  joinRule={room.getJoinRule()}
+-                  roomType={room.getType()}
 -                />
 -              )}
 -            </Avatar>
 -            <Box as="span" grow="Yes">
 -              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
--                {room.name}
+-                {roomName}
 -              </Text>
 +    <Box direction="Column" grow="Yes">
 +      <NavItem
@@ -3943,14 +3844,30 @@ index 33b21bff24..66e541a6dc 100644
 -              </UnreadBadgeCenter>
 -            )}
 -            {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
--              <Icon size="50" src={getRoomNotificationModeIcon(notificationMode)} />
+-              <Icon
+-                size="50"
+-                src={getRoomNotificationModeIcon(notificationMode)}
+-                aria-label={notificationMode}
+-              />
+-            )}
+-            {room.isCallRoom() && callMembers.length > 0 && (
+-              <Badge variant="Critical" fill="Solid" size="400">
+-                <Text as="span" size="L400" truncate>
+-                  {callMembers.length} Live
+-                </Text>
+-              </Badge>
 -            )}
 -          </Box>
 -        </NavItemContent>
 -      </NavLink>
 -      {optionsVisible && (
 -        <NavItemOptions>
+-          {selected && (callEmbed?.roomId === room.roomId || room.isCallRoom()) && (
+-            <CallChatToggle />
+-          )}
 -          <PopOut
+-            id={`menu-${room.roomId}`}
+-            aria-expanded={!!menuAnchor}
 -            anchor={menuAnchor}
 -            offset={menuAnchor?.width === 0 ? 0 : undefined}
 -            alignOffset={menuAnchor?.width === 0 ? 0 : -5}
@@ -3979,6 +3896,8 @@ index 33b21bff24..66e541a6dc 100644
 -            <IconButton
 -              onClick={handleOpenMenu}
 -              aria-pressed={!!menuAnchor}
+-              aria-controls={`menu-${room.roomId}`}
+-              aria-label="More Options"
 -              variant="Background"
 -              fill="None"
 -              size="300"
@@ -4460,7 +4379,7 @@ index 0000000000..0eab2a835e
 +  return memberships;
 +};
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index f8647d1865..d600c610c6 100644
+index 4de42081f5..dd99c21903 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
 @@ -67,6 +67,10 @@
@@ -4472,33 +4391,28 @@ index f8647d1865..d600c610c6 100644
 +import { IncomingCallNotification } from '../features/call/IncomingCallNotification';
 +import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
  import { getFallbackSession } from '../state/sessions';
- 
- export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize) => {
-@@ -124,15 +128,35 @@
+ import { CallStatusRenderer } from './CallStatusRenderer';
+ import { CallEmbedProvider } from '../components/CallEmbedProvider';
+@@ -126,7 +130,7 @@
                  <ClientRoomsNotificationPreferences>
                    <ClientBindAtoms>
                      <ClientNonUIFeatures>
--                      <ClientLayout
--                        nav={
--                          <MobileFriendlyClientNav>
--                            <SidebarNav />
--                          </MobileFriendlyClientNav>
--                        }
--                      >
--                        <Outlet />
--                      </ClientLayout>
+-                      <CallEmbedProvider>
 +                      <CallProvider>
-+                        <ClientLayout
-+                          nav={
-+                            <MobileFriendlyClientNav>
-+                              <SidebarNav />
-+                            </MobileFriendlyClientNav>
-+                          }
-+                        >
+                         <ClientLayout
+                           nav={
+                             <MobileFriendlyClientNav>
+@@ -134,10 +138,27 @@
+                             </MobileFriendlyClientNav>
+                           }
+                         >
+-                          <Outlet />
 +                          <PersistentCallContainer>
 +                            <Outlet />
 +                          </PersistentCallContainer>
-+                        </ClientLayout>
+                         </ClientLayout>
+-                        <CallStatusRenderer />
+-                      </CallEmbedProvider>
 +                        <IncomingCallNotification />
 +                        <GlobalKeyboardShortcuts />
 +                        <div
@@ -4520,7 +4434,7 @@ index f8647d1865..d600c610c6 100644
                        <UserRoomProfileRenderer />
                        <CreateRoomModalRenderer />
 diff --git a/src/app/pages/auth/AuthFooter.tsx b/src/app/pages/auth/AuthFooter.tsx
-index 146f039bf9..9d972e6936 100644
+index 7e509d1ee8..fed0727d4e 100644
 --- a/src/app/pages/auth/AuthFooter.tsx
 +++ b/src/app/pages/auth/AuthFooter.tsx
 @@ -23,6 +23,15 @@
@@ -5265,7 +5179,7 @@ index d87db963df..ffd300b2da 100644
    );
  }
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 3f60d2a957..faf052a225 100644
+index 2a7c619939..3d881cac6f 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -76,6 +76,10 @@
@@ -5279,7 +5193,7 @@ index 3f60d2a957..faf052a225 100644
  import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
  import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
  import { useRoomCreators } from '../../../hooks/useRoomCreators';
-@@ -429,6 +433,7 @@
+@@ -430,6 +434,7 @@
      getScrollElement: () => scrollRef.current,
      estimateSize: () => 0,
      overscan: 10,
@@ -5287,7 +5201,7 @@ index 3f60d2a957..faf052a225 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -500,7 +505,7 @@
+@@ -501,7 +506,7 @@
                  return (
                    <VirtualTile
                      virtualItem={vItem}
@@ -5296,7 +5210,7 @@ index 3f60d2a957..faf052a225 100644
                      ref={virtualizer.measureElement}
                    >
                      <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
-@@ -519,7 +524,7 @@
+@@ -520,7 +525,7 @@
                }
  
                return (
@@ -5305,7 +5219,7 @@ index 3f60d2a957..faf052a225 100644
                    <RoomNavItem
                      room={room}
                      selected={selectedRoomId === roomId}
-@@ -534,6 +539,7 @@
+@@ -535,6 +540,7 @@
            </NavCategory>
          </Box>
        </PageNavContent>
@@ -5345,36 +5259,50 @@ index 31ee6ccb97..83c14bfa87 100644
    hour24Clock: false,
    dateFormatString: 'D MMM YYYY',
 diff --git a/src/app/utils/room.ts b/src/app/utils/room.ts
-index c282a0a20c..02186a4c56 100644
+index 05dfeb29bd..1baa69b1de 100644
 --- a/src/app/utils/room.ts
 +++ b/src/app/utils/room.ts
-@@ -257,24 +257,60 @@
-   return unreadInfos;
- };
- 
--export const joinRuleToIconSrc = (
-+export const getRoomIconSrc = (
+@@ -261,41 +261,57 @@
+ export const getRoomIconSrc = (
    icons: Record<IconName, IconSrc>,
--  joinRule: JoinRule,
--  space: boolean
--): IconSrc | undefined => {
--  if (joinRule === JoinRule.Restricted) {
--    return space ? icons.Space : icons.Hash;
--  }
--  if (joinRule === JoinRule.Knock) {
--    return space ? icons.SpaceLock : icons.HashLock;
--  }
--  if (joinRule === JoinRule.Invite) {
--    return space ? icons.SpaceLock : icons.HashLock;
--  }
--  if (joinRule === JoinRule.Public) {
--    return space ? icons.SpaceGlobe : icons.HashGlobe;
--  }
--  return undefined;
-+  roomType?: string,
+   roomType?: string,
+-  joinRule?: JoinRule
 +  joinRule?: JoinRule,
 +  locked?: boolean
-+): IconSrc => {
+ ): IconSrc => {
+-  if (roomType === RoomType.Space) {
+-    if (joinRule === JoinRule.Public) return icons.SpaceGlobe;
+-    if (
+-      joinRule === JoinRule.Invite ||
+-      joinRule === JoinRule.Knock ||
+-      joinRule === JoinRule.Private
+-    ) {
+-      return icons.SpaceLock;
+-    }
+-    return icons.Space;
+-  }
+-
+-  if (roomType === RoomType.Call) {
+-    if (joinRule === JoinRule.Public) return icons.VolumeHighGlobe;
+-    if (
+-      joinRule === JoinRule.Invite ||
+-      joinRule === JoinRule.Knock ||
+-      joinRule === JoinRule.Private
+-    ) {
+-      return icons.VolumeHighLock;
+-    }
+-    return icons.VolumeHigh;
+-  }
+-
+-  if (joinRule === JoinRule.Public) return icons.HashGlobe;
+-  if (
+-    joinRule === JoinRule.Invite ||
+-    joinRule === JoinRule.Knock ||
+-    joinRule === JoinRule.Private
+-  ) {
+-    return icons.HashLock;
+-  }
+-  return icons.Hash;
 +  type RoomIcons = {
 +    base: IconSrc;
 +    locked: IconSrc;
@@ -5426,33 +5354,6 @@ index c282a0a20c..02186a4c56 100644
  };
  
  export const getRoomAvatarUrl = (
-diff --git a/src/types/matrix/room.ts b/src/types/matrix/room.ts
-index b866fd77fc..c949b30763 100644
---- a/src/types/matrix/room.ts
-+++ b/src/types/matrix/room.ts
-@@ -50,6 +50,7 @@
- 
- export enum RoomType {
-   Space = 'm.space',
-+  Call = 'org.matrix.msc3417.call',
- }
- 
- export type MSpaceChildContent = {
-diff --git a/vite.config.js b/vite.config.js
-index dfa02fc4eb..3cff0dbf81 100644
---- a/vite.config.js
-+++ b/vite.config.js
-@@ -14,6 +14,10 @@
- const copyFiles = {
-   targets: [
-     {
-+      src: 'node_modules/@element-hq/element-call-embedded/dist/*',
-+      dest: 'public/element-call',
-+    },
-+    {
-       src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
-       dest: '',
-       rename: 'pdf.worker.min.js',
 diff --git a/vitest.config.ts b/vitest.config.ts
 new file mode 100644
 index 0000000000..aa3ab472a1
