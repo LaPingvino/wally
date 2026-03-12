@@ -126,7 +126,7 @@ index 028cd560e5..3e7c53f1f4 100644
        </PageHeader>
        <Box grow="Yes">
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 39d7e50a60..3db462b57e 100644
+index 39d7e50a60..22c50036b5 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -115,6 +115,7 @@
@@ -147,7 +147,126 @@ index 39d7e50a60..3db462b57e 100644
    const mentionClickHandler = useMentionClickHandler(room.roomId);
    const spoilerClickHandler = useSpoilerClickHandler();
    const openUserRoomProfile = useOpenUserRoomProfile();
-@@ -1717,27 +1721,56 @@
+@@ -1521,13 +1525,13 @@
+           </Event>
+         );
+       },
+-    },
+-    (mEventId, mEvent, item) => {
+-      if (!showHiddenEvents) return null;
++      'm.call.notify': (mEventId, mEvent, item) => {
+       const highlighted = focusItem?.index === item && focusItem.highlight;
+       const senderId = mEvent.getSender() ?? '';
+       const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
+-
++      const content = mEvent.getContent();
++      const notifyType = content.notify_type ?? 'ring';
++      const isOwn = senderId === mx.getUserId();
+       const timeJSX = (
+         <Time
+           ts={mEvent.getTs()}
+@@ -1536,7 +1540,6 @@
+           dateFormatString={dateFormatString}
+         />
+       );
+-
+       return (
+         <Event
+           key={mEvent.getId()}
+@@ -1546,28 +1549,86 @@
+           mEvent={mEvent}
+           highlight={highlighted}
+           messageSpacing={messageSpacing}
+-          canDelete={canRedact || mEvent.getSender() === mx.getUserId()}
++          canDelete={canRedact || isOwn}
+           hideReadReceipts={hideActivity}
+           showDeveloperTools={showDeveloperTools}
+         >
+           <EventContent
+             messageLayout={messageLayout}
+             time={timeJSX}
+-            iconSrc={Icons.Code}
++            iconSrc={Icons.Phone}
+             content={
+-              <Box grow="Yes" direction="Column">
++              <Box grow="Yes" alignItems="Center" gap="200">
+                 <Text size="T300" priority="300">
+                   <b>{senderName}</b>
+-                  {' sent '}
+-                  <code className={customHtmlCss.Code}>{mEvent.getType()}</code>
+-                  {' state event'}
++                  {notifyType === 'ring' ? ' started a call' : ' sent a call notification'}
+                 </Text>
++                {isOwn && (
++                  <Chip
++                    variant="Secondary"
++                    radii="Pill"
++                    before={<Icon size="50" src={Icons.Phone} />}
++                    onClick={() =>
++                      mx.sendEvent(room.roomId, 'm.call.notify', content).catch(() => undefined)
++                    }
++                    aria-label="Ring again"
++                  >
++                    <Text size="T200">Ring again</Text>
++                  </Chip>
++                )}
+               </Box>
+             }
+           />
+         </Event>
+       );
+     },
++  },
++  (mEventId, mEvent, item) => {
++    if (!showHiddenEvents) return null;
++    const highlighted = focusItem?.index === item && focusItem.highlight;
++    const senderId = mEvent.getSender() ?? '';
++    const senderName = getMemberDisplayName(room, senderId) || getMxIdLocalPart(senderId);
++
++    const timeJSX = (
++      <Time
++        ts={mEvent.getTs()}
++        compact={messageLayout === MessageLayout.Compact}
++        hour24Clock={hour24Clock}
++        dateFormatString={dateFormatString}
++      />
++    );
++
++    return (
++      <Event
++        key={mEvent.getId()}
++        data-message-item={item}
++        data-message-id={mEventId}
++        room={room}
++        mEvent={mEvent}
++        highlight={highlighted}
++        messageSpacing={messageSpacing}
++        canDelete={canRedact || mEvent.getSender() === mx.getUserId()}
++        hideReadReceipts={hideActivity}
++        showDeveloperTools={showDeveloperTools}
++      >
++        <EventContent
++          messageLayout={messageLayout}
++          time={timeJSX}
++          iconSrc={Icons.Code}
++          content={
++            <Box grow="Yes" direction="Column">
++              <Text size="T300" priority="300">
++                <b>{senderName}</b>
++                {' sent '}
++                <code className={customHtmlCss.Code}>{mEvent.getType()}</code>
++                {' state event'}
++              </Text>
++            </Box>
++          }
++        />
++      </Event>
++    );
++  },
+     (mEventId, mEvent, item) => {
+       if (!showHiddenEvents) return null;
+       if (Object.keys(mEvent.getContent()).length === 0) return null;
+@@ -1717,27 +1778,56 @@
  
    return (
      <Box grow="Yes" style={{ position: 'relative' }}>
