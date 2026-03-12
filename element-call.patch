@@ -2480,7 +2480,7 @@ index 5e5d7d7840..ad0993f299 100644
      </PowerLevelsContextProvider>
    );
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index a19058d26f..20030864ce 100644
+index a19058d26f..d97c465127 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -23,8 +23,10 @@
@@ -2940,7 +2940,7 @@ index a19058d26f..20030864ce 100644
                >
                  {pinnedEvents.length > 0 && (
                    <Badge
-@@ -454,7 +777,8 @@
+@@ -454,13 +777,14 @@
              }
            />
  
@@ -2950,6 +2950,13 @@ index a19058d26f..20030864ce 100644
              <TooltipProvider
                position="Bottom"
                offset={4}
+               tooltip={
+                 <Tooltip>
+-                  {callView ? (
++                  {room.isCallRoom() ? (
+                     <Text>Members</Text>
+                   ) : (
+                     <Text>{peopleDrawer ? 'Hide Members' : 'Show Members'}</Text>
 @@ -469,13 +793,175 @@
                }
              >
