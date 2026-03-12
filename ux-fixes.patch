@@ -126,7 +126,7 @@ index 028cd560e5..3e7c53f1f4 100644
        </PageHeader>
        <Box grow="Yes">
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 39d7e50a60..681682d602 100644
+index 39d7e50a60..3db462b57e 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -115,6 +115,7 @@
@@ -147,39 +147,83 @@ index 39d7e50a60..681682d602 100644
    const mentionClickHandler = useMentionClickHandler(room.roomId);
    const spoilerClickHandler = useSpoilerClickHandler();
    const openUserRoomProfile = useOpenUserRoomProfile();
-@@ -1717,6 +1721,32 @@
+@@ -1717,27 +1721,56 @@
  
    return (
      <Box grow="Yes" style={{ position: 'relative' }}>
-+      {showUnreadNav && (
-+        <TimelineFloat position="Top">
-+          <Chip
-+            variant="SurfaceVariant"
-+            radii="Pill"
-+            outlined
-+            before={<Icon size="50" src={Icons.ChevronTop} />}
-+            onClick={navigatePrev}
-+            aria-label="Previous unread room (Alt+Shift+Up)"
-+            aria-keyshortcuts="Alt+Shift+ArrowUp"
-+          >
-+            <Text size="L400">Prev Unread</Text>
-+          </Chip>
-+          <Chip
-+            variant="SurfaceVariant"
-+            radii="Pill"
-+            outlined
-+            before={<Icon size="50" src={Icons.ChevronBottom} />}
-+            onClick={navigateNext}
-+            aria-label="Next unread room (Alt+Shift+Down)"
-+            aria-keyshortcuts="Alt+Shift+ArrowDown"
-+          >
-+            <Text size="L400">Next Unread</Text>
-+          </Chip>
-+        </TimelineFloat>
-+      )}
-       {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
+-      {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
++      {(showUnreadNav || (unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline)) && (
          <TimelineFloat position="Top">
-           <Chip
+-          <Chip
+-            variant="Primary"
+-            radii="Pill"
+-            outlined
+-            before={<Icon size="50" src={Icons.MessageUnread} />}
+-            onClick={handleJumpToUnread}
+-          >
+-            <Text size="L400">Jump to Unread</Text>
+-          </Chip>
+-
+-          <Chip
+-            variant="SurfaceVariant"
+-            radii="Pill"
+-            outlined
+-            before={<Icon size="50" src={Icons.CheckTwice} />}
+-            onClick={handleMarkAsRead}
+-          >
+-            <Text size="L400">Mark as Read</Text>
+-          </Chip>
++          {showUnreadNav && (
++            <>
++              <Chip
++                variant="SurfaceVariant"
++                radii="Pill"
++                outlined
++                before={<Icon size="50" src={Icons.ChevronTop} />}
++                onClick={navigatePrev}
++                aria-label="Previous unread room (Alt+Shift+Up)"
++                aria-keyshortcuts="Alt+Shift+ArrowUp"
++              >
++                <Text size="L400">Prev Unread</Text>
++              </Chip>
++              <Chip
++                variant="SurfaceVariant"
++                radii="Pill"
++                outlined
++                before={<Icon size="50" src={Icons.ChevronBottom} />}
++                onClick={navigateNext}
++                aria-label="Next unread room (Alt+Shift+Down)"
++                aria-keyshortcuts="Alt+Shift+ArrowDown"
++              >
++                <Text size="L400">Next Unread</Text>
++              </Chip>
++            </>
++          )}
++          {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
++            <>
++              <Chip
++                variant="Primary"
++                radii="Pill"
++                outlined
++                before={<Icon size="50" src={Icons.MessageUnread} />}
++                onClick={handleJumpToUnread}
++              >
++                <Text size="L400">Jump to Unread</Text>
++              </Chip>
++              <Chip
++                variant="SurfaceVariant"
++                radii="Pill"
++                outlined
++                before={<Icon size="50" src={Icons.CheckTwice} />}
++                onClick={handleMarkAsRead}
++              >
++                <Text size="L400">Mark as Read</Text>
++              </Chip>
++            </>
++          )}
+         </TimelineFloat>
+       )}
+       <Scroll ref={scrollRef} visibility="Hover">
 diff --git a/src/app/hooks/router/useInbox.ts b/src/app/hooks/router/useInbox.ts
 index de8d3d69f9..08381e8ddb 100644
 --- a/src/app/hooks/router/useInbox.ts
