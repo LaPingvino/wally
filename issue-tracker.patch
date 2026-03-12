@@ -1,11 +1,11 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 0000000000..93a8667fae
+index 0000000000..266ef6b9dd
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,2013 @@
+@@ -0,0 +1,2030 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-+import { useKanbanMonitor, useKanbanDraggable, useKanbanDropTarget, KanbanDropResult } from './useKanbanDnD';
++import { useKanbanMonitor, useKanbanCardDnD, useKanbanDropTarget, KanbanDropResult } from './useKanbanDnD';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixClient, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
 +import {
@@ -1059,15 +1059,23 @@ index 0000000000..93a8667fae
 +}) {
 +  const issueId = entry.event.getStateKey()!;
 +  const colVal = (entry.content[kanbanFieldKey] as string | undefined) ?? '__uncategorized__';
-+  const { ref, isDragging } = useKanbanDraggable(issueId, colVal, kanbanFieldKey, canWrite);
++  const { ref, isDragging, closestEdge } = useKanbanCardDnD(issueId, colVal, kanbanFieldKey, canWrite);
 +  const titleField = schema.fields.find((f) => f.key === 'title') ?? schema.fields[0];
 +  const title = titleField ? ((entry.content[titleField.key] as string) ?? 'issue') : 'issue';
 +
++  const dropLine = (
++    <div style={{ position: 'absolute', left: 0, right: 0, height: 2,
++      background: color.Primary.Main, borderRadius: 2, pointerEvents: 'none' }} />
++  );
++
 +  return (
-+    <div ref={ref} style={{ opacity: isDragging ? 0.4 : 1, cursor: canWrite ? 'grab' : undefined }}>
++    <div ref={ref} style={{ opacity: isDragging ? 0.4 : 1, cursor: canWrite ? 'grab' : undefined,
++      position: 'relative' }}>
++      {closestEdge === 'top' && <div style={{ position: 'absolute', top: -1, left: 0, right: 0 }}>{dropLine}</div>}
 +      <IssueCard entry={entry} schema={schema} room={room} kanbanFieldKey={kanbanFieldKey}
 +        canWrite={canWrite} onClick={onClick} showCheckbox={showCheckbox}
 +        isSelected={isSelected} onToggleSelect={onToggleSelect} />
++      {closestEdge === 'bottom' && <div style={{ position: 'absolute', bottom: -1, left: 0, right: 0 }}>{dropLine}</div>}
 +      {canWrite && allColumns.length > 1 && (
 +        <select
 +          value={colVal}
@@ -1616,31 +1624,39 @@ index 0000000000..93a8667fae
 +  // eslint-disable-next-line react-hooks/exhaustive-deps
 +  }, [room, tick]);
 +
-+  const handleKanbanDrop = useCallback(async ({ issueId, sourceColumn, targetColumn, kanbanFieldKey }: KanbanDropResult) => {
-+    if (!canWriteIssues || sourceColumn === targetColumn) return;
++  const handleKanbanDrop = useCallback(async (
++    { issueId, sourceColumn, targetColumn, kanbanFieldKey, targetCardId, targetEdge }: KanbanDropResult
++  ) => {
++    if (!canWriteIssues) return;
 +    const entry = issues.find((e) => e.event.getStateKey() === issueId);
 +    if (!entry) return;
 +
 +    const order = getKanbanOrder(kanbanFieldKey);
-+    const srcIds = (order[sourceColumn]?.length
-+      ? order[sourceColumn]
-+      : issues.filter((e) => sourceColumn === '__uncategorized__' ? !e.content[kanbanFieldKey] : e.content[kanbanFieldKey] === sourceColumn)
-+        .map((e) => e.event.getStateKey()!)
-+    ).filter((id) => id !== issueId);
-+    const dstIds = [
-+      ...(order[targetColumn]?.length
-+        ? order[targetColumn]
-+        : issues.filter((e) => targetColumn === '__uncategorized__' ? !e.content[kanbanFieldKey] : e.content[kanbanFieldKey] === targetColumn)
-+          .map((e) => e.event.getStateKey()!)
-+      ).filter((id) => id !== issueId),
-+      issueId,
-+    ];
++    const getColIds = (col: string): string[] => {
++      if (order[col]?.length) return [...order[col]];
++      return issues
++        .filter((e) => col === '__uncategorized__' ? !e.content[kanbanFieldKey] : e.content[kanbanFieldKey] === col)
++        .map((e) => e.event.getStateKey()!);
++    };
 +
-+    const newVal = targetColumn === '__uncategorized__' ? undefined : targetColumn;
-+    await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any,
-+      { ...entry.content, [kanbanFieldKey]: newVal }, issueId);
-+    await mx.sendStateEvent(room.roomId, 'eu.kiefte.issues.order' as any,
-+      { ...order, [sourceColumn]: srcIds, [targetColumn]: dstIds }, kanbanFieldKey);
++    const srcIds = getColIds(sourceColumn).filter((id) => id !== issueId);
++    const dstIds = sourceColumn === targetColumn ? [...srcIds] : getColIds(targetColumn).filter((id) => id !== issueId);
++
++    if (targetCardId) {
++      const idx = dstIds.indexOf(targetCardId);
++      dstIds.splice(idx >= 0 ? (targetEdge === 'bottom' ? idx + 1 : idx) : dstIds.length, 0, issueId);
++    } else {
++      dstIds.push(issueId);
++    }
++
++    const newOrder = { ...order, [sourceColumn]: srcIds, [targetColumn]: dstIds };
++
++    if (sourceColumn !== targetColumn) {
++      const newVal = targetColumn === '__uncategorized__' ? undefined : targetColumn;
++      await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any,
++        { ...entry.content, [kanbanFieldKey]: newVal }, issueId);
++    }
++    await mx.sendStateEvent(room.roomId, 'eu.kiefte.issues.order' as any, newOrder, kanbanFieldKey);
 +  }, [canWriteIssues, issues, mx, room.roomId, getKanbanOrder]);
 +
 +  useKanbanMonitor(handleKanbanDrop, schema !== null && viewMode.type === 'kanban');
@@ -1760,6 +1776,7 @@ index 0000000000..93a8667fae
 +                          allColumns={allColumnOptions}
 +                          onMoveToColumn={(targetColumn) => handleKanbanDrop({
 +                            issueId: sk, sourceColumn: col.key, targetColumn, kanbanFieldKey,
++                            targetCardId: null, targetEdge: null,
 +                          })}
 +                        />
 +                      </li>
@@ -2019,20 +2036,22 @@ index 0000000000..93a8667fae
 +}
 diff --git a/src/app/features/issues/useKanbanDnD.ts b/src/app/features/issues/useKanbanDnD.ts
 new file mode 100644
-index 0000000000..68385fe786
+index 0000000000..bdf6b9f7f2
 --- /dev/null
 +++ b/src/app/features/issues/useKanbanDnD.ts
-@@ -0,0 +1,115 @@
-+import { useEffect, useRef, useState, useCallback } from 'react';
+@@ -0,0 +1,148 @@
++import { useEffect, useRef, useState } from 'react';
 +
 +export type KanbanDropResult = {
 +  issueId: string;
 +  sourceColumn: string;
 +  targetColumn: string;
 +  kanbanFieldKey: string;
++  targetCardId: string | null;
++  targetEdge: 'top' | 'bottom' | null;
 +};
 +
-+// Monitor for drops anywhere on the board. Call once at the IssueBoard level.
++// Monitor for all drops across the board. Call once at IssueBoard level.
 +export function useKanbanMonitor(
 +  onDrop: (result: KanbanDropResult) => void,
 +  active: boolean
@@ -2045,18 +2064,28 @@ index 0000000000..68385fe786
 +    let cancelled = false;
 +    let cleanup: (() => void) | undefined;
 +
-+    import('@atlaskit/pragmatic-drag-and-drop/element/adapter').then(({ monitorForElements }) => {
++    Promise.all([
++      import('@atlaskit/pragmatic-drag-and-drop/element/adapter'),
++      import('@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'),
++    ]).then(([{ monitorForElements }, { extractClosestEdge }]) => {
 +      if (cancelled) return;
 +      cleanup = monitorForElements({
 +        canMonitor: ({ source }) => source.data.type === 'kanban-card',
 +        onDrop({ source, location }) {
-+          const target = location.current.dropTargets.find((t) => t.data.type === 'kanban-column');
-+          if (!target) return;
++          const targets = location.current.dropTargets;
++          const cardTarget = targets.find((t) => t.data.type === 'kanban-card');
++          const colTarget = targets.find((t) => t.data.type === 'kanban-column');
++          const hit = cardTarget ?? colTarget;
++          if (!hit) return;
 +          onDropRef.current({
 +            issueId: source.data.issueId as string,
 +            sourceColumn: source.data.columnValue as string,
-+            targetColumn: target.data.columnValue as string,
++            targetColumn: hit.data.columnValue as string,
 +            kanbanFieldKey: source.data.kanbanFieldKey as string,
++            targetCardId: cardTarget ? (cardTarget.data.issueId as string) : null,
++            targetEdge: cardTarget
++              ? (extractClosestEdge(cardTarget.data) as 'top' | 'bottom' | null)
++              : null,
 +          });
 +        },
 +      });
@@ -2069,30 +2098,51 @@ index 0000000000..68385fe786
 +  }, [active]);
 +}
 +
-+// Make a card draggable.
-+export function useKanbanDraggable(
++// Combined hook: makes a card both draggable and a drop target (closest-edge).
++export function useKanbanCardDnD(
 +  issueId: string,
 +  columnValue: string,
 +  kanbanFieldKey: string,
 +  canWrite: boolean
-+): { ref: React.RefObject<HTMLDivElement>; isDragging: boolean } {
++): { ref: React.RefObject<HTMLDivElement>; isDragging: boolean; closestEdge: 'top' | 'bottom' | null } {
 +  const ref = useRef<HTMLDivElement>(null);
 +  const [isDragging, setIsDragging] = useState(false);
++  const [closestEdge, setClosestEdge] = useState<'top' | 'bottom' | null>(null);
 +
 +  useEffect(() => {
 +    const el = ref.current;
-+    if (!el || !canWrite) return;
++    if (!el) return;
 +    let cancelled = false;
 +    let cleanup: (() => void) | undefined;
 +
-+    import('@atlaskit/pragmatic-drag-and-drop/element/adapter').then(({ draggable }) => {
++    Promise.all([
++      import('@atlaskit/pragmatic-drag-and-drop/element/adapter'),
++      import('@atlaskit/pragmatic-drag-and-drop/combine'),
++      import('@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge'),
++    ]).then(([{ draggable, dropTargetForElements }, { combine }, { attachClosestEdge, extractClosestEdge }]) => {
 +      if (cancelled || !ref.current) return;
-+      cleanup = draggable({
-+        element: ref.current,
-+        getInitialData: () => ({ type: 'kanban-card', issueId, columnValue, kanbanFieldKey }),
-+        onDragStart: () => setIsDragging(true),
-+        onDrop: () => setIsDragging(false),
-+      });
++      const dragData = { type: 'kanban-card', issueId, columnValue, kanbanFieldKey };
++      cleanup = combine(
++        ...(canWrite
++          ? [draggable({
++              element: ref.current,
++              getInitialData: () => dragData,
++              onDragStart: () => setIsDragging(true),
++              onDrop: () => setIsDragging(false),
++            })]
++          : []),
++        dropTargetForElements({
++          element: ref.current,
++          canDrop: ({ source }) =>
++            source.data.type === 'kanban-card' && source.data.issueId !== issueId,
++          getData: ({ input, element }) =>
++            attachClosestEdge(dragData, { input, element, allowedEdges: ['top', 'bottom'] }),
++          onDrag: ({ self }) =>
++            setClosestEdge(extractClosestEdge(self.data) as 'top' | 'bottom' | null),
++          onDragLeave: () => setClosestEdge(null),
++          onDrop: () => setClosestEdge(null),
++        })
++      );
 +    });
 +
 +    return () => {
@@ -2101,10 +2151,10 @@ index 0000000000..68385fe786
 +    };
 +  }, [issueId, columnValue, kanbanFieldKey, canWrite]);
 +
-+  return { ref, isDragging };
++  return { ref, isDragging, closestEdge };
 +}
 +
-+// Make a column a drop target.
++// Column drop target (fallback when not hovering a specific card).
 +export function useKanbanDropTarget(
 +  columnValue: string,
 +  kanbanFieldKey: string
