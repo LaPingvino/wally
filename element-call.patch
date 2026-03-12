@@ -4637,10 +4637,10 @@ index 7e509d1ee8..fed0727d4e 100644
  }
 diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
 new file mode 100644
-index 0000000000..918543817f
+index 0000000000..91248cdfc9
 --- /dev/null
 +++ b/src/app/pages/client/call/CallProvider.tsx
-@@ -0,0 +1,382 @@
+@@ -0,0 +1,406 @@
 +import React, {
 +  createContext,
 +  useState,
@@ -4657,7 +4657,9 @@ index 0000000000..918543817f
 +  IWidgetApiRequestData,
 +} from 'matrix-widget-api';
 +import { useParams } from 'react-router-dom';
++import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 +import { SmallWidget } from '../../../features/call/SmallWidget';
++import { useMatrixClient } from '../../../hooks/useMatrixClient';
 +
 +interface MediaStatePayload {
 +  data?: {
@@ -4713,6 +4715,7 @@ index 0000000000..918543817f
 +const DEFAULT_CHAT_OPENED = false;
 +
 +export function CallProvider({ children }: CallProviderProps) {
++  const mx = useMatrixClient();
 +  const [activeCallRoomId, setActiveCallRoomIdState] = useState<string | null>(null);
 +  const [viewedCallRoomId, setViewedCallRoomIdState] = useState<string | null>(null);
 +
@@ -4740,8 +4743,29 @@ index 0000000000..918543817f
 +      // Voice rooms: show call by default. Regular/DM rooms: show chat by default.
 +      setIsCallViewOpenState(isVoiceRoom);
 +      setIsChatOpenState(!isVoiceRoom);
++
++      // Send m.call.notify (MSC4075) so other clients (Element X etc.) ring.
++      // Only for non-voice rooms when no one else is already in the call.
++      if (!isVoiceRoom) {
++        const room = mx.getRoom(roomId);
++        if (room && MatrixRTCSession.callMembershipsForRoom(room).length === 0) {
++          const isDm = room.currentState.getJoinedMemberCount() <= 2;
++          const otherMembers = room
++            .getJoinedMembers()
++            .map((m) => m.userId)
++            .filter((id) => id !== mx.getUserId());
++          mx.sendEvent(roomId, 'm.call.notify', {
++            call_id: '',
++            application: 'm.call',
++            'm.mentions': isDm ? { room: false, user_ids: otherMembers } : { room: true },
++            notify_type: 'ring',
++          }).catch(() => {
++            // best-effort; don't block the call on a failed notify
++          });
++        }
++      }
 +    }
-+  }, []);
++  }, [mx]);
 +
 +  const setViewedCallRoomId = useCallback(
 +    (roomId: string | null) => {
