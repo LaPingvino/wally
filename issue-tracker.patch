@@ -1,10 +1,13 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 0000000000..f48a5d1e02
+index 0000000000..9cacd1c10b
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,1910 @@
+@@ -0,0 +1,2091 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
++import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
++import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixClient, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
 +import {
@@ -1049,6 +1052,112 @@ index 0000000000..f48a5d1e02
 +  );
 +}
 +
++// ── Kanban DnD ────────────────────────────────────────────────────────────────
++
++type KanbanCardData = {
++  type: 'kanban-card';
++  issueId: string;
++  columnValue: string;
++  kanbanFieldKey: string;
++};
++
++function isKanbanCardData(data: Record<string | symbol, unknown>): data is KanbanCardData {
++  return data.type === 'kanban-card';
++}
++
++function KanbanCard({ entry, schema, room, kanbanFieldKey, canWrite, onClick, isSelected, onToggleSelect, showCheckbox }: {
++  entry: IssueEntry; schema: IssueSchema; room: Room; kanbanFieldKey: string; canWrite: boolean; onClick: () => void;
++  isSelected?: boolean; onToggleSelect?: () => void; showCheckbox?: boolean;
++}) {
++  const ref = useRef<HTMLDivElement>(null);
++  const [isDragging, setIsDragging] = useState(false);
++  const [closestEdgeState, setClosestEdgeState] = useState<'top' | 'bottom' | null>(null);
++  const issueId = entry.event.getStateKey()!;
++  const colVal = (entry.content[kanbanFieldKey] as string | undefined) ?? '__uncategorized__';
++  const dragData: KanbanCardData = { type: 'kanban-card', issueId, columnValue: colVal, kanbanFieldKey };
++
++  useEffect(() => {
++    const el = ref.current;
++    if (!el || !canWrite) return;
++    return combine(
++      draggable({
++        element: el,
++        getInitialData: () => dragData,
++        onDragStart: () => setIsDragging(true),
++        onDrop: () => setIsDragging(false),
++      }),
++      dropTargetForElements({
++        element: el,
++        canDrop: ({ source }) => isKanbanCardData(source.data) && source.data.issueId !== issueId,
++        getData: ({ input, element: el2 }) =>
++          attachClosestEdge(dragData, { input, element: el2, allowedEdges: ['top', 'bottom'] }),
++        onDrag: ({ self }) => setClosestEdgeState(extractClosestEdge(self.data) as 'top' | 'bottom' | null),
++        onDragLeave: () => setClosestEdgeState(null),
++        onDrop: () => setClosestEdgeState(null),
++      })
++    );
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [canWrite, issueId, colVal, kanbanFieldKey]);
++
++  const dropLine = (
++    <div style={{ position: 'absolute', left: 0, right: 0, height: 2,
++      background: color.Primary.Main, borderRadius: 2, pointerEvents: 'none' }} />
++  );
++
++  return (
++    <div ref={ref} style={{ opacity: isDragging ? 0.4 : 1, position: 'relative',
++      cursor: canWrite ? 'grab' : undefined }}>
++      {closestEdgeState === 'top' && <div style={{ position: 'absolute', top: -2 }}>{dropLine}</div>}
++      <IssueCard entry={entry} schema={schema} room={room} kanbanFieldKey={kanbanFieldKey}
++        canWrite={canWrite} onClick={onClick} showCheckbox={showCheckbox}
++        isSelected={isSelected} onToggleSelect={onToggleSelect} />
++      {closestEdgeState === 'bottom' && <div style={{ position: 'absolute', bottom: -2 }}>{dropLine}</div>}
++    </div>
++  );
++}
++
++function KanbanColumnSection({ columnValue, kanbanFieldKey, colHeadingId, label, entryCount, onHide, children }: {
++  columnValue: string; kanbanFieldKey: string; colHeadingId: string; label: string;
++  entryCount: number; onHide: () => void; children: React.ReactNode;
++}) {
++  const ref = useRef<HTMLElement>(null);
++  const [isDraggedOver, setIsDraggedOver] = useState(false);
++
++  useEffect(() => {
++    const el = ref.current;
++    if (!el) return;
++    return dropTargetForElements({
++      element: el,
++      canDrop: ({ source }) => isKanbanCardData(source.data),
++      getData: () => ({ type: 'kanban-column', columnValue, kanbanFieldKey }),
++      onDragEnter: () => setIsDraggedOver(true),
++      onDragLeave: () => setIsDraggedOver(false),
++      onDrop: () => setIsDraggedOver(false),
++    });
++  }, [columnValue, kanbanFieldKey]);
++
++  return (
++    <section ref={ref as React.RefObject<HTMLElement>} aria-labelledby={colHeadingId}
++      style={{ minWidth: '240px', maxWidth: '320px', flexShrink: 0,
++        background: isDraggedOver ? color.Primary.Container : color.SurfaceVariant.Container,
++        outline: isDraggedOver ? '2px solid ' + color.Primary.Main : undefined,
++        borderRadius: config.radii.R300, padding: config.space.S300,
++        display: 'flex', flexDirection: 'column', gap: config.space.S200,
++        transition: 'background 0.15s, outline 0.15s' }}>
++      <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
++        <Text id={colHeadingId} as="h3" size="H6">{label.replace(/_/g, ' ')}</Text>
++        <Box alignItems="Center" gap="100">
++          <Text size="T200" priority="300" aria-label={entryCount + ' issues'}>{entryCount}</Text>
++          <button type="button" aria-label={'Hide ' + label + ' column'} onClick={onHide}
++            style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 4px',
++              color: 'inherit', opacity: 0.5, fontSize: '0.9em', lineHeight: 1 }}>✕</button>
++        </Box>
++      </Box>
++      {children}
++    </section>
++  );
++}
++
 +// ── IssueListItem (list view) ─────────────────────────────────────────────────
 +
 +function IssueListItem({ entry, schema, room, canWrite, onEdit, isSelected, onToggleSelect, showCheckbox }: {
@@ -1545,6 +1654,80 @@ index 0000000000..f48a5d1e02
 +    closeSchema();
 +  }, [mx, room.roomId, closeSchema]);
 +
++  const getKanbanOrder = useCallback((kanbanFieldKey: string): Record<string, string[]> => {
++    const ev = room.getLiveTimeline().getState(EventTimeline.FORWARDS)
++      ?.getStateEvents('eu.kiefte.issues.order' as any, kanbanFieldKey);
++    return (ev?.getContent() as Record<string, string[]> | undefined) ?? {};
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [room, tick]);
++
++  const handleKanbanDrop = useCallback(async (args: {
++    dragData: KanbanCardData;
++    dropColumnValue: string;
++    dropIssueId: string | null;
++    dropEdge: 'top' | 'bottom' | null;
++    kanbanFieldKey: string;
++  }) => {
++    const { dragData, dropColumnValue, dropIssueId, dropEdge, kanbanFieldKey } = args;
++    if (!canWriteIssues) return;
++    const { issueId, columnValue: srcCol } = dragData;
++    const entry = issues.find((e) => e.event.getStateKey() === issueId);
++    if (!entry) return;
++
++    const order = getKanbanOrder(kanbanFieldKey);
++    const getColIds = (col: string): string[] => {
++      if (order[col]?.length) return [...order[col]];
++      return issues
++        .filter((e) => col === '__uncategorized__'
++          ? !e.content[kanbanFieldKey]
++          : e.content[kanbanFieldKey] === col)
++        .map((e) => e.event.getStateKey()!);
++    };
++
++    const srcIds = getColIds(srcCol).filter((id) => id !== issueId);
++    const dstIds = srcCol === dropColumnValue ? [...srcIds] : getColIds(dropColumnValue).filter((id) => id !== issueId);
++
++    if (dropIssueId) {
++      const idx = dstIds.indexOf(dropIssueId);
++      dstIds.splice(idx >= 0 ? (dropEdge === 'bottom' ? idx + 1 : idx) : dstIds.length, 0, issueId);
++    } else {
++      dstIds.push(issueId);
++    }
++
++    const newOrder = { ...order, [srcCol]: srcIds, [dropColumnValue]: dstIds };
++
++    if (srcCol !== dropColumnValue) {
++      const newVal = dropColumnValue === '__uncategorized__' ? undefined : dropColumnValue;
++      await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any,
++        { ...entry.content, [kanbanFieldKey]: newVal }, issueId);
++    }
++    await mx.sendStateEvent(room.roomId, 'eu.kiefte.issues.order' as any, newOrder, kanbanFieldKey);
++  }, [canWriteIssues, issues, mx, room.roomId, getKanbanOrder]);
++
++  useEffect(() => {
++    if (effectiveViewMode.type !== 'kanban') return;
++    const kanbanFieldKey = effectiveViewMode.fieldKey;
++    return monitorForElements({
++      canMonitor: ({ source }) => isKanbanCardData(source.data),
++      onDrop: ({ source, location }) => {
++        const dragData = source.data as KanbanCardData;
++        const targets = location.current.dropTargets;
++        if (targets.length === 0) return;
++        const cardTarget = targets.find((t) => t.data.type === 'kanban-card');
++        const colTarget = targets.find((t) => t.data.type === 'kanban-column');
++        const hit = cardTarget ?? colTarget;
++        if (!hit) return;
++        handleKanbanDrop({
++          dragData,
++          dropColumnValue: hit.data.columnValue as string,
++          dropIssueId: cardTarget ? (cardTarget.data.issueId as string) : null,
++          dropEdge: cardTarget ? extractClosestEdge(cardTarget.data) as 'top' | 'bottom' : null,
++          kanbanFieldKey,
++        });
++      },
++    });
++  }, [effectiveViewMode, handleKanbanDrop]);
++
 +  // Must be declared before any conditional return to satisfy Rules of Hooks.
 +  const displayedIssues = useMemo(() => {
 +    if (!schema) return [];
@@ -1612,14 +1795,25 @@ index 0000000000..f48a5d1e02
 +  const renderKanban = (kanbanFieldKey: string) => {
 +    const kanbanField = schema.fields.find((f) => f.key === kanbanFieldKey);
 +    if (!kanbanField) return null;
++
++    const order = getKanbanOrder(kanbanFieldKey);
++    const applyOrder = (entries: IssueEntry[], colKey: string): IssueEntry[] => {
++      const ids = order[colKey];
++      if (!ids?.length) return entries;
++      const pos = new Map(ids.map((id, i) => [id, i]));
++      return [...entries].sort((a, b) =>
++        (pos.get(a.event.getStateKey()!) ?? Infinity) - (pos.get(b.event.getStateKey()!) ?? Infinity)
++      );
++    };
++
 +    interface Column { key: string; label: string; entries: IssueEntry[]; }
 +    const columns: Column[] = [
 +      ...(kanbanField.values ?? []).map((value) => ({
 +        key: value, label: value,
-+        entries: issues.filter((entry) => entry.content[kanbanField.key] === value),
++        entries: applyOrder(issues.filter((entry) => entry.content[kanbanField.key] === value), value),
 +      })),
 +      { key: '__uncategorized__', label: 'Uncategorized',
-+        entries: issues.filter((entry) => !kanbanField.values?.includes(entry.content[kanbanField.key] as string)) },
++        entries: applyOrder(issues.filter((entry) => !kanbanField.values?.includes(entry.content[kanbanField.key] as string)), '__uncategorized__') },
 +    ].filter((col) => col.entries.length > 0 || kanbanField.values?.includes(col.key));
 +
 +    const visibleColumns = columns.filter((col) => !hiddenColumns.has(col.key));
@@ -1630,28 +1824,15 @@ index 0000000000..f48a5d1e02
 +          {visibleColumns.map((col) => {
 +            const colHeadingId = 'issue-col-heading-' + col.key;
 +            return (
-+              <section key={col.key} aria-labelledby={colHeadingId}
-+                style={{ minWidth: '240px', maxWidth: '320px', flexShrink: 0, background: color.SurfaceVariant.Container,
-+                  borderRadius: config.radii.R300, padding: config.space.S300, display: 'flex', flexDirection: 'column', gap: config.space.S200 }}>
-+                <Box alignItems="Center" style={{ justifyContent: 'space-between' }}>
-+                  <Text id={colHeadingId} as="h3" size="H6">{col.label.replace(/_/g, ' ')}</Text>
-+                  <Box alignItems="Center" gap="100">
-+                    <Text size="T200" priority="300" aria-label={col.entries.length + ' issues'}>{col.entries.length}</Text>
-+                    <button
-+                      type="button"
-+                      aria-label={'Hide ' + col.label + ' column'}
-+                      onClick={() => setHiddenColumns((prev) => new Set([...prev, col.key]))}
-+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 4px',
-+                        color: 'inherit', opacity: 0.5, fontSize: '0.9em', lineHeight: 1 }}
-+                    >✕</button>
-+                  </Box>
-+                </Box>
++              <KanbanColumnSection key={col.key} columnValue={col.key} kanbanFieldKey={kanbanFieldKey}
++                colHeadingId={colHeadingId} label={col.label} entryCount={col.entries.length}
++                onHide={() => setHiddenColumns((prev) => new Set([...prev, col.key]))}>
 +                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: config.space.S200 }}>
 +                  {col.entries.map((entry) => {
 +                    const sk = entry.event.getStateKey()!;
 +                    return (
 +                      <li key={sk}>
-+                        <IssueCard
++                        <KanbanCard
 +                          entry={entry} schema={schema} room={room}
 +                          kanbanFieldKey={kanbanFieldKey} canWrite={canWriteIssues}
 +                          onClick={() => openEdit(entry)}
@@ -1668,7 +1849,7 @@ index 0000000000..f48a5d1e02
 +                    </li>
 +                  )}
 +                </ul>
-+              </section>
++              </KanbanColumnSection>
 +            );
 +          })}
 +        </Box>
