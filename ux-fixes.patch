@@ -125,6 +125,61 @@ index 028cd560e5..3e7c53f1f4 100644
          </Box>
        </PageHeader>
        <Box grow="Yes">
+diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
+index 39d7e50a60..681682d602 100644
+--- a/src/app/features/room/RoomTimeline.tsx
++++ b/src/app/features/room/RoomTimeline.tsx
+@@ -115,6 +115,7 @@
+ import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
+ import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
+ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
++import { useNavigateUnread, unreadNavRoomAtom } from '../../hooks/useNavigateUnread';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+ import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
+ import { useImagePackRooms } from '../../hooks/useImagePackRooms';
+@@ -480,6 +481,9 @@
+   const roomToParents = useAtomValue(roomToParentsAtom);
+   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+   const { navigateRoom } = useRoomNavigate();
++  const unreadNavRoom = useAtomValue(unreadNavRoomAtom);
++  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
++  const showUnreadNav = !threadId && unreadNavRoom === room.roomId && unreadCount > 0;
+   const mentionClickHandler = useMentionClickHandler(room.roomId);
+   const spoilerClickHandler = useSpoilerClickHandler();
+   const openUserRoomProfile = useOpenUserRoomProfile();
+@@ -1717,6 +1721,32 @@
+ 
+   return (
+     <Box grow="Yes" style={{ position: 'relative' }}>
++      {showUnreadNav && (
++        <TimelineFloat position="Top">
++          <Chip
++            variant="SurfaceVariant"
++            radii="Pill"
++            outlined
++            before={<Icon size="50" src={Icons.ChevronTop} />}
++            onClick={navigatePrev}
++            aria-label="Previous unread room (Alt+Shift+Up)"
++            aria-keyshortcuts="Alt+Shift+ArrowUp"
++          >
++            <Text size="L400">Prev Unread</Text>
++          </Chip>
++          <Chip
++            variant="SurfaceVariant"
++            radii="Pill"
++            outlined
++            before={<Icon size="50" src={Icons.ChevronBottom} />}
++            onClick={navigateNext}
++            aria-label="Next unread room (Alt+Shift+Down)"
++            aria-keyshortcuts="Alt+Shift+ArrowDown"
++          >
++            <Text size="L400">Next Unread</Text>
++          </Chip>
++        </TimelineFloat>
++      )}
+       {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
+         <TimelineFloat position="Top">
+           <Chip
 diff --git a/src/app/hooks/router/useInbox.ts b/src/app/hooks/router/useInbox.ts
 index de8d3d69f9..08381e8ddb 100644
 --- a/src/app/hooks/router/useInbox.ts
@@ -685,10 +740,10 @@ index 9592224f8c..4943987b97 100644
            </PageContent>
 diff --git a/src/app/pages/client/inbox/Unread.tsx b/src/app/pages/client/inbox/Unread.tsx
 new file mode 100644
-index 0000000000..ad10adbea8
+index 0000000000..7f7b0e64cd
 --- /dev/null
 +++ b/src/app/pages/client/inbox/Unread.tsx
-@@ -0,0 +1,337 @@
+@@ -0,0 +1,341 @@
 +import React, { useMemo } from 'react';
 +import {
 +  Avatar,
@@ -702,7 +757,7 @@ index 0000000000..ad10adbea8
 +  Text,
 +  config,
 +} from 'folds';
-+import { useAtomValue } from 'jotai';
++import { useAtomValue, useSetAtom } from 'jotai';
 +import { useNavigate } from 'react-router-dom';
 +import { JoinRule, MatrixEvent, Room } from 'matrix-js-sdk';
 +import {
@@ -734,6 +789,7 @@ index 0000000000..ad10adbea8
 +  getSpacePath,
 +  getSpaceRoomPath,
 +} from '../../pathUtils';
++import { unreadNavRoomAtom } from '../../../hooks/useNavigateUnread';
 +
 +const getUnreadMessages = (room: Room, userId: string, limit = 10): MatrixEvent[] => {
 +  const readUpToId = room.getEventReadUpTo(userId);
@@ -937,9 +993,12 @@ index 0000000000..ad10adbea8
 +    return entries;
 +  }, [roomToUnread, allRooms, mx]);
 +
++  const setUnreadNavRoom = useSetAtom(unreadNavRoomAtom);
++
 +  const navigateToRoom = (roomId: string, eventId?: string) => {
 +    const room = mx.getRoom(roomId);
 +    if (!room) return;
++    setUnreadNavRoom(roomId);
 +    const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
 +    if (room.isSpaceRoom()) {
 +      navigate(getSpacePath(roomIdOrAlias));

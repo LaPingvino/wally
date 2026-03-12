@@ -1,9 +1,9 @@
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
-index 0000000000..978349db57
+index 0000000000..19d5c05fbb
 --- /dev/null
 +++ b/src/app/hooks/useNavigateUnread.ts
-@@ -0,0 +1,192 @@
+@@ -0,0 +1,205 @@
 +import { useCallback, useMemo } from 'react';
 +import { useAtomValue, useAtom } from 'jotai';
 +import { atom } from 'jotai';
@@ -34,6 +34,12 @@ index 0000000000..978349db57
 + * even when the list shrinks as rooms are read.
 + */
 +const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
++
++/**
++ * The roomId last navigated to via unread nav (keyboard shortcuts or inbox buttons).
++ * Used to show the ↑↓ nav bar in the timeline only when in "unread browsing mode".
++ */
++export const unreadNavRoomAtom = atom<string | null>(null);
 +
 +type SidebarItem = string | { id: string; content: string[] };
 +
@@ -90,6 +96,7 @@ index 0000000000..978349db57
 +  const roomSortOrder: string =
 +    (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
 +  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
++  const setUnreadNavRoom = useAtom(unreadNavRoomAtom)[1];
 +  const selectedRoomId = useSelectedRoom();
 +
 +  const unreadEntries = useMemo(() => {
@@ -176,23 +183,29 @@ index 0000000000..978349db57
 +    if (unreadEntries.length === 0) return;
 +    const baseIndex = resolveBaseIndex(-1);
 +    const next = (baseIndex + 1) % unreadEntries.length;
-+    setLastNavigated({ roomId: unreadEntries[next][0], index: next });
-+    navigateToRoom(unreadEntries[next][0]);
-+  }, [unreadEntries, resolveBaseIndex, setLastNavigated, navigateToRoom]);
++    const roomId = unreadEntries[next][0];
++    setLastNavigated({ roomId, index: next });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
 +
 +  const navigatePrev = useCallback(() => {
 +    if (unreadEntries.length === 0) return;
 +    const baseIndex = resolveBaseIndex(unreadEntries.length);
 +    const prev = (baseIndex - 1 + unreadEntries.length) % unreadEntries.length;
-+    setLastNavigated({ roomId: unreadEntries[prev][0], index: prev });
-+    navigateToRoom(unreadEntries[prev][0]);
-+  }, [unreadEntries, resolveBaseIndex, setLastNavigated, navigateToRoom]);
++    const roomId = unreadEntries[prev][0];
++    setLastNavigated({ roomId, index: prev });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
 +
 +  const navigateFirst = useCallback(() => {
 +    if (unreadEntries.length === 0) return;
-+    setLastNavigated({ roomId: unreadEntries[0][0], index: 0 });
-+    navigateToRoom(unreadEntries[0][0]);
-+  }, [unreadEntries, setLastNavigated, navigateToRoom]);
++    const roomId = unreadEntries[0][0];
++    setLastNavigated({ roomId, index: 0 });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
 +
 +  return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
 +}
