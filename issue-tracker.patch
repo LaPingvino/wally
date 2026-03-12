@@ -1,9 +1,9 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 0000000000..266ef6b9dd
+index 0000000000..402c1d0958
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,2030 @@
+@@ -0,0 +1,2029 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { useKanbanMonitor, useKanbanCardDnD, useKanbanDropTarget, KanbanDropResult } from './useKanbanDnD';
 +import FocusTrap from 'focus-trap-react';
@@ -1081,9 +1081,8 @@ index 0000000000..266ef6b9dd
 +          value={colVal}
 +          aria-label={'Move "' + title + '" to column'}
 +          onChange={(e) => { if (e.target.value !== colVal) onMoveToColumn(e.target.value); }}
-+          style={{ width: '100%', marginTop: '4px', fontSize: '0.8em', padding: '2px 4px',
-+            background: 'transparent', border: '1px solid ' + color.Surface.ContainerLine,
-+            borderRadius: config.radii.R200, color: 'inherit', cursor: 'pointer' }}>
++          style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px',
++            overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
 +          {allColumns.map((col) => (
 +            <option key={col.key} value={col.key}>{col.label.replace(/_/g, ' ')}</option>
 +          ))}
