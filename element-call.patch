@@ -2480,10 +2480,10 @@ index 5e5d7d7840..ad0993f299 100644
      </PowerLevelsContextProvider>
    );
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index a19058d26f..d0b7e9c022 100644
+index a19058d26f..64d76bfa38 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
-@@ -23,7 +23,8 @@
+@@ -23,8 +23,10 @@
    Spinner,
  } from 'folds';
  import { useNavigate } from 'react-router-dom';
@@ -2491,9 +2491,11 @@ index a19058d26f..d0b7e9c022 100644
 +import { EventTimeline, Room } from 'matrix-js-sdk';
 +
  import { useStateEvent } from '../../hooks/useStateEvent';
++import { useRoomWidgets } from '../../hooks/useRoomWidgets';
  import { PageHeader } from '../../components/page';
  import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
-@@ -66,28 +67,62 @@
+ import { UseStateProvider } from '../../components/UseStateProvider';
+@@ -66,28 +68,62 @@
  import { useRoomCreators } from '../../hooks/useRoomCreators';
  import { useRoomPermissions } from '../../hooks/useRoomPermissions';
  import { InviteUserPrompt } from '../../components/invite-user-prompt';
@@ -2558,7 +2560,7 @@ index a19058d26f..d0b7e9c022 100644
    const handleMarkAsRead = () => {
      markAsRead(mx, room.roomId, hideActivity);
      requestClose();
-@@ -111,6 +146,17 @@
+@@ -111,6 +147,17 @@
      requestClose();
    };
  
@@ -2576,7 +2578,47 @@ index a19058d26f..d0b7e9c022 100644
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        {invitePrompt && (
-@@ -220,6 +266,26 @@
+@@ -122,6 +169,39 @@
+           }}
+         />
+       )}
++      {unpinnedItems && unpinnedItems.length > 0 && (
++        <>
++          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++            {unpinnedItems.map((item) => (
++              <MenuItem
++                key={item.id}
++                size="300"
++                radii="300"
++                aria-pressed={item.active}
++                onClick={() => { item.onToggle(); requestClose(); }}
++                after={
++                  <Box gap="100" alignItems="Center">
++                    {item.iconSrc && <Icon size="100" src={item.iconSrc} />}
++                    <IconButton
++                      size="300"
++                      radii="300"
++                      onClick={(e) => { e.stopPropagation(); onPin?.(item.id); }}
++                      aria-label="Pin to toolbar"
++                    >
++                      <Icon src={Icons.Pin} size="100" />
++                    </IconButton>
++                  </Box>
++                }
++              >
++                <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++                  {item.label}
++                </Text>
++              </MenuItem>
++            ))}
++          </Box>
++          <Line variant="Surface" size="300" />
++        </>
++      )}
+       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+         <MenuItem
+           onClick={handleMarkAsRead}
+@@ -220,6 +300,26 @@
            )}
          </UseStateProvider>
        </Box>
@@ -2603,7 +2645,7 @@ index a19058d26f..d0b7e9c022 100644
        <Line variant="Surface" size="300" />
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <UseStateProvider initial={false}>
-@@ -253,7 +319,17 @@
+@@ -253,7 +353,17 @@
    );
  });
  
@@ -2622,7 +2664,7 @@ index a19058d26f..d0b7e9c022 100644
    const navigate = useNavigate();
    const mx = useMatrixClient();
    const useAuthentication = useMediaAuthentication();
-@@ -264,10 +340,40 @@
+@@ -264,18 +374,129 @@
    const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
    const direct = useIsDirectRoom();
  
@@ -2664,8 +2706,97 @@ index a19058d26f..d0b7e9c022 100644
 -  const avatarMxc = useRoomAvatar(room, direct);
    const name = useRoomName(room);
    const topic = useRoomTopic(room);
++  const avatarMxc = useRoomAvatar(room);
    const avatarUrl = avatarMxc
-@@ -314,7 +420,7 @@
+     ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
+     : undefined;
+ 
+   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+ 
++  // Toolbar config — pins, ordering, defaultMode, widget shortcuts
++  const { config: toolbarConfig, getEffective, setItem: setToolbarItem, removeItem: removeToolbarItem } = useToolbarConfig();
++  const [ctxMenu, setCtxMenu] = useState<{ anchor: RectCords; id: ToolbarItemId } | null>(null);
++  const [, setActiveWidgetId] = useAtom(activeWidgetIdAtom);
++
++  const handleContextMenu = (id: ToolbarItemId) => (e: React.MouseEvent) => {
++    e.preventDefault();
++    setCtxMenu({ anchor: (e.currentTarget as HTMLElement).getBoundingClientRect(), id });
++  };
++
++  // Widget shortcut entries derived from config
++  type WidgetShortcutEntry = {
++    id: ToolbarItemId;
++    cfg: ReturnType<typeof getEffective>;
++    widget: (typeof roomWidgets)[number];
++  };
++  const widgetShortcutEntries: WidgetShortcutEntry[] = Object.entries(toolbarConfig)
++    .filter(([k]) => k.startsWith('widget:'))
++    .map(([id]) => {
++      const tid = id as ToolbarItemId;
++      return { id: tid, cfg: getEffective(tid), widget: roomWidgets.find((w) => `widget:${w.id}` === id) };
++    })
++    .filter((x): x is WidgetShortcutEntry => x.widget !== undefined)
++    .sort((a, b) => a.cfg.order - b.cfg.order);
++
++  // Unpinned panel items for overflow menu
++  const panelItems: UnpinnedItem[] = [
++    {
++      id: 'members' as ToolbarItemId,
++      label: peopleDrawer ? 'Hide Members' : 'Show Members',
++      iconSrc: Icons.User,
++      active: peopleDrawer,
++      onToggle: () => onTogglePeopleDrawer ? onTogglePeopleDrawer() : setPeopleDrawer((d) => !d),
++    },
++    {
++      id: 'threads' as ToolbarItemId,
++      label: isThreadsDrawer ? 'Hide Threads' : 'Show Threads',
++      iconSrc: Icons.Message,
++      active: isThreadsDrawer ?? false,
++      onToggle: () => onToggleThreadsDrawer?.(),
++    },
++    {
++      id: 'widgets' as ToolbarItemId,
++      label: isWidgetsDrawer ? 'Hide Widgets' : 'Show Widgets',
++      iconSrc: Icons.Category,
++      active: isWidgetsDrawer ?? false,
++      onToggle: () => onToggleWidgetsDrawer?.(),
++    },
++    {
++      id: 'issues' as ToolbarItemId,
++      label: isIssueBoard ? 'Show Chat' : 'Issue Tracker',
++      iconSrc: Icons.CheckTwice,
++      active: isIssueBoard ?? false,
++      onToggle: () => onToggleIssueBoard?.(),
++    },
++  ].filter((item) => {
++    if (screenSize !== ScreenSize.Desktop) return false;
++    if (getEffective(item.id).pinned) return false;
++    // Issues only appear if the room has a schema and user has rights
++    if (item.id === 'issues' && !showIssuesButton) return false;
++    // Threads/widgets need their toggle handlers
++    if (item.id === 'threads' && !onToggleThreadsDrawer) return false;
++    if (item.id === 'widgets' && !onToggleWidgetsDrawer) return false;
++    return true;
++  });
++
++  const unpinnedWidgetItems: UnpinnedItem[] = widgetShortcutEntries
++    .filter((x) => !x.cfg.pinned)
++    .map(({ id, cfg, widget }) => ({
++      id,
++      label: cfg.label ?? widget!.name,
++      active: isWidgetsDrawer ?? false,
++      onToggle: () => {
++        setActiveWidgetId(widget!.id);
++        onToggleWidgetsDrawer?.();
++      },
++    }));
++
++  const allUnpinnedItems = [...panelItems, ...unpinnedWidgetItems];
++
+   const handleSearchClick = () => {
+     const searchParams: _SearchPathSearchParams = {
+       rooms: room.roomId,
+@@ -314,7 +535,7 @@
            <BackRouteHandler>
              {(onBack) => (
                <Box shrink="No" alignItems="Center">
@@ -2674,7 +2805,7 @@ index a19058d26f..d0b7e9c022 100644
                    <Icon src={Icons.ArrowLeft} />
                  </IconButton>
                </Box>
-@@ -379,7 +485,105 @@
+@@ -379,7 +600,105 @@
          </Box>
  
          <Box shrink="No">
@@ -2781,7 +2912,7 @@ index a19058d26f..d0b7e9c022 100644
              <TooltipProvider
                position="Bottom"
                offset={4}
-@@ -390,12 +594,14 @@
+@@ -390,12 +709,14 @@
                }
              >
                {(triggerRef) => (
@@ -2797,7 +2928,7 @@ index a19058d26f..d0b7e9c022 100644
            <TooltipProvider
              position="Bottom"
              offset={4}
-@@ -409,9 +615,11 @@
+@@ -409,9 +730,11 @@
                <IconButton
                  fill="None"
                  style={{ position: 'relative' }}
@@ -2809,15 +2940,17 @@ index a19058d26f..d0b7e9c022 100644
                >
                  {pinnedEvents.length > 0 && (
                    <Badge
-@@ -454,6 +662,7 @@
+@@ -454,7 +777,8 @@
              }
            />
  
-+          {/* Members — Desktop, always enabled */}
-           {screenSize === ScreenSize.Desktop && (
+-          {screenSize === ScreenSize.Desktop && (
++          {/* Members — Desktop, pinnable */}
++          {screenSize === ScreenSize.Desktop && getEffective('members').pinned && (
              <TooltipProvider
                position="Bottom"
-@@ -469,13 +678,175 @@
+               offset={4}
+@@ -469,13 +793,175 @@
                }
              >
                {(triggerRef) => (
@@ -2994,7 +3127,7 @@ index a19058d26f..d0b7e9c022 100644
            <TooltipProvider
              position="Bottom"
              align="End"
-@@ -492,6 +863,7 @@
+@@ -492,6 +978,7 @@
                  onClick={handleOpenMenu}
                  ref={triggerRef}
                  aria-pressed={!!menuAnchor}
@@ -3002,7 +3135,7 @@ index a19058d26f..d0b7e9c022 100644
                >
                  <Icon size="400" src={Icons.VerticalDots} filled={!!menuAnchor} />
                </IconButton>
-@@ -513,7 +885,15 @@
+@@ -513,7 +1000,15 @@
                    escapeDeactivates: stopPropagation,
                  }}
                >
