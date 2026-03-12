@@ -196,3 +196,66 @@ index 0000000000..978349db57
 +
 +  return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
 +}
+diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
+index ce952bfc67..b96c5e92cd 100644
+--- a/src/app/pages/client/ClientNonUIFeatures.tsx
++++ b/src/app/pages/client/ClientNonUIFeatures.tsx
+@@ -1,7 +1,7 @@
+ import { useAtomValue } from 'jotai';
+ import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
+ import { useNavigate } from 'react-router-dom';
+-import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
++import { MatrixEvent, Room, RoomEvent, RoomEventHandlerMap, RoomMemberEvent } from 'matrix-js-sdk';
+ import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
+ import LogoSVG from '../../../../public/res/svg/cinny.svg';
+ import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
+@@ -231,8 +231,49 @@
+       }
+     };
+     mx.on(RoomEvent.Timeline, handleTimelineEvent);
++
++    // Reaction to my own message
++    const handleReactionEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
++      mEvent,
++      room,
++      _toStart,
++      _removed,
++      data
++    ) => {
++      if (!data.liveEvent || mEvent.getType() !== 'm.reaction') return;
++      const rel = mEvent.getContent()['m.relates_to'] as
++        | { rel_type?: string; event_id?: string; key?: string }
++        | undefined;
++      if (rel?.rel_type !== 'm.annotation' || !rel.event_id) return;
++      const targetEvt = room?.findEventById(rel.event_id);
++      if (targetEvt?.getSender() !== mx.getUserId()) return;
++      if (notificationSound) playReactionSound();
++      const reactor = mEvent.getSender() ?? 'Someone';
++      const reactorName = room
++        ? (getMemberDisplayName(room, reactor) ?? getMxIdLocalPart(reactor) ?? reactor)
++        : reactor;
++      announce(`${reactorName} reacted ${rel.key ?? ''} to your message`);
++    };
++    mx.on(RoomEvent.Timeline, handleReactionEvent);
++
++    // Typing sound for current room
++    const handleTyping = (event: MatrixEvent, room: Room) => {
++      if (room.roomId !== selectedRoomId) return;
++      const typingUserIds =
++        (event.getContent() as { user_ids?: string[] }).user_ids ?? [];
++      const othersTyping = typingUserIds.filter((uid) => uid !== mx.getUserId());
++      if (othersTyping.length > 0 && prevTypingCountRef.current === 0) {
++        if (inRoomActivitySound) playTypingSound();
++        announce('Someone is typing');
++      }
++      prevTypingCountRef.current = othersTyping.length;
++    };
++    mx.on(RoomMemberEvent.Typing, handleTyping);
++
+     return () => {
+       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
++      mx.removeListener(RoomEvent.Timeline, handleReactionEvent);
++      mx.removeListener(RoomMemberEvent.Typing, handleTyping);
+     };
+   }, [
+     mx,

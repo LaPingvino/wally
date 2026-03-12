@@ -128,7 +128,7 @@ index b861a060b7..6ec13f6799 100644
        </SequenceCard>
  
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc67..23bd48e644 100644
+index b96c5e92cd..65fe21586f 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -10,7 +10,7 @@

@@ -1387,21 +1387,75 @@ index 9cf4bfb963..024e962a8d 100644
  
  export const SPACE_SETTINGS_PATH = '/space-settings/';
  
+diff --git a/src/app/state/room-list/utils.ts b/src/app/state/room-list/utils.ts
+index 1ca7e7de12..b1c9e145c4 100644
+--- a/src/app/state/room-list/utils.ts
++++ b/src/app/state/room-list/utils.ts
+@@ -1,5 +1,5 @@
+ import { useSetAtom, WritableAtom } from 'jotai';
+-import { ClientEvent, MatrixClient, Room, RoomEvent } from 'matrix-js-sdk';
++import { ClientEvent, ClientEventHandlerMap, MatrixClient, Room, RoomEvent, SyncState } from 'matrix-js-sdk';
+ import { useEffect } from 'react';
+ import { Membership } from '../../../types/matrix/room';
+ 
+@@ -23,13 +23,21 @@
+   useEffect(() => {
+     const satisfyMembership = (room: Room): boolean =>
+       !!memberships.find((membership) => membership === room.getMyMembership());
+-    setRoomsAtom({
+-      type: 'INITIALIZE',
+-      rooms: mx
+-        .getRooms()
+-        .filter(satisfyMembership)
+-        .map((room) => room.roomId),
+-    });
++    const initRooms = () =>
++      setRoomsAtom({
++        type: 'INITIALIZE',
++        rooms: mx
++          .getRooms()
++          .filter(satisfyMembership)
++          .map((room) => room.roomId),
++      });
++    initRooms();
++
++    // Re-read rooms on initial sync completion and reconnect, not on every sync batch.
++    // Ongoing membership changes are handled by handleAddRoom / handleMembershipChange.
++    const handleSync: ClientEventHandlerMap[ClientEvent.Sync] = (state) => {
++      if (state === SyncState.Prepared || state === SyncState.Catchup) initRooms();
++    };
+ 
+     const handleAddRoom = (room: Room) => {
+       if (satisfyMembership(room)) {
+@@ -49,10 +57,12 @@
+       setRoomsAtom({ type: 'DELETE', roomId });
+     };
+ 
++    mx.on(ClientEvent.Sync, handleSync);
+     mx.on(ClientEvent.Room, handleAddRoom);
+     mx.on(RoomEvent.MyMembership, handleMembershipChange);
+     mx.on(ClientEvent.DeleteRoom, handleDeleteRoom);
+     return () => {
++      mx.removeListener(ClientEvent.Sync, handleSync);
+       mx.removeListener(ClientEvent.Room, handleAddRoom);
+       mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
+       mx.removeListener(ClientEvent.DeleteRoom, handleDeleteRoom);
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb97..888edb840a 100644
+index 31ee6ccb97..565838818d 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -41,6 +41,9 @@
+@@ -41,6 +41,10 @@
    dateFormatString: string;
  
    developerTools: boolean;
 +  issueTracker: boolean;
 +  multiAccount: boolean;
-+  roomSortOrder: 'activity' | 'az' | 'unread';
++  perMessageProfiles: boolean;
++  roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
  }
  
  const defaultSettings: Settings = {
-@@ -75,6 +78,9 @@
+@@ -75,6 +79,9 @@
    dateFormatString: 'D MMM YYYY',
  
    developerTools: false,
