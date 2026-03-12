@@ -1,13 +1,11 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 0000000000..9cacd1c10b
+index 0000000000..58b010b62e
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
-@@ -0,0 +1,2091 @@
+@@ -0,0 +1,2069 @@
 +import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { draggable, dropTargetForElements, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-+import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
-+import { attachClosestEdge, extractClosestEdge } from '@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge';
 +import FocusTrap from 'focus-trap-react';
 +import { EventTimeline, MatrixClient, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
 +import {
@@ -1071,7 +1069,6 @@ index 0000000000..9cacd1c10b
 +}) {
 +  const ref = useRef<HTMLDivElement>(null);
 +  const [isDragging, setIsDragging] = useState(false);
-+  const [closestEdgeState, setClosestEdgeState] = useState<'top' | 'bottom' | null>(null);
 +  const issueId = entry.event.getStateKey()!;
 +  const colVal = (entry.content[kanbanFieldKey] as string | undefined) ?? '__uncategorized__';
 +  const dragData: KanbanCardData = { type: 'kanban-card', issueId, columnValue: colVal, kanbanFieldKey };
@@ -1079,39 +1076,20 @@ index 0000000000..9cacd1c10b
 +  useEffect(() => {
 +    const el = ref.current;
 +    if (!el || !canWrite) return;
-+    return combine(
-+      draggable({
-+        element: el,
-+        getInitialData: () => dragData,
-+        onDragStart: () => setIsDragging(true),
-+        onDrop: () => setIsDragging(false),
-+      }),
-+      dropTargetForElements({
-+        element: el,
-+        canDrop: ({ source }) => isKanbanCardData(source.data) && source.data.issueId !== issueId,
-+        getData: ({ input, element: el2 }) =>
-+          attachClosestEdge(dragData, { input, element: el2, allowedEdges: ['top', 'bottom'] }),
-+        onDrag: ({ self }) => setClosestEdgeState(extractClosestEdge(self.data) as 'top' | 'bottom' | null),
-+        onDragLeave: () => setClosestEdgeState(null),
-+        onDrop: () => setClosestEdgeState(null),
-+      })
-+    );
++    return draggable({
++      element: el,
++      getInitialData: () => dragData,
++      onDragStart: () => setIsDragging(true),
++      onDrop: () => setIsDragging(false),
++    });
 +  // eslint-disable-next-line react-hooks/exhaustive-deps
 +  }, [canWrite, issueId, colVal, kanbanFieldKey]);
 +
-+  const dropLine = (
-+    <div style={{ position: 'absolute', left: 0, right: 0, height: 2,
-+      background: color.Primary.Main, borderRadius: 2, pointerEvents: 'none' }} />
-+  );
-+
 +  return (
-+    <div ref={ref} style={{ opacity: isDragging ? 0.4 : 1, position: 'relative',
-+      cursor: canWrite ? 'grab' : undefined }}>
-+      {closestEdgeState === 'top' && <div style={{ position: 'absolute', top: -2 }}>{dropLine}</div>}
++    <div ref={ref} style={{ opacity: isDragging ? 0.4 : 1, cursor: canWrite ? 'grab' : undefined }}>
 +      <IssueCard entry={entry} schema={schema} room={room} kanbanFieldKey={kanbanFieldKey}
 +        canWrite={canWrite} onClick={onClick} showCheckbox={showCheckbox}
 +        isSelected={isSelected} onToggleSelect={onToggleSelect} />
-+      {closestEdgeState === 'bottom' && <div style={{ position: 'absolute', bottom: -2 }}>{dropLine}</div>}
 +    </div>
 +  );
 +}
@@ -1721,7 +1699,7 @@ index 0000000000..9cacd1c10b
 +          dragData,
 +          dropColumnValue: hit.data.columnValue as string,
 +          dropIssueId: cardTarget ? (cardTarget.data.issueId as string) : null,
-+          dropEdge: cardTarget ? extractClosestEdge(cardTarget.data) as 'top' | 'bottom' : null,
++          dropEdge: null,
 +          kanbanFieldKey,
 +        });
 +      },
