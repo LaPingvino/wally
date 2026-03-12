@@ -438,12 +438,13 @@ index 4de42081f5..bc5ee9da26 100644
            <Route path={_INVITES_PATH} element={<Invites />} />
          </Route>
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf10906..9883994cff 100644
+index 04edf10906..813302b79e 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -1,5 +1,5 @@
- import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
 -import { useAtom, useAtomValue } from 'jotai';
++import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 +import { useAtom, useAtomValue, useSetAtom } from 'jotai';
  import {
    Avatar,
@@ -465,7 +466,15 @@ index 04edf10906..9883994cff 100644
  import {
    NavButton,
    NavCategory,
-@@ -60,6 +61,7 @@
+@@ -34,6 +35,7 @@
+ import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
+ import { VirtualTile } from '../../../components/virtualizer';
+ import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
++import { useNavigateUnread } from '../../../hooks/useNavigateUnread';
+ import { makeNavCategoryId } from '../../../state/closedNavCategories';
+ import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
+@@ -60,6 +62,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const orphanRooms = useDirectRooms();
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
@@ -473,7 +482,7 @@ index 04edf10906..9883994cff 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -71,6 +73,37 @@
+@@ -71,6 +74,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -511,7 +520,12 @@ index 04edf10906..9883994cff 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -182,14 +215,27 @@
+@@ -178,18 +212,32 @@
+   const navigate = useNavigate();
+ 
+   const createDirectSelected = useDirectCreateSelected();
++  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
+ 
    const selectedRoomId = useSelectedRoom();
    const noRoomToDisplay = directs.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
@@ -541,10 +555,42 @@ index 04edf10906..9883994cff 100644
  
    const virtualizer = useVirtualizer({
      count: sortedDirects.length,
+@@ -227,6 +275,25 @@
+                   </NavItemContent>
+                 </NavButton>
+               </NavItem>
++              {unreadCount > 0 && (
++                <NavItem variant="Background" radii="400">
++                  <NavItemContent>
++                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
++                      <IconButton size="300" radii="300" onClick={navigatePrev}
++                        aria-label={`Previous unread room (Alt+Shift+Up), ${unreadCount} unread`}>
++                        <Icon src={Icons.ChevronTop} size="100" />
++                      </IconButton>
++                      <Box as="span" grow="Yes" style={{ textAlign: 'center' }}>
++                        <Text as="span" size="T200" priority="300">{unreadCount} unread</Text>
++                      </Box>
++                      <IconButton size="300" radii="300" onClick={navigateNext}
++                        aria-label="Next unread room (Alt+Shift+Down)">
++                        <Icon src={Icons.ChevronBottom} size="100" />
++                      </IconButton>
++                    </Box>
++                  </NavItemContent>
++                </NavItem>
++              )}
+             </NavCategory>
+             <NavCategory>
+               <NavCategoryHeader>
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963df..8ea1e0d4a5 100644
+index d87db963df..482e813abc 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
+@@ -1,4 +1,4 @@
+-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
++import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import {
+   Avatar,
 @@ -7,6 +7,7 @@
    Icon,
    IconButton,
@@ -565,7 +611,15 @@ index d87db963df..8ea1e0d4a5 100644
  import {
    NavButton,
    NavCategory,
-@@ -74,6 +75,7 @@
+@@ -47,6 +48,7 @@
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+ import { VirtualTile } from '../../../components/virtualizer';
+ import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
++import { useNavigateUnread } from '../../../hooks/useNavigateUnread';
+ import { makeNavCategoryId } from '../../../state/closedNavCategories';
+ import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
+@@ -74,6 +76,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
    const mx = useMatrixClient();
@@ -573,7 +627,7 @@ index d87db963df..8ea1e0d4a5 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -85,6 +87,37 @@
+@@ -85,6 +88,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -611,8 +665,11 @@ index d87db963df..8ea1e0d4a5 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -208,18 +241,27 @@
+@@ -206,20 +240,30 @@
+   const selectedRoomId = useSelectedRoom();
+   const createRoomSelected = useHomeCreateSelected();
    const searchSelected = useHomeSearchSelected();
++  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
    const noRoomToDisplay = rooms.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 +  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
@@ -645,6 +702,32 @@ index d87db963df..8ea1e0d4a5 100644
  
    const virtualizer = useVirtualizer({
      count: sortedRooms.length,
+@@ -311,6 +355,25 @@
+                   </NavItemContent>
+                 </NavLink>
+               </NavItem>
++              {unreadCount > 0 && (
++                <NavItem variant="Background" radii="400">
++                  <NavItemContent>
++                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
++                      <IconButton size="300" radii="300" onClick={navigatePrev}
++                        aria-label={`Previous unread room (Alt+Shift+Up), ${unreadCount} unread`}>
++                        <Icon src={Icons.ChevronTop} size="100" />
++                      </IconButton>
++                      <Box as="span" grow="Yes" style={{ textAlign: 'center' }}>
++                        <Text as="span" size="T200" priority="300">{unreadCount} unread</Text>
++                      </Box>
++                      <IconButton size="300" radii="300" onClick={navigateNext}
++                        aria-label="Next unread room (Alt+Shift+Down)">
++                        <Icon src={Icons.ChevronBottom} size="100" />
++                      </IconButton>
++                    </Box>
++                  </NavItemContent>
++                </NavItem>
++              )}
+             </NavCategory>
+             <NavCategory>
+               <NavCategoryHeader>
 diff --git a/src/app/pages/client/inbox/Inbox.tsx b/src/app/pages/client/inbox/Inbox.tsx
 index 67d6021a3e..9b7c21a810 100644
 --- a/src/app/pages/client/inbox/Inbox.tsx
@@ -1381,7 +1464,7 @@ index 5d13a9ab65..b5f041b788 100644
    );
  }
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 2a7c619939..833485b466 100644
+index 2a7c619939..974cb489d9 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -6,7 +6,7 @@
@@ -1393,7 +1476,13 @@ index 2a7c619939..833485b466 100644
  import {
    Avatar,
    Box,
-@@ -53,7 +53,8 @@
+@@ -48,12 +48,14 @@
+ import { useSpace } from '../../../hooks/useSpace';
+ import { VirtualTile } from '../../../components/virtualizer';
+ import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
++import { useNavigateUnread } from '../../../hooks/useNavigateUnread';
+ import { makeNavCategoryId } from '../../../state/closedNavCategories';
+ import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
  import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
  import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
  import { useRoomName } from '../../../hooks/useRoomMeta';
@@ -1403,7 +1492,7 @@ index 2a7c619939..833485b466 100644
  import { allRoomsAtom } from '../../../state/room-list/roomList';
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
-@@ -94,6 +95,7 @@
+@@ -94,6 +96,7 @@
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const [developerTools] = useSetting(settingsAtom, 'developerTools');
@@ -1411,7 +1500,7 @@ index 2a7c619939..833485b466 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -151,6 +153,47 @@
+@@ -151,6 +154,47 @@
            />
          )}
          <MenuItem
@@ -1459,7 +1548,12 @@ index 2a7c619939..833485b466 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -395,6 +438,8 @@
+@@ -391,10 +435,13 @@
+   const selectedRoomId = useSelectedRoom();
+   const lobbySelected = useSpaceLobbySelected(spaceIdOrAlias);
+   const searchSelected = useSpaceSearchSelected(spaceIdOrAlias);
++  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
+   const callEmbed = useCallEmbed();
  
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
  
@@ -1468,7 +1562,7 @@ index 2a7c619939..833485b466 100644
    const getRoom = useCallback(
      (rId: string): Room | undefined => {
        if (allJoinedRooms.has(rId)) {
-@@ -405,6 +450,31 @@
+@@ -405,6 +452,31 @@
      [mx, allJoinedRooms]
    );
  
@@ -1500,7 +1594,7 @@ index 2a7c619939..833485b466 100644
    const hierarchy = useSpaceJoinedHierarchy(
      space.roomId,
      getRoom,
-@@ -419,10 +489,7 @@
+@@ -419,10 +491,7 @@
        },
        [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
      ),
@@ -1512,6 +1606,32 @@ index 2a7c619939..833485b466 100644
    );
  
    const virtualizer = useVirtualizer({
+@@ -483,6 +552,25 @@
+                 </NavItemContent>
+               </NavLink>
+             </NavItem>
++            {unreadCount > 0 && (
++              <NavItem variant="Background" radii="400">
++                <NavItemContent>
++                  <Box as="span" grow="Yes" alignItems="Center" gap="200">
++                    <IconButton size="300" radii="300" onClick={navigatePrev}
++                      aria-label={`Previous unread room (Alt+Shift+Up), ${unreadCount} unread`}>
++                      <Icon src={Icons.ChevronTop} size="100" />
++                    </IconButton>
++                    <Box as="span" grow="Yes" style={{ textAlign: 'center' }}>
++                      <Text as="span" size="T200" priority="300">{unreadCount} unread</Text>
++                    </Box>
++                    <IconButton size="300" radii="300" onClick={navigateNext}
++                      aria-label="Next unread room (Alt+Shift+Down)">
++                      <Icon src={Icons.ChevronBottom} size="100" />
++                    </IconButton>
++                  </Box>
++                </NavItemContent>
++              </NavItem>
++            )}
+           </NavCategory>
+           <NavCategory
+             style={{
 diff --git a/src/app/pages/pathUtils.ts b/src/app/pages/pathUtils.ts
 index 817d21d1f3..cc940960a7 100644
 --- a/src/app/pages/pathUtils.ts
