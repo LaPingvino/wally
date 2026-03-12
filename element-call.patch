@@ -4637,10 +4637,10 @@ index 7e509d1ee8..fed0727d4e 100644
  }
 diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
 new file mode 100644
-index 0000000000..1ed400aa8b
+index 0000000000..0b63aa27be
 --- /dev/null
 +++ b/src/app/pages/client/call/CallProvider.tsx
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,421 @@
 +import React, {
 +  createContext,
 +  useState,
@@ -4789,12 +4789,18 @@ index 0000000000..1ed400aa8b
 +  );
 +
 +  const hangUp = useCallback(() => {
++    // Capture iframe ref before clearing state, then blank it after a short delay
++    // so EC has time to stop its own MediaStreamTracks before we navigate away.
++    const iframeToBlank = activeClientWidgetIframeRef;
 +    setActiveClientWidgetApi(null, null, null, null);
 +    setActiveCallRoomIdState(null);
 +    activeClientWidgetApi?.transport.send(`${WIDGET_HANGUP_ACTION}`, {});
 +    setIsActiveCallReady(false);
 +    setIsCallViewOpenState(false);
-+  }, [activeClientWidgetApi?.transport, setActiveClientWidgetApi]);
++    if (iframeToBlank) {
++      setTimeout(() => { iframeToBlank.src = 'about:blank'; }, 300);
++    }
++  }, [activeClientWidgetApi?.transport, activeClientWidgetIframeRef, setActiveClientWidgetApi]);
 +
 +  const sendWidgetAction = useCallback(
 +    async <T extends IWidgetApiRequestData = IWidgetApiRequestData>(
@@ -4862,10 +4868,14 @@ index 0000000000..1ed400aa8b
 +      ev.preventDefault();
 +      if (isActiveCallReady && ev.detail.widgetId === activeClientWidgetApi.widget.id) {
 +        activeClientWidgetApi.transport.reply(ev.detail, {});
++        const iframeToBlank = activeClientWidgetIframeRef;
 +        setActiveCallRoomIdState(null);
 +        setActiveClientWidgetApi(null, null, null, null);
 +        setIsActiveCallReady(false);
 +        setIsCallViewOpenState(false);
++        if (iframeToBlank) {
++          setTimeout(() => { iframeToBlank.src = 'about:blank'; }, 300);
++        }
 +      }
 +    };
 +
