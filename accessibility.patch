@@ -1,9 +1,9 @@
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
-index 0000000000..19d5c05fbb
+index 0000000000..7ed76e62c5
 --- /dev/null
 +++ b/src/app/hooks/useNavigateUnread.ts
-@@ -0,0 +1,205 @@
+@@ -0,0 +1,207 @@
 +import { useCallback, useMemo } from 'react';
 +import { useAtomValue, useAtom } from 'jotai';
 +import { atom } from 'jotai';
@@ -110,7 +110,9 @@ index 0000000000..19d5c05fbb
 +    // All rooms with unread, sorted by:
 +    //   1. sidebar position of their nearest ancestor space
 +    //   2. within same space: current roomSortOrder
-+    const allUnread = Array.from(roomToUnread.keys()).filter(hasUnread);
++    const allUnread = Array.from(roomToUnread.keys()).filter(
++      (id) => hasUnread(id) && !mx.getRoom(id)?.isSpaceRoom()
++    );
 +
 +    const sortFallback =
 +      roomSortOrder === 'az'

@@ -1153,18 +1153,10 @@ index 778b729e2e..53b3a4cf9c 100644
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
 diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
-index 5d13a9ab65..d94819e4e4 100644
+index 5d13a9ab65..b5f041b788 100644
 --- a/src/app/pages/client/sidebar/InboxTab.tsx
 +++ b/src/app/pages/client/sidebar/InboxTab.tsx
-@@ -1,6 +1,6 @@
- import React from 'react';
- import { useNavigate } from 'react-router-dom';
--import { Icon, Icons } from 'folds';
-+import { Icon, IconButton, Icons, Tooltip, TooltipProvider } from 'folds';
- import { useAtomValue } from 'jotai';
- import {
-   SidebarAvatar,
-@@ -9,24 +9,34 @@
+@@ -9,10 +9,14 @@
    SidebarItemTooltip,
  } from '../../../components/sidebar';
  import { allInvitesAtom } from '../../../state/room-list/inviteList';
@@ -1179,16 +1171,7 @@ index 5d13a9ab65..d94819e4e4 100644
    joinPathComponent,
  } from '../../pathUtils';
  import { useInboxSelected } from '../../../hooks/router/useInbox';
- import { UnreadBadge } from '../../../components/unread-badge';
- import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
- import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
-+import { useNavigateUnread } from '../../../hooks/useNavigateUnread';
- 
- export function InboxTab() {
-   const screenSize = useScreenSizeContext();
-   const navigate = useNavigate();
-+  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
-   const navToActivePath = useAtomValue(useNavToActivePathAtom());
+@@ -27,6 +31,10 @@
    const inboxSelected = useInboxSelected();
    const allInvites = useAtomValue(allInvitesAtom);
    const inviteCount = allInvites.length;
@@ -1199,7 +1182,7 @@ index 5d13a9ab65..d94819e4e4 100644
  
    const handleInboxClick = () => {
      if (screenSize === ScreenSize.Mobile) {
-@@ -44,19 +54,65 @@
+@@ -44,19 +52,21 @@
    };
  
    return (
@@ -1210,50 +1193,6 @@ index 5d13a9ab65..d94819e4e4 100644
 -            <Icon src={Icons.Inbox} filled={inboxSelected} />
 -          </SidebarAvatar>
 +    <>
-+      {unreadCount > 0 && (
-+        <>
-+          <TooltipProvider
-+            tooltip={<Tooltip><span>Previous unread room (Alt+Shift+Up)</span></Tooltip>}
-+            position="Right"
-+          >
-+            {(triggerRef) => (
-+              <SidebarItem>
-+                <SidebarAvatar
-+                  as="button"
-+                  ref={triggerRef}
-+                  outlined
-+                  aria-label="Previous unread room"
-+                  aria-keyshortcuts="Alt+Shift+ArrowUp"
-+                  onClick={navigatePrev}
-+                  style={{ fontSize: '0.7em' }}
-+                >
-+                  <Icon src={Icons.ChevronTop} size="100" />
-+                </SidebarAvatar>
-+              </SidebarItem>
-+            )}
-+          </TooltipProvider>
-+          <TooltipProvider
-+            tooltip={<Tooltip><span>Next unread room (Alt+Shift+Down)</span></Tooltip>}
-+            position="Right"
-+          >
-+            {(triggerRef) => (
-+              <SidebarItem>
-+                <SidebarAvatar
-+                  as="button"
-+                  ref={triggerRef}
-+                  outlined
-+                  aria-label="Next unread room"
-+                  aria-keyshortcuts="Alt+Shift+ArrowDown"
-+                  onClick={navigateNext}
-+                  style={{ fontSize: '0.7em' }}
-+                >
-+                  <Icon src={Icons.ChevronBottom} size="100" />
-+                </SidebarAvatar>
-+              </SidebarItem>
-+            )}
-+          </TooltipProvider>
-+        </>
-+      )}
 +      <SidebarItem active={inboxSelected}>
 +        <SidebarItemTooltip tooltip="Inbox (Alt+I)">
 +          {(triggerRef) => (
