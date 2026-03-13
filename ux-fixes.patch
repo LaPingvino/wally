@@ -381,6 +381,19 @@ index b317b13abd..bd6aa89a7e 100644
          </Box>
          <Line variant="Surface" size="300" />
          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+diff --git a/src/app/hooks/router/useFavoritesSelected.ts b/src/app/hooks/router/useFavoritesSelected.ts
+new file mode 100644
+index 0000000000..6aaac607fe
+--- /dev/null
++++ b/src/app/hooks/router/useFavoritesSelected.ts
+@@ -0,0 +1,7 @@
++import { useMatch } from 'react-router-dom';
++import { getFavoritesPath } from '../../pages/pathUtils';
++
++export const useFavoritesSelected = (): boolean => {
++  const match = useMatch({ path: getFavoritesPath(), caseSensitive: true, end: false });
++  return !!match;
++};
 diff --git a/src/app/hooks/router/useInbox.ts b/src/app/hooks/router/useInbox.ts
 index de8d3d69f9..08381e8ddb 100644
 --- a/src/app/hooks/router/useInbox.ts
@@ -429,6 +442,155 @@ index 0000000000..b0b2195b80
 +
 +  return roomIds.filter((id) => !!mx.getRoom(id)?.tags['m.favourite']);
 +}
+diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
+new file mode 100644
+index 0000000000..14fcbb3d41
+--- /dev/null
++++ b/src/app/hooks/useGlobalKeyboardShortcuts.ts
+@@ -0,0 +1,143 @@
++import { useCallback, useMemo } from 'react';
++import { useNavigate } from 'react-router-dom';
++import { useAtomValue, useSetAtom } from 'jotai';
++import { isKeyHotkey } from 'is-hotkey';
++import { useKeyDown } from './useKeyDown';
++import { stopPropagation } from '../utils/keyboard';
++import { openSettingsAtKeyboardShortcutsAtom, customShortcutKeysAtom } from '../state/keyboardShortcutsHelp';
++import { searchModalAtom } from '../state/searchModal';
++import { getFavoritesPath, getHomePath, getDirectPath, getInboxNotificationsPath } from '../pages/pathUtils';
++
++export interface KeyboardShortcut {
++  key: string;
++  defaultKey: string;
++  description: string;
++  category: 'Navigation' | 'Search' | 'Actions' | 'Help';
++  /** If true, shortcut fires even when focus is inside an input/textarea/editor */
++  allowInEditable?: boolean;
++  action: () => void;
++}
++
++/** Static shortcut metadata — used by the settings page to show/edit bindings */
++export type ShortcutDefinition = Omit<KeyboardShortcut, 'action' | 'key'>;
++export const SHORTCUT_DEFINITIONS: ShortcutDefinition[] = [
++  { defaultKey: 'mod+k', description: 'Search', category: 'Search' },
++  { defaultKey: 'alt+r', description: 'Focus room list', category: 'Navigation', allowInEditable: true },
++  { defaultKey: 'alt+t', description: 'Focus message timeline', category: 'Navigation', allowInEditable: true },
++  { defaultKey: 'alt+c', description: 'Focus message composer', category: 'Navigation', allowInEditable: true },
++  { defaultKey: 'alt+h', description: 'Go to Home', category: 'Navigation', allowInEditable: true },
++  { defaultKey: 'alt+d', description: 'Go to Direct Messages', category: 'Navigation', allowInEditable: true },
++  { defaultKey: 'alt+f', description: 'Go to Favorites', category: 'Navigation', allowInEditable: true },
++  { defaultKey: 'alt+i', description: 'Go to Inbox', category: 'Navigation', allowInEditable: true },
++  { defaultKey: 'mod+/', description: 'Show keyboard shortcuts', category: 'Help' },
++];
++
++const focusSection = (selector: string) => {
++  const el = document.querySelector(selector) as HTMLElement | null;
++  el?.focus();
++};
++
++export const useGlobalKeyboardShortcuts = () => {
++  const navigate = useNavigate();
++  const setOpenAtKeyboardShortcuts = useSetAtom(openSettingsAtKeyboardShortcutsAtom);
++  const setSearchModal = useSetAtom(searchModalAtom);
++  const customKeys = useAtomValue(customShortcutKeysAtom);
++
++  const shortcuts = useMemo<KeyboardShortcut[]>(
++    () => {
++      const c = (desc: string, defaultKey: string) => customKeys[desc] ?? defaultKey;
++      return [
++        {
++          key: c('Search', 'mod+k'),
++          defaultKey: 'mod+k',
++          description: 'Search',
++          category: 'Search',
++          action: () => setSearchModal(true),
++        },
++        {
++          key: c('Focus room list', 'alt+r'),
++          defaultKey: 'alt+r',
++          description: 'Focus room list',
++          category: 'Navigation',
++          allowInEditable: true,
++          action: () => focusSection('#cinny-room-listbox'),
++        },
++        {
++          key: c('Focus message timeline', 'alt+t'),
++          defaultKey: 'alt+t',
++          description: 'Focus message timeline',
++          category: 'Navigation',
++          allowInEditable: true,
++          action: () => focusSection('#cinny-timeline'),
++        },
++        {
++          key: c('Focus message composer', 'alt+c'),
++          defaultKey: 'alt+c',
++          description: 'Focus message composer',
++          category: 'Navigation',
++          allowInEditable: true,
++          action: () => focusSection('[data-slate-editor="true"]'),
++        },
++        {
++          key: c('Go to Home', 'alt+h'),
++          defaultKey: 'alt+h',
++          description: 'Go to Home',
++          category: 'Navigation',
++          allowInEditable: true,
++          action: () => navigate(getHomePath()),
++        },
++        {
++          key: c('Go to Direct Messages', 'alt+d'),
++          defaultKey: 'alt+d',
++          description: 'Go to Direct Messages',
++          category: 'Navigation',
++          allowInEditable: true,
++          action: () => navigate(getDirectPath()),
++        },
++        {
++          key: c('Go to Favorites', 'alt+f'),
++          defaultKey: 'alt+f',
++          description: 'Go to Favorites',
++          category: 'Navigation',
++          allowInEditable: true,
++          action: () => navigate(getFavoritesPath()),
++        },
++        {
++          key: c('Go to Inbox', 'alt+i'),
++          defaultKey: 'alt+i',
++          description: 'Go to Inbox',
++          category: 'Navigation',
++          allowInEditable: true,
++          action: () => navigate(getInboxNotificationsPath()),
++        },
++        {
++          key: c('Show keyboard shortcuts', 'mod+/'),
++          defaultKey: 'mod+/',
++          description: 'Show keyboard shortcuts',
++          category: 'Help',
++          action: () => setOpenAtKeyboardShortcuts(true),
++        },
++      ];
++    },
++    [navigate, setOpenAtKeyboardShortcuts, setSearchModal, customKeys]
++  );
++
++  const handleKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      const inEditable = !stopPropagation(evt);
++
++      for (const shortcut of shortcuts) {
++        if (!isKeyHotkey(shortcut.key, evt)) continue;
++        if (inEditable && !shortcut.allowInEditable) continue;
++        evt.preventDefault();
++        shortcut.action();
++        return;
++      }
++    },
++    [shortcuts]
++  );
++
++  useKeyDown(window, handleKeyDown);
++
++  return { shortcuts };
++};
 diff --git a/src/app/hooks/useSpaceHierarchy.ts b/src/app/hooks/useSpaceHierarchy.ts
 index ad34e3f458..ad768ea8f1 100644
 --- a/src/app/hooks/useSpaceHierarchy.ts
@@ -468,10 +630,19 @@ index ad34e3f458..ad768ea8f1 100644
      atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems))
    );
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index 4de42081f5..bc5ee9da26 100644
+index 4de42081f5..570cc92c0e 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
-@@ -28,6 +28,7 @@
+@@ -13,6 +13,8 @@
+ import {
+   DIRECT_PATH,
+   EXPLORE_PATH,
++  FAVORITES_PATH,
++  FAVORITES_ROOM_PATH,
+   HOME_PATH,
+   LOGIN_PATH,
+   INBOX_PATH,
+@@ -28,6 +30,7 @@
    _ROOM_PATH,
    _SEARCH_PATH,
    _SERVER_PATH,
@@ -479,8 +650,11 @@ index 4de42081f5..bc5ee9da26 100644
    CREATE_PATH,
  } from './paths';
  import {
-@@ -44,7 +45,7 @@
+@@ -42,9 +45,10 @@
+ import { ClientBindAtoms, ClientLayout, ClientRoot } from './client';
+ import { Home, HomeRouteRoomProvider, HomeSearch } from './client/home';
  import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
++import { Favorites, FavoritesRouteRoomProvider } from './client/favorites';
  import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
  import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
 -import { Notifications, Inbox, Invites } from './client/inbox';
@@ -488,7 +662,38 @@ index 4de42081f5..bc5ee9da26 100644
  import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
  import { Room } from '../features/room';
  import { Lobby } from '../features/lobby';
-@@ -292,6 +293,7 @@
+@@ -207,6 +211,30 @@
+           />
+         </Route>
+         <Route
++          path={FAVORITES_PATH}
++          element={
++            <PageRoot
++              nav={
++                <MobileFriendlyPageNav path={FAVORITES_PATH}>
++                  <Favorites />
++                </MobileFriendlyPageNav>
++              }
++            >
++              <Outlet />
++            </PageRoot>
++          }
++        >
++          {mobile ? null : <Route index element={<WelcomePage />} />}
++          <Route
++            path={FAVORITES_ROOM_PATH}
++            element={
++              <FavoritesRouteRoomProvider>
++                <Room />
++              </FavoritesRouteRoomProvider>
++            }
++          />
++        </Route>
++        <Route
+           path={SPACE_PATH}
+           element={
+             <RouteSpaceProvider>
+@@ -292,6 +320,7 @@
                element={<WelcomePage />}
              />
            )}
@@ -496,6 +701,26 @@ index 4de42081f5..bc5ee9da26 100644
            <Route path={_NOTIFICATIONS_PATH} element={<Notifications />} />
            <Route path={_INVITES_PATH} element={<Invites />} />
          </Route>
+diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
+index a2e1b68207..639d25429a 100644
+--- a/src/app/pages/client/SidebarNav.tsx
++++ b/src/app/pages/client/SidebarNav.tsx
+@@ -9,6 +9,7 @@
+ } from '../../components/sidebar';
+ import {
+   DirectTab,
++  FavoritesTab,
+   HomeTab,
+   SpaceTabs,
+   InboxTab,
+@@ -30,6 +31,7 @@
+             <SidebarStack>
+               <HomeTab />
+               <DirectTab />
++              <FavoritesTab />
+             </SidebarStack>
+             <SpaceTabs scrollRef={scrollRef} />
+             <SidebarStackSeparator />
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
 index 04edf10906..6733ffeed3 100644
 --- a/src/app/pages/client/direct/Direct.tsx
@@ -696,6 +921,284 @@ index 04edf10906..6733ffeed3 100644
              <NavCategory>
                <NavCategoryHeader>
                  <RoomNavCategoryButton
+diff --git a/src/app/pages/client/favorites/Favorites.tsx b/src/app/pages/client/favorites/Favorites.tsx
+new file mode 100644
+index 0000000000..f0c4788ffb
+--- /dev/null
++++ b/src/app/pages/client/favorites/Favorites.tsx
+@@ -0,0 +1,223 @@
++import React, { useMemo, useRef } from 'react';
++import { useAtom, useAtomValue } from 'jotai';
++import { Avatar, Box, Icon, Icons, Text } from 'folds';
++import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { allRoomsAtom } from '../../../state/room-list/roomList';
++import { mDirectAtom } from '../../../state/mDirectList';
++import { roomToParentsAtom } from '../../../state/room/roomToParents';
++import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
++import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
++import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
++import {
++  getRoomNotificationMode,
++  useRoomsNotificationPreferencesContext,
++} from '../../../hooks/useRoomsNotificationPreferences';
++import { makeNavCategoryId } from '../../../state/closedNavCategories';
++import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
++import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
++import { RoomNavItem, RoomNavCategoryButton } from '../../../features/room-nav';
++import {
++  NavCategory,
++  NavCategoryHeader,
++  NavEmptyCenter,
++  NavEmptyLayout,
++  NavItemContent,
++} from '../../../components/nav';
++import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
++import { getFavoritesRoomPath } from '../../pathUtils';
++import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
++
++const DM_CATEGORY_ID = makeNavCategoryId('favorites', 'dm');
++const ROOMS_CATEGORY_ID = makeNavCategoryId('favorites', 'rooms');
++
++export function Favorites() {
++  const mx = useMatrixClient();
++  useNavToActivePathMapper('favorites');
++  const scrollRef = useRef<HTMLDivElement>(null);
++
++  const allRooms = useAtomValue(allRoomsAtom);
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
++  const notificationPreferences = useRoomsNotificationPreferencesContext();
++  const selectedRoomId = useSelectedRoom();
++
++  const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
++
++  const allFavoriteIds = useFavoriteRooms(allRooms);
++
++  const { dmFavorites, spaceFavoritesMap, orphanFavorites } = useMemo(() => {
++    const dms: string[] = [];
++    const spaces = new Map<string, string[]>();
++    const orphans: string[] = [];
++
++    allFavoriteIds.forEach((id) => {
++      if (mDirects.has(id)) {
++        dms.push(id);
++        return;
++      }
++      const parents = roomToParents.get(id);
++      if (parents && parents.size > 0) {
++        let addedToSpace = false;
++        parents.forEach((spaceId) => {
++          if (mx.getRoom(spaceId)?.getMyMembership() === 'join') {
++            const existing = spaces.get(spaceId) ?? [];
++            existing.push(id);
++            spaces.set(spaceId, existing);
++            addedToSpace = true;
++          }
++        });
++        if (!addedToSpace) {
++          orphans.push(id);
++        }
++      } else {
++        orphans.push(id);
++      }
++    });
++
++    return { dmFavorites: dms, spaceFavoritesMap: spaces, orphanFavorites: orphans };
++  }, [allFavoriteIds, mDirects, roomToParents, mx]);
++
++  const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
++    closedCategories.has(categoryId)
++  );
++
++  return (
++    <PageNav>
++      <PageNavHeader>
++        <Box alignItems="Center" grow="Yes" gap="300">
++          <Box grow="Yes">
++            <Text size="H4" as="h1" truncate>
++              Favorites
++            </Text>
++          </Box>
++        </Box>
++      </PageNavHeader>
++      {allFavoriteIds.length === 0 ? (
++        <NavEmptyCenter>
++          <NavEmptyLayout
++            icon={<Icon size="600" src={Icons.Star} />}
++            title={
++              <Text size="H5" as="h2" align="Center">
++                No Favorites
++              </Text>
++            }
++            content={
++              <Text size="T300" align="Center">
++                Right-click any room to add it to favorites.
++              </Text>
++            }
++          />
++        </NavEmptyCenter>
++      ) : (
++        <PageNavContent scrollRef={scrollRef}>
++          <Box direction="Column" gap="300">
++            {dmFavorites.length > 0 && (
++              <NavCategory>
++                <NavCategoryHeader>
++                  <RoomNavCategoryButton
++                    closed={closedCategories.has(DM_CATEGORY_ID)}
++                    data-category-id={DM_CATEGORY_ID}
++                    onClick={handleCategoryClick}
++                  >
++                    Direct Messages
++                  </RoomNavCategoryButton>
++                </NavCategoryHeader>
++                {!closedCategories.has(DM_CATEGORY_ID) &&
++                  dmFavorites.map((roomId) => {
++                    const room = mx.getRoom(roomId);
++                    if (!room) return null;
++                    return (
++                      <RoomNavItem
++                        key={roomId}
++                        room={room}
++                        selected={selectedRoomId === roomId}
++                        focused={false}
++                        optionId={`room-option-fav-${roomId}`}
++                        tabIndex={0}
++                        showAvatar
++                        direct
++                        linkPath={getFavoritesRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
++                        notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
++                      />
++                    );
++                  })}
++              </NavCategory>
++            )}
++            {orphanFavorites.length > 0 && (
++              <NavCategory>
++                <NavCategoryHeader>
++                  <RoomNavCategoryButton
++                    closed={closedCategories.has(ROOMS_CATEGORY_ID)}
++                    data-category-id={ROOMS_CATEGORY_ID}
++                    onClick={handleCategoryClick}
++                  >
++                    Rooms
++                  </RoomNavCategoryButton>
++                </NavCategoryHeader>
++                {!closedCategories.has(ROOMS_CATEGORY_ID) &&
++                  orphanFavorites.map((roomId) => {
++                    const room = mx.getRoom(roomId);
++                    if (!room) return null;
++                    return (
++                      <RoomNavItem
++                        key={roomId}
++                        room={room}
++                        selected={selectedRoomId === roomId}
++                        focused={false}
++                        optionId={`room-option-fav-${roomId}`}
++                        tabIndex={0}
++                        showAvatar={false}
++                        direct={false}
++                        linkPath={getFavoritesRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
++                        notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
++                      />
++                    );
++                  })}
++              </NavCategory>
++            )}
++            {Array.from(spaceFavoritesMap.entries()).map(([spaceId, roomIds]) => {
++              const spaceCategoryId = makeNavCategoryId('favorites', spaceId);
++              const spaceRoom = mx.getRoom(spaceId);
++              const spaceName = spaceRoom?.name ?? spaceId;
++              return (
++                <NavCategory key={spaceId}>
++                  <NavCategoryHeader>
++                    <RoomNavCategoryButton
++                      closed={closedCategories.has(spaceCategoryId)}
++                      data-category-id={spaceCategoryId}
++                      onClick={handleCategoryClick}
++                    >
++                      {spaceName}
++                    </RoomNavCategoryButton>
++                  </NavCategoryHeader>
++                  {!closedCategories.has(spaceCategoryId) &&
++                    roomIds.map((roomId) => {
++                      const room = mx.getRoom(roomId);
++                      if (!room) return null;
++                      return (
++                        <RoomNavItem
++                          key={roomId}
++                          room={room}
++                          selected={selectedRoomId === roomId}
++                          focused={false}
++                          optionId={`room-option-fav-${roomId}`}
++                          tabIndex={0}
++                          showAvatar={false}
++                          direct={false}
++                          linkPath={getFavoritesRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
++                          notificationMode={getRoomNotificationMode(
++                            notificationPreferences,
++                            roomId
++                          )}
++                        />
++                      );
++                    })}
++                </NavCategory>
++              );
++            })}
++          </Box>
++        </PageNavContent>
++      )}
++    </PageNav>
++  );
++}
+diff --git a/src/app/pages/client/favorites/RoomProvider.tsx b/src/app/pages/client/favorites/RoomProvider.tsx
+new file mode 100644
+index 0000000000..d2c55228e3
+--- /dev/null
++++ b/src/app/pages/client/favorites/RoomProvider.tsx
+@@ -0,0 +1,35 @@
++import React, { ReactNode } from 'react';
++import { useParams } from 'react-router-dom';
++import { useAtomValue } from 'jotai';
++import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
++import { IsDirectRoomProvider, RoomProvider } from '../../../hooks/useRoom';
++import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { JoinBeforeNavigate } from '../../../features/join-before-navigate';
++import { useSearchParamsViaServers } from '../../../hooks/router/useSearchParamsViaServers';
++import { mDirectAtom } from '../../../state/mDirectList';
++
++export function FavoritesRouteRoomProvider({ children }: { children: ReactNode }) {
++  const mx = useMatrixClient();
++  const mDirects = useAtomValue(mDirectAtom);
++  const { roomIdOrAlias, eventId } = useParams();
++  const viaServers = useSearchParamsViaServers();
++  const roomId = useSelectedRoom();
++  const room = mx.getRoom(roomId);
++
++  if (!room) {
++    return (
++      <JoinBeforeNavigate
++        roomIdOrAlias={roomIdOrAlias!}
++        eventId={eventId}
++        viaServers={viaServers}
++      />
++    );
++  }
++
++  const isDirect = mDirects.has(room.roomId);
++  return (
++    <RoomProvider key={room.roomId} value={room}>
++      <IsDirectRoomProvider value={isDirect}>{children}</IsDirectRoomProvider>
++    </RoomProvider>
++  );
++}
+diff --git a/src/app/pages/client/favorites/index.ts b/src/app/pages/client/favorites/index.ts
+new file mode 100644
+index 0000000000..a411b8a627
+--- /dev/null
++++ b/src/app/pages/client/favorites/index.ts
+@@ -0,0 +1,2 @@
++export * from './Favorites';
++export * from './RoomProvider';
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
 index d87db963df..8e03a47458 100644
 --- a/src/app/pages/client/home/Home.tsx
@@ -1505,6 +2008,61 @@ index c8036b471f..325a2e97a8 100644
  export * from './Notifications';
  export * from './Invites';
 +export * from './Unread';
+diff --git a/src/app/pages/client/sidebar/FavoritesTab.tsx b/src/app/pages/client/sidebar/FavoritesTab.tsx
+new file mode 100644
+index 0000000000..6863568d2e
+--- /dev/null
++++ b/src/app/pages/client/sidebar/FavoritesTab.tsx
+@@ -0,0 +1,49 @@
++import React from 'react';
++import { useNavigate } from 'react-router-dom';
++import { Icon, Icons } from 'folds';
++import { useAtomValue } from 'jotai';
++import {
++  SidebarAvatar,
++  SidebarItem,
++  SidebarItemBadge,
++  SidebarItemTooltip,
++} from '../../../components/sidebar';
++import { allRoomsAtom } from '../../../state/room-list/roomList';
++import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
++import { useRoomsUnread } from '../../../state/hooks/unread';
++import { getFavoritesPath } from '../../pathUtils';
++import { useFavoritesSelected } from '../../../hooks/router/useFavoritesSelected';
++import { UnreadBadge } from '../../../components/unread-badge';
++import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
++
++export function FavoritesTab() {
++  const navigate = useNavigate();
++  const favoritesSelected = useFavoritesSelected();
++  const allRooms = useAtomValue(allRoomsAtom);
++  const favoriteRoomIds = useFavoriteRooms(allRooms);
++  const favoriteUnread = useRoomsUnread(favoriteRoomIds, roomToUnreadAtom);
++
++  return (
++    <SidebarItem active={favoritesSelected}>
++      <SidebarItemTooltip tooltip="Favorites (Alt+F)">
++        {(triggerRef) => (
++          <SidebarAvatar
++            as="button"
++            ref={triggerRef}
++            outlined
++            aria-label="Favorites"
++            aria-keyshortcuts="Alt+F"
++            onClick={() => navigate(getFavoritesPath())}
++          >
++            <Icon src={Icons.Star} filled={favoritesSelected} />
++          </SidebarAvatar>
++        )}
++      </SidebarItemTooltip>
++      {favoriteUnread && (
++        <SidebarItemBadge hasCount={favoriteUnread.total > 0}>
++          <UnreadBadge highlight={favoriteUnread.highlight > 0} count={favoriteUnread.total} />
++        </SidebarItemBadge>
++      )}
++    </SidebarItem>
++  );
++}
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
 index 778b729e2e..53b3a4cf9c 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
@@ -1628,8 +2186,19 @@ index 5d13a9ab65..b5f041b788 100644
 +    </>
    );
  }
+diff --git a/src/app/pages/client/sidebar/index.ts b/src/app/pages/client/sidebar/index.ts
+index d44cfaa26e..744619082b 100644
+--- a/src/app/pages/client/sidebar/index.ts
++++ b/src/app/pages/client/sidebar/index.ts
+@@ -1,5 +1,6 @@
+ export * from './HomeTab';
+ export * from './DirectTab';
++export * from './FavoritesTab';
+ export * from './SpaceTabs';
+ export * from './InboxTab';
+ export * from './ExploreTab';
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 2a7c619939..974cb489d9 100644
+index 2a7c619939..d9339616d0 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -6,7 +6,7 @@
@@ -1641,7 +2210,7 @@ index 2a7c619939..974cb489d9 100644
  import {
    Avatar,
    Box,
-@@ -48,12 +48,14 @@
+@@ -48,13 +48,16 @@
  import { useSpace } from '../../../hooks/useSpace';
  import { VirtualTile } from '../../../components/virtualizer';
  import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
@@ -1655,9 +2224,11 @@ index 2a7c619939..974cb489d9 100644
 +import { HierarchyItem, useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
 +import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst, byOrderKey, byTsOldToNew } from '../../../utils/sort';
  import { allRoomsAtom } from '../../../state/room-list/roomList';
++import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
-@@ -94,6 +96,7 @@
+ import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
+@@ -94,6 +97,7 @@
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const [developerTools] = useSetting(settingsAtom, 'developerTools');
@@ -1665,7 +2236,7 @@ index 2a7c619939..974cb489d9 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -151,6 +154,47 @@
+@@ -151,6 +155,47 @@
            />
          )}
          <MenuItem
@@ -1713,7 +2284,7 @@ index 2a7c619939..974cb489d9 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -391,10 +435,13 @@
+@@ -391,10 +436,13 @@
    const selectedRoomId = useSelectedRoom();
    const lobbySelected = useSpaceLobbySelected(spaceIdOrAlias);
    const searchSelected = useSpaceSearchSelected(spaceIdOrAlias);
@@ -1727,7 +2298,7 @@ index 2a7c619939..974cb489d9 100644
    const getRoom = useCallback(
      (rId: string): Room | undefined => {
        if (allJoinedRooms.has(rId)) {
-@@ -405,6 +452,31 @@
+@@ -405,6 +453,31 @@
      [mx, allJoinedRooms]
    );
  
@@ -1759,7 +2330,7 @@ index 2a7c619939..974cb489d9 100644
    const hierarchy = useSpaceJoinedHierarchy(
      space.roomId,
      getRoom,
-@@ -419,10 +491,7 @@
+@@ -419,10 +492,7 @@
        },
        [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
      ),
@@ -1771,7 +2342,52 @@ index 2a7c619939..974cb489d9 100644
    );
  
    const virtualizer = useVirtualizer({
-@@ -483,6 +552,25 @@
+@@ -430,6 +500,44 @@
+     getScrollElement: () => scrollRef.current,
+     estimateSize: () => 0,
+     overscan: 10,
++    getItemKey: (index) => displayHierarchy[index]?.roomId ?? index,
++  });
++
++  const roomsOnly = useMemo(
++    () =>
++      displayHierarchy
++        .filter(({ roomId }) => {
++          const r = mx.getRoom(roomId);
++          return r && !r.isSpaceRoom();
++        })
++        .map(({ roomId }) => roomId),
++    [displayHierarchy, mx]
++  );
++
++  const allSpaceRoomIds = useMemo(
++    () =>
++      hierarchy
++        .filter(({ roomId }) => {
++          const r = mx.getRoom(roomId);
++          return r && !r.isSpaceRoom();
++        })
++        .map(({ roomId }) => roomId),
++    [hierarchy, mx]
++  );
++  const spaceFavoriteRoomIds = useFavoriteRooms(allSpaceRoomIds);
++  const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
++
++  const { navigateRoom } = useRoomNavigate();
++
++  const setSearchModal = useSetAtom(searchModalAtom);
++  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
++
++  const keyboardNav = useRoomListKeyboard({
++    items: roomsOnly,
++    selectedRoomId,
++    virtualizer,
++    onNavigate: (roomId) => navigateRoom(roomId),
++    onTypeChar: (key) => { setSearchInitialChar(key); setSearchModal(true); },
+   });
+ 
+   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
+@@ -483,7 +591,56 @@
                  </NavItemContent>
                </NavLink>
              </NavItem>
@@ -1795,10 +2411,41 @@ index 2a7c619939..974cb489d9 100644
 +              </NavItem>
 +            )}
            </NavCategory>
++          {spaceFavoriteRoomIds.length > 0 && (
++            <NavCategory>
++              <NavCategoryHeader>
++                <RoomNavCategoryButton
++                  closed={closedCategories.has(SPACE_FAVORITES_CATEGORY_ID)}
++                  data-category-id={SPACE_FAVORITES_CATEGORY_ID}
++                  onClick={handleCategoryClick}
++                >
++                  Favorites
++                </RoomNavCategoryButton>
++              </NavCategoryHeader>
++              {!closedCategories.has(SPACE_FAVORITES_CATEGORY_ID) &&
++                spaceFavoriteRoomIds.map((roomId) => {
++                  const room = mx.getRoom(roomId);
++                  if (!room) return null;
++                  return (
++                    <RoomNavItem
++                      key={roomId}
++                      room={room}
++                      selected={selectedRoomId === roomId}
++                      focused={false}
++                      optionId={`room-option-fav-${roomId}`}
++                      tabIndex={0}
++                      linkPath={getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId))}
++                      notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
++                    />
++                  );
++                })}
++            </NavCategory>
++          )}
            <NavCategory
              style={{
+               height: virtualizer.getTotalSize(),
 diff --git a/src/app/pages/pathUtils.ts b/src/app/pages/pathUtils.ts
-index 817d21d1f3..cc940960a7 100644
+index 817d21d1f3..9e8ecdf02c 100644
 --- a/src/app/pages/pathUtils.ts
 +++ b/src/app/pages/pathUtils.ts
 @@ -14,6 +14,7 @@
@@ -1809,16 +2456,35 @@ index 817d21d1f3..cc940960a7 100644
    INBOX_PATH,
    REGISTER_PATH,
    RESET_PASSWORD_PATH,
-@@ -158,3 +159,4 @@
+@@ -23,6 +24,8 @@
+   SPACE_ROOM_PATH,
+   SPACE_SEARCH_PATH,
+   CREATE_PATH,
++  FAVORITES_PATH,
++  FAVORITES_ROOM_PATH,
+ } from './paths';
+ import { trimLeadingSlash, trimTrailingSlash } from '../utils/common';
+ import { HashRouterConfig } from '../hooks/useClientConfig';
+@@ -158,3 +161,14 @@
  export const getInboxPath = (): string => INBOX_PATH;
  export const getInboxNotificationsPath = (): string => INBOX_NOTIFICATIONS_PATH;
  export const getInboxInvitesPath = (): string => INBOX_INVITES_PATH;
 +export const getInboxUnreadPath = (): string => INBOX_UNREAD_PATH;
++
++export const getFavoritesPath = (): string => FAVORITES_PATH;
++export const getFavoritesRoomPath = (roomIdOrAlias: string, eventId?: string): string => {
++  const params = {
++    roomIdOrAlias: encodeURIComponent(roomIdOrAlias),
++    eventId: eventId ? encodeURIComponent(eventId) : null,
++  };
++
++  return generatePath(FAVORITES_ROOM_PATH, params);
++};
 diff --git a/src/app/pages/paths.ts b/src/app/pages/paths.ts
-index 9cf4bfb963..024e962a8d 100644
+index 9cf4bfb963..45f5c8187f 100644
 --- a/src/app/pages/paths.ts
 +++ b/src/app/pages/paths.ts
-@@ -78,12 +78,14 @@
+@@ -78,13 +78,18 @@
  
  export const _NOTIFICATIONS_PATH = 'notifications/';
  export const _INVITES_PATH = 'invites/';
@@ -1833,6 +2499,10 @@ index 9cf4bfb963..024e962a8d 100644
  
  export const SPACE_SETTINGS_PATH = '/space-settings/';
  
+ export const ROOM_SETTINGS_PATH = '/room-settings/';
++
++export const FAVORITES_PATH = '/favorites/';
++export const FAVORITES_ROOM_PATH = `/favorites/${_ROOM_PATH}`;
 diff --git a/src/app/state/room-list/utils.ts b/src/app/state/room-list/utils.ts
 index 1ca7e7de12..b1c9e145c4 100644
 --- a/src/app/state/room-list/utils.ts
