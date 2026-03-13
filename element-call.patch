@@ -1273,10 +1273,10 @@ index 0000000000..8223dc3f7b
 +});
 diff --git a/src/app/features/call/SmallWidgetDriver.ts b/src/app/features/call/SmallWidgetDriver.ts
 new file mode 100644
-index 0000000000..045fbb799b
+index 0000000000..459125ab2d
 --- /dev/null
 +++ b/src/app/features/call/SmallWidgetDriver.ts
-@@ -0,0 +1,581 @@
+@@ -0,0 +1,586 @@
 +/* eslint-disable no-return-await */
 +/* eslint-disable no-param-reassign */
 +/* eslint-disable no-continue */
@@ -1603,8 +1603,13 @@ index 0000000000..045fbb799b
 +
 +  /**
 +   * @experimental Part of MSC4140 & MSC4157
-+   * ClientWidgetApi dispatches to these three specific methods (not updateDelayedEvent).
++   * matrix-widget-api 1.13+ calls this single method with an action argument.
 +   */
++  public async updateDelayedEvent(delayId: string, action: UpdateDelayedEventAction): Promise<void> {
++    await this.mxClient._unstable_updateDelayedEvent(delayId, action);
++  }
++
++  // Kept for backwards compat with older widget-api versions
 +  public async cancelScheduledDelayedEvent(delayId: string): Promise<void> {
 +    await this.mxClient._unstable_updateDelayedEvent(delayId, UpdateDelayedEventAction.Cancel);
 +  }
