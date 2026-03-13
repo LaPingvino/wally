@@ -5128,11 +5128,11 @@ index 0000000000..0b63aa27be
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..3651d1c7e6
+index 0000000000..bd95afb0b2
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,253 @@
-+import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+@@ -0,0 +1,275 @@
++import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 +import { ClientWidgetApi } from 'matrix-widget-api';
 +import { Box } from 'folds';
@@ -5162,6 +5162,10 @@ index 0000000000..3651d1c7e6
 +  const callIframeRef = useRef<HTMLIFrameElement | null>(null);
 +  const callWidgetApiRef = useRef<ClientWidgetApi | null>(null);
 +  const callSmallWidgetRef = useRef<SmallWidget | null>(null);
++  // Incrementing this key replaces the iframe DOM node, discarding any zombie iframe.load
++  // listeners left behind by matrix-widget-api (ClientWidgetApi.stop() doesn't remove them).
++  // Each reload cycle increments the key so only the fresh iframe gets load events.
++  const [iframeKey, setIframeKey] = useState(0);
 +  // After a non-voice room lobby join, reload EC with join_existing for proper in-call view.
 +  const hasReloadedAfterLobbyRef = useRef(false);
 +  const postLobbyIntentRef = useRef<'join_existing' | null>(null);
@@ -5291,6 +5295,11 @@ index 0000000000..3651d1c7e6
 +  // session and shows the full in-call grid. Hangs up if the session never appears.
 +  // This applies to all room types: DM/group rooms (start_call) and voice rooms (join_existing)
 +  // both hit the same timing issue where the in-call grid is not shown after the first join.
++  //
++  // INITIAL_DELAY_MS: wait before starting to poll. When a call already has participants,
++  // callMembershipsForRoom() would return > 0 immediately, triggering a reload within ~200 ms of
++  // io.element.join. That's before EC can begin its LiveKit connection, causing an instant
++  // disconnect. The delay gives EC time to start its connection before we replace it.
 +  useEffect(() => {
 +    if (!activeCallRoomId) {
 +      hasReloadedAfterLobbyRef.current = false;
@@ -5301,23 +5310,35 @@ index 0000000000..3651d1c7e6
 +      if (room) {
 +        hasReloadedAfterLobbyRef.current = true;
 +        const POLL_INTERVAL_MS = 200;
-+        const TIMEOUT_MS = 10000;
++        const TIMEOUT_MS = 15000;
++        const INITIAL_DELAY_MS = 2000;
 +        const startTime = Date.now();
-+        const pollTimer = setInterval(() => {
-+          if (MatrixRTCSession.callMembershipsForRoom(room).length > 0) {
-+            clearInterval(pollTimer);
-+            callSmallWidgetRef.current?.stopMessaging();
-+            callWidgetApiRef.current = null;
-+            callSmallWidgetRef.current = null;
-+            registerActiveClientWidgetApi(activeCallRoomId, null, null, null);
-+            postLobbyIntentRef.current = 'join_existing';
-+            resetActiveCallReady();
-+          } else if (Date.now() - startTime >= TIMEOUT_MS) {
-+            clearInterval(pollTimer);
-+            hangUp();
-+          }
-+        }, POLL_INTERVAL_MS);
-+        return () => clearInterval(pollTimer);
++        let pollTimer: ReturnType<typeof setInterval> | undefined;
++        const delayTimer = setTimeout(() => {
++          pollTimer = setInterval(() => {
++            if (MatrixRTCSession.callMembershipsForRoom(room).length > 0) {
++              clearInterval(pollTimer);
++              callSmallWidgetRef.current?.stopMessaging();
++              callWidgetApiRef.current = null;
++              callSmallWidgetRef.current = null;
++              registerActiveClientWidgetApi(activeCallRoomId, null, null, null);
++              postLobbyIntentRef.current = 'join_existing';
++              // Replace the iframe element so zombie iframe.load listeners from the old
++              // ClientWidgetApi session are discarded — matrix-widget-api adds a load listener
++              // in the constructor but never removes it in stop(), so each reload cycle would
++              // otherwise accumulate stale listeners that fire "contentLoaded timeout" errors.
++              setIframeKey((k) => k + 1);
++              resetActiveCallReady();
++            } else if (Date.now() - startTime >= TIMEOUT_MS) {
++              clearInterval(pollTimer);
++              hangUp();
++            }
++          }, POLL_INTERVAL_MS);
++        }, INITIAL_DELAY_MS);
++        return () => {
++          clearTimeout(delayTimer);
++          clearInterval(pollTimer);
++        };
 +      }
 +    }
 +    return undefined;
@@ -5363,6 +5384,7 @@ index 0000000000..3651d1c7e6
 +            }}
 +          >
 +            <iframe
++              key={iframeKey}
 +              ref={callIframeRef}
 +              style={{
 +                position: 'absolute',
