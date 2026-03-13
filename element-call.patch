@@ -1273,10 +1273,10 @@ index 0000000000..8223dc3f7b
 +});
 diff --git a/src/app/features/call/SmallWidgetDriver.ts b/src/app/features/call/SmallWidgetDriver.ts
 new file mode 100644
-index 0000000000..459125ab2d
+index 0000000000..ad2c433fce
 --- /dev/null
 +++ b/src/app/features/call/SmallWidgetDriver.ts
-@@ -0,0 +1,586 @@
+@@ -0,0 +1,625 @@
 +/* eslint-disable no-return-await */
 +/* eslint-disable no-param-reassign */
 +/* eslint-disable no-continue */
@@ -1296,6 +1296,7 @@ index 0000000000..459125ab2d
 +  type ISendEventDetails,
 +  type IReadEventRelationsResult,
 +  type IRoomEvent,
++  type ITurnServer,
 +  MatrixCapabilities,
 +  type Widget,
 +  WidgetDriver,
@@ -1310,8 +1311,10 @@ index 0000000000..459125ab2d
 +  IOpenIDUpdate,
 +} from 'matrix-widget-api';
 +import {
++  ClientEvent,
 +  EventType,
 +  type IContent,
++  type ITurnServer as MxTurnServer,
 +  MatrixError,
 +  type MatrixEvent,
 +  Direction,
@@ -1840,6 +1843,42 @@ index 0000000000..459125ab2d
 +        return { file: blob };
 +    }
 +    */
++
++  /**
++   * Yields TURN servers from the homeserver, then updates as they refresh.
++   */
++  public async *getTurnServers(): AsyncGenerator<ITurnServer> {
++    const client = this.mxClient;
++    const toWidget = (s: MxTurnServer): ITurnServer => ({
++      uris: s.urls,
++      username: s.username,
++      password: s.credential,
++    });
++
++    for (const server of client.getTurnServers()) {
++      yield toWidget(server);
++    }
++
++    const queue: ITurnServer[] = [];
++    let pending: (() => void) | null = null;
++    const onTurnServers = (servers: MxTurnServer[]): void => {
++      for (const s of servers) queue.push(toWidget(s));
++      pending?.();
++      pending = null;
++    };
++    client.on(ClientEvent.TurnServers, onTurnServers);
++    try {
++      while (true) {
++        if (queue.length > 0) {
++          yield queue.shift()!;
++        } else {
++          await new Promise<void>((resolve) => { pending = resolve; });
++        }
++      }
++    } finally {
++      client.off(ClientEvent.TurnServers, onTurnServers);
++    }
++  }
 +
 +  /**
 +   * Gets the IDs of all joined or invited rooms currently known to the
