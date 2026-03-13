@@ -5114,10 +5114,10 @@ index 0000000000..0b63aa27be
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..88651dc786
+index 0000000000..3651d1c7e6
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,251 @@
+@@ -0,0 +1,253 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 +import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 +import { ClientWidgetApi } from 'matrix-widget-api';
@@ -5242,8 +5242,14 @@ index 0000000000..88651dc786
 +          const smallWidget = new SmallWidget(app);
 +          smallWidgetRef.current = smallWidget;
 +
-+          // Start messaging BEFORE setting iframe.src — ensures the ClientWidgetApi
-+          // message listener is registered before the iframe navigates.
++          // Set iframe.src BEFORE startMessaging — PostmessageTransport captures
++          // iframe.contentWindow at construction time. If src is still "about:blank"
++          // when ClientWidgetApi is constructed, the transport permanently targets the
++          // dead about:blank window and EC never receives the ContentLoaded reply.
++          if (!iframeElement.src || iframeElement.src !== newUrl.toString()) {
++            iframeElement.src = newUrl.toString();
++          }
++
 +          const widgetApiInstance = smallWidget.startMessaging(iframeElement);
 +          widgetApiRef.current = widgetApiInstance;
 +          registerActiveClientWidgetApi(
@@ -5252,10 +5258,6 @@ index 0000000000..88651dc786
 +            smallWidget,
 +            iframeElement,
 +          );
-+
-+          if (!iframeElement.src || iframeElement.src !== newUrl.toString()) {
-+            iframeElement.src = newUrl.toString();
-+          }
 +        }
 +      }
 +    },
