@@ -5128,10 +5128,10 @@ index 0000000000..0b63aa27be
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..55245c7b67
+index 0000000000..d1d334f517
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,277 @@
+@@ -0,0 +1,280 @@
 +import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 +import { ClientWidgetApi } from 'matrix-widget-api';
@@ -5231,8 +5231,11 @@ index 0000000000..55245c7b67
 +            widgetId,
 +            {
 +              intent: effectiveIntent,
-+              // Skip lobby when rejoining existing session; or when autoJoin is on.
-+              skipLobby: intentOverride === 'join_existing' ? true : (autoJoin ? true : undefined),
++              // Always skip the lobby — we handle the pre-join A/V configuration via
++              // cinny's own call settings. Skipping the lobby also means EC goes straight
++              // to the in-call grid after io.element.join without needing a reload, which
++              // avoids EC regenerating E2EE keys (causing MissingKey errors for others).
++              skipLobby: true,
 +              returnToLobby: 'true',
 +              perParticipantE2EE: isRoomEncrypted ? 'true' : 'false',
 +              theme: themeKind,
