@@ -343,6 +343,44 @@ index 39d7e50a60..22c50036b5 100644
          </TimelineFloat>
        )}
        <Scroll ref={scrollRef} visibility="Hover">
+diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
+index b317b13abd..bd6aa89a7e 100644
+--- a/src/app/features/room-nav/RoomNavItem.tsx
++++ b/src/app/features/room-nav/RoomNavItem.tsx
+@@ -101,6 +101,16 @@
+       requestClose();
+     };
+ 
++    const isFavorite = !!room.tags['m.favourite'];
++    const handleToggleFavorite = () => {
++      if (isFavorite) {
++        mx.deleteRoomTag(room.roomId, 'm.favourite');
++      } else {
++        mx.setRoomTag(room.roomId, 'm.favourite', { order: 0.5 });
++      }
++      requestClose();
++    };
++
+     return (
+       <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+         {invitePrompt && room && (
+@@ -145,6 +155,16 @@
+               </MenuItem>
+             )}
+           </RoomNotificationModeSwitcher>
++          <MenuItem
++            onClick={handleToggleFavorite}
++            size="300"
++            after={<Icon size="100" src={Icons.Star} filled={isFavorite} />}
++            radii="300"
++          >
++            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++              {isFavorite ? 'Unfavorite' : 'Favorite'}
++            </Text>
++          </MenuItem>
+         </Box>
+         <Line variant="Surface" size="300" />
+         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
 diff --git a/src/app/hooks/router/useInbox.ts b/src/app/hooks/router/useInbox.ts
 index de8d3d69f9..08381e8ddb 100644
 --- a/src/app/hooks/router/useInbox.ts
@@ -370,6 +408,27 @@ index de8d3d69f9..08381e8ddb 100644
 +  return !!match;
 +};
 +
+diff --git a/src/app/hooks/useFavoriteRooms.ts b/src/app/hooks/useFavoriteRooms.ts
+new file mode 100644
+index 0000000000..b0b2195b80
+--- /dev/null
++++ b/src/app/hooks/useFavoriteRooms.ts
+@@ -0,0 +1,15 @@
++import { useEffect, useReducer } from 'react';
++import { RoomEvent } from 'matrix-js-sdk';
++import { useMatrixClient } from './useMatrixClient';
++
++export function useFavoriteRooms(roomIds: string[]): string[] {
++  const mx = useMatrixClient();
++  const [, rerender] = useReducer((n: number) => n + 1, 0);
++
++  useEffect(() => {
++    mx.on(RoomEvent.Tags, rerender);
++    return () => { mx.off(RoomEvent.Tags, rerender); };
++  }, [mx]);
++
++  return roomIds.filter((id) => !!mx.getRoom(id)?.tags['m.favourite']);
++}
 diff --git a/src/app/hooks/useSpaceHierarchy.ts b/src/app/hooks/useSpaceHierarchy.ts
 index ad34e3f458..ad768ea8f1 100644
 --- a/src/app/hooks/useSpaceHierarchy.ts
@@ -438,7 +497,7 @@ index 4de42081f5..bc5ee9da26 100644
            <Route path={_INVITES_PATH} element={<Invites />} />
          </Route>
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf10906..813302b79e 100644
+index 04edf10906..6733ffeed3 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -1,5 +1,5 @@
@@ -474,7 +533,19 @@ index 04edf10906..813302b79e 100644
  import { makeNavCategoryId } from '../../../state/closedNavCategories';
  import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
  import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
-@@ -60,6 +62,7 @@
+@@ -51,6 +53,11 @@
+   useRoomsNotificationPreferencesContext,
+ } from '../../../hooks/useRoomsNotificationPreferences';
+ import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
++import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
++import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
++import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
++import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
++import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
+ 
+ type DirectMenuProps = {
+   requestClose: () => void;
+@@ -60,6 +67,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const orphanRooms = useDirectRooms();
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
@@ -482,7 +553,7 @@ index 04edf10906..813302b79e 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -71,6 +74,37 @@
+@@ -71,6 +79,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -520,7 +591,15 @@ index 04edf10906..813302b79e 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -178,18 +212,32 @@
+@@ -168,6 +207,7 @@
+ }
+ 
+ const DEFAULT_CATEGORY_ID = makeNavCategoryId('direct', 'direct');
++const FAVORITES_CATEGORY_ID = makeNavCategoryId('direct', 'favorites');
+ export function Direct() {
+   const mx = useMatrixClient();
+   useNavToActivePathMapper('direct');
+@@ -178,18 +218,35 @@
    const navigate = useNavigate();
  
    const createDirectSelected = useDirectCreateSelected();
@@ -530,6 +609,9 @@ index 04edf10906..813302b79e 100644
    const noRoomToDisplay = directs.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 +  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
++
++  const favoriteRoomIds = useFavoriteRooms(directs);
++  const favoriteRoomIdsSet = useMemo(() => new Set(favoriteRoomIds), [favoriteRoomIds]);
  
    const sortedDirects = useMemo(() => {
 -    const items = Array.from(directs).sort(factoryRoomIdByActivity(mx));
@@ -545,17 +627,17 @@ index 04edf10906..813302b79e 100644
 +    } else {
 +      sortFn = factoryRoomIdByActivity(mx);
 +    }
-+    const items = Array.from(directs).sort(sortFn);
++    const items = Array.from(directs).sort(sortFn).filter((rId) => !favoriteRoomIdsSet.has(rId));
      if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
        return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
      }
      return items;
 -  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
-+  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId, roomSortOrder]);
++  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId, roomSortOrder, favoriteRoomIdsSet]);
  
    const virtualizer = useVirtualizer({
      count: sortedDirects.length,
-@@ -227,6 +275,25 @@
+@@ -227,7 +284,58 @@
                    </NavItemContent>
                  </NavButton>
                </NavItem>
@@ -579,10 +661,43 @@ index 04edf10906..813302b79e 100644
 +                </NavItem>
 +              )}
              </NavCategory>
++            {favoriteRoomIds.length > 0 && (
++              <NavCategory>
++                <NavCategoryHeader>
++                  <RoomNavCategoryButton
++                    closed={closedCategories.has(FAVORITES_CATEGORY_ID)}
++                    data-category-id={FAVORITES_CATEGORY_ID}
++                    onClick={handleCategoryClick}
++                  >
++                    Favorites
++                  </RoomNavCategoryButton>
++                </NavCategoryHeader>
++                {!closedCategories.has(FAVORITES_CATEGORY_ID) &&
++                  favoriteRoomIds.map((roomId) => {
++                    const room = mx.getRoom(roomId);
++                    if (!room) return null;
++                    return (
++                      <RoomNavItem
++                        key={roomId}
++                        room={room}
++                        selected={selectedRoomId === roomId}
++                        focused={false}
++                        optionId={`room-option-fav-${roomId}`}
++                        tabIndex={0}
++                        showAvatar
++                        direct
++                        linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
++                        notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
++                      />
++                    );
++                  })}
++              </NavCategory>
++            )}
              <NavCategory>
                <NavCategoryHeader>
+                 <RoomNavCategoryButton
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963df..482e813abc 100644
+index d87db963df..8e03a47458 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -1,4 +1,4 @@
@@ -619,7 +734,15 @@ index d87db963df..482e813abc 100644
  import { makeNavCategoryId } from '../../../state/closedNavCategories';
  import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
  import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
-@@ -74,6 +76,7 @@
+@@ -65,6 +67,7 @@
+ import { UseStateProvider } from '../../../components/UseStateProvider';
+ import { JoinAddressPrompt } from '../../../components/join-address-prompt';
+ import { _RoomSearchParams } from '../../paths';
++import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
+ 
+ type HomeMenuProps = {
+   requestClose: () => void;
+@@ -74,6 +77,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
    const mx = useMatrixClient();
@@ -627,7 +750,7 @@ index d87db963df..482e813abc 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -85,6 +88,37 @@
+@@ -85,6 +89,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -665,7 +788,15 @@ index d87db963df..482e813abc 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -206,20 +240,30 @@
+@@ -194,6 +229,7 @@
+ }
+ 
+ const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
++const FAVORITES_CATEGORY_ID = makeNavCategoryId('home', 'favorites');
+ export function Home() {
+   const mx = useMatrixClient();
+   useNavToActivePathMapper('home');
+@@ -206,20 +242,33 @@
    const selectedRoomId = useSelectedRoom();
    const createRoomSelected = useHomeCreateSelected();
    const searchSelected = useHomeSearchSelected();
@@ -673,6 +804,9 @@ index d87db963df..482e813abc 100644
    const noRoomToDisplay = rooms.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 +  const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
++
++  const favoriteRoomIds = useFavoriteRooms(rooms);
++  const favoriteRoomIdsSet = useMemo(() => new Set(favoriteRoomIds), [favoriteRoomIds]);
  
    const sortedRooms = useMemo(() => {
 -    const items = Array.from(rooms).sort(
@@ -692,17 +826,17 @@ index d87db963df..482e813abc 100644
 +    } else {
 +      sortFn = factoryRoomIdByActivity(mx);
 +    }
-+    const items = Array.from(rooms).sort(sortFn);
++    const items = Array.from(rooms).sort(sortFn).filter((rId) => !favoriteRoomIdsSet.has(rId));
      if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
        return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
      }
      return items;
 -  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId]);
-+  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId, roomSortOrder]);
++  }, [mx, rooms, closedCategories, roomToUnread, selectedRoomId, roomSortOrder, favoriteRoomIdsSet]);
  
    const virtualizer = useVirtualizer({
      count: sortedRooms.length,
-@@ -311,6 +355,25 @@
+@@ -311,7 +360,56 @@
                    </NavItemContent>
                  </NavLink>
                </NavItem>
@@ -726,8 +860,39 @@ index d87db963df..482e813abc 100644
 +                </NavItem>
 +              )}
              </NavCategory>
++            {favoriteRoomIds.length > 0 && (
++              <NavCategory>
++                <NavCategoryHeader>
++                  <RoomNavCategoryButton
++                    closed={closedCategories.has(FAVORITES_CATEGORY_ID)}
++                    data-category-id={FAVORITES_CATEGORY_ID}
++                    onClick={handleCategoryClick}
++                  >
++                    Favorites
++                  </RoomNavCategoryButton>
++                </NavCategoryHeader>
++                {!closedCategories.has(FAVORITES_CATEGORY_ID) &&
++                  favoriteRoomIds.map((roomId) => {
++                    const room = mx.getRoom(roomId);
++                    if (!room) return null;
++                    return (
++                      <RoomNavItem
++                        key={roomId}
++                        room={room}
++                        selected={selectedRoomId === roomId}
++                        focused={false}
++                        optionId={`room-option-fav-${roomId}`}
++                        tabIndex={0}
++                        linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
++                        notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
++                      />
++                    );
++                  })}
++              </NavCategory>
++            )}
              <NavCategory>
                <NavCategoryHeader>
+                 <RoomNavCategoryButton
 diff --git a/src/app/pages/client/inbox/Inbox.tsx b/src/app/pages/client/inbox/Inbox.tsx
 index 67d6021a3e..9b7c21a810 100644
 --- a/src/app/pages/client/inbox/Inbox.tsx
