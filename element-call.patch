@@ -3265,10 +3265,10 @@ index 0000000000..059afd5add
 +});
 diff --git a/src/app/features/room-nav/RoomCallNavStatus.tsx b/src/app/features/room-nav/RoomCallNavStatus.tsx
 new file mode 100644
-index 0000000000..94bd355119
+index 0000000000..067e343d4b
 --- /dev/null
 +++ b/src/app/features/room-nav/RoomCallNavStatus.tsx
-@@ -0,0 +1,505 @@
+@@ -0,0 +1,519 @@
 +import {
 +  Box,
 +  Chip,
@@ -3299,6 +3299,7 @@ index 0000000000..94bd355119
 +  useRoomsNotificationPreferences,
 +} from '../../hooks/useRoomsNotificationPreferences';
 +import { settingsAtom } from '../../state/settings';
++import { playMentionSound } from '../../utils/sounds';
 +import * as css from './RoomCallNavStatus.css';
 +
 +// Module-level: persists across tab switches (Direct/Home/Space each mount their own CallNavStatus).
@@ -3409,9 +3410,9 @@ index 0000000000..94bd355119
 +        // Playback failed — fall through to synthesized fallback
 +        audioElRef.current = null;
 +        try {
-+          const ctx = new AudioContext();
-+          audioCtxRef.current = ctx;
-+          scheduleNextCycle(ctx);
++          const newCtx = new AudioContext();
++          audioCtxRef.current = newCtx;
++          newCtx.resume().then(() => scheduleNextCycle(newCtx)).catch(() => scheduleNextCycle(newCtx));
 +        } catch {
 +          // Audio blocked or not supported
 +        }
@@ -3421,9 +3422,12 @@ index 0000000000..94bd355119
 +
 +    // Fallback: synthesized POTS ring
 +    try {
-+      const ctx = new AudioContext();
-+      audioCtxRef.current = ctx;
-+      scheduleNextCycle(ctx);
++      const newCtx = new AudioContext();
++      audioCtxRef.current = newCtx;
++      // Resume the context — modern browsers start AudioContext in suspended state,
++      // which silently prevents oscillators from playing. resume() succeeds when the
++      // page has recent user interaction (the typical case for an active chat user).
++      newCtx.resume().then(() => scheduleNextCycle(newCtx)).catch(() => scheduleNextCycle(newCtx));
 +    } catch {
 +      // Audio blocked or not supported
 +    }
@@ -3548,6 +3552,16 @@ index 0000000000..94bd355119
 +    },
 +    [clearCallTimeout]
 +  );
++
++  // Play a join sound once when the call transitions to connected (isConnected goes true).
++  // EC suppresses its own join sound in widget/embed mode, so cinny provides it.
++  const prevConnectedRef = useRef(false);
++  useEffect(() => {
++    if (isConnected && !prevConnectedRef.current) {
++      playMentionSound();
++    }
++    prevConnectedRef.current = isConnected;
++  }, [isConnected]);
 +
 +  // Ring while incoming calls are waiting; announce the first call to screen readers
 +  useEffect(() => {
