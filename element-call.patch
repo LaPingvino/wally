@@ -1273,10 +1273,10 @@ index 0000000000..8223dc3f7b
 +});
 diff --git a/src/app/features/call/SmallWidgetDriver.ts b/src/app/features/call/SmallWidgetDriver.ts
 new file mode 100644
-index 0000000000..ad2c433fce
+index 0000000000..9e2f8767c7
 --- /dev/null
 +++ b/src/app/features/call/SmallWidgetDriver.ts
-@@ -0,0 +1,625 @@
+@@ -0,0 +1,631 @@
 +/* eslint-disable no-return-await */
 +/* eslint-disable no-param-reassign */
 +/* eslint-disable no-continue */
@@ -1845,7 +1845,9 @@ index 0000000000..ad2c433fce
 +    */
 +
 +  /**
-+   * Yields TURN servers from the homeserver, then updates as they refresh.
++   * Yields TURN servers from the homeserver, then streams updates.
++   * Returns immediately if no TURN servers are available, letting EC
++   * handle the no-TURN case gracefully (avoids hanging widget init).
 +   */
 +  public async *getTurnServers(): AsyncGenerator<ITurnServer> {
 +    const client = this.mxClient;
@@ -1855,10 +1857,14 @@ index 0000000000..ad2c433fce
 +      password: s.credential,
 +    });
 +
-+    for (const server of client.getTurnServers()) {
++    const initial = client.getTurnServers();
++    for (const server of initial) {
 +      yield toWidget(server);
 +    }
++    // If no TURN servers, return so EC can proceed without them
++    if (initial.length === 0) return;
 +
++    // There were servers — stream refreshes as the client polls
 +    const queue: ITurnServer[] = [];
 +    let pending: (() => void) | null = null;
 +    const onTurnServers = (servers: MxTurnServer[]): void => {
