@@ -4701,10 +4701,10 @@ index 7e509d1ee8..fed0727d4e 100644
  }
 diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
 new file mode 100644
-index 0000000000..0b63aa27be
+index 0000000000..3c929457f3
 --- /dev/null
 +++ b/src/app/pages/client/call/CallProvider.tsx
-@@ -0,0 +1,421 @@
+@@ -0,0 +1,435 @@
 +import React, {
 +  createContext,
 +  useState,
@@ -4759,6 +4759,8 @@ index 0000000000..0b63aa27be
 +  ) => Promise<void>;
 +  isAudioEnabled: boolean;
 +  isVideoEnabled: boolean;
++  setAudioEnabled: (enabled: boolean) => void;
++  setVideoEnabled: (enabled: boolean) => void;
 +  isChatOpen: boolean;
 +  isCallViewOpen: boolean;
 +  isActiveCallReady: boolean;
@@ -5063,6 +5065,14 @@ index 0000000000..0b63aa27be
 +    setIsChatOpenState(newState);
 +  }, [isChatOpen]);
 +
++  const setAudioEnabled = useCallback((enabled: boolean) => {
++    setIsAudioEnabledState(enabled);
++  }, []);
++
++  const setVideoEnabled = useCallback((enabled: boolean) => {
++    setIsVideoEnabledState(enabled);
++  }, []);
++
 +  const resetActiveCallReady = useCallback(() => {
 +    setIsActiveCallReady(false);
 +  }, []);
@@ -5086,6 +5096,8 @@ index 0000000000..0b63aa27be
 +      isCallViewOpen,
 +      isAudioEnabled,
 +      isVideoEnabled,
++      setAudioEnabled,
++      setVideoEnabled,
 +      isActiveCallReady,
 +      resetActiveCallReady,
 +      toggleAudio,
@@ -5107,6 +5119,8 @@ index 0000000000..0b63aa27be
 +      isCallViewOpen,
 +      isAudioEnabled,
 +      isVideoEnabled,
++      setAudioEnabled,
++      setVideoEnabled,
 +      isActiveCallReady,
 +      resetActiveCallReady,
 +      toggleAudio,
@@ -5128,14 +5142,23 @@ index 0000000000..0b63aa27be
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..d1d334f517
+index 0000000000..7fe42a89c2
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,280 @@
-+import React, { createContext, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+@@ -0,0 +1,297 @@
++import React, {
++  createContext,
++  ReactNode,
++  useCallback,
++  useEffect,
++  useId,
++  useMemo,
++  useRef,
++  useState,
++} from 'react';
 +import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 +import { ClientWidgetApi } from 'matrix-widget-api';
-+import { Box } from 'folds';
++import { Box, Button, Icon, Icons, Text } from 'folds';
 +import { useCallState } from './CallProvider';
 +import {
 +  createVirtualWidget,
@@ -5144,6 +5167,7 @@ index 0000000000..d1d334f517
 +  getWidgetUrl,
 +  getCallIntentParams,
 +} from '../../../features/call/SmallWidget';
++import { MicrophoneButton, VideoButton } from '../../../features/call/Controls';
 +import { useMatrixClient } from '../../../hooks/useMatrixClient';
 +import { useClientConfig } from '../../../hooks/useClientConfig';
 +import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
@@ -5162,22 +5186,21 @@ index 0000000000..d1d334f517
 +  const callIframeRef = useRef<HTMLIFrameElement | null>(null);
 +  const callWidgetApiRef = useRef<ClientWidgetApi | null>(null);
 +  const callSmallWidgetRef = useRef<SmallWidget | null>(null);
-+  // Incrementing this key replaces the iframe DOM node, discarding any zombie iframe.load
-+  // listeners left behind by matrix-widget-api (ClientWidgetApi.stop() doesn't remove them).
-+  // Each reload cycle increments the key so only the fresh iframe gets load events.
-+  const [iframeKey, setIframeKey] = useState(0);
-+  // After a non-voice room lobby join, reload EC with join_existing for proper in-call view.
-+  const hasReloadedAfterLobbyRef = useRef(false);
-+  const postLobbyIntentRef = useRef<'join_existing' | null>(null);
++  // When autoJoin is off, hold at the pre-join screen until the user confirms.
++  const [pendingJoin, setPendingJoin] = useState(false);
++  const joinHeadingId = useId();
 +
 +  const {
 +    activeCallRoomId,
 +    viewedCallRoomId,
 +    isChatOpen,
 +    isActiveCallReady,
++    isAudioEnabled,
++    isVideoEnabled,
++    setAudioEnabled,
++    setVideoEnabled,
 +    registerActiveClientWidgetApi,
 +    activeClientWidget,
-+    resetActiveCallReady,
 +    hangUp,
 +  } = useCallState();
 +  const mx = useMatrixClient();
@@ -5194,9 +5217,7 @@ index 0000000000..d1d334f517
 +      widgetApiRef: React.MutableRefObject<ClientWidgetApi | null>,
 +      smallWidgetRef: React.MutableRefObject<SmallWidget | null>,
 +      iframeRef: React.MutableRefObject<HTMLIFrameElement | null>,
-+      autoJoin: boolean,
 +      themeKind: ThemeKind | null,
-+      intentOverride?: 'join_existing',
 +    ) => {
 +      if (mx?.getUserId()) {
 +        if (activeCallRoomId && !isActiveCallReady) {
@@ -5215,10 +5236,17 @@ index 0000000000..d1d334f517
 +            return;
 +          }
 +
-+          // Determine room type to pick the correct intent and callType.
++          // Determine room type and intent dynamically at load time.
++          // If others are already in the call, use join_existing; otherwise start_call.
++          // This avoids any iframe reload after io.element.join — a reload regenerates
++          // EC's E2EE keys, making our media undecryptable to existing participants
++          // (MissingKey errors at index 0) until the new keys are distributed.
 +          const room = mx.getRoom(roomIdToSet);
 +          const { intent: intentParam, callIntentParam } = getCallIntentParams(room);
-+          const effectiveIntent = intentOverride ?? intentParam;
++          const hasOngoingCall = room
++            ? MatrixRTCSession.callMembershipsForRoom(room).length > 0
++            : false;
++          const effectiveIntent = hasOngoingCall ? 'join_existing' : intentParam;
 +          // Only use per-participant E2EE if the room has Matrix encryption enabled.
 +          // Like gomuks: passing false overrides EC's own default of true for unencrypted rooms.
 +          const isRoomEncrypted = !!room?.currentState.getStateEvents('m.room.encryption', '');
@@ -5231,10 +5259,9 @@ index 0000000000..d1d334f517
 +            widgetId,
 +            {
 +              intent: effectiveIntent,
-+              // Always skip the lobby — we handle the pre-join A/V configuration via
-+              // cinny's own call settings. Skipping the lobby also means EC goes straight
-+              // to the in-call grid after io.element.join without needing a reload, which
-+              // avoids EC regenerating E2EE keys (causing MissingKey errors for others).
++              // Always skip EC's own lobby — we show our own pre-join screen instead.
++              // skipLobby=true also means EC goes straight to the in-call grid with no
++              // intermediate states that would otherwise require a reload.
 +              skipLobby: true,
 +              returnToLobby: 'true',
 +              perParticipantE2EE: isRoomEncrypted ? 'true' : 'false',
@@ -5289,71 +5316,22 @@ index 0000000000..d1d334f517
 +      clientConfig.elementCallUrl,
 +      activeClientWidget,
 +      registerActiveClientWidgetApi,
-+      callAutoJoin,
 +    ],
 +  );
 +
-+  // After a lobby join where we're the first participant, poll until our own call member state
-+  // event has propagated to the room, then reload EC with intent=join_existing + skipLobby=true
-+  // so it shows the full in-call grid. Hangs up if our membership never appears.
-+  //
-+  // When joining a call that already has participants, we skip the reload entirely: EC handles
-+  // the lobby→in-call transition naturally after io.element.join, and reloading would cause EC
-+  // to regenerate its E2EE keys, making all our frames undecryptable to existing participants
-+  // until the new keys are distributed (MissingKey errors at index 0).
++  // When a call starts and autoJoin is off, show the pre-join screen.
++  // Reset when the call ends (activeCallRoomId → null).
 +  useEffect(() => {
-+    if (!activeCallRoomId) {
-+      hasReloadedAfterLobbyRef.current = false;
-+      return undefined;
++    if (activeCallRoomId && !callAutoJoin) {
++      setPendingJoin(true);
++    } else {
++      setPendingJoin(false);
 +    }
-+    if (isActiveCallReady && !hasReloadedAfterLobbyRef.current) {
-+      const room = mx?.getRoom(activeCallRoomId);
-+      if (room) {
-+        hasReloadedAfterLobbyRef.current = true;
-+
-+        // If there are already other participants, EC will handle the in-call view itself.
-+        // Reloading here would regenerate E2EE keys and break media for existing participants.
-+        if (MatrixRTCSession.callMembershipsForRoom(room).length > 0) {
-+          return undefined;
-+        }
-+
-+        // No existing participants: we're the first to join. Poll for our own membership
-+        // to appear in room state, then reload to show the in-call grid.
-+        const POLL_INTERVAL_MS = 200;
-+        const TIMEOUT_MS = 15000;
-+        const startTime = Date.now();
-+        const pollTimer = setInterval(() => {
-+          if (MatrixRTCSession.callMembershipsForRoom(room).length > 0) {
-+            clearInterval(pollTimer);
-+            callSmallWidgetRef.current?.stopMessaging();
-+            callWidgetApiRef.current = null;
-+            callSmallWidgetRef.current = null;
-+            registerActiveClientWidgetApi(activeCallRoomId, null, null, null);
-+            postLobbyIntentRef.current = 'join_existing';
-+            // Replace the iframe element so zombie iframe.load listeners from the old
-+            // ClientWidgetApi session are discarded — matrix-widget-api adds a load listener
-+            // in the constructor but never removes it in stop(), so each reload cycle would
-+            // otherwise accumulate stale listeners that fire "contentLoaded timeout" errors.
-+            setIframeKey((k) => k + 1);
-+            resetActiveCallReady();
-+          } else if (Date.now() - startTime >= TIMEOUT_MS) {
-+            clearInterval(pollTimer);
-+            hangUp();
-+          }
-+        }, POLL_INTERVAL_MS);
-+        return () => {
-+          clearInterval(pollTimer);
-+        };
-+      }
-+    }
-+    return undefined;
-+  }, [isActiveCallReady, activeCallRoomId, mx, registerActiveClientWidgetApi, resetActiveCallReady, hangUp]);
++  }, [activeCallRoomId, callAutoJoin]);
 +
 +  useEffect(() => {
-+    if (activeCallRoomId) {
-+      const intentOverride = postLobbyIntentRef.current ?? undefined;
-+      postLobbyIntentRef.current = null;
-+      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, callAutoJoin, theme.kind, intentOverride);
++    if (activeCallRoomId && !pendingJoin) {
++      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, theme.kind);
 +    }
 +  }, [
 +    theme,
@@ -5365,9 +5343,14 @@ index 0000000000..d1d334f517
 +    activeCallRoomId,
 +    viewedCallRoomId,
 +    isActiveCallReady,
++    pendingJoin,
 +  ]);
 +
 +  const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
++
++  const roomName = activeCallRoomId
++    ? (mx?.getRoom(activeCallRoomId)?.name ?? 'Call')
++    : 'Call';
 +
 +  return (
 +    <CallRefContext.Provider value={memoizedIframeRef}>
@@ -5382,20 +5365,14 @@ index 0000000000..d1d334f517
 +            height: isMobile && isChatOpen ? '0%' : '100%',
 +          }}
 +        >
-+          <Box
-+            grow="Yes"
-+            style={{
-+              position: 'relative',
-+            }}
-+          >
++          <Box grow="Yes" style={{ position: 'relative' }}>
 +            <iframe
-+              key={iframeKey}
 +              ref={callIframeRef}
 +              style={{
 +                position: 'absolute',
 +                top: 0,
 +                left: 0,
-+                display: 'flex',
++                display: pendingJoin ? 'none' : 'flex',
 +                width: '100%',
 +                height: '100%',
 +                border: 'none',
@@ -5405,6 +5382,60 @@ index 0000000000..d1d334f517
 +              allow="microphone; camera; display-capture; autoplay; clipboard-write;"
 +              src="about:blank"
 +            />
++            {pendingJoin && activeCallRoomId && (
++              <Box
++                role="dialog"
++                aria-modal="true"
++                aria-labelledby={joinHeadingId}
++                direction="Column"
++                alignItems="Center"
++                justifyContent="Center"
++                style={{ position: 'absolute', inset: 0, gap: '24px' }}
++              >
++                <Box
++                  direction="Column"
++                  alignItems="Center"
++                  gap="400"
++                  style={{ padding: '32px', maxWidth: '280px', width: '100%' }}
++                >
++                  <Icon src={Icons.Phone} size="600" />
++                  <Text id={joinHeadingId} size="H4" style={{ textAlign: 'center' }}>
++                    {roomName}
++                  </Text>
++                  <Box direction="Row" gap="300">
++                    <MicrophoneButton
++                      enabled={isAudioEnabled}
++                      onToggle={() => setAudioEnabled(!isAudioEnabled)}
++                    />
++                    <VideoButton
++                      enabled={isVideoEnabled}
++                      onToggle={() => setVideoEnabled(!isVideoEnabled)}
++                    />
++                  </Box>
++                  <Box direction="Row" gap="200">
++                    <Button
++                      variant="Critical"
++                      fill="Soft"
++                      onClick={hangUp}
++                      aria-label="Cancel joining call"
++                    >
++                      <Text size="B400">Cancel</Text>
++                    </Button>
++                    <Button
++                      // eslint-disable-next-line jsx-a11y/no-autofocus
++                      autoFocus
++                      variant="Success"
++                      fill="Solid"
++                      before={<Icon src={Icons.Phone} size="200" filled />}
++                      onClick={() => setPendingJoin(false)}
++                      aria-label={`Join call in ${roomName}`}
++                    >
++                      <Text size="B400">Join</Text>
++                    </Button>
++                  </Box>
++                </Box>
++              </Box>
++            )}
 +          </Box>
 +        </Box>
 +      </Box>
