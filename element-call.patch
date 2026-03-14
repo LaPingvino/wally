@@ -4701,10 +4701,10 @@ index 7e509d1ee8..fed0727d4e 100644
  }
 diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
 new file mode 100644
-index 0000000000..3c929457f3
+index 0000000000..201cade589
 --- /dev/null
 +++ b/src/app/pages/client/call/CallProvider.tsx
-@@ -0,0 +1,435 @@
+@@ -0,0 +1,439 @@
 +import React, {
 +  createContext,
 +  useState,
@@ -4813,6 +4813,10 @@ index 0000000000..3c929457f3
 +      // Voice rooms: show call by default. Regular/DM rooms: show chat by default.
 +      setIsCallViewOpenState(isVoiceRoom);
 +      setIsChatOpenState(!isVoiceRoom);
++      // Reset A/V state to defaults for each new call so a previously muted call
++      // doesn't carry over into the pre-join screen of the next one.
++      setIsAudioEnabledState(DEFAULT_AUDIO_ENABLED);
++      setIsVideoEnabledState(DEFAULT_VIDEO_ENABLED);
 +    }
 +  }, []);
 +
