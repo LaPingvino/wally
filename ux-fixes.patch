@@ -126,28 +126,31 @@ index 028cd560e5..3e7c53f1f4 100644
        </PageHeader>
        <Box grow="Yes">
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 39d7e50a60..22c50036b5 100644
+index 39d7e50a60..6f2b926515 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
-@@ -115,6 +115,7 @@
+@@ -115,6 +115,8 @@
  import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
  import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
  import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 +import { useNavigateUnread, unreadNavRoomAtom } from '../../hooks/useNavigateUnread';
++import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
  import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
  import { useImagePackRooms } from '../../hooks/useImagePackRooms';
-@@ -480,6 +481,9 @@
+@@ -480,6 +482,11 @@
    const roomToParents = useAtomValue(roomToParentsAtom);
    const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
    const { navigateRoom } = useRoomNavigate();
 +  const unreadNavRoom = useAtomValue(unreadNavRoomAtom);
 +  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
 +  const showUnreadNav = !threadId && unreadNavRoom === room.roomId && unreadCount > 0;
++  const screenSize = useScreenSizeContext();
++  const isMobile = screenSize === ScreenSize.Mobile;
    const mentionClickHandler = useMentionClickHandler(room.roomId);
    const spoilerClickHandler = useSpoilerClickHandler();
    const openUserRoomProfile = useOpenUserRoomProfile();
-@@ -1521,13 +1525,13 @@
+@@ -1521,13 +1528,13 @@
            </Event>
          );
        },
@@ -165,7 +168,7 @@ index 39d7e50a60..22c50036b5 100644
        const timeJSX = (
          <Time
            ts={mEvent.getTs()}
-@@ -1536,7 +1540,6 @@
+@@ -1536,7 +1543,6 @@
            dateFormatString={dateFormatString}
          />
        );
@@ -173,7 +176,7 @@ index 39d7e50a60..22c50036b5 100644
        return (
          <Event
            key={mEvent.getId()}
-@@ -1546,28 +1549,86 @@
+@@ -1546,28 +1552,86 @@
            mEvent={mEvent}
            highlight={highlighted}
            messageSpacing={messageSpacing}
@@ -266,7 +269,7 @@ index 39d7e50a60..22c50036b5 100644
      (mEventId, mEvent, item) => {
        if (!showHiddenEvents) return null;
        if (Object.keys(mEvent.getContent()).length === 0) return null;
-@@ -1717,27 +1778,56 @@
+@@ -1717,27 +1781,56 @@
  
    return (
      <Box grow="Yes" style={{ position: 'relative' }}>
@@ -303,7 +306,7 @@ index 39d7e50a60..22c50036b5 100644
 +                aria-label="Previous unread room (Alt+Shift+Up)"
 +                aria-keyshortcuts="Alt+Shift+ArrowUp"
 +              >
-+                <Text size="L400">Prev Unread</Text>
++                <Text size="L400">{isMobile ? '↑' : 'Prev Unread'}</Text>
 +              </Chip>
 +              <Chip
 +                variant="SurfaceVariant"
@@ -314,7 +317,7 @@ index 39d7e50a60..22c50036b5 100644
 +                aria-label="Next unread room (Alt+Shift+Down)"
 +                aria-keyshortcuts="Alt+Shift+ArrowDown"
 +              >
-+                <Text size="L400">Next Unread</Text>
++                <Text size="L400">{isMobile ? '↓' : 'Next Unread'}</Text>
 +              </Chip>
 +            </>
 +          )}
@@ -327,7 +330,7 @@ index 39d7e50a60..22c50036b5 100644
 +                before={<Icon size="50" src={Icons.MessageUnread} />}
 +                onClick={handleJumpToUnread}
 +              >
-+                <Text size="L400">Jump to Unread</Text>
++                <Text size="L400">{isMobile && showUnreadNav ? 'Jump' : 'Jump to Unread'}</Text>
 +              </Chip>
 +              <Chip
 +                variant="SurfaceVariant"
@@ -336,7 +339,7 @@ index 39d7e50a60..22c50036b5 100644
 +                before={<Icon size="50" src={Icons.CheckTwice} />}
 +                onClick={handleMarkAsRead}
 +              >
-+                <Text size="L400">Mark as Read</Text>
++                <Text size="L400">{isMobile && showUnreadNav ? 'Read' : 'Mark as Read'}</Text>
 +              </Chip>
 +            </>
 +          )}
