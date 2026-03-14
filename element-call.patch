@@ -5142,10 +5142,10 @@ index 0000000000..3c929457f3
 +}
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
 new file mode 100644
-index 0000000000..7fe42a89c2
+index 0000000000..5b30e08f71
 --- /dev/null
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
-@@ -0,0 +1,297 @@
+@@ -0,0 +1,307 @@
 +import React, {
 +  createContext,
 +  ReactNode,
@@ -5188,6 +5188,11 @@ index 0000000000..7fe42a89c2
 +  const callSmallWidgetRef = useRef<SmallWidget | null>(null);
 +  // When autoJoin is off, hold at the pre-join screen until the user confirms.
 +  const [pendingJoin, setPendingJoin] = useState(false);
++  // Tracks whether the user explicitly clicked Join (vs. pendingJoin=false from initialization).
++  // Without this, the setupWidget effect fires on the very first render where activeCallRoomId
++  // becomes non-null — pendingJoin hasn't updated yet (React state is one render behind), so
++  // the effect would call setupWidget before the pre-join screen has even appeared.
++  const joinConfirmedRef = useRef(false);
 +  const joinHeadingId = useId();
 +
 +  const {
@@ -5320,17 +5325,21 @@ index 0000000000..7fe42a89c2
 +  );
 +
 +  // When a call starts and autoJoin is off, show the pre-join screen.
-+  // Reset when the call ends (activeCallRoomId → null).
++  // Reset join confirmation and pending state whenever activeCallRoomId changes.
 +  useEffect(() => {
-+    if (activeCallRoomId && !callAutoJoin) {
-+      setPendingJoin(true);
-+    } else {
-+      setPendingJoin(false);
-+    }
-+  }, [activeCallRoomId, callAutoJoin]);
++    joinConfirmedRef.current = false;
++    setPendingJoin(activeCallRoomId ? !callAutoJoin : false);
++  // Only run when activeCallRoomId changes (new call) — callAutoJoin is intentionally
++  // read as a snapshot so its current value is used without re-triggering on setting changes.
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [activeCallRoomId]);
 +
 +  useEffect(() => {
-+    if (activeCallRoomId && !pendingJoin) {
++    // Load EC when: autoJoin is on, OR when autoJoin is off and the user has explicitly
++    // confirmed via the pre-join screen (joinConfirmedRef). Checking the ref rather than
++    // pendingJoin alone avoids a one-render race where pendingJoin is still false on the
++    // first render after activeCallRoomId is set (before the pendingJoin effect runs).
++    if (activeCallRoomId && (callAutoJoin || joinConfirmedRef.current)) {
 +      setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, theme.kind);
 +    }
 +  }, [
@@ -5344,6 +5353,7 @@ index 0000000000..7fe42a89c2
 +    viewedCallRoomId,
 +    isActiveCallReady,
 +    pendingJoin,
++    callAutoJoin,
 +  ]);
 +
 +  const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
@@ -5427,7 +5437,7 @@ index 0000000000..7fe42a89c2
 +                      variant="Success"
 +                      fill="Solid"
 +                      before={<Icon src={Icons.Phone} size="200" filled />}
-+                      onClick={() => setPendingJoin(false)}
++                      onClick={() => { joinConfirmedRef.current = true; setPendingJoin(false); }}
 +                      aria-label={`Join call in ${roomName}`}
 +                    >
 +                      <Text size="B400">Join</Text>
