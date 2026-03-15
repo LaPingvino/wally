@@ -115,3 +115,19 @@ export const clearLoginData = async () => {
   window.localStorage.clear();
   window.location.reload();
 };
+
+/**
+ * Delete all IndexedDB databases (removing corrupted data) while preserving
+ * localStorage session credentials. The page reloads and the SDK reinitialises
+ * fresh — the user stays logged in.
+ *
+ * Use this when startup fails with an IDB/UnknownError after a crash. It is
+ * preferable to clearLoginData() which also wipes localStorage and logs out.
+ */
+export const repairIDBAndReload = async () => {
+  const dbs = await window.indexedDB.databases();
+  dbs.forEach(({ name }) => {
+    if (name) window.indexedDB.deleteDatabase(name);
+  });
+  window.location.reload();
+};
