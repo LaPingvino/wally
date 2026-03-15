@@ -405,7 +405,7 @@ index 94eee2a8f5..164884b97f 100644
                </IconButton>
              </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 06a1a2d7c8..8c3ab85418 100644
+index 99a850a4c9..fce73bb427 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -86,6 +86,7 @@
@@ -416,7 +416,7 @@ index 06a1a2d7c8..8c3ab85418 100644
  import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
  import { Reactions, Message, Event, EncryptedContent } from './message';
  import { useMemberEventParser } from '../../hooks/useMemberEventParser';
-@@ -1835,12 +1836,21 @@
+@@ -1838,12 +1839,21 @@
        dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
      }
  

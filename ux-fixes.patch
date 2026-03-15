@@ -472,31 +472,34 @@ index 028cd560e5..3e7c53f1f4 100644
        </PageHeader>
        <Box grow="Yes">
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 2e9726a868..06a1a2d7c8 100644
+index 2e9726a868..99a850a4c9 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -115,6 +115,8 @@
  import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
  import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
  import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-+import { useNavigateUnread, unreadNavRoomAtom } from '../../hooks/useNavigateUnread';
++import { useNavigateUnread, unreadNavRoomAtom, useNavigateMention, mentionNavRoomAtom } from '../../hooks/useNavigateUnread';
 +import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
  import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
  import { useImagePackRooms } from '../../hooks/useImagePackRooms';
-@@ -567,6 +569,11 @@
+@@ -567,6 +569,14 @@
    const roomToParents = useAtomValue(roomToParentsAtom);
    const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
    const { navigateRoom } = useRoomNavigate();
 +  const unreadNavRoom = useAtomValue(unreadNavRoomAtom);
++  const mentionNavRoom = useAtomValue(mentionNavRoomAtom);
 +  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
++  const { navigatePrev: navigatePrevMention, navigateNext: navigateNextMention, mentionCount } = useNavigateMention();
 +  const showUnreadNav = !threadId && unreadNavRoom === room.roomId && unreadCount > 0;
++  const showMentionNav = !threadId && mentionNavRoom === room.roomId && mentionCount > 0;
 +  const screenSize = useScreenSizeContext();
 +  const isMobile = screenSize === ScreenSize.Mobile;
    const mentionClickHandler = useMentionClickHandler(room.roomId);
    const spoilerClickHandler = useSpoilerClickHandler();
    const openUserRoomProfile = useOpenUserRoomProfile();
-@@ -1644,13 +1651,13 @@
+@@ -1644,13 +1654,13 @@
            </Event>
          );
        },
@@ -514,7 +517,7 @@ index 2e9726a868..06a1a2d7c8 100644
        const timeJSX = (
          <Time
            ts={mEvent.getTs()}
-@@ -1659,7 +1666,6 @@
+@@ -1659,7 +1669,6 @@
            dateFormatString={dateFormatString}
          />
        );
@@ -522,7 +525,7 @@ index 2e9726a868..06a1a2d7c8 100644
        return (
          <Event
            key={mEvent.getId()}
-@@ -1669,28 +1675,86 @@
+@@ -1669,28 +1678,86 @@
            mEvent={mEvent}
            highlight={highlighted}
            messageSpacing={messageSpacing}
@@ -615,12 +618,12 @@ index 2e9726a868..06a1a2d7c8 100644
      (mEventId, mEvent, item) => {
        if (!showHiddenEvents) return null;
        if (Object.keys(mEvent.getContent()).length === 0) return null;
-@@ -1840,27 +1904,56 @@
+@@ -1840,27 +1907,80 @@
  
    return (
      <Box grow="Yes" style={{ position: 'relative' }}>
 -      {unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline && (
-+      {(showUnreadNav || (unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline)) && (
++      {(showUnreadNav || showMentionNav || (unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline)) && (
          <TimelineFloat position="Top">
 -          <Chip
 -            variant="Primary"
@@ -664,6 +667,30 @@ index 2e9726a868..06a1a2d7c8 100644
 +                aria-keyshortcuts="Alt+Shift+ArrowDown"
 +              >
 +                <Text size="L400">{isMobile ? '↓' : 'Next Unread'}</Text>
++              </Chip>
++            </>
++          )}
++          {showMentionNav && (
++            <>
++              <Chip
++                variant="SurfaceVariant"
++                radii="Pill"
++                outlined
++                before={<Icon size="50" src={Icons.Mention} />}
++                onClick={navigatePrevMention}
++                aria-label="Previous mention"
++              >
++                <Text size="L400">{isMobile ? '@↑' : 'Prev @'}</Text>
++              </Chip>
++              <Chip
++                variant="SurfaceVariant"
++                radii="Pill"
++                outlined
++                before={<Icon size="50" src={Icons.Mention} />}
++                onClick={navigateNextMention}
++                aria-label="Next mention"
++              >
++                <Text size="L400">{isMobile ? '@↓' : 'Next @'}</Text>
 +              </Chip>
 +            </>
 +          )}
@@ -1277,6 +1304,141 @@ index 0000000000..14fcbb3d41
 +
 +  return { shortcuts };
 +};
+diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
+index 7ed76e62c5..9964a8fdf7 100644
+--- a/src/app/hooks/useNavigateUnread.ts
++++ b/src/app/hooks/useNavigateUnread.ts
+@@ -28,12 +28,14 @@
+  * even when the list shrinks as rooms are read.
+  */
+ const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
++const lastNavigatedMentionAtom = atom<{ roomId: string; index: number } | null>(null);
+ 
+ /**
+  * The roomId last navigated to via unread nav (keyboard shortcuts or inbox buttons).
+  * Used to show the ↑↓ nav bar in the timeline only when in "unread browsing mode".
+  */
+ export const unreadNavRoomAtom = atom<string | null>(null);
++export const mentionNavRoomAtom = atom<string | null>(null);
+ 
+ type SidebarItem = string | { id: string; content: string[] };
+ 
+@@ -205,3 +207,115 @@
+ 
+   return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
+ }
++
++/** Same as useNavigateUnread but restricted to rooms with highlight (mention) counts > 0. */
++export function useNavigateMention() {
++  const navigate = useNavigate();
++  const mx = useMatrixClient();
++  const roomToUnread = useAtomValue(roomToUnreadAtom);
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
++  const settings = useAtomValue(settingsAtom);
++  const roomSortOrder: string =
++    (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
++  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedMentionAtom);
++  const setMentionNavRoom = useAtom(mentionNavRoomAtom)[1];
++  const selectedRoomId = useSelectedRoom();
++
++  const mentionEntries = useMemo(() => {
++    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++
++    const sidebarSpaceIds = getSidebarSpaceIds(mx);
++    const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
++
++    const allMentions = Array.from(roomToUnread.keys()).filter(
++      (id) => (roomToUnread.get(id)?.highlight ?? 0) > 0 && !mx.getRoom(id)?.isSpaceRoom()
++    );
++
++    const sortFallback =
++      roomSortOrder === 'az'
++        ? factoryRoomIdByAtoZ(mx)
++        : roomSortOrder === 'unread'
++        ? factoryRoomIdByUnreadFirst(
++            (id) => getUnread(id).highlight,
++            (id) => getUnread(id).total,
++            factoryRoomIdByActivity(mx)
++          )
++        : factoryRoomIdByActivity(mx);
++
++    allMentions.sort((a, b) => {
++      const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
++      const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
++      if (ai !== bi) return ai - bi;
++      return sortFallback(a, b);
++    });
++
++    return allMentions.map((id) => [id, roomToUnread.get(id)!] as const);
++  }, [mx, roomToUnread, roomToParents, roomSortOrder]);
++
++  const navigateToRoom = useCallback(
++    (roomId: string) => {
++      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++      const isDirect = mDirects.has(roomId);
++      if (isDirect) {
++        navigate(getDirectRoomPath(roomIdOrAlias));
++      } else {
++        const parents = roomToParents.get(roomId);
++        if (parents && parents.size > 0) {
++          const spaceId = Array.from(parents)[0];
++          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
++        } else {
++          navigate(getHomeRoomPath(roomIdOrAlias));
++        }
++      }
++    },
++    [mx, mDirects, roomToParents, navigate]
++  );
++
++  const resolveBaseIndex = useCallback(
++    (fallback: number): number => {
++      if (lastNavigated) {
++        const found = mentionEntries.findIndex(([id]) => id === lastNavigated.roomId);
++        if (found >= 0) return found;
++        const clamped = Math.min(lastNavigated.index, mentionEntries.length);
++        return fallback < 0 ? clamped - 1 : Math.max(1, clamped);
++      }
++      if (selectedRoomId) {
++        const found = mentionEntries.findIndex(([id]) => id === selectedRoomId);
++        if (found >= 0) return found;
++      }
++      return fallback;
++    },
++    [mentionEntries, lastNavigated, selectedRoomId]
++  );
++
++  const navigateNext = useCallback(() => {
++    if (mentionEntries.length === 0) return;
++    const baseIndex = resolveBaseIndex(-1);
++    const next = (baseIndex + 1) % mentionEntries.length;
++    const roomId = mentionEntries[next][0];
++    setLastNavigated({ roomId, index: next });
++    setMentionNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [mentionEntries, resolveBaseIndex, setLastNavigated, setMentionNavRoom, navigateToRoom]);
++
++  const navigatePrev = useCallback(() => {
++    if (mentionEntries.length === 0) return;
++    const baseIndex = resolveBaseIndex(mentionEntries.length);
++    const prev = (baseIndex - 1 + mentionEntries.length) % mentionEntries.length;
++    const roomId = mentionEntries[prev][0];
++    setLastNavigated({ roomId, index: prev });
++    setMentionNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [mentionEntries, resolveBaseIndex, setLastNavigated, setMentionNavRoom, navigateToRoom]);
++
++  const navigateFirst = useCallback(() => {
++    if (mentionEntries.length === 0) return;
++    const roomId = mentionEntries[0][0];
++    setLastNavigated({ roomId, index: 0 });
++    setMentionNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [mentionEntries, setLastNavigated, setMentionNavRoom, navigateToRoom]);
++
++  return { navigateNext, navigatePrev, navigateFirst, mentionCount: mentionEntries.length };
++}
 diff --git a/src/app/hooks/useSpaceHierarchy.ts b/src/app/hooks/useSpaceHierarchy.ts
 index ad34e3f458..ad768ea8f1 100644
 --- a/src/app/hooks/useSpaceHierarchy.ts

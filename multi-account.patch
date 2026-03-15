@@ -1,9 +1,9 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 0000000000..e763193bee
+index 0000000000..55f68b47fe
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -0,0 +1,337 @@
+@@ -0,0 +1,354 @@
 +import React, { useCallback } from 'react';
 +import { useNavigate, useLocation, matchPath } from 'react-router-dom';
 +import { useAtomValue } from 'jotai';
@@ -32,7 +32,7 @@ index 0000000000..e763193bee
 +import { settingsAtom } from '../state/settings';
 +import { getSecondarySessions } from '../state/sessions';
 +import { useClientConfig } from '../hooks/useClientConfig';
-+import { useNavigateUnread } from '../hooks/useNavigateUnread';
++import { useNavigateUnread, useNavigateMention } from '../hooks/useNavigateUnread';
 +
 +const CALL_SHORTCUTS: DisplayShortcut[] = [
 +  { key: 'mod+shift+m', description: 'Toggle mute (in call)', category: 'Actions' },
@@ -49,6 +49,12 @@ index 0000000000..e763193bee
 +const NEXT_UNREAD_SHORTCUT: DisplayShortcut = {
 +  key: 'alt+n',
 +  description: 'Go to next unread room',
++  category: 'Navigation',
++};
++
++const NEXT_MENTION_SHORTCUT: DisplayShortcut = {
++  key: 'alt+m',
++  description: 'Go to next mention/highlight',
 +  category: 'Navigation',
 +};
 +
@@ -166,6 +172,7 @@ index 0000000000..e763193bee
 +  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = useCallState();
 +  const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
 +  const { navigateNext: navigateNextUnread, navigatePrev: navigatePrevUnread, navigateFirst: navigateFirstUnread } = useNavigateUnread();
++  const { navigateFirst: navigateFirstMention } = useNavigateMention();
 +  const mx = useMatrixClient();
 +  const roomToParents = useAtomValue(roomToParentsAtom);
 +  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
@@ -230,6 +237,15 @@ index 0000000000..e763193bee
 +      navigateFirstUnread();
 +    },
 +    [navigateFirstUnread]
++  );
++
++  const handleNextMentionKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (!isKeyHotkey('alt+m', evt)) return;
++      evt.preventDefault();
++      navigateFirstMention();
++    },
++    [navigateFirstMention]
 +  );
 +
 +  const handleUnreadNavKeyDown = useCallback(
@@ -333,6 +349,7 @@ index 0000000000..e763193bee
 +  useKeyDown(window, handleCallKeyDown);
 +  useKeyDown(window, handleSpaceKeyDown);
 +  useKeyDown(window, handleNextUnreadKeyDown);
++  useKeyDown(window, handleNextMentionKeyDown);
 +  useKeyDown(window, handleUnreadNavKeyDown);
 +  useKeyDown(window, handleStartCallKeyDown);
 +  useKeyDown(window, handlePeopleDrawerKeyDown);
