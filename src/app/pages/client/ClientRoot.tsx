@@ -29,6 +29,7 @@ import {
   logoutClient,
   startClient,
 } from '../../../client/initMatrix';
+import { recordSessionStart } from '../../state/sessions';
 import { SplashScreen } from '../../components/splash-screen';
 import { CapabilitiesProvider } from '../../hooks/useCapabilities';
 import { MediaConfigProvider } from '../../hooks/useMediaConfig';
@@ -193,6 +194,9 @@ type ClientRootProps = {
 export function ClientRoot({ children }: ClientRootProps) {
   const [loading, setLoading] = useState(true);
   const { baseUrl, userId } = getFallbackSession() ?? {};
+
+  // Record session start time so mention search can limit how far back it looks.
+  useEffect(() => { recordSessionStart(); }, []);
 
   // Fetch spec versions in parallel with initClient — children use empty fallback until resolved
   const [specVersionsData, setSpecVersionsData] = useState<SpecVersionsData>({ versions: [] });
