@@ -77,7 +77,8 @@ import { useToolbarConfig } from '../../hooks/useToolbarConfig';
 import { ToolbarItemId } from '../../state/toolbarConfig';
 import { renderItemIcon } from './PanelIconPicker';
 import { activeWidgetIdAtom } from './WidgetsDrawer';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
+import { mentionNavAtom } from '../../hooks/useNavigateUnread';
 
 type UnpinnedItem = {
   id: ToolbarItemId;
@@ -119,6 +120,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const notificationPreferences = useRoomsNotificationPreferencesContext();
   const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
   const { navigateRoom } = useRoomNavigate();
+  const setMentionNav = useSetAtom(mentionNavAtom);
 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
@@ -299,6 +301,35 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             </>
           )}
         </UseStateProvider>
+        <MenuItem
+          onClick={() => {
+            const myUserId = mx.getSafeUserId();
+            const eventIds = room
+              .getUnfilteredTimelineSet()
+              .getTimelines()
+              .flatMap((tl) => tl.getEvents())
+              .filter(
+                (e) =>
+                  e.getType() === 'm.room.message' &&
+                  (e.getContent()['m.mentions']?.user_ids?.includes(myUserId) ||
+                    e.getContent().body?.includes(myUserId))
+              )
+              .map((e) => e.getId()!)
+              .filter(Boolean);
+            if (eventIds.length === 0) return;
+            const index = eventIds.length - 1;
+            setMentionNav({ roomId: room.roomId, eventIds, index });
+            navigateRoom(room.roomId, eventIds[index]);
+            requestClose();
+          }}
+          size="300"
+          after={<Icon size="100" src={Icons.Mention} />}
+          radii="300"
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Jump to Last Mention
+          </Text>
+        </MenuItem>
       </Box>
       {/* Experimental: Issue Tracker setup (requires experimental setting + admin rights) */}
       {issueTrackerEnabled && canConfigSchema && !hasIssueSchema && (
