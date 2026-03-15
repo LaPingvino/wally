@@ -24,6 +24,7 @@ import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState }
 import {
   clearCacheAndReload,
   clearLoginData,
+  repairIDBAndReload,
   initClient,
   logoutClient,
   startClient,
@@ -271,15 +272,30 @@ export function ClientRoot({ children }: ClientRootProps) {
                       Retry
                     </Text>
                   </Button>
-                  <Button
-                    variant="Secondary"
-                    fill="Soft"
-                    onClick={mx ? () => clearCacheAndReload(mx) : clearLoginData}
-                  >
-                    <Text as="span" size="B400">
-                      Clear Cache
-                    </Text>
-                  </Button>
+                  {mx ? (
+                    <Button
+                      variant="Secondary"
+                      fill="Soft"
+                      onClick={() => clearCacheAndReload(mx)}
+                    >
+                      <Text as="span" size="B400">
+                        Clear Cache and Reload
+                      </Text>
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="Secondary" fill="Soft" onClick={repairIDBAndReload}>
+                        <Text as="span" size="B400">
+                          Repair (keep session)
+                        </Text>
+                      </Button>
+                      <Button variant="Critical" fill="Soft" onClick={clearLoginData}>
+                        <Text as="span" size="B400">
+                          Clear All Data (logout)
+                        </Text>
+                      </Button>
+                    </>
+                  )}
                 </Box>
               </Dialog>
             </Box>
