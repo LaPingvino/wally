@@ -5696,10 +5696,10 @@ index 2a7c619939..8a5578651c 100644
    );
  }
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb97..83c14bfa87 100644
+index b31490f92f..fd5b726f44 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -36,6 +36,13 @@
+@@ -42,6 +42,13 @@
  
    showNotifications: boolean;
    isNotificationSounds: boolean;
@@ -5713,7 +5713,7 @@ index 31ee6ccb97..83c14bfa87 100644
  
    hour24Clock: boolean;
    dateFormatString: string;
-@@ -70,6 +77,12 @@
+@@ -76,6 +83,12 @@
  
    showNotifications: true,
    isNotificationSounds: true,

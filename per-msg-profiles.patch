@@ -323,7 +323,7 @@ index 0000000000..d36b07e876
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index f88ccf9382..e0a686e7fb 100644
+index 94eee2a8f5..164884b97f 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -9,6 +9,8 @@
@@ -335,7 +335,7 @@ index f88ccf9382..e0a686e7fb 100644
  import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
  import { ReactEditor } from 'slate-react';
  import { Transforms, Editor } from 'slate';
-@@ -132,6 +134,7 @@
+@@ -133,6 +135,7 @@
      const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
      const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
      const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
@@ -343,7 +343,7 @@ index f88ccf9382..e0a686e7fb 100644
      const direct = useIsDirectRoom();
      const commands = useCommands(mx, room);
      const emojiBtnRef = useRef<HTMLButtonElement>(null);
-@@ -175,6 +178,7 @@
+@@ -177,6 +180,7 @@
        useState<AutocompleteQuery<AutocompletePrefix>>();
  
      const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
@@ -351,7 +351,7 @@ index f88ccf9382..e0a686e7fb 100644
  
      const handleFiles = useCallback(
        async (files: File[]) => {
-@@ -293,7 +297,18 @@
+@@ -295,7 +299,18 @@
        });
        handleCancelUpload(uploads);
        const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
@@ -371,7 +371,7 @@ index f88ccf9382..e0a686e7fb 100644
      };
  
      const submit = useCallback(() => {
-@@ -372,12 +387,21 @@
+@@ -386,12 +401,21 @@
            content['m.relates_to'].is_falling_back = false;
          }
        }
@@ -389,12 +389,12 @@ index f88ccf9382..e0a686e7fb 100644
        resetEditorHistory(editor);
        setReplyDraft(undefined);
        sendTypingStatus(false);
--    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
-+    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona]);
+-    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
++    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona]);
  
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
-@@ -669,7 +693,8 @@
+@@ -683,7 +707,8 @@
                    </PopOut>
                  )}
                </UseStateProvider>
@@ -405,7 +405,7 @@ index f88ccf9382..e0a686e7fb 100644
                </IconButton>
              </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 39d7e50a60..577fba4d42 100644
+index 06a1a2d7c8..8c3ab85418 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -86,6 +86,7 @@
@@ -416,7 +416,7 @@ index 39d7e50a60..577fba4d42 100644
  import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
  import { Reactions, Message, Event, EncryptedContent } from './message';
  import { useMemberEventParser } from '../../hooks/useMemberEventParser';
-@@ -1648,12 +1649,21 @@
+@@ -1835,12 +1836,21 @@
        dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
      }
  
@@ -748,7 +748,7 @@ index a4f0d7af68..b2f29f9ff8 100644
    );
  }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 2d87e9bde0..514f919eaa 100644
+index 8b109bbabc..eb96be8967 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -53,12 +53,11 @@
@@ -765,7 +765,7 @@ index 2d87e9bde0..514f919eaa 100644
  import { useMatrixClient } from '../../../hooks/useMatrixClient';
  import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
  import * as css from './styles.css';
-@@ -324,8 +323,6 @@
+@@ -337,8 +336,6 @@
      onClose?: () => void;
    }
  >(({ room, mEvent, onClose, ...props }, ref) => {
@@ -774,7 +774,7 @@ index 2d87e9bde0..514f919eaa 100644
    const handleCopy = () => {
      const eventId = mEvent.getId();
      if (!eventId) return;
-@@ -728,9 +725,15 @@
+@@ -741,9 +738,15 @@
      const [menuAnchor, setMenuAnchor] = useState<RectCords>();
      const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
  
@@ -792,14 +792,17 @@ index 2d87e9bde0..514f919eaa 100644
  
      const tagColor = memberPowerTag?.color
        ? accessibleTagColors?.get(memberPowerTag.color)
-@@ -763,6 +766,16 @@
+@@ -776,7 +779,18 @@
                truncate
              >
                <UsernameBold>{senderDisplayName}</UsernameBold>
-+              {perMsgProfile?.pronouns && (
+-              <InlinePronouns userId={senderId} />
++              {perMsgProfile?.pronouns ? (
 +                <span style={{ opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>
 +                  {' '}({perMsgProfile.pronouns})
 +                </span>
++              ) : (
++                <InlinePronouns userId={senderId} />
 +              )}
 +              {perMsgProfile && (
 +                <span style={{ opacity: 0.5, fontWeight: 'normal', fontSize: '0.8em' }}>
@@ -810,45 +813,35 @@ index 2d87e9bde0..514f919eaa 100644
            </Username>
            {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567b6..7899760d4b 100644
+index c63b43ef4c..0a03175166 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
-@@ -20,6 +20,7 @@
- export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
-   const mx = useMatrixClient();
+@@ -50,6 +50,7 @@
    const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+   const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
+   const [multiAccount, setMultiAccount] = useSetting(settingsAtom, 'multiAccount');
 +  const [perMessageProfiles, setPerMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
-   const [expand, setExpend] = useState(false);
-   const [accountDataType, setAccountDataType] = useState<string | null>();
- 
-@@ -62,6 +63,27 @@
-           <PageContent>
-             <Box direction="Column" gap="700">
-               <Box direction="Column" gap="100">
-+                <Text size="L400">Features</Text>
-+                <SequenceCard
-+                  className={SequenceCardStyle}
-+                  variant="SurfaceVariant"
-+                  direction="Column"
-+                  gap="400"
-+                >
-+                  <SettingTile
-+                    title="Per-Message Profiles (Personas)"
-+                    description="Send messages under a named persona (MSC4144). The real sender is always visible as 'via @user:server'."
-+                    after={
-+                      <Switch
-+                        variant="Primary"
-+                        value={perMessageProfiles}
-+                        onChange={setPerMessageProfiles}
+   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
+   const [globalExpand, setGlobalExpand] = useState(false);
+   const [profileExpand, setProfileExpand] = useState(false);
+@@ -164,6 +165,17 @@
+                           />
+                         }
+                       />
++                      <SettingTile
++                        title="Per-Message Profiles (Personas)"
++                        description="Send messages under a named persona (MSC4144). The real sender is always visible as 'via @user:server'."
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={perMessageProfiles}
++                            onChange={setPerMessageProfiles}
++                          />
++                        }
 +                      />
-+                    }
-+                  />
-+                </SequenceCard>
-+              </Box>
-+              <Box direction="Column" gap="100">
-                 <Text size="L400">Options</Text>
-                 <SequenceCard
-                   className={SequenceCardStyle}
+                     </SequenceCard>
+                   </Box>
+                   <Box direction="Column" gap="100">
 diff --git a/src/app/state/personas.ts b/src/app/state/personas.ts
 new file mode 100644
 index 0000000000..874eaff73c
@@ -915,21 +908,21 @@ index 0000000000..874eaff73c
 +  }
 +);
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb97..b7c2362cc2 100644
+index 58167172b0..84c26d7006 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -41,6 +41,7 @@
-   dateFormatString: string;
- 
-   developerTools: boolean;
+@@ -57,6 +57,7 @@
+   issueTracker: boolean;
+   multiAccount: boolean;
+   roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
 +  perMessageProfiles: boolean;
  }
  
  const defaultSettings: Settings = {
-@@ -75,6 +76,7 @@
-   dateFormatString: 'D MMM YYYY',
- 
-   developerTools: false,
+@@ -100,6 +101,7 @@
+   issueTracker: false,
+   multiAccount: false,
+   roomSortOrder: 'activity',
 +  perMessageProfiles: false,
  };
  

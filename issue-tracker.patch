@@ -2188,50 +2188,50 @@ index 0000000000..bdf6b9f7f2
 +  return { ref, isOver };
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567b6..3b7eebb49b 100644
+index 1378c0c929..33f0c36399 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
-@@ -20,6 +20,7 @@
- export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
-   const mx = useMatrixClient();
+@@ -48,6 +48,7 @@
+   const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
+ 
    const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
 +  const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
-   const [expand, setExpend] = useState(false);
-   const [accountDataType, setAccountDataType] = useState<string | null>();
- 
-@@ -62,6 +63,27 @@
-           <PageContent>
-             <Box direction="Column" gap="700">
-               <Box direction="Column" gap="100">
-+                <Text size="L400">Experimental Features</Text>
-+                <SequenceCard
-+                  className={SequenceCardStyle}
-+                  variant="SurfaceVariant"
-+                  direction="Column"
-+                  gap="400"
-+                >
-+                  <SettingTile
-+                    title="Issue Tracker"
-+                    description="Enable per-room issue tracker (experimental)."
-+                    after={
-+                      <Switch
-+                        variant="Primary"
-+                        value={issueTracker}
-+                        onChange={setIssueTracker}
+   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
+   const [globalExpand, setGlobalExpand] = useState(false);
+   const [profileExpand, setProfileExpand] = useState(false);
+@@ -133,6 +134,27 @@
+               <PageContent>
+                 <Box direction="Column" gap="700">
+                   <Box direction="Column" gap="100">
++                    <Text size="L400">Experimental Features</Text>
++                    <SequenceCard
++                      className={SequenceCardStyle}
++                      variant="SurfaceVariant"
++                      direction="Column"
++                      gap="400"
++                    >
++                      <SettingTile
++                        title="Issue Tracker"
++                        description="Enable per-room issue tracker (experimental)."
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={issueTracker}
++                            onChange={setIssueTracker}
++                          />
++                        }
 +                      />
-+                    }
-+                  />
-+                </SequenceCard>
-+              </Box>
-+              <Box direction="Column" gap="100">
-                 <Text size="L400">Options</Text>
-                 <SequenceCard
-                   className={SequenceCardStyle}
++                    </SequenceCard>
++                  </Box>
++                  <Box direction="Column" gap="100">
+                     <Text size="L400">Options</Text>
+                     <SequenceCard
+                       className={SequenceCardStyle}
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb97..7af872e443 100644
+index fd5b726f44..5c87e91d72 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -41,6 +41,7 @@
+@@ -54,6 +54,7 @@
    dateFormatString: string;
  
    developerTools: boolean;
@@ -2239,7 +2239,7 @@ index 31ee6ccb97..7af872e443 100644
  }
  
  const defaultSettings: Settings = {
-@@ -75,6 +76,7 @@
+@@ -94,6 +95,7 @@
    dateFormatString: 'D MMM YYYY',
  
    developerTools: false,

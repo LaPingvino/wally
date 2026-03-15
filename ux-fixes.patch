@@ -1,3 +1,349 @@
+diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
+new file mode 100644
+index 0000000000..05ce4573e8
+--- /dev/null
++++ b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
+@@ -0,0 +1,340 @@
++import React, { useCallback, useEffect, useRef, useState } from 'react';
++import {
++  Box,
++  Text,
++  config,
++  Header,
++  IconButton,
++  Icon,
++  Icons,
++  Modal,
++  Overlay,
++  OverlayBackdrop,
++  OverlayCenter,
++} from 'folds';
++import { useAtom } from 'jotai';
++import FocusTrap from 'focus-trap-react';
++import { keyboardShortcutsHelpAtom, customShortcutKeysAtom } from '../../state/keyboardShortcutsHelp';
++import { KeyboardShortcut } from '../../hooks/useGlobalKeyboardShortcuts';
++import { stopPropagation } from '../../utils/keyboard';
++
++interface KeyboardShortcutsHelpProps {
++  shortcuts: KeyboardShortcut[];
++}
++
++function formatShortcut(key: string): string {
++  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
++  return key
++    .replace('mod', isMac ? 'Cmd' : 'Ctrl')
++    .split('+')
++    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
++    .join('+');
++}
++
++function ShortcutKeys({ keyStr }: { keyStr: string }) {
++  const formatted = formatShortcut(keyStr);
++  if (formatted.includes('\u2013') || formatted.includes('\u2014')) {
++    return <kbd style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{formatted}</kbd>;
++  }
++  const parts = formatted.split('+');
++  return (
++    <span aria-label={formatted}>
++      {parts.map((part, i) => (
++        <React.Fragment key={part}>
++          <kbd style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{part}</kbd>
++          {i < parts.length - 1 && (
++            <span aria-hidden="true" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>+</span>
++          )}
++        </React.Fragment>
++      ))}
++    </span>
++  );
++}
++
++/** Convert a KeyboardEvent to an is-hotkey format string, or null for pure modifiers */
++function eventToBinding(evt: KeyboardEvent): string | null {
++  const { key } = evt;
++  if (['Control', 'Alt', 'Shift', 'Meta', 'CapsLock', 'Tab', 'Escape'].includes(key)) return null;
++  const parts: string[] = [];
++  if (evt.ctrlKey || evt.metaKey) parts.push('mod');
++  if (evt.altKey) parts.push('alt');
++  if (evt.shiftKey) parts.push('shift');
++  parts.push(key === ' ' ? 'space' : key.toLowerCase());
++  return parts.join('+');
++}
++
++const TITLE_ID = 'kb-shortcuts-help-title';
++
++export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps) {
++  const [open, setOpen] = useAtom(keyboardShortcutsHelpAtom);
++  const [customKeys, setCustomKeys] = useAtom(customShortcutKeysAtom);
++  const triggerRef = useRef<HTMLElement | null>(null);
++  const listRef = useRef<HTMLDivElement>(null);
++
++  // recordingFor: description of the shortcut being rebound, or null
++  const [recordingFor, setRecordingForState] = useState<string | null>(null);
++  const recordingForRef = useRef<string | null>(null);
++  const setRecordingFor = useCallback((val: string | null) => {
++    recordingForRef.current = val;
++    setRecordingForState(val);
++  }, []);
++
++  // Focused row: 0 = close button, 1..N = shortcut rows
++  const [focusedRow, setFocusedRow] = useState(0);
++
++  // Capture key combos while recording
++  useEffect(() => {
++    if (!open) return;
++    const handler = (evt: KeyboardEvent) => {
++      if (recordingForRef.current === null) return;
++      evt.preventDefault();
++      evt.stopPropagation();
++      if (evt.key === 'Escape') {
++        setRecordingFor(null);
++        return;
++      }
++      const binding = eventToBinding(evt);
++      if (binding) {
++        const desc = recordingForRef.current;
++        setCustomKeys((prev) => ({ ...prev, [desc]: binding }));
++        setRecordingFor(null);
++      }
++    };
++    window.addEventListener('keydown', handler, { capture: true });
++    return () => window.removeEventListener('keydown', handler, { capture: true });
++  }, [open, setRecordingFor, setCustomKeys]);
++
++  const handleClose = useCallback(() => {
++    setOpen(false);
++    setRecordingFor(null);
++    setTimeout(() => {
++      if (triggerRef.current && document.body.contains(triggerRef.current)) {
++        (triggerRef.current as HTMLElement).focus();
++      }
++      triggerRef.current = null;
++    }, 50);
++  }, [setOpen, setRecordingFor]);
++
++  // escapeDeactivates: check ref so it's always current even if FocusTrap caches it
++  const escapeDeactivates = useCallback((evt: KeyboardEvent): boolean => {
++    if (recordingForRef.current !== null) {
++      // The recording capture handler above already handled this Escape;
++      // just tell FocusTrap not to close.
++      evt.stopPropagation();
++      return false;
++    }
++    return stopPropagation(evt);
++  }, []);
++
++  if (!open) return null;
++
++  // Capture trigger synchronously before FocusTrap moves focus
++  if (!triggerRef.current) {
++    triggerRef.current = document.activeElement as HTMLElement | null;
++  }
++
++  const effectiveKey = (s: KeyboardShortcut) => customKeys[s.description] ?? s.defaultKey;
++  const resetShortcut = (desc: string) =>
++    setCustomKeys((prev) => {
++      const next = { ...prev };
++      delete next[desc];
++      return next;
++    });
++
++  // Flat ordered list for roving tabindex (close button at index 0)
++  const allRows = shortcuts;
++
++  return (
++    <Overlay open={open} backdrop={<OverlayBackdrop />}>
++      <OverlayCenter>
++        <FocusTrap
++          focusTrapOptions={{
++            returnFocusOnDeactivate: false,
++            onDeactivate: handleClose,
++            clickOutsideDeactivates: true,
++            allowOutsideClick: true,
++            escapeDeactivates,
++          }}
++        >
++          <Modal
++            size="500"
++            variant="Background"
++            role="dialog"
++            aria-modal="true"
++            aria-labelledby={TITLE_ID}
++          >
++            <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
++
++              {/* Header */}
++              <Box direction="Row" justifyContent="SpaceBetween" alignItems="Center">
++                <Header id={TITLE_ID} size="400">Keyboard Shortcuts</Header>
++                <IconButton
++                  size="300"
++                  onClick={handleClose}
++                  aria-label="Close keyboard shortcuts"
++                  tabIndex={focusedRow === 0 ? 0 : -1}
++                  onFocus={() => setFocusedRow(0)}
++                >
++                  <Icon src={Icons.Cross} size="200" />
++                </IconButton>
++              </Box>
++
++              {/* Arrow-navigable shortcut list — plain div for reliable tabIndex + text selection */}
++              <div
++                ref={listRef}
++                style={{ overflowY: 'auto', maxHeight: '60vh', userSelect: 'text' }}
++                onKeyDown={(evt) => {
++                  // ArrowUp/Down navigate between rows (including close button at row 0)
++                  if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
++                  evt.preventDefault();
++                  const next =
++                    evt.key === 'ArrowDown'
++                      ? Math.min(focusedRow + 1, allRows.length)
++                      : Math.max(focusedRow - 1, 0);
++                  setFocusedRow(next);
++                  if (next === 0) {
++                    listRef.current
++                      ?.closest('[role="dialog"]')
++                      ?.querySelector<HTMLElement>('button[aria-label="Close keyboard shortcuts"]')
++                      ?.focus();
++                  } else {
++                    listRef.current
++                      ?.querySelector<HTMLElement>(`[data-row-index="${next}"]`)
++                      ?.focus();
++                  }
++                }}
++              >
++                {Object.entries(
++                  shortcuts.reduce(
++                    (acc, s) => {
++                      if (!acc[s.category]) acc[s.category] = [];
++                      acc[s.category].push(s);
++                      return acc;
++                    },
++                    {} as Record<string, KeyboardShortcut[]>
++                  )
++                ).map(([category, items]) => (
++                  <section key={category} aria-label={`${category} shortcuts`}>
++                    <Text
++                      size="L400"
++                      as="h3"
++                      style={{
++                        margin: `${config.space.S200} 0 ${config.space.S100}`,
++                        paddingLeft: config.space.S100,
++                      }}
++                    >
++                      {category}
++                    </Text>
++                    {items.map((shortcut) => {
++                      const rowIdx = allRows.indexOf(shortcut) + 1;
++                      const isRecording = recordingFor === shortcut.description;
++                      const hasCustom = shortcut.description in customKeys;
++                      return (
++                        <ShortcutRow
++                          key={shortcut.description}
++                          shortcut={shortcut}
++                          effectiveKey={effectiveKey(shortcut)}
++                          isRecording={isRecording}
++                          hasCustom={hasCustom}
++                          rowIndex={rowIdx}
++                          tabIndex={focusedRow === rowIdx ? 0 : -1}
++                          onFocus={() => setFocusedRow(rowIdx)}
++                          onActivate={() => !isRecording && setRecordingFor(shortcut.description)}
++                          onReset={() => resetShortcut(shortcut.description)}
++                        />
++                      );
++                    })}
++                  </section>
++                ))}
++              </div>
++            </Box>
++          </Modal>
++        </FocusTrap>
++      </OverlayCenter>
++    </Overlay>
++  );
++}
++
++// ── ShortcutRow ───────────────────────────────────────────────────────────────
++
++type ShortcutRowProps = {
++  shortcut: KeyboardShortcut;
++  effectiveKey: string;
++  isRecording: boolean;
++  hasCustom: boolean;
++  rowIndex: number;
++  tabIndex: number;
++  onFocus: () => void;
++  onActivate: () => void;
++  onReset: () => void;
++};
++function ShortcutRow({
++  shortcut,
++  effectiveKey,
++  isRecording,
++  hasCustom,
++  rowIndex,
++  tabIndex,
++  onFocus,
++  onActivate,
++  onReset,
++}: ShortcutRowProps) {
++  return (
++    <div
++      data-row-index={rowIndex}
++      role="button"
++      tabIndex={tabIndex}
++      aria-label={`${shortcut.description}: ${isRecording ? 'press new key combo' : formatShortcut(effectiveKey)}${hasCustom ? ', customized' : ''}. Press Enter to change.`}
++      onFocus={onFocus}
++      onClick={onActivate}
++      onKeyDown={(evt) => {
++        if (evt.key === 'Enter' || evt.key === ' ') {
++          evt.preventDefault();
++          onActivate();
++        }
++      }}
++      style={{
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'space-between',
++        gap: config.space.S400,
++        padding: `${config.space.S100} ${config.space.S100}`,
++        borderRadius: config.radii.R300,
++        cursor: 'pointer',
++        outline: isRecording ? `2px solid var(--bg-surface-border)` : undefined,
++        background: isRecording ? 'var(--bg-surface-low)' : undefined,
++        userSelect: 'text',
++      }}
++    >
++      <Text size="T300" style={{ flex: 1, minWidth: 0 }}>
++        {shortcut.description}
++      </Text>
++      <Box gap="200" alignItems="Center" style={{ flexShrink: 0 }}>
++        {isRecording ? (
++          <Text size="T200" priority="300" style={{ fontStyle: 'italic' }}>
++            Press keys… (Esc to cancel)
++          </Text>
++        ) : (
++          <>
++            <ShortcutKeys keyStr={effectiveKey} />
++            {hasCustom && (
++              <IconButton
++                size="300"
++                fill="None"
++                title="Reset to default"
++                aria-label={`Reset ${shortcut.description} shortcut to default`}
++                tabIndex={-1}
++                onClick={(e: React.MouseEvent) => {
++                  e.stopPropagation();
++                  onReset();
++                }}
++              >
++                <Icon src={Icons.Cross} size="100" />
++              </IconButton>
++            )}
++          </>
++        )}
++      </Box>
++    </div>
++  );
++}
 diff --git a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
 index 028cd560e5..3e7c53f1f4 100644
 --- a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
@@ -126,7 +472,7 @@ index 028cd560e5..3e7c53f1f4 100644
        </PageHeader>
        <Box grow="Yes">
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 39d7e50a60..6f2b926515 100644
+index 2e9726a868..06a1a2d7c8 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -115,6 +115,8 @@
@@ -138,7 +484,7 @@ index 39d7e50a60..6f2b926515 100644
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
  import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
  import { useImagePackRooms } from '../../hooks/useImagePackRooms';
-@@ -480,6 +482,11 @@
+@@ -567,6 +569,11 @@
    const roomToParents = useAtomValue(roomToParentsAtom);
    const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
    const { navigateRoom } = useRoomNavigate();
@@ -150,7 +496,7 @@ index 39d7e50a60..6f2b926515 100644
    const mentionClickHandler = useMentionClickHandler(room.roomId);
    const spoilerClickHandler = useSpoilerClickHandler();
    const openUserRoomProfile = useOpenUserRoomProfile();
-@@ -1521,13 +1528,13 @@
+@@ -1644,13 +1651,13 @@
            </Event>
          );
        },
@@ -168,7 +514,7 @@ index 39d7e50a60..6f2b926515 100644
        const timeJSX = (
          <Time
            ts={mEvent.getTs()}
-@@ -1536,7 +1543,6 @@
+@@ -1659,7 +1666,6 @@
            dateFormatString={dateFormatString}
          />
        );
@@ -176,7 +522,7 @@ index 39d7e50a60..6f2b926515 100644
        return (
          <Event
            key={mEvent.getId()}
-@@ -1546,28 +1552,86 @@
+@@ -1669,28 +1675,86 @@
            mEvent={mEvent}
            highlight={highlighted}
            messageSpacing={messageSpacing}
@@ -269,7 +615,7 @@ index 39d7e50a60..6f2b926515 100644
      (mEventId, mEvent, item) => {
        if (!showHiddenEvents) return null;
        if (Object.keys(mEvent.getContent()).length === 0) return null;
-@@ -1717,27 +1781,56 @@
+@@ -1840,27 +1904,56 @@
  
    return (
      <Box grow="Yes" style={{ position: 'relative' }}>
@@ -347,10 +693,10 @@ index 39d7e50a60..6f2b926515 100644
        )}
        <Scroll ref={scrollRef} visibility="Hover">
 diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
-index b317b13abd..bd6aa89a7e 100644
+index 3a79aada7a..ff035d4425 100644
 --- a/src/app/features/room-nav/RoomNavItem.tsx
 +++ b/src/app/features/room-nav/RoomNavItem.tsx
-@@ -101,6 +101,16 @@
+@@ -103,6 +103,16 @@
        requestClose();
      };
  
@@ -367,7 +713,7 @@ index b317b13abd..bd6aa89a7e 100644
      return (
        <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
          {invitePrompt && room && (
-@@ -145,6 +155,16 @@
+@@ -147,6 +157,16 @@
                </MenuItem>
              )}
            </RoomNotificationModeSwitcher>
@@ -384,6 +730,343 @@ index b317b13abd..bd6aa89a7e 100644
          </Box>
          <Line variant="Surface" size="300" />
          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+diff --git a/src/app/features/settings/keyboard-shortcuts/KeyboardShortcuts.tsx b/src/app/features/settings/keyboard-shortcuts/KeyboardShortcuts.tsx
+new file mode 100644
+index 0000000000..64037f6074
+--- /dev/null
++++ b/src/app/features/settings/keyboard-shortcuts/KeyboardShortcuts.tsx
+@@ -0,0 +1,331 @@
++import React, { useCallback, useEffect, useRef, useState } from 'react';
++import {
++  Box,
++  Icon,
++  IconButton,
++  Icons,
++  Scroll,
++  Text,
++  config,
++} from 'folds';
++import { useAtom } from 'jotai';
++import { Page, PageContent, PageHeader } from '../../../components/page';
++import { customShortcutKeysAtom } from '../../../state/keyboardShortcutsHelp';
++import { SHORTCUT_DEFINITIONS, ShortcutDefinition } from '../../../hooks/useGlobalKeyboardShortcuts';
++
++// ── Helpers ───────────────────────────────────────────────────────────────────
++
++function formatShortcut(key: string): string {
++  const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
++  return key
++    .replace('mod', isMac ? 'Cmd' : 'Ctrl')
++    .split('+')
++    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
++    .join('+');
++}
++
++function ShortcutKeys({ keyStr }: { keyStr: string }) {
++  const formatted = formatShortcut(keyStr);
++  if (formatted.includes('\u2013') || formatted.includes('\u2014')) {
++    return <kbd style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{formatted}</kbd>;
++  }
++  const parts = formatted.split('+');
++  return (
++    <span aria-label={formatted}>
++      {parts.map((part, i) => (
++        <React.Fragment key={part}>
++          <kbd style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>{part}</kbd>
++          {i < parts.length - 1 && (
++            <span aria-hidden="true" style={{ fontFamily: 'monospace', fontWeight: 'bold' }}>+</span>
++          )}
++        </React.Fragment>
++      ))}
++    </span>
++  );
++}
++
++function eventToBinding(evt: KeyboardEvent): string | null {
++  const { key } = evt;
++  if (['Control', 'Alt', 'Shift', 'Meta', 'CapsLock', 'Tab', 'Escape'].includes(key)) return null;
++  const parts: string[] = [];
++  if (evt.ctrlKey || evt.metaKey) parts.push('mod');
++  if (evt.altKey) parts.push('alt');
++  if (evt.shiftKey) parts.push('shift');
++  parts.push(key === ' ' ? 'space' : key.toLowerCase());
++  return parts.join('+');
++}
++
++// ── Display-only shortcuts (non-customizable) ─────────────────────────────────
++
++type DisplayEntry = { key: string; description: string; category: string };
++
++const DISPLAY_ONLY: DisplayEntry[] = [
++  { key: 'alt+j', description: 'Start or join call in current room', category: 'Actions' },
++  { key: 'alt+p', description: 'Toggle members panel', category: 'Actions' },
++  { key: 'alt+shift+t', description: 'Toggle threads panel', category: 'Actions' },
++  { key: 'alt+shift+c', description: 'Toggle chat panel (during call)', category: 'Actions' },
++  { key: 'mod+shift+m', description: 'Toggle mute (in call)', category: 'Actions' },
++  { key: 'mod+shift+v', description: 'Toggle video (in call)', category: 'Actions' },
++  { key: 'mod+shift+h', description: 'End call', category: 'Actions' },
++  { key: 'alt+f', description: 'Search in room', category: 'Search' },
++  { key: 'alt+n', description: 'Go to next unread room', category: 'Navigation' },
++  { key: 'alt+shift+\u2193', description: 'Next unread room', category: 'Navigation' },
++  { key: 'alt+shift+\u2191', description: 'Previous unread room', category: 'Navigation' },
++  { key: 'alt+1\u20139', description: 'Go to 1st\u20139th space', category: 'Navigation' },
++  { key: 'alt+shift+1\u20139', description: 'Switch to 1st\u20139th account', category: 'Navigation' },
++  { key: 'f6', description: 'Move to next section', category: 'Navigation' },
++  { key: 'shift+f6', description: 'Move to previous section', category: 'Navigation' },
++];
++
++// ── ShortcutRow (editable) ────────────────────────────────────────────────────
++
++type ShortcutRowProps = {
++  def: ShortcutDefinition;
++  effectiveKey: string;
++  isRecording: boolean;
++  hasCustom: boolean;
++  onActivate: () => void;
++  onReset: () => void;
++};
++function ShortcutRow({ def, effectiveKey, isRecording, hasCustom, onActivate, onReset }: ShortcutRowProps) {
++  return (
++    <div
++      role="button"
++      tabIndex={0}
++      aria-label={`${def.description}: ${isRecording ? 'press new key combo' : formatShortcut(effectiveKey)}${hasCustom ? ', customized' : ''}. Press Enter to change.`}
++      onClick={onActivate}
++      onKeyDown={(evt) => {
++        if (evt.key === 'Enter' || evt.key === ' ') {
++          evt.preventDefault();
++          onActivate();
++        }
++      }}
++      style={{
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'space-between',
++        gap: config.space.S400,
++        padding: `${config.space.S100} ${config.space.S100}`,
++        borderRadius: config.radii.R300,
++        cursor: 'pointer',
++        outline: isRecording ? `2px solid var(--bg-surface-border)` : undefined,
++        background: isRecording ? 'var(--bg-surface-low)' : undefined,
++        userSelect: 'text',
++      }}
++    >
++      <Text size="T300" style={{ flex: 1, minWidth: 0 }}>
++        {def.description}
++      </Text>
++      <Box gap="200" alignItems="Center" style={{ flexShrink: 0 }}>
++        {isRecording ? (
++          <Text size="T200" priority="300" style={{ fontStyle: 'italic' }}>
++            Press keys… (Esc to cancel)
++          </Text>
++        ) : (
++          <>
++            <ShortcutKeys keyStr={effectiveKey} />
++            {hasCustom && (
++              <IconButton
++                size="300"
++                fill="None"
++                title="Reset to default"
++                aria-label={`Reset ${def.description} shortcut to default`}
++                tabIndex={-1}
++                onClick={(e: React.MouseEvent) => {
++                  e.stopPropagation();
++                  onReset();
++                }}
++              >
++                <Icon src={Icons.Cross} size="100" />
++              </IconButton>
++            )}
++          </>
++        )}
++      </Box>
++    </div>
++  );
++}
++
++// ── ReadOnlyRow ───────────────────────────────────────────────────────────────
++
++function ReadOnlyRow({ entry }: { entry: DisplayEntry }) {
++  return (
++    <div
++      style={{
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'space-between',
++        gap: config.space.S400,
++        padding: `${config.space.S100} ${config.space.S100}`,
++      }}
++    >
++      <Text size="T300" style={{ flex: 1, minWidth: 0 }}>
++        {entry.description}
++      </Text>
++      <Box gap="200" alignItems="Center" style={{ flexShrink: 0 }}>
++        <ShortcutKeys keyStr={entry.key} />
++      </Box>
++    </div>
++  );
++}
++
++// ── KeyboardShortcuts page ────────────────────────────────────────────────────
++
++type KeyboardShortcutsProps = {
++  requestClose: () => void;
++};
++export function KeyboardShortcuts({ requestClose }: KeyboardShortcutsProps) {
++  const [customKeys, setCustomKeys] = useAtom(customShortcutKeysAtom);
++  const [recordingFor, setRecordingForState] = useState<string | null>(null);
++  const recordingForRef = useRef<string | null>(null);
++
++  const setRecordingFor = useCallback((val: string | null) => {
++    recordingForRef.current = val;
++    setRecordingForState(val);
++  }, []);
++
++  // Capture key combos while recording — runs all the time (page is always mounted when visible)
++  useEffect(() => {
++    const handler = (evt: KeyboardEvent) => {
++      if (recordingForRef.current === null) return;
++      evt.preventDefault();
++      evt.stopPropagation();
++      if (evt.key === 'Escape') {
++        setRecordingFor(null);
++        return;
++      }
++      const binding = eventToBinding(evt);
++      if (binding) {
++        const desc = recordingForRef.current;
++        setCustomKeys((prev) => ({ ...prev, [desc]: binding }));
++        setRecordingFor(null);
++      }
++    };
++    window.addEventListener('keydown', handler, { capture: true });
++    return () => window.removeEventListener('keydown', handler, { capture: true });
++  }, [setRecordingFor, setCustomKeys]);
++
++  const effectiveKey = (def: ShortcutDefinition) => customKeys[def.description] ?? def.defaultKey;
++  const resetShortcut = (desc: string) =>
++    setCustomKeys((prev) => {
++      const next = { ...prev };
++      delete next[desc];
++      return next;
++    });
++
++  // Group editable shortcuts by category
++  const editableByCategory = SHORTCUT_DEFINITIONS.reduce(
++    (acc, def) => {
++      if (!acc[def.category]) acc[def.category] = [];
++      acc[def.category].push(def);
++      return acc;
++    },
++    {} as Record<string, ShortcutDefinition[]>
++  );
++
++  // Group display-only shortcuts by category
++  const displayByCategory = DISPLAY_ONLY.reduce(
++    (acc, entry) => {
++      if (!acc[entry.category]) acc[entry.category] = [];
++      acc[entry.category].push(entry);
++      return acc;
++    },
++    {} as Record<string, DisplayEntry[]>
++  );
++
++  return (
++    <Page>
++      <PageHeader outlined={false}>
++        <Box grow="Yes" gap="200">
++          <Box grow="Yes" alignItems="Center" gap="200">
++            <Text size="H3" as="h1" truncate>
++              Keyboard Shortcuts
++            </Text>
++          </Box>
++          <Box shrink="No">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
++              <Icon src={Icons.Cross} />
++            </IconButton>
++          </Box>
++        </Box>
++      </PageHeader>
++      <Box grow="Yes">
++        <Scroll hideTrack visibility="Hover">
++          <PageContent>
++            <Box direction="Column" gap="600">
++
++              {/* Customizable shortcuts */}
++              <Box direction="Column" gap="300">
++                <Box direction="Column" gap="100">
++                  <Text size="L400">Customizable Shortcuts</Text>
++                  <Text size="T200" priority="300">
++                    Click a shortcut row to rebind it. Press Escape to cancel.
++                  </Text>
++                </Box>
++                {Object.entries(editableByCategory).map(([category, defs]) => (
++                  <section key={category} aria-label={`${category} shortcuts`}>
++                    <Text
++                      size="L400"
++                      as="h3"
++                      style={{
++                        margin: `${config.space.S200} 0 ${config.space.S100}`,
++                        paddingLeft: config.space.S100,
++                        opacity: 0.7,
++                      }}
++                    >
++                      {category}
++                    </Text>
++                    {defs.map((def) => {
++                      const isRecording = recordingFor === def.description;
++                      const hasCustom = def.description in customKeys;
++                      return (
++                        <ShortcutRow
++                          key={def.description}
++                          def={def}
++                          effectiveKey={effectiveKey(def)}
++                          isRecording={isRecording}
++                          hasCustom={hasCustom}
++                          onActivate={() => !isRecording && setRecordingFor(def.description)}
++                          onReset={() => resetShortcut(def.description)}
++                        />
++                      );
++                    })}
++                  </section>
++                ))}
++              </Box>
++
++              {/* Display-only shortcuts */}
++              <Box direction="Column" gap="300">
++                <Box direction="Column" gap="100">
++                  <Text size="L400">Other Shortcuts</Text>
++                  <Text size="T200" priority="300">
++                    These shortcuts are fixed and cannot be customized.
++                  </Text>
++                </Box>
++                {Object.entries(displayByCategory).map(([category, entries]) => (
++                  <section key={category} aria-label={`${category} shortcuts`}>
++                    <Text
++                      size="L400"
++                      as="h3"
++                      style={{
++                        margin: `${config.space.S200} 0 ${config.space.S100}`,
++                        paddingLeft: config.space.S100,
++                        opacity: 0.7,
++                      }}
++                    >
++                      {category}
++                    </Text>
++                    {entries.map((entry) => (
++                      <ReadOnlyRow key={entry.description} entry={entry} />
++                    ))}
++                  </section>
++                ))}
++              </Box>
++
++            </Box>
++          </PageContent>
++        </Scroll>
++      </Box>
++    </Page>
++  );
++}
 diff --git a/src/app/hooks/router/useFavoritesSelected.ts b/src/app/hooks/router/useFavoritesSelected.ts
 new file mode 100644
 index 0000000000..6aaac607fe
@@ -633,7 +1316,7 @@ index ad34e3f458..ad768ea8f1 100644
      atom(getSpaceJoinedHierarchy(spaceId, getRoom, excludeRoom, sortRoomItems))
    );
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index 4de42081f5..570cc92c0e 100644
+index 53feabaf8e..6727c31f2a 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
 @@ -13,6 +13,8 @@
@@ -665,7 +1348,7 @@ index 4de42081f5..570cc92c0e 100644
  import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
  import { Room } from '../features/room';
  import { Lobby } from '../features/lobby';
-@@ -207,6 +211,30 @@
+@@ -228,6 +232,30 @@
            />
          </Route>
          <Route
@@ -696,7 +1379,7 @@ index 4de42081f5..570cc92c0e 100644
            path={SPACE_PATH}
            element={
              <RouteSpaceProvider>
-@@ -292,6 +320,7 @@
+@@ -313,6 +341,7 @@
                element={<WelcomePage />}
              />
            )}
@@ -705,7 +1388,7 @@ index 4de42081f5..570cc92c0e 100644
            <Route path={_INVITES_PATH} element={<Invites />} />
          </Route>
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index a2e1b68207..639d25429a 100644
+index 168bda38b7..d6478579ff 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -9,6 +9,7 @@
@@ -725,7 +1408,7 @@ index a2e1b68207..639d25429a 100644
              <SpaceTabs scrollRef={scrollRef} />
              <SidebarStackSeparator />
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf10906..6733ffeed3 100644
+index 20068745b8..2af74d87ee 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -1,5 +1,5 @@
@@ -761,19 +1444,15 @@ index 04edf10906..6733ffeed3 100644
  import { makeNavCategoryId } from '../../../state/closedNavCategories';
  import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
  import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
-@@ -51,6 +53,11 @@
-   useRoomsNotificationPreferencesContext,
- } from '../../../hooks/useRoomsNotificationPreferences';
- import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
-+import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
-+import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
-+import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
-+import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
+@@ -55,6 +57,7 @@
+ import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
+ import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
+ import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 +import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
  
  type DirectMenuProps = {
    requestClose: () => void;
-@@ -60,6 +67,7 @@
+@@ -64,6 +67,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const orphanRooms = useDirectRooms();
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
@@ -781,7 +1460,7 @@ index 04edf10906..6733ffeed3 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -71,6 +79,37 @@
+@@ -75,6 +79,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -819,7 +1498,7 @@ index 04edf10906..6733ffeed3 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -168,6 +207,7 @@
+@@ -172,6 +207,7 @@
  }
  
  const DEFAULT_CATEGORY_ID = makeNavCategoryId('direct', 'direct');
@@ -827,7 +1506,7 @@ index 04edf10906..6733ffeed3 100644
  export function Direct() {
    const mx = useMatrixClient();
    useNavToActivePathMapper('direct');
-@@ -178,18 +218,35 @@
+@@ -182,18 +218,35 @@
    const navigate = useNavigate();
  
    const createDirectSelected = useDirectCreateSelected();
@@ -865,7 +1544,7 @@ index 04edf10906..6733ffeed3 100644
  
    const virtualizer = useVirtualizer({
      count: sortedDirects.length,
-@@ -227,7 +284,58 @@
+@@ -232,7 +285,58 @@
                    </NavItemContent>
                  </NavButton>
                </NavItem>
@@ -1203,7 +1882,7 @@ index 0000000000..a411b8a627
 +export * from './Favorites';
 +export * from './RoomProvider';
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963df..8e03a47458 100644
+index ffd300b2da..aa6767dc07 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -1,4 +1,4 @@
@@ -1240,7 +1919,7 @@ index d87db963df..8e03a47458 100644
  import { makeNavCategoryId } from '../../../state/closedNavCategories';
  import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
  import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
-@@ -65,6 +67,7 @@
+@@ -69,6 +71,7 @@
  import { UseStateProvider } from '../../../components/UseStateProvider';
  import { JoinAddressPrompt } from '../../../components/join-address-prompt';
  import { _RoomSearchParams } from '../../paths';
@@ -1248,7 +1927,7 @@ index d87db963df..8e03a47458 100644
  
  type HomeMenuProps = {
    requestClose: () => void;
-@@ -74,6 +77,7 @@
+@@ -78,6 +81,7 @@
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
    const mx = useMatrixClient();
@@ -1256,7 +1935,7 @@ index d87db963df..8e03a47458 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -85,6 +89,37 @@
+@@ -89,6 +93,37 @@
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
          <MenuItem
@@ -1294,7 +1973,7 @@ index d87db963df..8e03a47458 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -194,6 +229,7 @@
+@@ -198,6 +233,7 @@
  }
  
  const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
@@ -1302,7 +1981,7 @@ index d87db963df..8e03a47458 100644
  export function Home() {
    const mx = useMatrixClient();
    useNavToActivePathMapper('home');
-@@ -206,20 +242,33 @@
+@@ -210,20 +246,33 @@
    const selectedRoomId = useSelectedRoom();
    const createRoomSelected = useHomeCreateSelected();
    const searchSelected = useHomeSearchSelected();
@@ -1342,7 +2021,7 @@ index d87db963df..8e03a47458 100644
  
    const virtualizer = useVirtualizer({
      count: sortedRooms.length,
-@@ -311,7 +360,56 @@
+@@ -316,7 +365,56 @@
                    </NavItemContent>
                  </NavLink>
                </NavItem>
@@ -2201,10 +2880,10 @@ index d44cfaa26e..744619082b 100644
  export * from './InboxTab';
  export * from './ExploreTab';
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 2a7c619939..d9339616d0 100644
+index 8a5578651c..5aab83978e 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
-@@ -6,7 +6,7 @@
+@@ -7,7 +7,7 @@
    useRef,
    useState,
  } from 'react';
@@ -2213,7 +2892,7 @@ index 2a7c619939..d9339616d0 100644
  import {
    Avatar,
    Box,
-@@ -48,13 +48,16 @@
+@@ -49,13 +49,16 @@
  import { useSpace } from '../../../hooks/useSpace';
  import { VirtualTile } from '../../../components/virtualizer';
  import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
@@ -2231,7 +2910,7 @@ index 2a7c619939..d9339616d0 100644
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
  import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
-@@ -94,6 +97,7 @@
+@@ -99,6 +102,7 @@
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const [developerTools] = useSetting(settingsAtom, 'developerTools');
@@ -2239,7 +2918,7 @@ index 2a7c619939..d9339616d0 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -151,6 +155,47 @@
+@@ -156,6 +160,47 @@
            />
          )}
          <MenuItem
@@ -2287,7 +2966,7 @@ index 2a7c619939..d9339616d0 100644
            onClick={handleMarkAsRead}
            size="300"
            after={<Icon size="100" src={Icons.CheckTwice} />}
-@@ -391,10 +436,13 @@
+@@ -396,10 +441,13 @@
    const selectedRoomId = useSelectedRoom();
    const lobbySelected = useSpaceLobbySelected(spaceIdOrAlias);
    const searchSelected = useSpaceSearchSelected(spaceIdOrAlias);
@@ -2301,7 +2980,7 @@ index 2a7c619939..d9339616d0 100644
    const getRoom = useCallback(
      (rId: string): Room | undefined => {
        if (allJoinedRooms.has(rId)) {
-@@ -405,6 +453,31 @@
+@@ -410,6 +458,31 @@
      [mx, allJoinedRooms]
    );
  
@@ -2333,7 +3012,7 @@ index 2a7c619939..d9339616d0 100644
    const hierarchy = useSpaceJoinedHierarchy(
      space.roomId,
      getRoom,
-@@ -419,10 +492,7 @@
+@@ -424,10 +497,7 @@
        },
        [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
      ),
@@ -2344,25 +3023,11 @@ index 2a7c619939..d9339616d0 100644
 +    sortSpaceRoomItems
    );
  
-   const virtualizer = useVirtualizer({
-@@ -430,6 +500,44 @@
-     getScrollElement: () => scrollRef.current,
-     estimateSize: () => 0,
-     overscan: 10,
-+    getItemKey: (index) => displayHierarchy[index]?.roomId ?? index,
-+  });
-+
-+  const roomsOnly = useMemo(
-+    () =>
-+      displayHierarchy
-+        .filter(({ roomId }) => {
-+          const r = mx.getRoom(roomId);
-+          return r && !r.isSpaceRoom();
-+        })
-+        .map(({ roomId }) => roomId),
-+    [displayHierarchy, mx]
-+  );
-+
+   // Virtual "Unread" group: when roomSortOrder==='unread' and the space has sub-spaces,
+@@ -503,6 +573,19 @@
+     [displayHierarchy, mx]
+   );
+ 
 +  const allSpaceRoomIds = useMemo(
 +    () =>
 +      hierarchy
@@ -2376,21 +3041,10 @@ index 2a7c619939..d9339616d0 100644
 +  const spaceFavoriteRoomIds = useFavoriteRooms(allSpaceRoomIds);
 +  const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
 +
-+  const { navigateRoom } = useRoomNavigate();
-+
-+  const setSearchModal = useSetAtom(searchModalAtom);
-+  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
-+
-+  const keyboardNav = useRoomListKeyboard({
-+    items: roomsOnly,
-+    selectedRoomId,
-+    virtualizer,
-+    onNavigate: (roomId) => navigateRoom(roomId),
-+    onTypeChar: (key) => { setSearchInitialChar(key); setSearchModal(true); },
-   });
+   const { navigateRoom } = useRoomNavigate();
  
-   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -483,7 +591,56 @@
+   const setSearchModal = useSetAtom(searchModalAtom);
+@@ -574,7 +657,56 @@
                  </NavItemContent>
                </NavLink>
              </NavItem>
@@ -2506,6 +3160,23 @@ index 9cf4bfb963..45f5c8187f 100644
 +
 +export const FAVORITES_PATH = '/favorites/';
 +export const FAVORITES_ROOM_PATH = `/favorites/${_ROOM_PATH}`;
+diff --git a/src/app/state/keyboardShortcutsHelp.ts b/src/app/state/keyboardShortcutsHelp.ts
+new file mode 100644
+index 0000000000..8612faaaf8
+--- /dev/null
++++ b/src/app/state/keyboardShortcutsHelp.ts
+@@ -0,0 +1,11 @@
++import { atom } from 'jotai';
++import { atomWithStorage } from 'jotai/utils';
++
++export const keyboardShortcutsHelpAtom = atom<boolean>(false);
++// Set to true to open Settings at the Keyboard Shortcuts page
++export const openSettingsAtKeyboardShortcutsAtom = atom<boolean>(false);
++// Maps shortcut description → custom key string (is-hotkey format, e.g. 'mod+k')
++export const customShortcutKeysAtom = atomWithStorage<Record<string, string>>(
++  'cinny_custom_bindings',
++  {}
++);
 diff --git a/src/app/state/room-list/utils.ts b/src/app/state/room-list/utils.ts
 index 1ca7e7de12..b1c9e145c4 100644
 --- a/src/app/state/room-list/utils.ts
@@ -2559,27 +3230,32 @@ index 1ca7e7de12..b1c9e145c4 100644
        mx.removeListener(ClientEvent.Room, handleAddRoom);
        mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
        mx.removeListener(ClientEvent.DeleteRoom, handleDeleteRoom);
+diff --git a/src/app/state/searchModal.ts b/src/app/state/searchModal.ts
+index 3893e5e30c..a7b0671c63 100644
+--- a/src/app/state/searchModal.ts
++++ b/src/app/state/searchModal.ts
+@@ -1,3 +1,5 @@
+ import { atom } from 'jotai';
+ 
+ export const searchModalAtom = atom<boolean>(false);
++// Set this to a non-empty string before setting searchModalAtom=true to pre-populate the search input.
++export const searchModalInitialCharAtom = atom<string>('');
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb97..565838818d 100644
+index 8eb03b7b9e..58167172b0 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -41,6 +41,10 @@
-   dateFormatString: string;
- 
+@@ -56,6 +56,7 @@
    developerTools: boolean;
-+  issueTracker: boolean;
-+  multiAccount: boolean;
-+  perMessageProfiles: boolean;
+   issueTracker: boolean;
+   multiAccount: boolean;
 +  roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
  }
  
  const defaultSettings: Settings = {
-@@ -75,6 +79,9 @@
-   dateFormatString: 'D MMM YYYY',
- 
+@@ -98,6 +99,7 @@
    developerTools: false,
-+  issueTracker: false,
-+  multiAccount: false,
+   issueTracker: false,
+   multiAccount: false,
 +  roomSortOrder: 'activity',
  };
  

@@ -1,3 +1,67 @@
+diff --git a/.gitignore b/.gitignore
+index 1af58a970d..f75536e438 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -4,4 +4,5 @@
+ devAssets
+ 
+ .DS_Store
+-.idea
+\ No newline at end of file
++.idea
++public/font/NotoColorEmoji.Bahai.*.ttf
+diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
+new file mode 100644
+index 0000000000..7e3a46eb7c
+--- /dev/null
++++ b/src/app/components/room-listbox/RoomListbox.tsx
+@@ -0,0 +1,46 @@
++import React, { ReactNode } from 'react';
++
++interface RoomListboxProps {
++  id?: string;
++  'aria-label': string;
++  items: string[];
++  focusedIndex: number;
++  onKeyDown: React.KeyboardEventHandler<HTMLDivElement>;
++  onFocus?: React.FocusEventHandler<HTMLDivElement>;
++  children: ReactNode;
++}
++
++export function RoomListbox({
++  id,
++  'aria-label': ariaLabel,
++  items,
++  focusedIndex,
++  onKeyDown,
++  onFocus,
++  children,
++}: RoomListboxProps) {
++  const activedescendant =
++    focusedIndex >= 0 && items[focusedIndex]
++      ? `room-option-${items[focusedIndex]}`
++      : undefined;
++
++  return (
++    <div
++      id={id}
++      role="listbox"
++      aria-label={ariaLabel}
++      aria-activedescendant={activedescendant}
++      aria-orientation="vertical"
++      tabIndex={0}
++      onKeyDown={onKeyDown}
++      onFocus={(evt) => {
++        if (evt.target === evt.currentTarget) onFocus?.(evt);
++      }}
++      onMouseDown={(evt) => {
++        if (evt.target === evt.currentTarget) evt.preventDefault();
++      }}
++    >
++      {children}
++    </div>
++  );
++}
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
 index 0000000000..7ed76e62c5
@@ -211,6 +275,137 @@ index 0000000000..7ed76e62c5
 +
 +  return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
 +}
+diff --git a/src/app/hooks/useRoomListKeyboard.ts b/src/app/hooks/useRoomListKeyboard.ts
+new file mode 100644
+index 0000000000..8144229c7d
+--- /dev/null
++++ b/src/app/hooks/useRoomListKeyboard.ts
+@@ -0,0 +1,125 @@
++import { useCallback, useEffect, useState } from 'react';
++import { Virtualizer } from '@tanstack/react-virtual';
++import { isKeyHotkey } from 'is-hotkey';
++
++interface UseRoomListKeyboardOptions {
++  items: string[];
++  selectedRoomId: string | undefined;
++  virtualizer: Virtualizer<HTMLDivElement, Element>;
++  onNavigate: (roomId: string) => void;
++  enabled?: boolean;
++  onTypeChar?: (key: string) => void;
++}
++
++export const useRoomListKeyboard = ({
++  items,
++  selectedRoomId,
++  virtualizer,
++  onNavigate,
++  enabled = true,
++  onTypeChar,
++}: UseRoomListKeyboardOptions) => {
++  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
++
++  useEffect(() => {
++    if (focusedIndex >= items.length) {
++      setFocusedIndex(items.length - 1);
++    }
++  }, [items.length, focusedIndex]);
++
++  // Called when the listbox div receives focus (e.g. via Tab)
++  const handleFocus = useCallback(() => {
++    if (focusedIndex < 0) {
++      const selectedIndex = selectedRoomId ? items.indexOf(selectedRoomId) : 0;
++      const idx = selectedIndex >= 0 ? selectedIndex : 0;
++      setFocusedIndex(idx);
++      virtualizer.scrollToIndex(idx, { align: 'auto' });
++    }
++  }, [focusedIndex, items, selectedRoomId, virtualizer]);
++
++  const handleKeyDown = useCallback(
++    (evt: React.KeyboardEvent<HTMLDivElement>) => {
++      if (!enabled) return;
++
++      if (isKeyHotkey('arrowdown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? 0 : Math.min(prev + 1, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('arrowup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? items.length - 1 : Math.max(prev - 1, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('home', evt)) {
++        evt.preventDefault();
++        setFocusedIndex(0);
++        virtualizer.scrollToIndex(0, { align: 'start' });
++        return;
++      }
++
++      if (isKeyHotkey('end', evt)) {
++        evt.preventDefault();
++        const lastIndex = items.length - 1;
++        setFocusedIndex(lastIndex);
++        virtualizer.scrollToIndex(lastIndex, { align: 'end' });
++        return;
++      }
++
++      if ((isKeyHotkey('enter', evt) || isKeyHotkey('space', evt)) && focusedIndex >= 0) {
++        // Let child buttons (e.g. phone icon) handle their own Enter/Space
++        if (evt.target !== evt.currentTarget) return;
++        evt.preventDefault();
++        const roomId = items[focusedIndex];
++        if (roomId) {
++          onNavigate(roomId);
++        }
++        return;
++      }
++
++      if (isKeyHotkey('pagedown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.min(prev + 10, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('pageup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.max(prev - 10, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      // Single printable character: redirect to search modal (via onTypeChar callback)
++      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey && onTypeChar) {
++        evt.preventDefault();
++        onTypeChar(evt.key);
++      }
++    },
++    [enabled, items, focusedIndex, virtualizer, onNavigate, onTypeChar]
++  );
++
++  return {
++    focusedIndex,
++    handleKeyDown,
++    handleFocus,
++    setFocusedIndex,
++  };
++};
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
 index ce952bfc67..b96c5e92cd 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
@@ -274,3 +469,78 @@ index ce952bfc67..b96c5e92cd 100644
      };
    }, [
      mx,
+diff --git a/src/app/utils/sounds.ts b/src/app/utils/sounds.ts
+new file mode 100644
+index 0000000000..70f6eacf78
+--- /dev/null
++++ b/src/app/utils/sounds.ts
+@@ -0,0 +1,69 @@
++// Shared lazy AudioContext + named tone generators.
++// All sounds are short Web Audio API tones — no asset files needed.
++// Callers are responsible for checking user settings before calling.
++
++let audioCtx: AudioContext | null = null;
++
++function ctx(): AudioContext {
++  if (!audioCtx || audioCtx.state === 'closed') {
++    audioCtx = new AudioContext();
++  }
++  return audioCtx;
++}
++
++function tone(freq: number, dur: number, gain: number, type: OscillatorType = 'sine'): void {
++  try {
++    const c = ctx();
++    // Browsers start AudioContext suspended; resume() is a no-op if already running.
++    void c.resume();
++    const now = c.currentTime;
++    const g = c.createGain();
++    g.connect(c.destination);
++    g.gain.setValueAtTime(0, now);
++    g.gain.linearRampToValueAtTime(gain, now + 0.01);
++    g.gain.setValueAtTime(gain, now + dur - 0.02);
++    g.gain.linearRampToValueAtTime(0, now + dur);
++    const osc = c.createOscillator();
++    osc.type = type;
++    osc.frequency.value = freq;
++    osc.connect(g);
++    osc.start(now);
++    osc.stop(now + dur);
++  } catch {
++    // Audio not supported or blocked by browser
++  }
++}
++
++/** C5->E5 two-tone ascending -- urgent mention alert */
++export function playMentionSound(): void {
++  tone(523.25, 0.12, 0.25);
++  setTimeout(() => tone(659.25, 0.15, 0.3), 120);
++}
++
++/** Single A4 soft beep -- activity in current room */
++export function playCurrentRoomSound(): void {
++  tone(440, 0.08, 0.1);
++}
++
++/** Low Eb4 tick, very quiet -- activity in another room */
++export function playOtherRoomSound(): void {
++  tone(311.13, 0.06, 0.07);
++}
++
++/** Very brief 800Hz click -- someone started typing */
++export function playTypingSound(): void {
++  tone(800, 0.04, 0.05, 'square');
++}
++
++/** A5->C#6 two quick sparkle tones -- reaction received */
++export function playReactionSound(): void {
++  tone(880, 0.08, 0.15);
++  setTimeout(() => tone(1108.73, 0.1, 0.12), 80);
++}
++
++/** A4->C#5->E5 three-step sweep -- reply to your message */
++export function playReplyToMeSound(): void {
++  tone(440, 0.1, 0.15);
++  setTimeout(() => tone(554.37, 0.1, 0.15), 100);
++  setTimeout(() => tone(659.25, 0.12, 0.18), 200);
++}
