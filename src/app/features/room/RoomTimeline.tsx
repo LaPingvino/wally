@@ -29,7 +29,7 @@ import { ReactEditor } from 'slate-react';
 import { Editor } from 'slate';
 import { SessionMembershipData } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
 import to from 'await-to-js';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import {
   Badge,
   Box,
@@ -116,7 +116,7 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-import { useNavigateUnread, unreadNavRoomAtom, useNavigateMention, mentionNavRoomAtom } from '../../hooks/useNavigateUnread';
+import { useNavigateUnread, unreadNavRoomAtom, mentionNavAtom } from '../../hooks/useNavigateUnread';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
@@ -571,11 +571,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const { navigateRoom } = useRoomNavigate();
   const unreadNavRoom = useAtomValue(unreadNavRoomAtom);
-  const mentionNavRoom = useAtomValue(mentionNavRoomAtom);
+  const [mentionNav, setMentionNav] = useAtom(mentionNavAtom);
   const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
-  const { navigatePrev: navigatePrevMention, navigateNext: navigateNextMention, mentionCount } = useNavigateMention();
   const showUnreadNav = !threadId && unreadNavRoom === room.roomId && unreadCount > 0;
-  const showMentionNav = !threadId && mentionNavRoom === room.roomId && mentionCount > 0;
+  const showMentionNav =
+    !threadId && mentionNav?.roomId === room.roomId && (mentionNav?.eventIds.length ?? 0) > 0;
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
   const mentionClickHandler = useMentionClickHandler(room.roomId);
@@ -1945,14 +1945,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
               </Chip>
             </>
           )}
-          {showMentionNav && (
+          {showMentionNav && mentionNav && (
             <>
               <Chip
                 variant="SurfaceVariant"
                 radii="Pill"
                 outlined
                 before={<Icon size="50" src={Icons.Mention} />}
-                onClick={navigatePrevMention}
+                onClick={() => {
+                  const prev = (mentionNav.index - 1 + mentionNav.eventIds.length) % mentionNav.eventIds.length;
+                  setMentionNav({ ...mentionNav, index: prev });
+                  navigateRoom(room.roomId, mentionNav.eventIds[prev]);
+                }}
                 aria-label="Previous mention"
               >
                 <Text size="L400">{isMobile ? '@↑' : 'Prev @'}</Text>
@@ -1962,7 +1966,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 radii="Pill"
                 outlined
                 before={<Icon size="50" src={Icons.Mention} />}
-                onClick={navigateNextMention}
+                onClick={() => {
+                  const next = (mentionNav.index + 1) % mentionNav.eventIds.length;
+                  setMentionNav({ ...mentionNav, index: next });
+                  navigateRoom(room.roomId, mentionNav.eventIds[next]);
+                }}
                 aria-label="Next mention"
               >
                 <Text size="L400">{isMobile ? '@↓' : 'Next @'}</Text>

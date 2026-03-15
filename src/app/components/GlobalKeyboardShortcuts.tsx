@@ -26,7 +26,7 @@ import { useSetSetting } from '../state/hooks/settings';
 import { settingsAtom } from '../state/settings';
 import { getSecondarySessions } from '../state/sessions';
 import { useClientConfig } from '../hooks/useClientConfig';
-import { useNavigateUnread, useNavigateMention } from '../hooks/useNavigateUnread';
+import { useNavigateUnread } from '../hooks/useNavigateUnread';
 
 const CALL_SHORTCUTS: DisplayShortcut[] = [
   { key: 'mod+shift+m', description: 'Toggle mute (in call)', category: 'Actions' },
@@ -46,11 +46,6 @@ const NEXT_UNREAD_SHORTCUT: DisplayShortcut = {
   category: 'Navigation',
 };
 
-const NEXT_MENTION_SHORTCUT: DisplayShortcut = {
-  key: 'alt+m',
-  description: 'Go to next mention/highlight',
-  category: 'Navigation',
-};
 
 const START_CALL_SHORTCUT: DisplayShortcut = {
   key: 'alt+j',
@@ -166,7 +161,6 @@ export function GlobalKeyboardShortcuts() {
   const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = useCallState();
   const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
   const { navigateNext: navigateNextUnread, navigatePrev: navigatePrevUnread, navigateFirst: navigateFirstUnread } = useNavigateUnread();
-  const { navigateFirst: navigateFirstMention } = useNavigateMention();
   const mx = useMatrixClient();
   const roomToParents = useAtomValue(roomToParentsAtom);
   const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
@@ -233,16 +227,7 @@ export function GlobalKeyboardShortcuts() {
     [navigateFirstUnread]
   );
 
-  const handleNextMentionKeyDown = useCallback(
-    (evt: KeyboardEvent) => {
-      if (!isKeyHotkey('alt+m', evt)) return;
-      evt.preventDefault();
-      navigateFirstMention();
-    },
-    [navigateFirstMention]
-  );
-
-  const handleUnreadNavKeyDown = useCallback(
+const handleUnreadNavKeyDown = useCallback(
     (evt: KeyboardEvent) => {
       const isDown = isKeyHotkey('alt+shift+down', evt);
       const isUp = isKeyHotkey('alt+shift+up', evt);
@@ -343,7 +328,6 @@ export function GlobalKeyboardShortcuts() {
   useKeyDown(window, handleCallKeyDown);
   useKeyDown(window, handleSpaceKeyDown);
   useKeyDown(window, handleNextUnreadKeyDown);
-  useKeyDown(window, handleNextMentionKeyDown);
   useKeyDown(window, handleUnreadNavKeyDown);
   useKeyDown(window, handleStartCallKeyDown);
   useKeyDown(window, handlePeopleDrawerKeyDown);
