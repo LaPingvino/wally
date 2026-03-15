@@ -1955,7 +1955,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 onClick={() => {
                   const prev = (mentionNav.index - 1 + mentionNav.eventIds.length) % mentionNav.eventIds.length;
                   setMentionNav({ ...mentionNav, index: prev });
-                  navigateRoom(room.roomId, mentionNav.eventIds[prev]);
+                  handleOpenEvent(mentionNav.eventIds[prev]);
                 }}
                 aria-label="Previous mention"
               >
@@ -1969,7 +1969,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 onClick={() => {
                   const next = (mentionNav.index + 1) % mentionNav.eventIds.length;
                   setMentionNav({ ...mentionNav, index: next });
-                  navigateRoom(room.roomId, mentionNav.eventIds[next]);
+                  handleOpenEvent(mentionNav.eventIds[next]);
                 }}
                 aria-label="Next mention"
               >

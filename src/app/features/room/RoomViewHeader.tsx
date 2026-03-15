@@ -23,7 +23,7 @@ import {
   Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import { EventTimeline, Room } from 'matrix-js-sdk';
+import { Direction, EventTimeline, Room } from 'matrix-js-sdk';
 
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { useRoomWidgets } from '../../hooks/useRoomWidgets';
@@ -79,6 +79,7 @@ import { renderItemIcon } from './PanelIconPicker';
 import { activeWidgetIdAtom } from './WidgetsDrawer';
 import { useAtom, useSetAtom } from 'jotai';
 import { mentionNavAtom } from '../../hooks/useNavigateUnread';
+import { getPrevSessionStart } from '../../state/sessions';
 
 type UnpinnedItem = {
   id: ToolbarItemId;
@@ -121,6 +122,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const notificationMode = getRoomNotificationMode(notificationPreferences, room.roomId);
   const { navigateRoom } = useRoomNavigate();
   const setMentionNav = useSetAtom(mentionNavAtom);
+  const [searchingMentions, setSearchingMentions] = useState(false);
 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
@@ -303,31 +305,90 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
         </UseStateProvider>
         <MenuItem
           onClick={() => {
+            if (searchingMentions) return;
             const myUserId = mx.getSafeUserId();
-            const eventIds = room
-              .getUnfilteredTimelineSet()
-              .getTimelines()
-              .flatMap((tl) => tl.getEvents())
-              .filter(
-                (e) =>
-                  e.getType() === 'm.room.message' &&
-                  (e.getContent()['m.mentions']?.user_ids?.includes(myUserId) ||
-                    e.getContent().body?.includes(myUserId))
-              )
-              .map((e) => e.getId()!)
-              .filter(Boolean);
-            if (eventIds.length === 0) return;
-            const index = eventIds.length - 1;
-            setMentionNav({ roomId: room.roomId, eventIds, index });
-            navigateRoom(room.roomId, eventIds[index]);
-            requestClose();
+            const timelineSet = room.getUnfilteredTimelineSet();
+
+            const isMentioned = (e: { getType(): string; getContent(): Record<string, unknown> }) => {
+              if (e.getType() !== 'm.room.message') return false;
+              const c = e.getContent() as Record<string, unknown>;
+              const mentions = c['m.mentions'] as { user_ids?: string[] } | undefined;
+              if (mentions?.user_ids?.includes(myUserId)) return true;
+              return typeof c.body === 'string' && c.body.includes(myUserId);
+            };
+
+            const collectMentionIds = () =>
+              timelineSet
+                .getTimelines()
+                .flatMap((tl) => tl.getEvents())
+                .filter(isMentioned)
+                .map((e) => e.getId()!)
+                .filter(Boolean);
+
+            // Threshold: search at most 24 h back, unless the previous session
+            // started before that — in which case go back to that session start.
+            const prevSession = getPrevSessionStart();
+            const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+            const threshold = prevSession > 0 ? Math.min(prevSession, oneDayAgo) : oneDayAgo;
+
+            void (async () => {
+              let eventIds = collectMentionIds();
+
+              if (eventIds.length === 0) {
+                setSearchingMentions(true);
+                try {
+                  const liveTimeline = timelineSet.getLiveTimeline();
+                  // eslint-disable-next-line no-constant-condition
+                  while (true) {
+                    // Walk to oldest loaded fragment
+                    let oldest = liveTimeline;
+                    let prev = oldest.getNeighbouringTimeline(Direction.Backward);
+                    while (prev) {
+                      oldest = prev;
+                      prev = oldest.getNeighbouringTimeline(Direction.Backward);
+                    }
+
+                    // Check if oldest event is already past our threshold
+                    const oldestEvent = oldest.getEvents()[0];
+                    if (oldestEvent && oldestEvent.getTs() < threshold) break;
+
+                    // Check if server has more to give
+                    if (!oldest.getPaginationToken(Direction.Backward)) break;
+
+                    // eslint-disable-next-line no-await-in-loop
+                    const ok = await mx.paginateEventTimeline(oldest, {
+                      backwards: true,
+                      limit: 50,
+                    });
+                    if (!ok) break;
+
+                    eventIds = collectMentionIds();
+                    if (eventIds.length > 0) break;
+                  }
+                } finally {
+                  setSearchingMentions(false);
+                }
+              }
+
+              if (eventIds.length === 0) return;
+              const index = eventIds.length - 1;
+              setMentionNav({ roomId: room.roomId, eventIds, index });
+              navigateRoom(room.roomId, eventIds[index]);
+              requestClose();
+            })();
           }}
           size="300"
-          after={<Icon size="100" src={Icons.Mention} />}
+          after={
+            searchingMentions ? (
+              <Spinner size="100" variant="Secondary" />
+            ) : (
+              <Icon size="100" src={Icons.Mention} />
+            )
+          }
           radii="300"
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            Jump to Last Mention
+            {searchingMentions ? 'Searching mentions…' : 'Jump to Last Mention'}
           </Text>
         </MenuItem>
       </Box>

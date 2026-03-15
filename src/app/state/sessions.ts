@@ -118,6 +118,26 @@ export const getSessionForSlot = (slot: number): Session | undefined => {
   return rest;
 };
 
+const THIS_SESSION_START_KEY = 'cinny_this_session_start';
+const PREV_SESSION_START_KEY = 'cinny_prev_session_start';
+
+/**
+ * Record the current session start time and promote the previous value.
+ * Call once on app load (ClientRoot mount).
+ */
+export const recordSessionStart = () => {
+  const prev = localStorage.getItem(THIS_SESSION_START_KEY);
+  if (prev) localStorage.setItem(PREV_SESSION_START_KEY, prev);
+  localStorage.setItem(THIS_SESSION_START_KEY, String(Date.now()));
+};
+
+/**
+ * Returns the timestamp of the start of the session before this one.
+ * Used to determine how far back mention search should look.
+ */
+export const getPrevSessionStart = (): number =>
+  parseInt(localStorage.getItem(PREV_SESSION_START_KEY) ?? '0', 10);
+
 // export const getSessionStoreName = (session: Session): SessionStoreName => {
 //   if (session.fallbackSdkStores) {
 //     return FALLBACK_STORE_NAME;
