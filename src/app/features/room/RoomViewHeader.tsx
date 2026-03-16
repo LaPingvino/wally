@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useCallback, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
 import {
   Box,
@@ -607,6 +607,45 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
     setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
+  const handleToolbarKeyDown = useCallback((evt: React.KeyboardEvent<HTMLElement>) => {
+    const isLeft = isKeyHotkey('arrowleft', evt as unknown as KeyboardEvent);
+    const isRight = isKeyHotkey('arrowright', evt as unknown as KeyboardEvent);
+    const isHome = isKeyHotkey('home', evt as unknown as KeyboardEvent);
+    const isEnd = isKeyHotkey('end', evt as unknown as KeyboardEvent);
+    if (!isLeft && !isRight && !isHome && !isEnd) return;
+    const toolbar = evt.currentTarget;
+    const buttons = Array.from(
+      toolbar.querySelectorAll<HTMLElement>('button:not([disabled])')
+    );
+    if (buttons.length === 0) return;
+    evt.preventDefault();
+    const focused = document.activeElement as HTMLElement;
+    const currentIdx = buttons.indexOf(focused);
+    let nextIdx: number;
+    if (isHome) nextIdx = 0;
+    else if (isEnd) nextIdx = buttons.length - 1;
+    else if (isLeft) nextIdx = currentIdx <= 0 ? buttons.length - 1 : currentIdx - 1;
+    else nextIdx = currentIdx >= buttons.length - 1 ? 0 : currentIdx + 1;
+    buttons[nextIdx].focus();
+  }, []);
+
+  const handleHeaderKeyDown = useCallback(
+    (evt: KeyboardEvent) => {
+      if (isKeyHotkey('alt+shift+t', evt)) {
+        evt.preventDefault();
+        onToggleThreadsDrawer?.();
+      } else if (isKeyHotkey('alt+f', evt)) {
+        evt.preventDefault();
+        handleSearchClick();
+      } else if (isKeyHotkey('alt+shift+c', evt) && (isActiveCall || room.isCallRoom())) {
+        evt.preventDefault();
+        toggleChat();
+      }
+    },
+    [onToggleThreadsDrawer, handleSearchClick, isActiveCall, room, toggleChat]
+  );
+  useKeyDown(window, handleHeaderKeyDown);
+
   const openSettings = useOpenRoomSettings();
   const parentSpace = useSpaceOptionally();
   const handleMemberToggle = () => {
@@ -691,7 +730,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
           </Box>
         </Box>
 
-        <Box shrink="No">
+        <Box id="cinny-room-header-toolbar" data-section-label="Room actions" role="toolbar" aria-label="Room actions" aria-orientation="horizontal" shrink="No" onKeyDown={handleToolbarKeyDown}>
           {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
               Wobble here (left side of group) is less noticeable than at the right. */}
 
