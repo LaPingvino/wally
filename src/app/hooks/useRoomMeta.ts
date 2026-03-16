@@ -35,31 +35,47 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   return avatarMxc;
 };
 
+/** Get the display name for a DM room directly from the loaded member, bypassing room.name. */
+const getDmName = (room: Room): string => {
+  const member = room.getAvatarFallbackMember();
+  return member?.name ?? room.name;
+};
+
 export const useRoomName = (room: Room, dm?: boolean): string => {
-  const [name, setName] = useState(room.name);
+  const [name, setName] = useState(() => (dm ? getDmName(room) : room.name));
 
   useEffect(() => {
-    setName(room.name);
+    if (dm) {
+      setName(getDmName(room));
+    } else {
+      setName(room.name);
+    }
 
     const handleRoomNameChange: RoomEventHandlerMap[RoomEvent.Name] = () => {
-      setName(room.name);
+      setName(dm ? getDmName(room) : room.name);
     };
     room.on(RoomEvent.Name, handleRoomNameChange);
     return () => {
       room.removeListener(RoomEvent.Name, handleRoomNameChange);
     };
-  }, [room]);
+  }, [room, dm]);
 
-  // For DMs: member display names aren't available until members are loaded.
-  // Force a name re-read after loadMembersIfNeeded() resolves, since the SDK
-  // doesn't always emit RoomEvent.Name after a lazy member load.
+  // For DMs: members are lazy-loaded. After load, read name directly from the
+  // member object since room.name may not be recalculated by the SDK.
   useEffect(() => {
     if (!dm) return;
     let cancelled = false;
     room.loadMembersIfNeeded().then(() => {
-      if (!cancelled) setName(room.name);
+      if (!cancelled) setName(getDmName(room));
     });
-    return () => { cancelled = true; };
+    const onMember = () => { if (!cancelled) setName(getDmName(room)); };
+    room.on(RoomMemberEvent.Name, onMember);
+    room.on(RoomMemberEvent.Membership, onMember);
+    return () => {
+      cancelled = true;
+      room.off(RoomMemberEvent.Name, onMember);
+      room.off(RoomMemberEvent.Membership, onMember);
+    };
   }, [room, dm]);
 
   return name;
