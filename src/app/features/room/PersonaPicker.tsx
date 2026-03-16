@@ -14,9 +14,87 @@ import {
   Text,
   config,
 } from 'folds';
-import { activePersonaAtom, savedPersonasAtom, Persona } from '../../state/personas';
+import {
+  activePersonaAtom,
+  savedPersonasAtom,
+  prefixStickyAtom,
+  Persona,
+  exportPersonasToPluralKit,
+  importPersonasFromJson,
+} from '../../state/personas';
 import { stopPropagation } from '../../utils/keyboard';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+
+function PrefixList({
+  prefixes,
+  onChange,
+}: {
+  prefixes: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [input, setInput] = useState('');
+
+  const add = () => {
+    const trimmed = input.trim();
+    if (!trimmed || prefixes.includes(trimmed)) return;
+    onChange([...prefixes, trimmed]);
+    setInput('');
+  };
+
+  const onKeyDown: KeyboardEventHandler = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); add(); }
+  };
+
+  return (
+    <Box direction="Column" gap="100">
+      {prefixes.map((pfx) => (
+        <Box key={pfx} gap="100" alignItems="Center">
+          <Text
+            size="T200"
+            style={{
+              flexGrow: 1,
+              fontFamily: 'monospace',
+              background: 'var(--mx-surface-variant-container)',
+              borderRadius: config.radii.R300,
+              padding: `${config.space.S100} ${config.space.S200}`,
+            }}
+          >
+            {pfx}
+          </Text>
+          <IconButton
+            size="300"
+            variant="SurfaceVariant"
+            radii="300"
+            onClick={() => onChange(prefixes.filter((p) => p !== pfx))}
+            aria-label={`Remove prefix ${pfx}`}
+          >
+            <Icon size="100" src={Icons.Cross} />
+          </IconButton>
+        </Box>
+      ))}
+      <Box gap="100" alignItems="Center">
+        <Input
+          style={{ flexGrow: 1 }}
+          size="300"
+          placeholder="Add prefix (e.g. A:)"
+          value={input}
+          onChange={(e) => setInput((e.target as HTMLInputElement).value)}
+          onKeyDown={onKeyDown}
+        />
+        <IconButton
+          size="300"
+          variant="SurfaceVariant"
+          radii="300"
+          onClick={add}
+          aria-label="Add prefix"
+          disabled={!input.trim()}
+        >
+          <Icon size="100" src={Icons.Plus} />
+        </IconButton>
+      </Box>
+    </Box>
+  );
+}
 
 function PersonaForm({
   initial,
@@ -31,6 +109,7 @@ function PersonaForm({
   const [name, setName] = useState(initial?.displayname ?? '');
   const [avatar, setAvatar] = useState(initial?.avatar_url ?? '');
   const [pronouns, setPronouns] = useState(initial?.pronouns ?? '');
+  const [prefixes, setPrefixes] = useState<string[]>(initial?.prefixes ?? []);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,7 +153,12 @@ function PersonaForm({
   const save = () => {
     const displayname = name.trim();
     if (!displayname) return;
-    onSave({ displayname, avatar_url: avatar.trim() || undefined, pronouns: pronouns.trim() || undefined });
+    onSave({
+      displayname,
+      avatar_url: avatar.trim() || undefined,
+      pronouns: pronouns.trim() || undefined,
+      prefixes: prefixes.length > 0 ? prefixes : undefined,
+    });
   };
 
   const onKeyDown: KeyboardEventHandler = (e) => {
@@ -130,6 +214,8 @@ function PersonaForm({
         onChange={(e) => setPronouns((e.target as HTMLInputElement).value)}
         onKeyDown={onKeyDown}
       />
+      <Text size="T200" style={{ opacity: 0.7 }}>Prefixes (trigger words to activate this persona):</Text>
+      <PrefixList prefixes={prefixes} onChange={setPrefixes} />
       <Box gap="200">
         <IconButton size="300" variant="Primary" radii="300" onClick={save} aria-label="Save" disabled={uploading}>
           <Icon src={Icons.Check} />
@@ -145,9 +231,11 @@ function PersonaForm({
 export function PersonaPicker() {
   const [activePersona, setActivePersona] = useAtom(activePersonaAtom);
   const [savedPersonas, setSavedPersonas] = useAtom(savedPersonasAtom);
+  const [prefixSticky, setPrefixSticky] = useAtom(prefixStickyAtom);
   const [menuCords, setMenuCords] = useState<RectCords>();
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [addMode, setAddMode] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   const openMenu = (evt: React.MouseEvent<HTMLButtonElement>) => {
     setMenuCords(evt.currentTarget.getBoundingClientRect());
@@ -168,7 +256,6 @@ export function PersonaPicker() {
   };
 
   const handleSaveNew = (p: Persona) => {
-    // Add to saved list (avoid exact duplicates)
     if (!savedPersonas.some((s) => s.displayname === p.displayname)) {
       setSavedPersonas([...savedPersonas, p]);
     }
@@ -180,7 +267,6 @@ export function PersonaPicker() {
   const handleSaveEdit = (idx: number, p: Persona) => {
     const updated = savedPersonas.map((s, i) => (i === idx ? p : s));
     setSavedPersonas(updated);
-    // Update active persona if we just edited the active one
     if (activePersona?.displayname === savedPersonas[idx].displayname) {
       setActivePersona(p);
     }
@@ -193,10 +279,50 @@ export function PersonaPicker() {
     if (activePersona?.displayname === p.displayname) setActivePersona(null);
   };
 
+  const handleExport = () => {
+    const json = exportPersonasToPluralKit(savedPersonas);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'personas.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const imported = importPersonasFromJson(reader.result as string);
+        if (imported.length === 0) return;
+        // Merge: add personas not already present (by displayname)
+        const merged = [...savedPersonas];
+        imported.forEach((p) => {
+          if (!merged.some((s) => s.displayname === p.displayname)) merged.push(p);
+        });
+        setSavedPersonas(merged);
+      } catch {
+        // invalid JSON — silently ignore
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const isActive = !!activePersona;
 
   return (
     <>
+      <input
+        ref={importFileRef}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: 'none' }}
+        onChange={handleImportFile}
+      />
       <IconButton
         aria-label={isActive ? `Persona: ${activePersona.displayname}` : 'Set persona'}
         aria-pressed={isActive}
@@ -221,8 +347,37 @@ export function PersonaPicker() {
               escapeDeactivates: stopPropagation,
             }}
           >
-            <Menu style={{ minWidth: '220px', maxWidth: '300px' }}>
+            <Menu style={{ minWidth: '240px', maxWidth: '320px' }}>
               <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+
+                {/* Sticky mode toggle */}
+                <Box
+                  as="label"
+                  gap="200"
+                  alignItems="Center"
+                  style={{
+                    padding: `${config.space.S100} ${config.space.S200}`,
+                    cursor: 'pointer',
+                    borderRadius: config.radii.R300,
+                    background: 'var(--bg-surface-low, rgba(0,0,0,0.05))',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={prefixSticky}
+                    onChange={(e) => setPrefixSticky((e.target as HTMLInputElement).checked)}
+                    style={{ accentColor: 'var(--bg-primary)' }}
+                  />
+                  <Box direction="Column">
+                    <Text size="T300">Sticky prefix mode</Text>
+                    <Text size="T200" style={{ opacity: 0.7 }}>
+                      {prefixSticky
+                        ? 'Prefix switches persona until \\ (escape) or \\\\ (reset)'
+                        : 'Prefix applies to one message only'}
+                    </Text>
+                  </Box>
+                </Box>
+
                 {/* Default profile */}
                 <MenuItem
                   size="300"
@@ -259,9 +414,14 @@ export function PersonaPicker() {
                           ) : undefined
                         }
                       >
-                        <Text size="T300" truncate>
-                          {p.displayname}
-                        </Text>
+                        <Box direction="Column" style={{ minWidth: 0 }}>
+                          <Text size="T300" truncate>{p.displayname}</Text>
+                          {(p.prefixes?.length ?? 0) > 0 && (
+                            <Text size="T200" style={{ opacity: 0.6, fontFamily: 'monospace' }} truncate>
+                              {p.prefixes!.join('  ')}
+                            </Text>
+                          )}
+                        </Box>
                       </MenuItem>
                       <IconButton
                         size="300"
@@ -308,6 +468,32 @@ export function PersonaPicker() {
                     <Text size="T300">Add persona...</Text>
                   </MenuItem>
                 )}
+
+                {/* Import / Export */}
+                <Box gap="100">
+                  <MenuItem
+                    style={{ flexGrow: 1 }}
+                    size="300"
+                    variant="Surface"
+                    radii="300"
+                    onClick={() => importFileRef.current?.click()}
+                    before={<Icon size="100" src={Icons.Attachment} />}
+                  >
+                    <Text size="T300">Import (PluralKit JSON)</Text>
+                  </MenuItem>
+                  <IconButton
+                    size="300"
+                    variant="SurfaceVariant"
+                    radii="300"
+                    onClick={handleExport}
+                    aria-label="Export personas as PluralKit JSON"
+                    title="Export"
+                    disabled={savedPersonas.length === 0}
+                  >
+                    <Icon size="100" src={Icons.Download} />
+                  </IconButton>
+                </Box>
+
               </Box>
             </Menu>
           </FocusTrap>

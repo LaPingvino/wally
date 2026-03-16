@@ -9,7 +9,16 @@ import React, {
 } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
-import { activePersonaAtom, personaId, PER_MSG_PROFILE_UNSTABLE } from '../../state/personas';
+import {
+  activePersonaAtom,
+  savedPersonasAtom,
+  prefixStickyAtom,
+  personaId,
+  matchPersonaPrefix,
+  stripHtmlPrefix,
+  PER_MSG_PROFILE_UNSTABLE,
+  Persona,
+} from '../../state/personas';
 import { PersonaPicker } from './PersonaPicker';
 import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
@@ -180,7 +189,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       useState<AutocompleteQuery<AutocompletePrefix>>();
 
     const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
-    const activePersona = useAtomValue(activePersonaAtom);
+    const [activePersona, setActivePersona] = useAtom(activePersonaAtom);
+    const savedPersonas = useAtomValue(savedPersonasAtom);
+    const [prefixSticky] = useAtom(prefixStickyAtom);
 
     const handleFiles = useCallback(
       async (files: File[]) => {
@@ -281,6 +292,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       handleRemoveUpload(uploads.map((upload) => upload.file));
     };
 
+    /** Build the per-message profile payload for a persona. */
+    const buildPerMsgProfile = (p: Persona) => ({
+      id: personaId(p),
+      displayname: p.displayname,
+      ...(p.avatar_url ? { avatar_url: p.avatar_url } : {}),
+      ...(p.pronouns ? { pronouns: p.pronouns } : {}),
+    });
+
     const handleSendUpload = async (uploads: UploadSuccess[]) => {
       const contentsPromises = uploads.map(async (upload) => {
         const fileItem = selectedFiles.find((f) => f.file === upload.file);
@@ -302,12 +321,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       contents.forEach((content) => {
         const c = content as Record<string, unknown>;
         if (activePersona && perMessageProfiles) {
-          c[PER_MSG_PROFILE_UNSTABLE] = {
-            id: personaId(activePersona),
-            displayname: activePersona.displayname,
-            ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
-            ...(activePersona.pronouns ? { pronouns: activePersona.pronouns } : {}),
-          };
+          c[PER_MSG_PROFILE_UNSTABLE] = buildPerMsgProfile(activePersona);
         }
         mx.sendMessage(roomId, c as any);
       });
@@ -357,6 +371,36 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
       if (plainText === '') return;
 
+      // ── Prefix-based persona switching ────────────────────────────────────
+      // effectivePersona is the persona to attach to this specific message.
+      let effectivePersona = activePersona;
+      if (perMessageProfiles) {
+        if (prefixSticky && plainText.startsWith('\\\\')) {
+          // \\ = permanent reset: clear active persona, strip escape from message
+          const stripped = plainText.slice(2).trimStart();
+          customHtml = stripHtmlPrefix(customHtml, '\\\\');
+          plainText = stripped;
+          setActivePersona(null);
+          effectivePersona = null;
+        } else if (plainText.startsWith('\\') && !plainText.startsWith('\\\\')) {
+          // \ = one-message escape: send without persona, keep sticky unchanged
+          const stripped = plainText.slice(1).trimStart();
+          customHtml = stripHtmlPrefix(customHtml, '\\');
+          plainText = stripped;
+          effectivePersona = null;
+        } else {
+          const match = matchPersonaPrefix(plainText, savedPersonas);
+          if (match) {
+            customHtml = stripHtmlPrefix(customHtml, match.prefix);
+            plainText = match.stripped;
+            effectivePersona = match.persona;
+            if (prefixSticky) setActivePersona(match.persona);
+          }
+        }
+        if (plainText === '') return;
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const body = plainText;
       const formattedBody = customHtml;
       const mentionData = getMentions(mx, roomId, editor);
@@ -401,21 +445,16 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           content['m.relates_to'].is_falling_back = false;
         }
       }
-      if (activePersona && perMessageProfiles) {
+      if (effectivePersona && perMessageProfiles) {
         // Send unstable Beeper key (MSC4144 not yet merged into spec).
-        content[PER_MSG_PROFILE_UNSTABLE] = {
-          id: personaId(activePersona),
-          displayname: activePersona.displayname,
-          ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
-          ...(activePersona.pronouns ? { pronouns: activePersona.pronouns } : {}),
-        };
+        content[PER_MSG_PROFILE_UNSTABLE] = buildPerMsgProfile(effectivePersona);
       }
       mx.sendMessage(roomId, content as any);
       resetEditor(editor);
       resetEditorHistory(editor);
       setReplyDraft(undefined);
       sendTypingStatus(false);
-    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona]);
+    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona, setActivePersona, savedPersonas, prefixSticky, perMessageProfiles]);
 
     const handleKeyDown: KeyboardEventHandler = useCallback(
       (evt) => {
