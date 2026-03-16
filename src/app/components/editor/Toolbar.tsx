@@ -54,8 +54,8 @@ function BtnTooltip({ text, shortCode }: { text: string; shortCode?: string }) {
   );
 }
 
-type MarkButtonProps = { format: MarkType; icon: IconSrc; tooltip: ReactNode };
-export function MarkButton({ format, icon, tooltip }: MarkButtonProps) {
+type MarkButtonProps = { format: MarkType; icon: IconSrc; tooltip: ReactNode; disabled?: boolean };
+export function MarkButton({ format, icon, tooltip, disabled: extraDisabled }: MarkButtonProps) {
   const editor = useSlate();
   const disableInline = isBlockActive(editor, BlockType.CodeBlock);
 
@@ -78,7 +78,7 @@ export function MarkButton({ format, icon, tooltip }: MarkButtonProps) {
           aria-pressed={isMarkActive(editor, format)}
           size="400"
           radii="300"
-          disabled={disableInline}
+          disabled={disableInline || !!extraDisabled}
         >
           <Icon size="200" src={icon} />
         </IconButton>
@@ -282,6 +282,7 @@ export function Toolbar() {
                 format={MarkType.Underline}
                 icon={Icons.Underline}
                 tooltip={<BtnTooltip text="Underline" shortCode={`${modKey} + U`} />}
+                disabled={isMarkdown}
               />
               <MarkButton
                 format={MarkType.StrikeThrough}
