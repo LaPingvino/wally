@@ -239,6 +239,7 @@ export function SystemNotification() {
     'isNotificationSounds'
   );
   const [callAutoJoin, setCallAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
+  const [inboxUnreadNotifications, setInboxUnreadNotifications] = useSetting(settingsAtom, 'inboxUnreadNotifications');
 
   const requestNotificationPermission = () => {
     window.Notification.requestPermission();
