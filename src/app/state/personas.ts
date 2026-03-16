@@ -115,31 +115,48 @@ type PluralKitProxyTag = { prefix?: string; suffix?: string };
 type PluralKitMember = {
   name?: string;
   display_name?: string | null;
+  /** https:// URL for PluralKit compatibility */
   avatar_url?: string | null;
+  /** mxc:// URL preserved for round-trip (custom field, ignored by PluralKit) */
+  avatar_mxc?: string | null;
   pronouns?: string | null;
   proxy_tags?: PluralKitProxyTag[];
 };
 type PluralKitSystem = { members?: PluralKitMember[] };
 
-/** Convert our Persona list to a PluralKit-compatible JSON array. */
-export function exportPersonasToPluralKit(personas: Persona[]): string {
-  const members = personas.map((p) => ({
-    name: p.displayname,
-    display_name: null,
-    avatar_url: p.avatar_url ?? null,
-    pronouns: p.pronouns ?? null,
-    proxy_tags: (p.prefixes ?? []).map((pfx) => ({ prefix: pfx, suffix: '' })),
-  }));
+/**
+ * Convert our Persona list to a PluralKit-compatible JSON array.
+ * @param mxcToHttp - optional converter; converts mxc:// → https:// for avatar_url.
+ *   Pass `(mxc) => mx.mxcUrlToHttp(mxc)` from a component that has the Matrix client.
+ */
+export function exportPersonasToPluralKit(
+  personas: Persona[],
+  mxcToHttp?: (mxc: string) => string | null
+): string {
+  const members = personas.map((p) => {
+    const mxc = p.avatar_url?.startsWith('mxc://') ? p.avatar_url : undefined;
+    const http = mxc && mxcToHttp ? (mxcToHttp(mxc) ?? null) : (p.avatar_url ?? null);
+    return {
+      name: p.displayname,
+      display_name: null,
+      avatar_url: http,
+      ...(mxc ? { avatar_mxc: mxc } : {}),
+      pronouns: p.pronouns ?? null,
+      proxy_tags: (p.prefixes ?? []).map((pfx) => ({ prefix: pfx, suffix: '' })),
+    };
+  });
   return JSON.stringify(members, null, 2);
 }
 
-/** Parse PluralKit JSON (system export or members array) or our own format into Personas. */
+/** Parse PluralKit JSON (system export or members array) or our own format into Personas.
+ *  Returns personas where avatar_url is the mxc:// URI if available (avatar_mxc field),
+ *  otherwise the raw avatar_url (https:// — caller should upload to mxc).
+ */
 export function importPersonasFromJson(json: string): Persona[] {
   const raw = JSON.parse(json) as unknown;
   let members: PluralKitMember[] = [];
 
   if (Array.isArray(raw)) {
-    // Could be our own format or a PluralKit members array
     members = raw as PluralKitMember[];
   } else if (raw && typeof raw === 'object') {
     const sys = raw as PluralKitSystem;
@@ -155,9 +172,11 @@ export function importPersonasFromJson(json: string): Persona[] {
       const prefixes = (m.proxy_tags ?? [])
         .filter((t) => t.prefix && !t.suffix)
         .map((t) => t.prefix as string);
+      // Prefer mxc:// (our custom round-trip field) over https:// avatar_url
+      const avatarUrl = m.avatar_mxc || m.avatar_url || undefined;
       return {
         displayname,
-        ...(m.avatar_url ? { avatar_url: m.avatar_url } : {}),
+        ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         ...(m.pronouns ? { pronouns: m.pronouns } : {}),
         ...(prefixes.length > 0 ? { prefixes } : {}),
       };

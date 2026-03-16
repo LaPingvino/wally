@@ -345,7 +345,7 @@ export function PersonaPicker() {
   };
 
   const handleExport = () => {
-    const json = exportPersonasToPluralKit(savedPersonas);
+    const json = exportPersonasToPluralKit(savedPersonas, (mxc) => mx.mxcUrlToHttp(mxc));
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
