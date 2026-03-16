@@ -38,7 +38,7 @@ export function matchPersonaPrefix(
   for (const p of savedPersonas) {
     for (const prefix of p.prefixes ?? []) {
       if (!prefix) continue;
-      if (text === prefix || text.startsWith(prefix + ' ') || text.startsWith(prefix + '\n')) {
+      if (text.startsWith(prefix)) {
         return { persona: p, prefix, stripped: text.slice(prefix.length).trimStart() };
       }
     }
