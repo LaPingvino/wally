@@ -35,10 +35,21 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   return avatarMxc;
 };
 
-/** Get the display name for a DM room directly from the loaded member, bypassing room.name. */
+/** Get the display name for a DM room directly from loaded members, bypassing room.name. */
 const getDmName = (room: Room): string => {
-  const member = room.getAvatarFallbackMember();
-  return member?.name ?? room.name;
+  // For 2-person DMs getAvatarFallbackMember() gives the other member directly.
+  const fallbackMember = room.getAvatarFallbackMember();
+  if (fallbackMember) return fallbackMember.name;
+
+  // Group DMs: compute name from other joined/invited members (room.name won't be recalculated).
+  const others = room
+    .getMembers()
+    .filter((m) => m.userId !== room.myUserId && (m.membership === 'join' || m.membership === 'invite'));
+
+  if (others.length === 0) return room.name;
+  if (others.length === 1) return others[0].name;
+  if (others.length === 2) return `${others[0].name} and ${others[1].name}`;
+  return `${others[0].name} and ${others.length - 1} others`;
 };
 
 export const useRoomName = (room: Room, dm?: boolean): string => {
