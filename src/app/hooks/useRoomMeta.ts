@@ -35,7 +35,7 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   return avatarMxc;
 };
 
-export const useRoomName = (room: Room): string => {
+export const useRoomName = (room: Room, dm?: boolean): string => {
   const [name, setName] = useState(room.name);
 
   useEffect(() => {
@@ -49,6 +49,18 @@ export const useRoomName = (room: Room): string => {
       room.removeListener(RoomEvent.Name, handleRoomNameChange);
     };
   }, [room]);
+
+  // For DMs: member display names aren't available until members are loaded.
+  // Force a name re-read after loadMembersIfNeeded() resolves, since the SDK
+  // doesn't always emit RoomEvent.Name after a lazy member load.
+  useEffect(() => {
+    if (!dm) return;
+    let cancelled = false;
+    room.loadMembersIfNeeded().then(() => {
+      if (!cancelled) setName(room.name);
+    });
+    return () => { cancelled = true; };
+  }, [room, dm]);
 
   return name;
 };
