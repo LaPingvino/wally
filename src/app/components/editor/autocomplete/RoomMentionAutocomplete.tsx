@@ -43,6 +43,7 @@ function UnknownRoomMentionItem({
       as="button"
       radii="300"
       onKeyDown={(evt: ReactKeyboardEvent<HTMLButtonElement>) => onTabPress(evt, handleSelect)}
+      onMouseDown={(evt: React.MouseEvent) => evt.preventDefault()}
       onClick={handleSelect}
       before={
         <Avatar size="200">
@@ -152,6 +153,7 @@ export function RoomMentionAutocomplete({
               onKeyDown={(evt: ReactKeyboardEvent<HTMLButtonElement>) =>
                 onTabPress(evt, handleSelect)
               }
+              onMouseDown={(evt: React.MouseEvent) => evt.preventDefault()}
               onClick={handleSelect}
               after={
                 <Text size="T200" priority="300" truncate>
