@@ -306,7 +306,7 @@ export function RoomNavItem({
 
   const powerLevels = usePowerLevels(room);
   const creators = useRoomCreators(room);
-  const roomName = useRoomName(room);
+  const roomName = useRoomName(room, direct);
 
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoinCall = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
