@@ -4,6 +4,30 @@ import { Editor, Element as SlateElement, Range, Transforms } from 'slate';
 import { isAnyMarkActive, isBlockActive, removeAllMark, toggleBlock, toggleMark } from './utils';
 import { BlockType, MarkType } from './types';
 
+// Markdown delimiters to insert when isMarkdown mode is active.
+const INLINE_MD_DELIMITERS: Partial<Record<MarkType, [string, string]>> = {
+  [MarkType.Bold]: ['**', '**'],
+  [MarkType.Italic]: ['*', '*'],
+  [MarkType.StrikeThrough]: ['~~', '~~'],
+  [MarkType.Code]: ['`', '`'],
+  [MarkType.Spoiler]: ['||', '||'],
+  // Underline has no standard markdown equivalent — skipped.
+};
+
+const insertMarkdownAround = (editor: Editor, [open, close]: [string, string]) => {
+  const { selection } = editor;
+  if (!selection) return;
+  if (Range.isCollapsed(selection)) {
+    Transforms.insertText(editor, open + close);
+    Transforms.move(editor, { distance: close.length, unit: 'character', reverse: true });
+  } else {
+    const [start, end] = Range.edges(selection);
+    // Insert at end first so the start offset isn't shifted.
+    Transforms.insertText(editor, close, { at: end });
+    Transforms.insertText(editor, open, { at: start });
+  }
+};
+
 export const INLINE_HOTKEYS: Record<string, MarkType> = {
   'mod+b': MarkType.Bold,
   'mod+i': MarkType.Italic,
@@ -28,7 +52,11 @@ const isHeading3 = isKeyHotkey('mod+3');
 /**
  * @return boolean true if shortcut is toggled.
  */
-export const toggleKeyboardShortcut = (editor: Editor, event: KeyboardEvent<Element>): boolean => {
+export const toggleKeyboardShortcut = (
+  editor: Editor,
+  event: KeyboardEvent<Element>,
+  isMarkdown = false
+): boolean => {
   if (isKeyHotkey('backspace', event) && editor.selection && Range.isCollapsed(editor.selection)) {
     const startPoint = Range.start(editor.selection);
     if (startPoint.offset !== 0) return false;
@@ -107,7 +135,12 @@ export const toggleKeyboardShortcut = (editor: Editor, event: KeyboardEvent<Elem
     : INLINE_KEYS.find((hotkey) => {
         if (isKeyHotkey(hotkey, event)) {
           event.preventDefault();
-          toggleMark(editor, INLINE_HOTKEYS[hotkey]);
+          if (isMarkdown) {
+            const delimiters = INLINE_MD_DELIMITERS[INLINE_HOTKEYS[hotkey]];
+            if (delimiters) insertMarkdownAround(editor, delimiters);
+          } else {
+            toggleMark(editor, INLINE_HOTKEYS[hotkey]);
+          }
           return true;
         }
         return false;
