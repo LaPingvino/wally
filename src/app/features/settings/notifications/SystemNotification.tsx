@@ -238,6 +238,7 @@ export function SystemNotification() {
     settingsAtom,
     'isNotificationSounds'
   );
+  const [callAutoJoin, setCallAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
 
   const requestNotificationPermission = () => {
     window.Notification.requestPermission();
