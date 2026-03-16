@@ -1,4 +1,4 @@
-import React, { KeyboardEventHandler, useRef, useState } from 'react';
+import React, { KeyboardEventHandler, useEffect, useRef, useState } from 'react';
 import { useAtom } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
@@ -269,6 +269,34 @@ export function PersonaPicker() {
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [addMode, setAddMode] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+
+  // Auto-upload any https:// avatar URLs to mxc:// whenever saved personas change
+  useEffect(() => {
+    const httpsIndexes = savedPersonas
+      .map((p, i) => ({ p, i }))
+      .filter(({ p }) => p.avatar_url?.startsWith('http://') || p.avatar_url?.startsWith('https://'));
+    if (httpsIndexes.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const updated = [...savedPersonas];
+      for (const { p, i } of httpsIndexes) {
+        if (cancelled) break;
+        try {
+          const resp = await fetch(p.avatar_url!);
+          const blob = await resp.blob();
+          const filename = p.avatar_url!.split('/').pop()?.split('?')[0] ?? 'avatar';
+          const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
+          if (!cancelled && result.content_uri) updated[i] = { ...p, avatar_url: result.content_uri };
+        } catch {
+          // leave as-is on error
+        }
+      }
+      if (!cancelled) setSavedPersonas(updated);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openMenu = (evt: React.MouseEvent<HTMLButtonElement>) => {
     setMenuCords(evt.currentTarget.getBoundingClientRect());
