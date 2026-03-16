@@ -167,7 +167,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                       />
                       <SettingTile
                         title="Per-Message Profiles (Personas)"
-                        description="Send messages under a named persona (MSC4144). The real sender is always visible as 'via @user:server'."
+                        description="Send messages under a named persona (MSC4144). The sending Matrix account is always visible as 'via @user:server'."
                         after={
                           <Switch
                             variant="Primary"
