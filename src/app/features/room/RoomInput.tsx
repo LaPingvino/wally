@@ -142,6 +142,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const useAuthentication = useMediaAuthentication();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
+    const [captionPosition] = useSetting(settingsAtom, 'captionPosition');
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
     const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
     const [perMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
@@ -319,24 +320,24 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       });
       handleCancelUpload(uploads);
       const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
-      contents.forEach((content) => {
+      // Send files sequentially so their order is always deterministic.
+      for (const content of contents) {
         const c = content as Record<string, unknown>;
         if (activePersona && perMessageProfiles) {
           c[PER_MSG_PROFILE_UNSTABLE] = buildPerMsgProfile(activePersona);
         }
-        mx.sendMessage(roomId, c as any).catch((err: unknown) => {
+        // eslint-disable-next-line no-await-in-loop
+        await mx.sendMessage(roomId, c as any).catch((err: unknown) => {
           const msg =
             err instanceof MatrixError
               ? `Message blocked: ${err.data?.error ?? err.message}`
               : 'Message failed to send.';
           setSendError(msg);
         });
-      });
+      }
     };
 
-    const submit = useCallback(() => {
-      uploadBoardHandlers.current?.handleSend();
-
+    const submit = useCallback(async () => {
       const commandName = getBeginCommand(editor);
       let plainText = toPlainText(editor.children, isMarkdown).trim();
       let customHtml = trimCustomHtml(
@@ -376,21 +377,16 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         return;
       }
 
-      if (plainText === '') return;
-
       // ── Prefix-based persona switching ────────────────────────────────────
-      // effectivePersona is the persona to attach to this specific message.
       let effectivePersona = activePersona;
       if (perMessageProfiles) {
         if (prefixSticky && plainText.startsWith('\\\\')) {
-          // \\ = permanent reset: clear active persona, strip escape from message
           const stripped = plainText.slice(2).trimStart();
           customHtml = stripHtmlPrefix(customHtml, '\\\\');
           plainText = stripped;
           setActivePersona(null);
           effectivePersona = null;
         } else if (plainText.startsWith('\\') && !plainText.startsWith('\\\\')) {
-          // \ = one-message escape: send without persona, keep sticky unchanged
           const stripped = plainText.slice(1).trimStart();
           customHtml = stripHtmlPrefix(customHtml, '\\');
           plainText = stripped;
@@ -404,70 +400,82 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             if (prefixSticky) setActivePersona(match.persona);
           }
         }
-        if (plainText === '') return;
       }
       // ─────────────────────────────────────────────────────────────────────
 
-      const body = plainText;
-      const formattedBody = customHtml;
-      const mentionData = getMentions(mx, roomId, editor);
+      const hasText = plainText !== '';
 
-      const content: IContent = {
-        msgtype: msgType,
-        body,
-      };
+      // If no text and no files pending, nothing to do.
+      if (!hasText && selectedFiles.length === 0) return;
 
-      if (replyDraft && replyDraft.userId !== mx.getUserId()) {
-        mentionData.users.add(replyDraft.userId);
-      }
+      const sendText = hasText
+        ? async () => {
+            const body = plainText;
+            const formattedBody = customHtml;
+            const mentionData = getMentions(mx, roomId, editor);
 
-      const mMentions = getMentionContent(Array.from(mentionData.users), mentionData.room);
-      content['m.mentions'] = mMentions;
+            const content: IContent = { msgtype: msgType, body };
 
-      if (replyDraft || !customHtmlEqualsPlainText(formattedBody, body)) {
-        content.format = 'org.matrix.custom.html';
-        content.formatted_body = formattedBody;
-      }
-      if (threadId) {
-        // Sending a thread reply (thread-native, no fallback to main timeline)
-        content['m.relates_to'] = {
-          rel_type: RelationType.Thread,
-          event_id: threadId,
-          ...(replyDraft
-            ? {
-                'm.in_reply_to': { event_id: replyDraft.eventId },
-                is_falling_back: false,
+            if (replyDraft && replyDraft.userId !== mx.getUserId()) {
+              mentionData.users.add(replyDraft.userId);
+            }
+
+            content['m.mentions'] = getMentionContent(
+              Array.from(mentionData.users),
+              mentionData.room
+            );
+
+            if (replyDraft || !customHtmlEqualsPlainText(formattedBody, body)) {
+              content.format = 'org.matrix.custom.html';
+              content.formatted_body = formattedBody;
+            }
+            if (threadId) {
+              content['m.relates_to'] = {
+                rel_type: RelationType.Thread,
+                event_id: threadId,
+                ...(replyDraft
+                  ? { 'm.in_reply_to': { event_id: replyDraft.eventId }, is_falling_back: false }
+                  : {}),
+              };
+            } else if (replyDraft) {
+              content['m.relates_to'] = { 'm.in_reply_to': { event_id: replyDraft.eventId } };
+              if (replyDraft.relation?.rel_type === RelationType.Thread) {
+                content['m.relates_to'].event_id = replyDraft.relation.event_id;
+                content['m.relates_to'].rel_type = RelationType.Thread;
+                content['m.relates_to'].is_falling_back = false;
               }
-            : {}),
-        };
-      } else if (replyDraft) {
-        content['m.relates_to'] = {
-          'm.in_reply_to': {
-            event_id: replyDraft.eventId,
-          },
-        };
-        if (replyDraft.relation?.rel_type === RelationType.Thread) {
-          content['m.relates_to'].event_id = replyDraft.relation.event_id;
-          content['m.relates_to'].rel_type = RelationType.Thread;
-          content['m.relates_to'].is_falling_back = false;
-        }
+            }
+            if (effectivePersona && perMessageProfiles) {
+              content[PER_MSG_PROFILE_UNSTABLE] = buildPerMsgProfile(effectivePersona);
+            }
+
+            await mx.sendMessage(roomId, content as any).catch((err: unknown) => {
+              const msg =
+                err instanceof MatrixError
+                  ? `Message blocked: ${err.data?.error ?? err.message}`
+                  : 'Message failed to send.';
+              setSendError(msg);
+            });
+          }
+        : null;
+
+      const sendFiles = () => uploadBoardHandlers.current?.handleSend() ?? Promise.resolve();
+
+      if (captionPosition === 'after') {
+        await sendFiles();
+        if (sendText) await sendText();
+      } else {
+        if (sendText) await sendText();
+        await sendFiles();
       }
-      if (effectivePersona && perMessageProfiles) {
-        // Send unstable Beeper key (MSC4144 not yet merged into spec).
-        content[PER_MSG_PROFILE_UNSTABLE] = buildPerMsgProfile(effectivePersona);
+
+      if (hasText) {
+        resetEditor(editor);
+        resetEditorHistory(editor);
+        setReplyDraft(undefined);
+        sendTypingStatus(false);
       }
-      mx.sendMessage(roomId, content as any).catch((err: unknown) => {
-        const msg =
-          err instanceof MatrixError
-            ? `Message blocked: ${err.data?.error ?? err.message}`
-            : 'Message failed to send.';
-        setSendError(msg);
-      });
-      resetEditor(editor);
-      resetEditorHistory(editor);
-      setReplyDraft(undefined);
-      sendTypingStatus(false);
-    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona, setActivePersona, savedPersonas, prefixSticky, perMessageProfiles]);
+    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona, setActivePersona, savedPersonas, prefixSticky, perMessageProfiles, captionPosition, selectedFiles]);
 
     const handleKeyDown: KeyboardEventHandler = useCallback(
       (evt) => {

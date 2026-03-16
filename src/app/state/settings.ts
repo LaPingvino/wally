@@ -58,6 +58,7 @@ export interface Settings {
   multiAccount: boolean;
   roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
   perMessageProfiles: boolean;
+  captionPosition: 'before' | 'after';
 }
 
 const defaultSettings: Settings = {
@@ -102,6 +103,7 @@ const defaultSettings: Settings = {
   multiAccount: false,
   roomSortOrder: 'activity',
   perMessageProfiles: false,
+  captionPosition: 'before',
 };
 
 export const getSettings = () => {

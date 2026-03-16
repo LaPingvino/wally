@@ -800,6 +800,7 @@ function Editor() {
   const [enterForNewline, setEnterForNewline] = useSetting(settingsAtom, 'enterForNewline');
   const [isMarkdown, setIsMarkdown] = useSetting(settingsAtom, 'isMarkdown');
   const [hideActivity, setHideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const [captionPosition, setCaptionPosition] = useSetting(settingsAtom, 'captionPosition');
 
   return (
     <Box direction="Column" gap="100">
@@ -817,6 +818,23 @@ function Editor() {
         <SettingTile
           title="Markdown Formatting"
           after={<Switch variant="Primary" value={isMarkdown} onChange={setIsMarkdown} />}
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Caption Position"
+          description={
+            captionPosition === 'before'
+              ? 'Text is sent before attached files.'
+              : 'Text is sent after attached files.'
+          }
+          after={
+            <Switch
+              variant="Primary"
+              value={captionPosition === 'after'}
+              onChange={(v) => setCaptionPosition(v ? 'after' : 'before')}
+            />
+          }
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
