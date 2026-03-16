@@ -222,9 +222,9 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
           style={{
             position: 'relative',
             zIndex: 0,
-            display: isMobile && isChatOpen ? 'none' : 'flex',
-            width: isMobile && isChatOpen ? '0%' : '100%',
-            height: isMobile && isChatOpen ? '0%' : '100%',
+            display: activeCallRoomId && !(isMobile && isChatOpen) ? 'flex' : 'none',
+            width: '100%',
+            height: '100%',
           }}
         >
           <Box grow="Yes" style={{ position: 'relative' }}>
