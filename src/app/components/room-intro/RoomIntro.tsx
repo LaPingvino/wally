@@ -30,8 +30,9 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
   const createEvent = getStateEvent(room, StateEvent.RoomCreate);
-  const avatarMxc = useRoomAvatar(room, mDirects.has(room.roomId));
-  const name = useRoomName(room);
+  const isDirect = mDirects.has(room.roomId);
+  const avatarMxc = useRoomAvatar(room, isDirect);
+  const name = useRoomName(room, isDirect);
   const topic = useRoomTopic(room);
   const avatarHttpUrl = avatarMxc ? mxcUrlToHttp(mx, avatarMxc, useAuthentication) : undefined;
 
