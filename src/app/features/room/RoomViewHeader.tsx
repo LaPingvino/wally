@@ -502,7 +502,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
-  const avatarMxc = useRoomAvatar(room);
+  const avatarMxc = useRoomAvatar(room, direct);
   const avatarUrl = avatarMxc
     ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
     : undefined;
