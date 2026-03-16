@@ -313,7 +313,24 @@ export function RoomNavItem({
 
   const { navigateRoom } = useRoomNavigate();
   const navigate = useNavigate();
-  const ariaLabel = roomName;
+  const ariaLabel = [
+    roomName,
+    room.isCallRoom()
+      ? [
+          'Call Room',
+          isActiveCall && 'Currently in Call',
+          callMemberships.length && `${callMemberships.length} in Call`,
+        ]
+      : direct
+        ? 'Direct Message'
+        : room.getJoinRule() === JoinRule.Public
+          ? 'Public Room'
+          : 'Group Room',
+    unread?.total && `${unread.total} Messages`,
+  ]
+    .flat()
+    .filter(Boolean)
+    .join(', ');
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
