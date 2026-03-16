@@ -20,7 +20,7 @@ import {
   Persona,
 } from '../../state/personas';
 import { PersonaPicker } from './PersonaPicker';
-import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
+import { EventType, IContent, MatrixError, MsgType, RelationType, Room } from 'matrix-js-sdk';
 import { ReactEditor } from 'slate-react';
 import { Transforms, Editor } from 'slate';
 import {
@@ -175,6 +175,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       legacyUsernameColor || direct ? colorMXID(replyUserID ?? '') : replyPowerColor;
 
     const [uploadBoard, setUploadBoard] = useState(true);
+    const [sendError, setSendError] = useState<string | null>(null);
     const [selectedFiles, setSelectedFiles] = useAtom(roomIdToUploadItemsAtomFamily(roomId));
     const uploadFamilyObserverAtom = createUploadFamilyObserverAtom(
       roomUploadAtomFamily,
@@ -323,7 +324,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         if (activePersona && perMessageProfiles) {
           c[PER_MSG_PROFILE_UNSTABLE] = buildPerMsgProfile(activePersona);
         }
-        mx.sendMessage(roomId, c as any);
+        mx.sendMessage(roomId, c as any).catch((err: unknown) => {
+          const msg =
+            err instanceof MatrixError
+              ? `Message blocked: ${err.data?.error ?? err.message}`
+              : 'Message failed to send.';
+          setSendError(msg);
+        });
       });
     };
 
@@ -449,7 +456,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         // Send unstable Beeper key (MSC4144 not yet merged into spec).
         content[PER_MSG_PROFILE_UNSTABLE] = buildPerMsgProfile(effectivePersona);
       }
-      mx.sendMessage(roomId, content as any);
+      mx.sendMessage(roomId, content as any).catch((err: unknown) => {
+        const msg =
+          err instanceof MatrixError
+            ? `Message blocked: ${err.data?.error ?? err.message}`
+            : 'Message failed to send.';
+        setSendError(msg);
+      });
       resetEditor(editor);
       resetEditorHistory(editor);
       setReplyDraft(undefined);
@@ -525,6 +538,28 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     return (
       <div ref={ref}>
+        {sendError && (
+          <Box
+            alignItems="Center"
+            gap="200"
+            style={{
+              padding: `${config.space.S100} ${config.space.S200}`,
+              background: 'var(--bg-danger, #f85149)',
+              color: 'var(--tc-on-danger, #fff)',
+            }}
+          >
+            <Text size="T300" style={{ flexGrow: 1 }}>{sendError}</Text>
+            <IconButton
+              size="300"
+              variant="Surface"
+              radii="300"
+              onClick={() => setSendError(null)}
+              aria-label="Dismiss error"
+            >
+              <Icon src={Icons.Cross} size="100" />
+            </IconButton>
+          </Box>
+        )}
         {selectedFiles.length > 0 && (
           <UploadBoard
             header={

@@ -44,6 +44,7 @@ function UnknownMentionItem({
       onKeyDown={(evt: ReactKeyboardEvent<HTMLButtonElement>) =>
         onTabPress(evt, () => handleAutocomplete(userId, name))
       }
+      onMouseDown={(evt: React.MouseEvent) => evt.preventDefault()}
       onClick={() => handleAutocomplete(userId, name)}
       before={
         <Avatar size="200">
@@ -165,6 +166,7 @@ export function UserMentionAutocomplete({
               onKeyDown={(evt: ReactKeyboardEvent<HTMLButtonElement>) =>
                 onTabPress(evt, () => handleAutocomplete(roomMember.userId, getName(roomMember)))
               }
+              onMouseDown={(evt: React.MouseEvent) => evt.preventDefault()}
               onClick={() => handleAutocomplete(roomMember.userId, getName(roomMember))}
               after={
                 <Text size="T200" priority="300" truncate>
