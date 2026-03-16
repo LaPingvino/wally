@@ -841,6 +841,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
     useCallback(() => roomInputRef.current, [roomInputRef])
   );
 
+  // Stay at bottom when virtual keyboard opens/closes (mobile)
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      requestAnimationFrame(() => {
+        const scrollElement = getScrollElement();
+        if (scrollElement && atBottomRef.current) {
+          scrollToBottom(scrollElement);
+        }
+      });
+    };
+    vv.addEventListener('resize', handler);
+    return () => vv.removeEventListener('resize', handler);
+  }, [getScrollElement]);
+
   const tryAutoMarkAsRead = useCallback(() => {
     const readUptoEventId = readUptoEventIdRef.current;
     if (!readUptoEventId) {
