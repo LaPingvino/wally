@@ -352,10 +352,12 @@ export function PersonaPicker() {
             }
           })
         );
-        // Merge: add personas not already present (by displayname)
+        // Merge: update existing personas by displayname, add new ones
         const merged = [...savedPersonas];
         uploaded.forEach((p) => {
-          if (!merged.some((s) => s.displayname === p.displayname)) merged.push(p);
+          const idx = merged.findIndex((s) => s.displayname === p.displayname);
+          if (idx >= 0) merged[idx] = p;
+          else merged.push(p);
         });
         setSavedPersonas(merged);
       } catch {
