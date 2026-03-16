@@ -258,6 +258,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
         <CustomEditor
           editor={editor}
           placeholder="Edit message..."
+          isMarkdown={isMarkdown}
           onKeyDown={handleKeyDown}
           onKeyUp={handleKeyUp}
           bottom={

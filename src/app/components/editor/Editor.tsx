@@ -67,6 +67,7 @@ type CustomEditorProps = {
   maxHeight?: string;
   editor: Editor;
   placeholder?: string;
+  isMarkdown?: boolean;
   onKeyDown?: KeyboardEventHandler;
   onKeyUp?: KeyboardEventHandler;
   onChange?: EditorChangeHandler;
@@ -83,6 +84,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
       maxHeight = '50vh',
       editor,
       placeholder,
+      isMarkdown,
       onKeyDown,
       onKeyUp,
       onChange,
@@ -100,10 +102,10 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
     const handleKeydown: KeyboardEventHandler = useCallback(
       (evt) => {
         onKeyDown?.(evt);
-        const shortcutToggled = toggleKeyboardShortcut(editor, evt);
+        const shortcutToggled = toggleKeyboardShortcut(editor, evt, isMarkdown);
         if (shortcutToggled) evt.preventDefault();
       },
-      [editor, onKeyDown]
+      [editor, onKeyDown, isMarkdown]
     );
 
     const renderPlaceholder = useCallback(
