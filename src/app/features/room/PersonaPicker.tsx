@@ -115,16 +115,21 @@ function PersonaForm({
   const mx = useMatrixClient();
   const [name, setName] = useState(initial?.displayname ?? '');
   const [avatar, setAvatar] = useState(initial?.avatar_url ?? '');
+  const [avatarHttp, setAvatarHttp] = useState(initial?.avatar_http ?? '');
   const [pronouns, setPronouns] = useState(initial?.pronouns ?? '');
   const [prefixes, setPrefixes] = useState<string[]>(initial?.prefixes ?? []);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadAndSetMxc = async (blob: Blob, filename: string) => {
+  const uploadAndSetMxc = async (blob: Blob, filename: string, sourceHttpUrl?: string) => {
     setUploading(true);
     try {
       const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
-      if (result.content_uri) setAvatar(result.content_uri);
+      if (result.content_uri) {
+        setAvatar(result.content_uri);
+        // File uploads don't have an original https URL to cache
+        if (!sourceHttpUrl) setAvatarHttp('');
+      }
     } catch {
       // leave avatar unchanged on error
     } finally {
@@ -149,7 +154,10 @@ function PersonaForm({
       const blob = await resp.blob();
       const filename = url.split('/').pop()?.split('?')[0] ?? 'avatar';
       const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
-      if (result.content_uri) setAvatar(result.content_uri);
+      if (result.content_uri) {
+        setAvatar(result.content_uri);
+        setAvatarHttp(url); // cache original https for round-trip export
+      }
     } catch {
       // leave as-is if fetch/upload fails
     } finally {
@@ -163,6 +171,7 @@ function PersonaForm({
     onSave({
       displayname,
       avatar_url: avatar.trim() || undefined,
+      ...(avatarHttp ? { avatar_http: avatarHttp } : {}),
       pronouns: pronouns.trim() || undefined,
       prefixes: prefixes.length > 0 ? prefixes : undefined,
     });
@@ -222,7 +231,7 @@ function PersonaForm({
             placeholder={uploading ? 'Uploading…' : 'Avatar URL (mxc://, optional)'}
             value={uploading ? '' : avatar}
             readOnly={uploading}
-            onChange={(e) => setAvatar((e.target as HTMLInputElement).value)}
+            onChange={(e) => { setAvatar((e.target as HTMLInputElement).value); setAvatarHttp(''); }}
             onBlur={handleAvatarBlur}
             onKeyDown={onKeyDown}
           />
@@ -287,7 +296,8 @@ export function PersonaPicker() {
           const blob = await resp.blob();
           const filename = p.avatar_url!.split('/').pop()?.split('?')[0] ?? 'avatar';
           const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
-          if (!cancelled && result.content_uri) updated[i] = { ...p, avatar_url: result.content_uri };
+          if (!cancelled && result.content_uri)
+            updated[i] = { ...p, avatar_url: result.content_uri, avatar_http: p.avatar_url };
         } catch {
           // leave as-is on error
         }
@@ -374,7 +384,7 @@ export function PersonaPicker() {
               const blob = await resp.blob();
               const filename = p.avatar_url.split('/').pop()?.split('?')[0] ?? 'avatar';
               const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
-              return { ...p, avatar_url: result.content_uri ?? p.avatar_url };
+              return { ...p, avatar_url: result.content_uri ?? p.avatar_url, avatar_http: p.avatar_url };
             } catch {
               return { ...p, avatar_url: undefined };
             }

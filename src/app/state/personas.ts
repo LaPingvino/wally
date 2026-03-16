@@ -2,7 +2,10 @@ import { atom } from 'jotai';
 
 export type Persona = {
   displayname: string;
+  /** mxc:// URI stored on the homeserver */
   avatar_url?: string;
+  /** Original https:// URL cached for round-trip export compatibility */
+  avatar_http?: string;
   pronouns?: string;
   /** Trigger prefixes for this persona (e.g. ["A:", "alex:"]). Multiple allowed. */
   prefixes?: string[];
@@ -135,7 +138,8 @@ export function exportPersonasToPluralKit(
 ): string {
   const members = personas.map((p) => {
     const mxc = p.avatar_url?.startsWith('mxc://') ? p.avatar_url : undefined;
-    const http = mxc && mxcToHttp ? (mxcToHttp(mxc) ?? null) : (p.avatar_url ?? null);
+    // Prefer cached original https URL, then homeserver conversion, then raw avatar_url
+    const http = p.avatar_http ?? (mxc && mxcToHttp ? (mxcToHttp(mxc) ?? null) : (p.avatar_url ?? null));
     return {
       name: p.displayname,
       display_name: null,
@@ -174,9 +178,12 @@ export function importPersonasFromJson(json: string): Persona[] {
         .map((t) => t.prefix as string);
       // Prefer mxc:// (our custom round-trip field) over https:// avatar_url
       const avatarUrl = m.avatar_mxc || m.avatar_url || undefined;
+      // Cache the https URL for round-trip export (prefer avatar_url if it's https)
+      const avatarHttp = m.avatar_url?.startsWith('http') ? m.avatar_url : undefined;
       return {
         displayname,
         ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+        ...(avatarHttp ? { avatar_http: avatarHttp } : {}),
         ...(m.pronouns ? { pronouns: m.pronouns } : {}),
         ...(prefixes.length > 0 ? { prefixes } : {}),
       };
