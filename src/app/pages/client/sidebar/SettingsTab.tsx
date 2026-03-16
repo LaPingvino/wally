@@ -97,7 +97,7 @@ export function SettingsTab() {
     <SidebarItem active={settings || !!menuAnchor}>
       <SidebarItemTooltip tooltip={multiAccount ? 'Account & Settings' : 'User Settings'}>
         {(triggerRef) => (
-          <SidebarAvatar as="button" ref={triggerRef} onClick={openSettings}>
+          <SidebarAvatar as="button" ref={triggerRef} onClick={handleClick}>
             <UserAvatar
               userId={userId}
               src={avatarUrl}
