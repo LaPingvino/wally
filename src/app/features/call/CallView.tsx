@@ -3,14 +3,16 @@ import React, {
   useContext,
   useCallback,
   useEffect,
+  useId,
   useRef,
   MouseEventHandler,
   useState,
   ReactNode,
 } from 'react';
-import { Box, Button, config, Spinner, Text } from 'folds';
+import { Box, Button, config, Icon, Icons, Spinner, Text } from 'folds';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { useCallMembers } from '../../hooks/useCallMemberships';
+import { MicrophoneButton, VideoButton } from './Controls';
 
 import { CallRefContext } from '../../pages/client/call/PersistentCallContainer';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -60,6 +62,7 @@ export function CallView({ room }: { room: Room }) {
   const mx = useMatrixClient();
 
   const [visibleCallNames, setVisibleCallNames] = useState('');
+  const joinHeadingId = useId();
 
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
@@ -75,6 +78,12 @@ export function CallView({ room }: { room: Room }) {
     setActiveCallRoomId,
     hangUp,
     setViewedCallRoomId,
+    pendingJoin,
+    confirmJoin,
+    isAudioEnabled,
+    isVideoEnabled,
+    setAudioEnabled,
+    setVideoEnabled,
   } = useCallState();
 
   const isActiveCallRoom = activeCallRoomId === room.roomId;
@@ -234,6 +243,7 @@ export function CallView({ room }: { room: Room }) {
       direction="Column"
       style={{ display: isCallViewVisible ? 'flex' : 'none' }}
     >
+      {/* iframe host: reserves space for the fixed-position EC iframe */}
       <div
         ref={iframeHostRef}
         style={{
@@ -241,10 +251,66 @@ export function CallView({ room }: { room: Room }) {
           width: '100%',
           position: 'relative',
           pointerEvents: 'none',
-          // Show as soon as the call is active so the EC lobby iframe is visible.
-          display: isActiveCallRoom ? 'flex' : 'none',
+          // Show once the call is active and the pre-join screen has been dismissed.
+          display: isActiveCallRoom && !pendingJoin ? 'flex' : 'none',
         }}
       />
+      {/* Pre-join screen: shown after the user clicks "Join Voice" but before confirming */}
+      {isActiveCallRoom && pendingJoin && (
+        <Box
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={joinHeadingId}
+          grow="Yes"
+          direction="Column"
+          alignItems="Center"
+          justifyContent="Center"
+          gap="400"
+        >
+          <Box
+            direction="Column"
+            alignItems="Center"
+            gap="400"
+            style={{ padding: '32px', maxWidth: '280px', width: '100%' }}
+          >
+            <Icon src={Icons.Phone} size="600" />
+            <Text id={joinHeadingId} size="H4" style={{ textAlign: 'center' }}>
+              {roomName}
+            </Text>
+            <Box direction="Row" gap="300">
+              <MicrophoneButton
+                enabled={isAudioEnabled}
+                onToggle={() => setAudioEnabled(!isAudioEnabled)}
+              />
+              <VideoButton
+                enabled={isVideoEnabled}
+                onToggle={() => setVideoEnabled(!isVideoEnabled)}
+              />
+            </Box>
+            <Box direction="Row" gap="200">
+              <Button
+                variant="Critical"
+                fill="Soft"
+                onClick={hangUp}
+                aria-label="Cancel joining call"
+              >
+                <Text size="B400">Cancel</Text>
+              </Button>
+              <Button
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
+                variant="Success"
+                fill="Solid"
+                before={<Icon src={Icons.Phone} size="200" filled />}
+                onClick={confirmJoin}
+                aria-label={`Join call in ${roomName}`}
+              >
+                <Text size="B400">Join</Text>
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      )}
       <Box
         grow="Yes"
         justifyContent="Center"

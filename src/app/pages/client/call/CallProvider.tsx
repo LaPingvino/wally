@@ -18,6 +18,8 @@ import { useParams } from 'react-router-dom';
 import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { SmallWidget } from '../../../features/call/SmallWidget';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
 
 interface MediaStatePayload {
   data?: {
@@ -62,6 +64,9 @@ interface CallContextState {
   toggleVideo: () => Promise<void>;
   toggleChat: () => Promise<void>;
   toggleCallView: () => void;
+  pendingJoin: boolean;
+  joinConfirmedRef: React.MutableRefObject<boolean>;
+  confirmJoin: () => void;
 }
 
 const CallContext = createContext<CallContextState | undefined>(undefined);
@@ -96,6 +101,27 @@ export function CallProvider({ children }: CallProviderProps) {
   const [isActiveCallReady, setIsActiveCallReady] = useState<boolean>(false);
   // Tracks whether m.call.notify has been sent for the current call session
   const callNotifySentRef = useRef<boolean>(false);
+
+  const [callAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
+  const [pendingJoin, setPendingJoin] = useState(false);
+  // Ref avoids a one-render race: when activeCallRoomId first becomes non-null,
+  // the pendingJoin state update hasn't flushed yet. PersistentCallContainer's
+  // setupWidget effect checks this ref so it doesn't load the iframe too early.
+  const joinConfirmedRef = useRef(false);
+
+  // Reset pending-join state whenever the active call room changes.
+  // callAutoJoin is intentionally read as a snapshot (not in deps) so that
+  // changing the setting mid-call doesn't reset pending state unexpectedly.
+  useEffect(() => {
+    joinConfirmedRef.current = false;
+    setPendingJoin(activeCallRoomId ? !callAutoJoin : false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCallRoomId]);
+
+  const confirmJoin = useCallback(() => {
+    joinConfirmedRef.current = true;
+    setPendingJoin(false);
+  }, []);
 
   const { roomIdOrAlias: viewedRoomId } = useParams<{ roomIdOrAlias: string }>();
 
@@ -160,6 +186,7 @@ export function CallProvider({ children }: CallProviderProps) {
     activeClientWidgetApi?.transport.send(`${WIDGET_HANGUP_ACTION}`, {});
     setIsActiveCallReady(false);
     setIsCallViewOpenState(false);
+    setPendingJoin(false);
     if (iframeToBlank) {
       setTimeout(() => { iframeToBlank.src = 'about:blank'; }, 300);
     }
@@ -401,6 +428,9 @@ export function CallProvider({ children }: CallProviderProps) {
       toggleVideo,
       toggleChat,
       toggleCallView,
+      pendingJoin,
+      joinConfirmedRef,
+      confirmJoin,
     }),
     [
       activeCallRoomId,
@@ -424,6 +454,9 @@ export function CallProvider({ children }: CallProviderProps) {
       toggleVideo,
       toggleChat,
       toggleCallView,
+      pendingJoin,
+      joinConfirmedRef,
+      confirmJoin,
     ]
   );
 
