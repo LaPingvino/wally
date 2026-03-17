@@ -38,6 +38,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     viewedCallRoomId,
     isChatOpen,
     isActiveCallReady,
+    isCallViewOpen,
     registerActiveClientWidgetApi,
     activeClientWidget,
     pendingJoin,
@@ -205,7 +206,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
           width: 0,
           height: 0,
           border: 'none',
-          display: activeCallRoomId && !pendingJoin && !(isMobile && isChatOpen) ? 'block' : 'none',
+          display: activeCallRoomId && !pendingJoin && isCallViewOpen && !(isMobile && isChatOpen) ? 'block' : 'none',
         }}
         title="Persistent Element Call"
         sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads"

@@ -35,7 +35,6 @@ type OriginalStyles = {
   width?: string;
   height?: string;
   zIndex?: string;
-  display?: string;
   visibility?: string;
   pointerEvents?: string;
   border?: string;
@@ -142,7 +141,6 @@ export function CallView({ room }: { room: Room }) {
           width: iframeElement.style.width || computed.width,
           height: iframeElement.style.height || computed.height,
           zIndex: iframeElement.style.zIndex || computed.zIndex,
-          display: iframeElement.style.display || computed.display,
           visibility: iframeElement.style.visibility || computed.visibility,
           pointerEvents: iframeElement.style.pointerEvents || computed.pointerEvents,
           border: iframeElement.style.border || computed.border,
@@ -158,11 +156,13 @@ export function CallView({ room }: { room: Room }) {
       iframeElement.style.height = `${hostRect.height}px`;
       iframeElement.style.border = 'none';
       iframeElement.style.zIndex = '1000';
-      iframeElement.style.display = (room.isCallRoom() || isActiveCallRoom) && isCallViewOpen ? 'block' : 'none';
+      // display is NOT set here — PersistentCallContainer's React style prop owns it.
+      // This avoids a fight where React sets display:none (pendingJoin) but the effect
+      // immediately overrides it to display:block.
       iframeElement.style.visibility = 'visible';
       iframeElement.style.pointerEvents = 'auto';
     }
-  }, [activeIframeDisplayRef, room, isActiveCallRoom, isCallViewOpen]);
+  }, [activeIframeDisplayRef, room, isActiveCallRoom]);
 
   const debouncedApplyFixedPositioning = useDebounce(applyFixedPositioningToIframe, {
     wait: 50,
@@ -241,9 +241,12 @@ export function CallView({ room }: { room: Room }) {
     <Box
       grow="Yes"
       direction="Column"
-      style={{ display: isCallViewVisible ? 'flex' : 'none' }}
+      style={{ display: isCallViewVisible ? 'flex' : 'none', position: 'relative' }}
     >
-      {/* iframe host: reserves space for the fixed-position EC iframe */}
+      {/* iframe host: reserves space for the fixed-position EC iframe.
+          Always visible when the call is active — even during pendingJoin — so that
+          getBoundingClientRect() returns a valid rect and the iframe is positioned correctly
+          before the pre-join screen is dismissed. */}
       <div
         ref={iframeHostRef}
         style={{
@@ -251,11 +254,10 @@ export function CallView({ room }: { room: Room }) {
           width: '100%',
           position: 'relative',
           pointerEvents: 'none',
-          // Show once the call is active and the pre-join screen has been dismissed.
-          display: isActiveCallRoom && !pendingJoin ? 'flex' : 'none',
+          display: isActiveCallRoom ? 'flex' : 'none',
         }}
       />
-      {/* Pre-join screen: shown after the user clicks "Join Voice" but before confirming */}
+      {/* Pre-join screen: overlaid absolutely so the iframe host below it still has dimensions */}
       {isActiveCallRoom && pendingJoin && (
         <Box
           role="dialog"
@@ -266,6 +268,7 @@ export function CallView({ room }: { room: Room }) {
           alignItems="Center"
           justifyContent="Center"
           gap="400"
+          style={{ position: 'absolute', inset: 0, zIndex: 1 }}
         >
           <Box
             direction="Column"
