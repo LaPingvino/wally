@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
-import { Room, RoomEvent, RoomEventHandlerMap, RoomMemberEvent } from 'matrix-js-sdk';
+import { Room, RoomEvent, RoomEventHandlerMap, RoomStateEvent } from 'matrix-js-sdk';
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEvent } from './useStateEvent';
 
@@ -12,7 +12,7 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
     if (!dm) return;
     let cancelled = false;
     let rafId: number | null = null;
-    // Debounce via rAF: many member events may fire in one batch (e.g. large group
+    // Debounce via rAF: many member state events may fire in one batch (e.g. large group
     // incorrectly marked as DM), so coalesce into a single setState per frame.
     const onMember = () => {
       if (cancelled) return;
@@ -23,15 +23,11 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
       });
     };
     room.loadMembersIfNeeded().then(() => { onMember(); });
-    room.on(RoomMemberEvent.Membership, onMember);
-    room.on(RoomMemberEvent.Name, onMember);
-    room.on(RoomMemberEvent.AvatarUrl, onMember);
+    room.on(RoomStateEvent.Members, onMember);
     return () => {
       cancelled = true;
       if (rafId !== null) cancelAnimationFrame(rafId);
-      room.off(RoomMemberEvent.Membership, onMember);
-      room.off(RoomMemberEvent.Name, onMember);
-      room.off(RoomMemberEvent.AvatarUrl, onMember);
+      room.off(RoomStateEvent.Members, onMember);
     };
   }, [room, dm]);
 
@@ -86,7 +82,7 @@ export const useRoomName = (room: Room, dm?: boolean): string => {
     if (!dm) return;
     let cancelled = false;
     let rafId: number | null = null;
-    // Debounce via rAF: many member events may fire in one batch (e.g. large group
+    // Debounce via rAF: many member state events may fire in one batch (e.g. large group
     // incorrectly marked as DM), so coalesce into a single getDmName call per frame.
     const onMember = () => {
       if (cancelled) return;
@@ -97,13 +93,11 @@ export const useRoomName = (room: Room, dm?: boolean): string => {
       });
     };
     room.loadMembersIfNeeded().then(() => { onMember(); });
-    room.on(RoomMemberEvent.Name, onMember);
-    room.on(RoomMemberEvent.Membership, onMember);
+    room.on(RoomStateEvent.Members, onMember);
     return () => {
       cancelled = true;
       if (rafId !== null) cancelAnimationFrame(rafId);
-      room.off(RoomMemberEvent.Name, onMember);
-      room.off(RoomMemberEvent.Membership, onMember);
+      room.off(RoomStateEvent.Members, onMember);
     };
   }, [room, dm]);
 

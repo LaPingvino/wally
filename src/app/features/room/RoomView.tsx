@@ -190,7 +190,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
                 const ts = mxEvent.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
                 const parts: string[] = [sender, body];
                 // Reactions on this message
-                const relations = room.getUnfilteredTimelineSet()
+                const relations = (room.getUnfilteredTimelineSet() as any)
                   .getRelationsForEvent?.(evtId, 'm.annotation', 'm.reaction');
                 if (relations && relations.getRelations().length > 0) {
                   playReactionSound();
