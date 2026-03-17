@@ -461,19 +461,22 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
       const sendFiles = () => uploadBoardHandlers.current?.handleSend() ?? Promise.resolve();
 
+      // Reset the editor synchronously BEFORE any await so that handleKeyUp
+      // (which fires in the same tick) sees an empty editor and closes the
+      // emoji/autocomplete picker immediately.
+      if (hasText) {
+        resetEditor(editor);
+        resetEditorHistory(editor);
+        setReplyDraft(undefined);
+        sendTypingStatus(false);
+      }
+
       if (captionPosition === 'after') {
         await sendFiles();
         if (sendText) await sendText();
       } else {
         if (sendText) await sendText();
         await sendFiles();
-      }
-
-      if (hasText) {
-        resetEditor(editor);
-        resetEditorHistory(editor);
-        setReplyDraft(undefined);
-        sendTypingStatus(false);
       }
     }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona, setActivePersona, savedPersonas, prefixSticky, perMessageProfiles, captionPosition, selectedFiles]);
 
