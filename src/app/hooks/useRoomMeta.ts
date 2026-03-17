@@ -11,15 +11,24 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   useEffect(() => {
     if (!dm) return;
     let cancelled = false;
-    room.loadMembersIfNeeded().then(() => {
-      if (!cancelled) setMemberTick((t) => t + 1);
-    });
-    const onMember = () => { if (!cancelled) setMemberTick((t) => t + 1); };
+    let rafId: number | null = null;
+    // Debounce via rAF: many member events may fire in one batch (e.g. large group
+    // incorrectly marked as DM), so coalesce into a single setState per frame.
+    const onMember = () => {
+      if (cancelled) return;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!cancelled) setMemberTick((t) => t + 1);
+      });
+    };
+    room.loadMembersIfNeeded().then(() => { onMember(); });
     room.on(RoomMemberEvent.Membership, onMember);
     room.on(RoomMemberEvent.Name, onMember);
     room.on(RoomMemberEvent.AvatarUrl, onMember);
     return () => {
       cancelled = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
       room.off(RoomMemberEvent.Membership, onMember);
       room.off(RoomMemberEvent.Name, onMember);
       room.off(RoomMemberEvent.AvatarUrl, onMember);
@@ -76,14 +85,23 @@ export const useRoomName = (room: Room, dm?: boolean): string => {
   useEffect(() => {
     if (!dm) return;
     let cancelled = false;
-    room.loadMembersIfNeeded().then(() => {
-      if (!cancelled) setName(getDmName(room));
-    });
-    const onMember = () => { if (!cancelled) setName(getDmName(room)); };
+    let rafId: number | null = null;
+    // Debounce via rAF: many member events may fire in one batch (e.g. large group
+    // incorrectly marked as DM), so coalesce into a single getDmName call per frame.
+    const onMember = () => {
+      if (cancelled) return;
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!cancelled) setName(getDmName(room));
+      });
+    };
+    room.loadMembersIfNeeded().then(() => { onMember(); });
     room.on(RoomMemberEvent.Name, onMember);
     room.on(RoomMemberEvent.Membership, onMember);
     return () => {
       cancelled = true;
+      if (rafId !== null) cancelAnimationFrame(rafId);
       room.off(RoomMemberEvent.Name, onMember);
       room.off(RoomMemberEvent.Membership, onMember);
     };
