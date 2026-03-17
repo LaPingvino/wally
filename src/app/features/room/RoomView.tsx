@@ -31,6 +31,7 @@ import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { announce } from '../../utils/announce';
+import { useRoomName } from '../../hooks/useRoomMeta';
 import { playReactionSound, playReplyToMeSound } from '../../utils/sounds';
 
 const FN_KEYS_REGEX = /^F\d+$/;
@@ -85,6 +86,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
   const direct = useIsDirectRoom();
+  const roomDisplayName = useRoomName(room, direct);
   const unread = useRoomUnread(roomId, roomToUnreadAtom);
 
   useEffect(() => {
@@ -95,7 +97,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
         : room.getJoinRule() === JoinRule.Public
           ? 'Public Room'
           : 'Group Room';
-    const parts: string[] = [room.name, roomType];
+    const parts: string[] = [roomDisplayName, roomType];
     if (unread?.total) parts.push(`${unread.total} unread messages`);
     const callMemberCount = MatrixRTCSession.callMembershipsForRoom(room).length;
     if (callMemberCount > 0)

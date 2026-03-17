@@ -9,7 +9,8 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { PowerLevelsContextProvider, usePowerLevels } from '../../hooks/usePowerLevels';
-import { useRoom } from '../../hooks/useRoom';
+import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
+import { useRoomName } from '../../hooks/useRoomMeta';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { markAsRead } from '../../utils/notifications';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -35,6 +36,8 @@ export function Room() {
   const { eventId } = useParams();
   const room = useRoom();
   const mx = useMatrixClient();
+  const direct = useIsDirectRoom();
+  const roomDisplayName = useRoomName(room, direct);
 
   const [isDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -125,12 +128,11 @@ export function Room() {
   }, [setPeopleDrawer, getEffective]);
 
   useEffect(() => {
-    const name = room.name || room.roomId;
-    document.title = `${name} – Wally`;
+    document.title = `${roomDisplayName || room.roomId} – Wally`;
     return () => {
       document.title = 'Wally';
     };
-  }, [room.name, room.roomId]);
+  }, [roomDisplayName, room.roomId]);
 
   const isVoiceRoom = room.isCallRoom();
   const isCallLayout = isVoiceRoom || isActiveCall;
