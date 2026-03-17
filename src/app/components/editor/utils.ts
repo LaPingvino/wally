@@ -249,7 +249,11 @@ export const getPrevWorldRange = (editor: Editor): BaseRange | undefined => {
     reverse: true,
     match: (char) => char === ' ',
   });
-  return worldStartPoint && Editor.range(editor, worldStartPoint, cursorPoint);
+  if (!worldStartPoint) return undefined;
+  // Don't cross block boundaries — if the found start is in a different top-level
+  // block than the cursor (e.g. after Enter inserted a new paragraph), discard it.
+  if (worldStartPoint.path[0] !== cursorPoint.path[0]) return undefined;
+  return Editor.range(editor, worldStartPoint, cursorPoint);
 };
 
 export const isEmptyEditor = (editor: Editor): boolean => {
