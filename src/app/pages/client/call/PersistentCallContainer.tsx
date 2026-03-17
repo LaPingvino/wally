@@ -70,6 +70,14 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
             return;
           }
 
+          // Stop any previous widget instance before creating a new one.
+          // Without this, the old ClientWidgetApi keeps waiting for ContentLoaded
+          // indefinitely, producing a timeout warning in the console.
+          if (callSmallWidgetRef.current) {
+            callSmallWidgetRef.current.stopMessaging();
+            callSmallWidgetRef.current = null;
+          }
+
           const iframeElement = iframeRef.current;
           if (!iframeElement) {
             return;
@@ -86,10 +94,6 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
             ? MatrixRTCSession.callMembershipsForRoom(room).length > 0
             : false;
           const effectiveIntent = hasOngoingCall ? 'join_existing' : intentParam;
-          // Only use per-participant E2EE if the room has Matrix encryption enabled.
-          // Like gomuks: passing false overrides EC's own default of true for unencrypted rooms.
-          const isRoomEncrypted = !!room?.currentState.getStateEvents('m.room.encryption', '');
-
           const widgetId = `element-call-${roomIdToSet}-${Date.now()}`;
           const newUrl = getWidgetUrl(
             mx,
@@ -103,7 +107,10 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
               // intermediate states that would otherwise require a reload.
               skipLobby: true,
               returnToLobby: 'true',
-              perParticipantE2EE: isRoomEncrypted ? 'true' : 'false',
+              // Per-participant E2EE requires the LiveKit SFU to be configured for it.
+              // Passing 'true' on a non-E2EE SFU causes EC to throw "e2ee not configured".
+              // Always pass 'false' here; the SFU/JWT service controls E2EE at the room level.
+              perParticipantE2EE: 'false',
               theme: themeKind,
               callIntent: callIntentParam,
             },
