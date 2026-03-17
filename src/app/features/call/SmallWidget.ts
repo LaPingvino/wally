@@ -76,7 +76,7 @@ export const getWidgetUrl = (
     widgetId,
     appPrompt: 'false',
     returnToLobby: setParams.returnToLobby ?? 'true',
-    perParticipantE2EE: setParams.perParticipantE2EE ?? 'true',
+    perParticipantE2EE: setParams.perParticipantE2EE ?? 'false',
     callIntent: setParams.callIntent ?? 'video',
     header: 'none',
     confineToRoom: 'true',
@@ -391,7 +391,10 @@ export const getWidgetData = (
   currentData: object,
   overwriteData: object,
 ): IWidgetData => {
-  const perParticipantE2EE = true;
+  // Always false — per-participant E2EE requires the LiveKit SFU to be provisioned for it.
+  // Passing true on a standard SFU causes EC to throw "e2ee not configured" on connect.
+  // The SFU/JWT service controls E2EE at the room level, not us.
+  const perParticipantE2EE = false;
 
   // Pass the LiveKit foci from .well-known/matrix/client explicitly so EC
   // doesn't have to re-fetch .well-known itself (which can fail if the server
