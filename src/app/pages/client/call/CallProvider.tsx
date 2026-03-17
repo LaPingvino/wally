@@ -270,8 +270,10 @@ export function CallProvider({ children }: CallProviderProps) {
     };
 
     const handleMediaStateUpdate = (ev: CustomEvent<MediaStatePayload>) => {
-      if (!isActiveCallReady) return;
+      // Always preventDefault so the widget API sends a reply — without this,
+      // EC's transport times out waiting for the host to acknowledge device_mute.
       ev.preventDefault();
+      if (!isActiveCallReady) return;
 
       /* eslint-disable camelcase */
       const { audio_enabled, video_enabled } = ev.detail.data ?? {};
