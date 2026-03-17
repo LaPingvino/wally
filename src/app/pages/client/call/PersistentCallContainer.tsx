@@ -189,6 +189,28 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     joinConfirmedRef,
   ]);
 
+  // If EC has been loading for 15 seconds without becoming ready (isActiveCallReady=false),
+  // reload the iframe. This recovers from the case where the widget API channel (ContentLoaded
+  // → capabilities negotiation) fails to establish on the first load — EC can't get OpenID
+  // credentials without a working channel, so it stays "Not connected yet" indefinitely.
+  // The reload resets EC cleanly; the existing ClientWidgetApi instance stays and picks up the
+  // new ContentLoaded after reload. Fires at most once per widget instance.
+  useEffect(() => {
+    const iframe = callIframeRef.current;
+    if (!activeClientWidget || isActiveCallReady || !iframe) return;
+
+    const timer = setTimeout(() => {
+      const currentIframe = callIframeRef.current;
+      if (currentIframe && currentIframe.src && currentIframe.src !== 'about:blank') {
+        // Force EC to reload — same URL/widgetId so the existing ClientWidgetApi handles it.
+        // eslint-disable-next-line no-self-assign
+        currentIframe.src = currentIframe.src;
+      }
+    }, 15000);
+
+    return () => clearTimeout(timer);
+  }, [activeClientWidget, isActiveCallReady, callIframeRef]);
+
   const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
 
   return (
