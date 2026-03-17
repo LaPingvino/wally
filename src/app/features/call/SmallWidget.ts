@@ -391,13 +391,17 @@ export const getWidgetData = (
   currentData: object,
   overwriteData: object,
 ): IWidgetData => {
-  // Example: Determine E2EE based on room state if needed
-  const perParticipantE2EE = true; // Default or based on logic
-  // const roomEncryption = client.getRoom(roomId)?.currentState.getStateEvents(EventType.RoomEncryption, "");
-  // if (roomEncryption) perParticipantE2EE = true; // Simplified example
+  const perParticipantE2EE = true;
+
+  // Pass the LiveKit foci from .well-known/matrix/client explicitly so EC
+  // doesn't have to re-fetch .well-known itself (which can fail if the server
+  // domain differs from the homeserver URL, or due to CORS in the iframe).
+  const wellKnown = client.getClientWellKnown() as Record<string, unknown> | undefined;
+  const fociPreferred = wellKnown?.['org.matrix.msc4143.rtc_foci'] ?? [];
 
   return {
     ...currentData,
+    fociPreferred,
     ...overwriteData,
     perParticipantE2EE,
   };

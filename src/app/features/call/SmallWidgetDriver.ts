@@ -447,10 +447,18 @@ export class SmallWidgetDriver extends WidgetDriver {
   }
 
   public async askOpenID(observer: SimpleObservable<IOpenIDUpdate>): Promise<void> {
-    return observer.update({
-      state: OpenIDRequestState.Allowed,
-      token: await this.mxClient.getOpenIdToken(),
-    });
+    try {
+      const token = await this.mxClient.getOpenIdToken();
+      return observer.update({
+        state: OpenIDRequestState.Allowed,
+        token,
+      });
+    } catch {
+      // If the homeserver doesn't support the OpenID token endpoint, tell EC
+      // it's blocked rather than leaving the observer hanging (which causes EC
+      // to get stuck at "Connecting" indefinitely with no network requests).
+      return observer.update({ state: OpenIDRequestState.Blocked });
+    }
   }
 
   /**
