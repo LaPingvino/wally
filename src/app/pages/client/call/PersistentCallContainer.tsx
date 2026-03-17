@@ -3,14 +3,11 @@ import React, {
   ReactNode,
   useCallback,
   useEffect,
-  useId,
   useMemo,
   useRef,
-  useState,
 } from 'react';
 import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { ClientWidgetApi } from 'matrix-widget-api';
-import { Box, Button, Icon, Icons, Text } from 'folds';
 import { useCallState } from './CallProvider';
 import {
   createVirtualWidget,
@@ -19,13 +16,10 @@ import {
   getWidgetUrl,
   getCallIntentParams,
 } from '../../../features/call/SmallWidget';
-import { MicrophoneButton, VideoButton } from '../../../features/call/Controls';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { ThemeKind, useTheme } from '../../../hooks/useTheme';
-import { useSetting } from '../../../state/hooks/settings';
-import { settingsAtom } from '../../../state/settings';
 
 interface PersistentCallContainerProps {
   children: ReactNode;
@@ -38,34 +32,22 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   const callIframeRef = useRef<HTMLIFrameElement | null>(null);
   const callWidgetApiRef = useRef<ClientWidgetApi | null>(null);
   const callSmallWidgetRef = useRef<SmallWidget | null>(null);
-  // When autoJoin is off, hold at the pre-join screen until the user confirms.
-  const [pendingJoin, setPendingJoin] = useState(false);
-  // Tracks whether the user explicitly clicked Join (vs. pendingJoin=false from initialization).
-  // Without this, the setupWidget effect fires on the very first render where activeCallRoomId
-  // becomes non-null — pendingJoin hasn't updated yet (React state is one render behind), so
-  // the effect would call setupWidget before the pre-join screen has even appeared.
-  const joinConfirmedRef = useRef(false);
-  const joinHeadingId = useId();
 
   const {
     activeCallRoomId,
     viewedCallRoomId,
     isChatOpen,
     isActiveCallReady,
-    isAudioEnabled,
-    isVideoEnabled,
-    setAudioEnabled,
-    setVideoEnabled,
     registerActiveClientWidgetApi,
     activeClientWidget,
-    hangUp,
+    pendingJoin,
+    joinConfirmedRef,
   } = useCallState();
   const mx = useMatrixClient();
   const clientConfig = useClientConfig();
   const screenSize = useScreenSizeContext();
   const theme = useTheme();
   const isMobile = screenSize === ScreenSize.Mobile;
-  const [callAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
 
   /* eslint-disable no-param-reassign */
 
@@ -176,22 +158,13 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     ],
   );
 
-  // When a call starts and autoJoin is off, show the pre-join screen.
-  // Reset join confirmation and pending state whenever activeCallRoomId changes.
   useEffect(() => {
-    joinConfirmedRef.current = false;
-    setPendingJoin(activeCallRoomId ? !callAutoJoin : false);
-  // Only run when activeCallRoomId changes (new call) — callAutoJoin is intentionally
-  // read as a snapshot so its current value is used without re-triggering on setting changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCallRoomId]);
-
-  useEffect(() => {
-    // Load EC when: autoJoin is on, OR when autoJoin is off and the user has explicitly
-    // confirmed via the pre-join screen (joinConfirmedRef). Checking the ref rather than
-    // pendingJoin alone avoids a one-render race where pendingJoin is still false on the
-    // first render after activeCallRoomId is set (before the pendingJoin effect runs).
-    if (activeCallRoomId && (callAutoJoin || joinConfirmedRef.current)) {
+    // Load EC when: autoJoin is on (pendingJoin=false from the start), OR when the user
+    // has explicitly confirmed via the pre-join screen (joinConfirmedRef). Checking the
+    // ref rather than pendingJoin alone avoids a one-render race where pendingJoin is
+    // still false on the first render after activeCallRoomId is set (before the
+    // pendingJoin effect in CallProvider runs).
+    if (activeCallRoomId && (!pendingJoin || joinConfirmedRef.current)) {
       setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, theme.kind);
     }
   }, [
@@ -205,102 +178,33 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     viewedCallRoomId,
     isActiveCallReady,
     pendingJoin,
-    callAutoJoin,
+    joinConfirmedRef,
   ]);
 
   const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
 
-  const roomName = activeCallRoomId
-    ? (mx?.getRoom(activeCallRoomId)?.name ?? 'Call')
-    : 'Call';
-
   return (
     <CallRefContext.Provider value={memoizedIframeRef}>
-      <Box grow="No">
-        <Box
-          direction="Column"
-          style={{
-            position: 'relative',
-            zIndex: 0,
-            display: activeCallRoomId && !(isMobile && isChatOpen) ? 'flex' : 'none',
-            width: '100%',
-            height: '100%',
-          }}
-        >
-          <Box grow="Yes" style={{ position: 'relative' }}>
-            <iframe
-              ref={callIframeRef}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                display: pendingJoin ? 'none' : 'flex',
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              }}
-              title="Persistent Element Call"
-              sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads"
-              allow="microphone; camera; display-capture; autoplay; clipboard-write;"
-              src="about:blank"
-            />
-            {pendingJoin && activeCallRoomId && (
-              <Box
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={joinHeadingId}
-                direction="Column"
-                alignItems="Center"
-                justifyContent="Center"
-                style={{ position: 'absolute', inset: 0, gap: '24px' }}
-              >
-                <Box
-                  direction="Column"
-                  alignItems="Center"
-                  gap="400"
-                  style={{ padding: '32px', maxWidth: '280px', width: '100%' }}
-                >
-                  <Icon src={Icons.Phone} size="600" />
-                  <Text id={joinHeadingId} size="H4" style={{ textAlign: 'center' }}>
-                    {roomName}
-                  </Text>
-                  <Box direction="Row" gap="300">
-                    <MicrophoneButton
-                      enabled={isAudioEnabled}
-                      onToggle={() => setAudioEnabled(!isAudioEnabled)}
-                    />
-                    <VideoButton
-                      enabled={isVideoEnabled}
-                      onToggle={() => setVideoEnabled(!isVideoEnabled)}
-                    />
-                  </Box>
-                  <Box direction="Row" gap="200">
-                    <Button
-                      variant="Critical"
-                      fill="Soft"
-                      onClick={hangUp}
-                      aria-label="Cancel joining call"
-                    >
-                      <Text size="B400">Cancel</Text>
-                    </Button>
-                    <Button
-                      // eslint-disable-next-line jsx-a11y/no-autofocus
-                      autoFocus
-                      variant="Success"
-                      fill="Solid"
-                      before={<Icon src={Icons.Phone} size="200" filled />}
-                      onClick={() => { joinConfirmedRef.current = true; setPendingJoin(false); }}
-                      aria-label={`Join call in ${roomName}`}
-                    >
-                      <Text size="B400">Join</Text>
-                    </Button>
-                  </Box>
-                </Box>
-              </Box>
-            )}
-          </Box>
-        </Box>
-      </Box>
+      {/* The iframe lives here (outside the room component tree) so it persists
+          across room navigation. CallView positions it via fixed-position overlay. */}
+      <iframe
+        ref={callIframeRef}
+        style={{
+          position: 'fixed',
+          // Hidden by default; CallView's applyFixedPositioningToIframe moves it
+          // into the correct position and makes it visible when a call is active.
+          top: 0,
+          left: 0,
+          width: 0,
+          height: 0,
+          border: 'none',
+          display: activeCallRoomId && !pendingJoin && !(isMobile && isChatOpen) ? 'block' : 'none',
+        }}
+        title="Persistent Element Call"
+        sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads"
+        allow="microphone; camera; display-capture; autoplay; clipboard-write;"
+        src="about:blank"
+      />
       {children}
     </CallRefContext.Provider>
   );
