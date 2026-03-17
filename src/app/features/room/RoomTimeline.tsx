@@ -1715,7 +1715,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                     radii="Pill"
                     before={<Icon size="50" src={Icons.Phone} />}
                     onClick={() =>
-                      mx.sendEvent(room.roomId, 'm.call.notify', content).catch(() => undefined)
+                      mx.sendEvent(room.roomId, 'm.call.notify' as any, content).catch(() => undefined)
                     }
                     aria-label="Ring again"
                   >

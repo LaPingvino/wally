@@ -336,7 +336,7 @@ export function CallProvider({ children }: CallProviderProps) {
           const otherMembers = room.getJoinedMembers()
             .map((m) => m.userId)
             .filter((id) => id !== mx.getUserId());
-          mx.sendEvent(activeCallRoomId, 'm.call.notify', {
+          mx.sendEvent(activeCallRoomId, 'm.call.notify' as any, {
             call_id: '',
             application: 'm.call',
             'm.mentions': isDm ? { room: false, user_ids: otherMembers } : { room: true },

@@ -145,6 +145,8 @@ function MessageNotifications() {
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
+  const [inRoomActivitySound] = useSetting(settingsAtom, 'inRoomActivitySound');
+  const prevTypingCountRef = useRef(0);
 
   const navigate = useNavigate();
   const notificationSelected = useInboxNotificationsSelected();
@@ -266,8 +268,8 @@ function MessageNotifications() {
     mx.on(RoomEvent.Timeline, handleReactionEvent);
 
     // Typing sound for current room
-    const handleTyping = (event: MatrixEvent, room: Room) => {
-      if (room.roomId !== selectedRoomId) return;
+    const handleTyping = (event: MatrixEvent, member: { roomId?: string }) => {
+      if (member.roomId !== selectedRoomId) return;
       const typingUserIds =
         (event.getContent() as { user_ids?: string[] }).user_ids ?? [];
       const othersTyping = typingUserIds.filter((uid) => uid !== mx.getUserId());
@@ -277,12 +279,12 @@ function MessageNotifications() {
       }
       prevTypingCountRef.current = othersTyping.length;
     };
-    mx.on(RoomMemberEvent.Typing, handleTyping);
+    mx.on(RoomMemberEvent.Typing, handleTyping as any);
 
     return () => {
       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
       mx.removeListener(RoomEvent.Timeline, handleReactionEvent);
-      mx.removeListener(RoomMemberEvent.Typing, handleTyping);
+      mx.removeListener(RoomMemberEvent.Typing, handleTyping as any);
     };
   }, [
     mx,
@@ -293,6 +295,7 @@ function MessageNotifications() {
     notify,
     selectedRoomId,
     useAuthentication,
+    inRoomActivitySound,
   ]);
 
   return (
