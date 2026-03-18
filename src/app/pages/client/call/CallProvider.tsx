@@ -93,6 +93,9 @@ export function CallProvider({ children }: CallProviderProps) {
   );
   const [activeClientWidgetIframeRef, setActiveClientWidgetIframeRef] =
     useState<HTMLIFrameElement | null>(null);
+  // Tracks the pending hangUp about:blank timer so re-joining can cancel it before
+  // the timer fires and overwrites the newly set EC URL with about:blank.
+  const hangUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isAudioEnabled, setIsAudioEnabledState] = useState<boolean>(DEFAULT_AUDIO_ENABLED);
   const [isVideoEnabled, setIsVideoEnabledState] = useState<boolean>(DEFAULT_VIDEO_ENABLED);
@@ -126,6 +129,12 @@ export function CallProvider({ children }: CallProviderProps) {
   const { roomIdOrAlias: viewedRoomId } = useParams<{ roomIdOrAlias: string }>();
 
   const setActiveCallRoomId = useCallback((roomId: string | null, isVoiceRoom = false) => {
+    // Cancel any pending about:blank timer from a previous hangUp so it doesn't
+    // overwrite the EC URL that setupWidget is about to set for the new call.
+    if (hangUpTimerRef.current !== null) {
+      clearTimeout(hangUpTimerRef.current);
+      hangUpTimerRef.current = null;
+    }
     setActiveCallRoomIdState(roomId);
     callNotifySentRef.current = false;
     if (roomId !== null) {
@@ -188,7 +197,10 @@ export function CallProvider({ children }: CallProviderProps) {
     setIsCallViewOpenState(false);
     setPendingJoin(false);
     if (iframeToBlank) {
-      setTimeout(() => { iframeToBlank.src = 'about:blank'; }, 300);
+      hangUpTimerRef.current = setTimeout(() => {
+        hangUpTimerRef.current = null;
+        iframeToBlank.src = 'about:blank';
+      }, 300);
     }
   }, [activeClientWidgetApi?.transport, activeClientWidgetIframeRef, setActiveClientWidgetApi]);
 
