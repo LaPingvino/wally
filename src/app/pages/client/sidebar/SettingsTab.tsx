@@ -10,7 +10,7 @@ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { Settings, SettingsPages } from '../../../features/settings';
 import { useUserProfile } from '../../../hooks/useUserProfile';
 import { Modal500 } from '../../../components/Modal500';
-import { openSettingsAtKeyboardShortcutsAtom } from '../../../state/keyboardShortcutsHelp';
+import { openSettingsAtKeyboardShortcutsAtom, openSettingsAtDevicesAtom } from '../../../state/keyboardShortcutsHelp';
 import { getSecondarySessions } from '../../../state/sessions';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { useSetting } from '../../../state/hooks/settings';
@@ -33,6 +33,7 @@ export function SettingsTab() {
   const { hashRouter } = useClientConfig();
 
   const [openAtKbShortcuts, setOpenAtKbShortcuts] = useAtom(openSettingsAtKeyboardShortcutsAtom);
+  const [openAtDevices, setOpenAtDevices] = useAtom(openSettingsAtDevicesAtom);
 
   useEffect(() => {
     if (openAtKbShortcuts) {
@@ -42,6 +43,15 @@ export function SettingsTab() {
       setSettings(true);
     }
   }, [openAtKbShortcuts, setOpenAtKbShortcuts]);
+
+  useEffect(() => {
+    if (openAtDevices) {
+      setOpenAtDevices(false);
+      setInitialPage(SettingsPages.DevicesPage);
+      setSettingsKey((k) => k + 1);
+      setSettings(true);
+    }
+  }, [openAtDevices, setOpenAtDevices]);
 
   const avatarUrl = profile.avatarUrl
     ? mxcUrlToHttp(mx, profile.avatarUrl, useAuthentication, 96, 96, 'crop') ?? undefined
