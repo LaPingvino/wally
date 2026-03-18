@@ -189,26 +189,41 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     joinConfirmedRef,
   ]);
 
-  // If EC has been loading for 15 seconds without becoming ready (isActiveCallReady=false),
-  // reload the iframe. This recovers from the case where the widget API channel (ContentLoaded
-  // → capabilities negotiation) fails to establish on the first load — EC can't get OpenID
-  // credentials without a working channel, so it stays "Not connected yet" indefinitely.
-  // The reload resets EC cleanly; the existing ClientWidgetApi instance stays and picks up the
-  // new ContentLoaded after reload. Fires at most once per widget instance.
+  // Watch the widget channel health and reload EC if it fails to establish.
+  // SmallWidget emits 'ready' when ContentLoaded + capabilities negotiation succeed, and
+  // 'error:preparing' if the channel errors. Without a working channel EC can't get OpenID
+  // credentials and stays "Not connected yet" indefinitely.
+  // We reload the same URL/widgetId so the existing ClientWidgetApi picks up the new
+  // ContentLoaded without needing to be recreated.
   useEffect(() => {
     const iframe = callIframeRef.current;
     if (!activeClientWidget || isActiveCallReady || !iframe) return;
 
-    const timer = setTimeout(() => {
+    const reload = () => {
       const currentIframe = callIframeRef.current;
       if (currentIframe && currentIframe.src && currentIframe.src !== 'about:blank') {
-        // Force EC to reload — same URL/widgetId so the existing ClientWidgetApi handles it.
         // eslint-disable-next-line no-self-assign
         currentIframe.src = currentIframe.src;
       }
-    }, 15000);
+    };
 
-    return () => clearTimeout(timer);
+    // Reload immediately if the widget API signals a preparation error.
+    activeClientWidget.once('error:preparing', reload);
+
+    // Fallback: if 'ready' hasn't fired after 8 seconds the channel is stuck — reload.
+    const timer = setTimeout(reload, 8000);
+
+    // Cancel the fallback timer once the widget channel is established ('ready' = ContentLoaded
+    // received + capabilities negotiated). LiveKit may still be connecting at this point — that
+    // is normal and does not require a reload.
+    const onReady = () => clearTimeout(timer);
+    activeClientWidget.once('ready', onReady);
+
+    return () => {
+      clearTimeout(timer);
+      activeClientWidget.off('error:preparing', reload);
+      activeClientWidget.off('ready', onReady);
+    };
   }, [activeClientWidget, isActiveCallReady, callIframeRef]);
 
   const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
