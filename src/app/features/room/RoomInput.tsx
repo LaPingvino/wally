@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { isKeyHotkey } from 'is-hotkey';
 import {
   activePersonaAtom,
@@ -128,6 +128,8 @@ import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
+import { useDeviceList, useSplitCurrentDevice } from '../../hooks/useDeviceList';
+import { openSettingsAtDevicesAtom } from '../../state/keyboardShortcutsHelp';
 
 interface RoomInputProps {
   editor: Editor;
@@ -177,6 +179,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [uploadBoard, setUploadBoard] = useState(true);
     const [sendError, setSendError] = useState<string | null>(null);
+    const [ghostWarningDismissed, setGhostWarningDismissed] = useState(false);
+
+    const [deviceList] = useDeviceList();
+    const [, otherDevices] = useSplitCurrentDevice(deviceList);
+    const setOpenAtDevices = useSetAtom(openSettingsAtDevicesAtom);
+
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const ghostDevices = otherDevices?.filter(
+      (d) => d.last_seen_ts !== undefined && d.last_seen_ts < Date.now() - THIRTY_DAYS_MS
+    ) ?? [];
+    const ghostCount = ghostDevices.length;
+    const isEncrypted = mx.isRoomEncrypted(roomId) ?? false;
+    const showGhostWarning = isEncrypted && ghostCount > 0 && !ghostWarningDismissed;
     const [selectedFiles, setSelectedFiles] = useAtom(roomIdToUploadItemsAtomFamily(roomId));
     const uploadFamilyObserverAtom = createUploadFamilyObserverAtom(
       roomUploadAtomFamily,
@@ -549,6 +564,47 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     return (
       <div ref={ref}>
+        {showGhostWarning && (
+          <Box
+            alignItems="Center"
+            gap="200"
+            style={{
+              padding: `${config.space.S100} ${config.space.S200}`,
+              background: 'var(--bg-caution, #9a6700)',
+              color: 'var(--tc-on-caution, #fff)',
+            }}
+          >
+            <Text size="T300" style={{ flexGrow: 1 }}>
+              {ghostCount === 1
+                ? `You have 1 inactive device (not seen in 30+ days). Each encrypted message wastes a network operation trying to reach it.`
+                : `You have ${ghostCount} inactive devices (not seen in 30+ days). Each encrypted message wastes ${ghostCount} network operations trying to reach them.`}{' '}
+              <button
+                type="button"
+                onClick={() => setOpenAtDevices(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  padding: 0,
+                  textDecoration: 'underline',
+                  font: 'inherit',
+                }}
+              >
+                Manage Devices
+              </button>
+            </Text>
+            <IconButton
+              size="300"
+              variant="Surface"
+              radii="300"
+              onClick={() => setGhostWarningDismissed(true)}
+              aria-label="Dismiss ghost device warning"
+            >
+              <Icon src={Icons.Cross} size="100" />
+            </IconButton>
+          </Box>
+        )}
         {sendError && (
           <Box
             alignItems="Center"
