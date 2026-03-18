@@ -45,7 +45,7 @@ export function Room() {
   const powerLevels = usePowerLevels(room);
   const members = useRoomMembers(mx, room?.roomId);
 
-  const { activeCallRoomId, isCallViewOpen, isChatOpen } = useCallState();
+  const { activeCallRoomId, setActiveCallRoomId, hangUp, isCallViewOpen, isChatOpen } = useCallState();
   const isActiveCall = activeCallRoomId === room?.roomId;
 
   const [isIssueBoard, setIsIssueBoard] = useState(false);
@@ -135,6 +135,17 @@ export function Room() {
   }, [roomDisplayName, room.roomId]);
 
   const isVoiceRoom = room.isCallRoom();
+
+  // Auto-join voice rooms on direct navigation (URL navigation or page reload).
+  // RoomNavItem handles the click case; this effect covers the URL case where
+  // setActiveCallRoomId was never called and isCallViewOpen stays false.
+  useEffect(() => {
+    if (isVoiceRoom && activeCallRoomId !== room.roomId) {
+      if (activeCallRoomId) hangUp();
+      setActiveCallRoomId(room.roomId, true);
+    }
+  }, [isVoiceRoom, room.roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const isCallLayout = isVoiceRoom || isActiveCall;
   const showCallPanel = isCallLayout && isCallViewOpen;
   // Voice rooms: show chat by default when call panel is closed (no isChatOpen state needed).
