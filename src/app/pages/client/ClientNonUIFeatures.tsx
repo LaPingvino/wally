@@ -28,6 +28,70 @@ import { announce } from '../../utils/announce';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+import { SyncState } from 'matrix-js-sdk';
+import { repairIDBAndReload } from '../../../client/initMatrix';
+
+/**
+ * Monitors session health after tab suspension (common on Chromebooks).
+ *
+ * When a Chromebook discards a tab to save memory, IndexedDB connections become
+ * invalid. The SDK can't sync or persist data, but the error surfaces only as
+ * an opaque UnknownError — there's no specific "IDB died" event to catch.
+ *
+ * This component listens for `visibilitychange` and, when the tab wakes up:
+ *  1. Probes IndexedDB with a quick open/close.
+ *  2. If IDB is broken → auto-repairs (wipes IDB, preserves localStorage creds, reloads).
+ *  3. If IDB is fine but sync is stuck → calls retryImmediately() to nudge reconnection.
+ */
+function SessionHealthMonitor() {
+  const mx = useMatrixClient();
+  const hiddenSinceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        hiddenSinceRef.current = Date.now();
+        return;
+      }
+
+      // Tab is visible again. Only run health check if we were hidden > 5 seconds
+      // (short hides like alt-tabbing away briefly don't need recovery).
+      const hiddenMs = hiddenSinceRef.current ? Date.now() - hiddenSinceRef.current : 0;
+      hiddenSinceRef.current = null;
+      if (hiddenMs < 5_000) return;
+
+      // 1. Probe IndexedDB health — a broken connection means the OS discarded our tab.
+      const probeDb = `idb-health-${Date.now()}`;
+      try {
+        const req = indexedDB.open(probeDb);
+        req.onsuccess = () => {
+          // IDB works — clean up probe and check sync instead.
+          req.result.close();
+          indexedDB.deleteDatabase(probeDb);
+
+          // 2. If sync hasn't produced an event recently, nudge reconnection.
+          const syncState = mx.getSyncState();
+          if (syncState === SyncState.Error || syncState === SyncState.Stopped) {
+            mx.retryImmediately();
+          }
+        };
+        req.onerror = () => {
+          // IDB is broken — auto-repair.
+          indexedDB.deleteDatabase(probeDb);
+          repairIDBAndReload();
+        };
+      } catch {
+        // indexedDB.open() threw — critically broken.
+        repairIDBAndReload();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [mx]);
+
+  return null;
+}
 
 function SystemEmojiFeature() {
   const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
@@ -313,6 +377,7 @@ type ClientNonUIFeaturesProps = {
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
     <>
+      <SessionHealthMonitor />
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
