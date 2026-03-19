@@ -226,6 +226,27 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClientWidget, isActiveCallReady]);
 
+  // Poke EC with a resize event when the iframe becomes visible or the call
+  // becomes ready. EC lays out its participant grid based on viewport size —
+  // if the grid was rendered while the iframe was display:none (0×0), tiles
+  // are laid out at zero size and never re-flow when the iframe appears.
+  const iframeVisible = !!(activeCallRoomId && !pendingJoin && isCallViewOpen && !(isMobile && isChatOpen));
+  useEffect(() => {
+    if (!iframeVisible) return;
+    const iframe = callIframeRef.current;
+    if (!iframe) return;
+    // Small delay: the browser needs a frame to apply the display:block and
+    // compute the actual dimensions before EC's resize handler can read them.
+    const timer = setTimeout(() => {
+      try {
+        iframe.contentWindow?.dispatchEvent(new Event('resize'));
+      } catch {
+        // cross-origin — ignore
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [iframeVisible, isActiveCallReady]);
+
   const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
 
   return (
