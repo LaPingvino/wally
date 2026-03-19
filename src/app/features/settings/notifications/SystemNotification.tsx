@@ -238,6 +238,7 @@ export function SystemNotification() {
     settingsAtom,
     'isNotificationSounds'
   );
+  const [inRoomActivitySound, setInRoomActivitySound] = useSetting(settingsAtom, 'inRoomActivitySound');
   const [callAutoJoin, setCallAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
   const [inboxUnreadNotifications, setInboxUnreadNotifications] = useSetting(settingsAtom, 'inboxUnreadNotifications');
 
@@ -290,8 +291,13 @@ export function SystemNotification() {
       >
         <SettingTile
           title="Notification Sound"
-          description="Play sound when new message arrive."
+          description="Play mention, other-room, and reaction sounds when messages arrive."
           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
+        />
+        <SettingTile
+          title="In-Room Activity Sounds"
+          description="Play a soft beep for messages in the current room, and a click when someone starts typing."
+          after={<Switch value={inRoomActivitySound} onChange={setInRoomActivitySound} />}
         />
       </SequenceCard>
       <SequenceCard
