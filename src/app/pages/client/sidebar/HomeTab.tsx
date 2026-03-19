@@ -127,7 +127,7 @@ export function HomeTab() {
 
   return (
     <SidebarItem active={homeSelected}>
-      <SidebarItemTooltip tooltip="Home">
+      <SidebarItemTooltip tooltip="Home (Alt+H)">
         {(triggerRef) => (
           <SidebarAvatar
             as="button"
