@@ -28,10 +28,13 @@ interface PersistentCallContainerProps {
 export const CallRefContext =
   createContext<React.MutableRefObject<HTMLIFrameElement | null> | null>(null);
 
+const MAX_RELOAD_RETRIES = 2;
+
 export function PersistentCallContainer({ children }: PersistentCallContainerProps) {
   const callIframeRef = useRef<HTMLIFrameElement | null>(null);
   const callWidgetApiRef = useRef<ClientWidgetApi | null>(null);
   const callSmallWidgetRef = useRef<SmallWidget | null>(null);
+  const reloadCountRef = useRef(0);
 
   const {
     activeCallRoomId,
@@ -175,19 +178,10 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     if (activeCallRoomId && (!pendingJoin || joinConfirmedRef.current)) {
       setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, theme.kind);
     }
-  }, [
-    theme,
-    setupWidget,
-    callWidgetApiRef,
-    callSmallWidgetRef,
-    callIframeRef,
-    registerActiveClientWidgetApi,
-    activeCallRoomId,
-    viewedCallRoomId,
-    isActiveCallReady,
-    pendingJoin,
-    joinConfirmedRef,
-  ]);
+    // Refs (callWidgetApiRef, callSmallWidgetRef, callIframeRef, joinConfirmedRef) are
+    // stable and never change — intentionally excluded from deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme.kind, setupWidget, activeCallRoomId, pendingJoin]);
 
   // Watch the widget channel health and reload EC if it fails to establish.
   // SmallWidget emits 'ready' when ContentLoaded + capabilities negotiation succeed, and
@@ -199,7 +193,12 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     const iframe = callIframeRef.current;
     if (!activeClientWidget || isActiveCallReady || !iframe) return;
 
+    // Reset retry counter when a brand-new widget is registered.
+    reloadCountRef.current = 0;
+
     const reload = () => {
+      if (reloadCountRef.current >= MAX_RELOAD_RETRIES) return;
+      reloadCountRef.current += 1;
       const currentIframe = callIframeRef.current;
       if (currentIframe && currentIframe.src && currentIframe.src !== 'about:blank') {
         // eslint-disable-next-line no-self-assign
@@ -224,7 +223,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       activeClientWidget.off('error:preparing', reload);
       activeClientWidget.off('ready', onReady);
     };
-  }, [activeClientWidget, isActiveCallReady, callIframeRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClientWidget, isActiveCallReady]);
 
   const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
 

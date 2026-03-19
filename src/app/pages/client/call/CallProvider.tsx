@@ -102,6 +102,20 @@ export function CallProvider({ children }: CallProviderProps) {
   const [isChatOpen, setIsChatOpenState] = useState<boolean>(DEFAULT_CHAT_OPENED);
   const [isCallViewOpen, setIsCallViewOpenState] = useState<boolean>(false);
   const [isActiveCallReady, setIsActiveCallReady] = useState<boolean>(false);
+
+  // Refs keep handler closures up-to-date without being effect dependencies.
+  // Without these, the widget-handler effect re-runs on every A/V toggle,
+  // tearing down and re-registering ALL widget listeners each time and
+  // re-sending device_mute — which causes DeviceMute timeouts.
+  const isAudioEnabledRef = useRef(isAudioEnabled);
+  isAudioEnabledRef.current = isAudioEnabled;
+  const isVideoEnabledRef = useRef(isVideoEnabled);
+  isVideoEnabledRef.current = isVideoEnabled;
+  const isActiveCallReadyRef = useRef(isActiveCallReady);
+  isActiveCallReadyRef.current = isActiveCallReady;
+  const activeCallRoomIdRef = useRef(activeCallRoomId);
+  activeCallRoomIdRef.current = activeCallRoomId;
+  const hangUpRef = useRef<() => void>(() => {});
   // Tracks whether m.call.notify has been sent for the current call session
   const callNotifySentRef = useRef<boolean>(false);
 
@@ -203,6 +217,7 @@ export function CallProvider({ children }: CallProviderProps) {
       }, 300);
     }
   }, [activeClientWidgetApi?.transport, activeClientWidgetIframeRef, setActiveClientWidgetApi]);
+  hangUpRef.current = hangUp;
 
   const sendWidgetAction = useCallback(
     async <T extends IWidgetApiRequestData = IWidgetApiRequestData>(
@@ -257,18 +272,23 @@ export function CallProvider({ children }: CallProviderProps) {
     }
   }, [isVideoEnabled, isAudioEnabled, sendWidgetAction, isActiveCallReady]);
 
+  // Register widget API event handlers once per widget API instance.
+  // Handlers read mutable state from refs — NOT from closure captures —
+  // so this effect only re-runs when the actual widget API changes (new call),
+  // not on every A/V toggle, chat open, or render cycle.
+  //
+  // CRITICAL: The old deps included activeClientWidget?.iframe?.contentDocument
+  // which is a DOM property that returns a new reference every render, causing
+  // this effect to re-run on EVERY render — tearing down and re-registering
+  // all widget handlers and re-sending device_mute each time.
   useEffect(() => {
-    if (!activeCallRoomId && !viewedCallRoomId) {
-      return;
-    }
-
     if (!activeClientWidgetApi) {
       return;
     }
 
     const handleHangup = (ev: CustomEvent) => {
       ev.preventDefault();
-      if (isActiveCallReady && ev.detail.widgetId === activeClientWidgetApi.widget.id) {
+      if (isActiveCallReadyRef.current && ev.detail.widgetId === activeClientWidgetApi.widget.id) {
         activeClientWidgetApi.transport.reply(ev.detail, {});
         const iframeToBlank = activeClientWidgetIframeRef;
         setActiveCallRoomIdState(null);
@@ -276,7 +296,10 @@ export function CallProvider({ children }: CallProviderProps) {
         setIsActiveCallReady(false);
         setIsCallViewOpenState(false);
         if (iframeToBlank) {
-          setTimeout(() => { iframeToBlank.src = 'about:blank'; }, 300);
+          hangUpTimerRef.current = setTimeout(() => {
+            hangUpTimerRef.current = null;
+            iframeToBlank.src = 'about:blank';
+          }, 300);
         }
       }
     };
@@ -285,15 +308,15 @@ export function CallProvider({ children }: CallProviderProps) {
       // Always preventDefault so the widget API sends a reply — without this,
       // EC's transport times out waiting for the host to acknowledge device_mute.
       ev.preventDefault();
-      if (!isActiveCallReady) return;
+      if (!isActiveCallReadyRef.current) return;
 
       /* eslint-disable camelcase */
       const { audio_enabled, video_enabled } = ev.detail.data ?? {};
 
-      if (typeof audio_enabled === 'boolean' && audio_enabled !== isAudioEnabled) {
+      if (typeof audio_enabled === 'boolean' && audio_enabled !== isAudioEnabledRef.current) {
         setIsAudioEnabledState(audio_enabled);
       }
-      if (typeof video_enabled === 'boolean' && video_enabled !== isVideoEnabled) {
+      if (typeof video_enabled === 'boolean' && video_enabled !== isVideoEnabledRef.current) {
         setIsVideoEnabledState(video_enabled);
       }
       /* eslint-enable camelcase */
@@ -305,13 +328,11 @@ export function CallProvider({ children }: CallProviderProps) {
 
     const handleOnTileLayout = (ev: CustomEvent) => {
       ev.preventDefault();
-
       activeClientWidgetApi.transport.reply(ev.detail, {});
     };
 
     const handleJoin = (ev: CustomEvent) => {
       ev.preventDefault();
-
       activeClientWidgetApi.transport.reply(ev.detail, {});
 
       // Wrap iframe access in try-catch to prevent cross-origin errors
@@ -326,23 +347,22 @@ export function CallProvider({ children }: CallProviderProps) {
             const button = iframeDoc.querySelector('[data-testid="incall_leave"]');
             if (button) {
               button.addEventListener('click', () => {
-                hangUp();
+                hangUpRef.current();
               });
             }
             observer.disconnect();
           });
           observer.observe(iframeDoc, { childList: true, subtree: true });
         }
-      } catch (error) {
+      } catch {
         // Ignore cross-origin errors - they're expected when Element Call is on a different domain
       }
 
       // Send m.call.notify (MSC4075) once per call session so other clients ring.
-      // Triggered here (on io.element.join) rather than on setActiveCallRoomId because
-      // all call starts pass isVoiceRoom=true, making the setActiveCallRoomId path unreachable.
-      if (activeCallRoomId && !callNotifySentRef.current) {
+      const currentRoomId = activeCallRoomIdRef.current;
+      if (currentRoomId && !callNotifySentRef.current) {
         callNotifySentRef.current = true;
-        const room = mx.getRoom(activeCallRoomId);
+        const room = mx.getRoom(currentRoomId);
         if (room && MatrixRTCSession.callMembershipsForRoom(room).filter(
           (m) => m.sender !== mx.getUserId()
         ).length === 0) {
@@ -350,7 +370,7 @@ export function CallProvider({ children }: CallProviderProps) {
           const otherMembers = room.getJoinedMembers()
             .map((m) => m.userId)
             .filter((id) => id !== mx.getUserId());
-          mx.sendEvent(activeCallRoomId, 'm.call.notify' as any, {
+          mx.sendEvent(currentRoomId, 'm.call.notify' as any, {
             call_id: '',
             application: 'm.call',
             'm.mentions': isDm ? { room: false, user_ids: otherMembers } : { room: true },
@@ -362,9 +382,10 @@ export function CallProvider({ children }: CallProviderProps) {
       setIsActiveCallReady(true);
     };
 
-    void sendWidgetAction(WIDGET_MEDIA_STATE_UPDATE_ACTION, {
-      audio_enabled: isAudioEnabled,
-      video_enabled: isVideoEnabled,
+    // Send initial A/V state once when the widget API is first registered.
+    void activeClientWidgetApi.transport.send(WIDGET_MEDIA_STATE_UPDATE_ACTION, {
+      audio_enabled: isAudioEnabledRef.current,
+      video_enabled: isVideoEnabledRef.current,
     }).catch(() => {
       // Widget transport may reject while call/session setup is still in progress.
     });
@@ -380,23 +401,10 @@ export function CallProvider({ children }: CallProviderProps) {
       activeClientWidgetApi.off(`action:${WIDGET_TILE_UPDATE}`, handleOnTileLayout);
       activeClientWidgetApi.off(`action:${WIDGET_JOIN_ACTION}`, handleJoin);
     };
-  }, [
-    activeClientWidgetIframeRef,
-    activeClientWidgetApi,
-    activeCallRoomId,
-    activeClientWidgetApiRoomId,
-    hangUp,
-    isChatOpen,
-    isAudioEnabled,
-    isVideoEnabled,
-    isActiveCallReady,
-    viewedRoomId,
-    viewedCallRoomId,
-    setViewedCallRoomId,
-    activeClientWidget?.iframe?.contentDocument,
-    activeClientWidget?.iframe?.contentWindow?.document,
-    sendWidgetAction,
-  ]);
+    // Only re-run when the widget API instance itself changes (new call session).
+    // Handlers read current state from refs, not from captured closure values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClientWidgetApi, activeClientWidgetIframeRef, mx]);
 
   const toggleChat = useCallback(async () => {
     const newState = !isChatOpen;
