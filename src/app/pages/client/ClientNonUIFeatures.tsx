@@ -29,7 +29,7 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
-import { repairIDBAndReload } from '../../../client/initMatrix';
+import { repairIDBAndReload, backupSessionToCache } from '../../../client/initMatrix';
 
 /**
  * Monitors session health after tab suspension (common on Chromebooks).
@@ -68,6 +68,9 @@ function SessionHealthMonitor() {
           // IDB works — clean up probe and check sync instead.
           req.result.close();
           indexedDB.deleteDatabase(probeDb);
+
+          // Keep the Cache API session backup fresh while healthy.
+          backupSessionToCache();
 
           // 2. If sync hasn't produced an event recently, nudge reconnection.
           const syncState = mx.getSyncState();

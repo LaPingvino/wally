@@ -78,6 +78,7 @@ export const logoutClient = async (mx: MatrixClient) => {
   const isSecondary =
     window.location.pathname.startsWith('/account/') || slot !== null;
 
+  await clearSessionBackup();
   pushSessionToSW();
   mx.stopClient();
   try {
@@ -103,6 +104,7 @@ export const logoutClient = async (mx: MatrixClient) => {
 };
 
 export const clearLoginData = async () => {
+  await clearSessionBackup();
   const dbs = await window.indexedDB.databases();
 
   dbs.forEach((idbInfo) => {
@@ -116,15 +118,95 @@ export const clearLoginData = async () => {
   window.location.reload();
 };
 
+// ---------------------------------------------------------------------------
+// Session backup via Cache API — independent of both localStorage and IDB.
+// If the OS discards the tab and wipes localStorage (Chromebooks), we can
+// restore credentials from this backup without requiring a re-login.
+// ---------------------------------------------------------------------------
+const SESSION_BACKUP_CACHE = 'cinny-session-backup';
+const SESSION_BACKUP_KEY = '/_session';
+
+const SESSION_LS_KEYS = [
+  'cinny_access_token',
+  'cinny_device_id',
+  'cinny_user_id',
+  'cinny_hs_base_url',
+] as const;
+
+const SECONDARY_SESSIONS_KEY = 'cinny_sessions';
+
+/**
+ * Snapshot current localStorage session credentials into the Cache API.
+ * Call this periodically (e.g. on each visibility-change health check)
+ * so the backup stays current.
+ */
+export const backupSessionToCache = async (): Promise<void> => {
+  try {
+    const data: Record<string, string | null> = {};
+    for (const key of SESSION_LS_KEYS) {
+      data[key] = localStorage.getItem(key);
+    }
+    // Also back up secondary accounts if present.
+    data[SECONDARY_SESSIONS_KEY] = localStorage.getItem(SECONDARY_SESSIONS_KEY);
+
+    // Only back up if we actually have a session.
+    if (!data.cinny_access_token || !data.cinny_user_id) return;
+
+    const cache = await caches.open(SESSION_BACKUP_CACHE);
+    await cache.put(SESSION_BACKUP_KEY, new Response(JSON.stringify(data)));
+  } catch {
+    // Cache API unavailable (private browsing, etc.) — silently skip.
+  }
+};
+
+/**
+ * Restore session credentials from Cache API backup into localStorage.
+ * Returns true if credentials were successfully restored.
+ */
+export const restoreSessionFromCache = async (): Promise<boolean> => {
+  try {
+    const cache = await caches.open(SESSION_BACKUP_CACHE);
+    const resp = await cache.match(SESSION_BACKUP_KEY);
+    if (!resp) return false;
+
+    const data = await resp.json();
+    if (!data.cinny_access_token || !data.cinny_user_id) return false;
+
+    for (const key of SESSION_LS_KEYS) {
+      const val = data[key];
+      if (val) localStorage.setItem(key, val);
+    }
+    if (data[SECONDARY_SESSIONS_KEY]) {
+      localStorage.setItem(SECONDARY_SESSIONS_KEY, data[SECONDARY_SESSIONS_KEY]);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Remove the Cache API backup (on explicit logout). */
+export const clearSessionBackup = async (): Promise<void> => {
+  try {
+    await caches.delete(SESSION_BACKUP_CACHE);
+  } catch {
+    // ignore
+  }
+};
+
 /**
  * Delete all IndexedDB databases (removing corrupted data) while preserving
  * localStorage session credentials. The page reloads and the SDK reinitialises
  * fresh — the user stays logged in.
  *
- * Use this when startup fails with an IDB/UnknownError after a crash. It is
- * preferable to clearLoginData() which also wipes localStorage and logs out.
+ * If localStorage was also wiped (aggressive Chromebook tab discard), attempts
+ * to restore credentials from the Cache API backup first.
  */
 export const repairIDBAndReload = async () => {
+  // If localStorage creds are gone, try restoring from Cache API backup.
+  if (!localStorage.getItem('cinny_access_token')) {
+    await restoreSessionFromCache();
+  }
   const dbs = await window.indexedDB.databases();
   dbs.forEach(({ name }) => {
     if (name) window.indexedDB.deleteDatabase(name);
