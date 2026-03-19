@@ -152,6 +152,7 @@ export enum Command {
   Ignore = 'ignore',
   UnIgnore = 'unignore',
   MyRoomNick = 'myroomnick',
+  ResetNick = 'resetnick',
   MyRoomAvatar = 'myroomavatar',
   ConvertToDm = 'converttodm',
   ConvertToRoom = 'converttoroom',
@@ -370,6 +371,29 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
             {
               ...content,
               displayname: nick,
+            },
+            mx.getSafeUserId()
+          );
+        },
+      },
+      [Command.ResetNick]: {
+        name: Command.ResetNick,
+        description: 'Reset room nick to your global display name.',
+        exe: async () => {
+          const globalName = mx.getUser(mx.getSafeUserId())?.displayName;
+          if (!globalName) return;
+          const mEvent = room
+            .getLiveTimeline()
+            .getState(EventTimeline.FORWARDS)
+            ?.getStateEvents(StateEvent.RoomMember, mx.getSafeUserId());
+          const content = mEvent?.getContent();
+          if (!content) return;
+          await mx.sendStateEvent(
+            room.roomId,
+            StateEvent.RoomMember as any,
+            {
+              ...content,
+              displayname: globalName,
             },
             mx.getSafeUserId()
           );
