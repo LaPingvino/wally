@@ -57,6 +57,7 @@ import { CallNavStatus } from '../../../features/room-nav/RoomCallNavStatus';
 import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
 import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
+import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
 
 type DirectMenuProps = {
@@ -256,6 +257,18 @@ export function Direct() {
     getItemKey: (index) => sortedDirects[index],
   });
 
+  const { navigateRoom } = useRoomNavigate();
+  const setSearchModal = useSetAtom(searchModalAtom);
+  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
+
+  const keyboardNav = useRoomListKeyboard({
+    items: sortedDirects,
+    selectedRoomId,
+    virtualizer,
+    onNavigate: (roomId) => navigateRoom(roomId),
+    onTypeChar: (key) => { setSearchInitialChar(key); setSearchModal(true); },
+  });
+
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
     closedCategories.has(categoryId)
   );
@@ -347,39 +360,50 @@ export function Direct() {
                   Chats
                 </RoomNavCategoryButton>
               </NavCategoryHeader>
-              <div
-                style={{
-                  position: 'relative',
-                  height: virtualizer.getTotalSize(),
-                }}
+              <RoomListbox
+                id="cinny-room-listbox"
+                aria-label="Direct Messages"
+                items={sortedDirects}
+                focusedIndex={keyboardNav.focusedIndex}
+                onKeyDown={keyboardNav.handleKeyDown}
+                onFocus={keyboardNav.handleFocus}
               >
-                {virtualizer.getVirtualItems().map((vItem) => {
-                  const roomId = sortedDirects[vItem.index];
-                  const room = mx.getRoom(roomId);
-                  if (!room) return null;
-                  const selected = selectedRoomId === roomId;
+                <div
+                  style={{
+                    position: 'relative',
+                    height: virtualizer.getTotalSize(),
+                  }}
+                >
+                  {virtualizer.getVirtualItems().map((vItem) => {
+                    const roomId = sortedDirects[vItem.index];
+                    const room = mx.getRoom(roomId);
+                    if (!room) return null;
+                    const selected = selectedRoomId === roomId;
 
-                  return (
-                    <VirtualTile
-                      virtualItem={vItem}
-                      key={vItem.key}
-                      ref={virtualizer.measureElement}
-                    >
-                      <RoomNavItem
-                        room={room}
-                        selected={selected}
-                        showAvatar
-                        direct
-                        linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
-                        notificationMode={getRoomNotificationMode(
-                          notificationPreferences,
-                          room.roomId
-                        )}
-                      />
-                    </VirtualTile>
-                  );
-                })}
+                    return (
+                      <VirtualTile
+                        virtualItem={vItem}
+                        key={vItem.key}
+                        ref={virtualizer.measureElement}
+                      >
+                        <RoomNavItem
+                          room={room}
+                          selected={selected}
+                          focused={keyboardNav.focusedIndex === vItem.index}
+                          optionId={`room-option-${roomId}`}
+                          showAvatar
+                          direct
+                          linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
+                          notificationMode={getRoomNotificationMode(
+                            notificationPreferences,
+                            room.roomId
+                          )}
+                        />
+                      </VirtualTile>
+                    );
+                  })}
               </div>
+              </RoomListbox>
             </NavCategory>
           </Box>
         </PageNavContent>

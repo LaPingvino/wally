@@ -707,55 +707,67 @@ export function Space() {
                 })}
             </NavCategory>
           )}
-          <NavCategory
-            style={{
-              height: virtualizer.getTotalSize(),
-              position: 'relative',
-            }}
+          <RoomListbox
+            id="cinny-room-listbox"
+            aria-label="Space rooms"
+            items={roomsOnly}
+            focusedIndex={keyboardNav.focusedIndex}
+            onKeyDown={keyboardNav.handleKeyDown}
+            onFocus={keyboardNav.handleFocus}
           >
-            {virtualizer.getVirtualItems().map((vItem) => {
-              const { roomId } = hierarchy[vItem.index] ?? {};
-              const room = mx.getRoom(roomId);
-              if (!room) return null;
+            <NavCategory
+              style={{
+                height: virtualizer.getTotalSize(),
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((vItem) => {
+                const { roomId } = hierarchy[vItem.index] ?? {};
+                const room = mx.getRoom(roomId);
+                if (!room) return null;
 
-              if (room.isSpaceRoom()) {
-                const categoryId = makeNavCategoryId(space.roomId, roomId);
+                if (room.isSpaceRoom()) {
+                  const categoryId = makeNavCategoryId(space.roomId, roomId);
 
+                  return (
+                    <VirtualTile
+                      virtualItem={vItem}
+                      key={vItem.key}
+                      ref={virtualizer.measureElement}
+                    >
+                      <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
+                        <NavCategoryHeader>
+                          <RoomNavCategoryButton
+                            data-category-id={categoryId}
+                            onClick={handleCategoryClick}
+                            closed={closedCategories.has(categoryId)}
+                          >
+                            {roomId === space.roomId ? 'Rooms' : room?.name}
+                          </RoomNavCategoryButton>
+                        </NavCategoryHeader>
+                      </div>
+                    </VirtualTile>
+                  );
+                }
+
+                const roomIdx = roomsOnly.indexOf(roomId);
                 return (
-                  <VirtualTile
-                    virtualItem={vItem}
-                    key={vItem.key}
-                    ref={virtualizer.measureElement}
-                  >
-                    <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
-                      <NavCategoryHeader>
-                        <RoomNavCategoryButton
-                          data-category-id={categoryId}
-                          onClick={handleCategoryClick}
-                          closed={closedCategories.has(categoryId)}
-                        >
-                          {roomId === space.roomId ? 'Rooms' : room?.name}
-                        </RoomNavCategoryButton>
-                      </NavCategoryHeader>
-                    </div>
+                  <VirtualTile virtualItem={vItem} key={vItem.key} ref={virtualizer.measureElement}>
+                    <RoomNavItem
+                      room={room}
+                      selected={selectedRoomId === roomId}
+                      focused={roomIdx >= 0 && keyboardNav.focusedIndex === roomIdx}
+                      optionId={`room-option-${roomId}`}
+                      showAvatar={mDirects.has(roomId)}
+                      direct={mDirects.has(roomId)}
+                      linkPath={getToLink(roomId)}
+                      notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
+                    />
                   </VirtualTile>
                 );
-              }
-
-              return (
-                <VirtualTile virtualItem={vItem} key={vItem.key} ref={virtualizer.measureElement}>
-                  <RoomNavItem
-                    room={room}
-                    selected={selectedRoomId === roomId}
-                    showAvatar={mDirects.has(roomId)}
-                    direct={mDirects.has(roomId)}
-                    linkPath={getToLink(roomId)}
-                    notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
-                  />
-                </VirtualTile>
-              );
-            })}
-          </NavCategory>
+              })}
+            </NavCategory>
+          </RoomListbox>
         </Box>
       </PageNavContent>
       <CallNavStatus />
