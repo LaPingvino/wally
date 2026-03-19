@@ -38,6 +38,7 @@ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { stopPropagation } from '../../utils/keyboard';
 import { SyncStatus } from './SyncStatus';
+import { VersionCheck } from './VersionCheck';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getFallbackSession, removeSecondarySession } from '../../state/sessions';
 import { AutoDiscovery } from './AutoDiscovery';
@@ -259,6 +260,7 @@ export function ClientRoot({ children }: ClientRootProps) {
     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
       <SpecVersionsProvider value={specVersionsData}>
         {mx && <SyncStatus mx={mx} />}
+        <VersionCheck />
         {loading && <ClientRootOptions mx={mx} />}
         {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
           <SplashScreen>
