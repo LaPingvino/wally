@@ -96,7 +96,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       widgetId,
       {
         intent: hasOngoingCall ? 'join_existing' : intentParam,
-        skipLobby: false,
+        skipLobby: true,
         returnToLobby: 'false',
         perParticipantE2EE: 'false',
         theme: theme.kind,
