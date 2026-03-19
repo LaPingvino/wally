@@ -46,6 +46,15 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   const theme = useTheme();
   const isMobile = screenSize === ScreenSize.Mobile;
 
+  // ── Cleanup: clear stale widget ref when the call ends ─────────────
+  useEffect(() => {
+    if (!activeCallRoomId && callSmallWidgetRef.current) {
+      callSmallWidgetRef.current.stopMessaging();
+      callSmallWidgetRef.current = null;
+      callWidgetApiRef.current = null;
+    }
+  }, [activeCallRoomId]);
+
   // ── Widget setup: load EC when a call room is active ──────────────
   useEffect(() => {
     if (!activeCallRoomId || !mx?.getUserId() || isActiveCallReady) return;
@@ -53,10 +62,15 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     const iframeElement = callIframeRef.current;
     if (!iframeElement) return;
 
-    // Skip if already set up for this room.
+    // Skip if already set up for this room AND the iframe is actually loaded
+    // (not about:blank). After hangup, callSmallWidgetRef keeps the old widget
+    // but the iframe navigates to about:blank — the ref is stale and must not
+    // block re-creation.
     if (
       callSmallWidgetRef.current?.roomId &&
-      callSmallWidgetRef.current.roomId === activeCallRoomId
+      callSmallWidgetRef.current.roomId === activeCallRoomId &&
+      iframeElement.src !== 'about:blank' &&
+      iframeElement.src !== ''
     ) {
       return;
     }
