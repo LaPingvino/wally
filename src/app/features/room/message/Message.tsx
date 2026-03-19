@@ -948,6 +948,7 @@ export const Message = as<'div', MessageProps>(
                   >
                     <IconButton
                       onClick={handleOpenEmojiBoard}
+                      aria-label="Add reaction"
                       variant="SurfaceVariant"
                       size="300"
                       radii="300"
@@ -959,6 +960,7 @@ export const Message = as<'div', MessageProps>(
                 )}
                 <IconButton
                   onClick={onReplyClick}
+                  aria-label="Reply"
                   data-event-id={mEvent.getId()}
                   variant="SurfaceVariant"
                   size="300"
@@ -969,6 +971,7 @@ export const Message = as<'div', MessageProps>(
                 {!isThreadedMessage && (
                   <IconButton
                     onClick={(ev) => onReplyClick(ev, true)}
+                    aria-label="Open thread"
                     data-event-id={mEvent.getId()}
                     variant="SurfaceVariant"
                     size="300"
@@ -980,6 +983,7 @@ export const Message = as<'div', MessageProps>(
                 {canEditEvent(mx, mEvent) && onEditId && (
                   <IconButton
                     onClick={() => onEditId(mEvent.getId())}
+                    aria-label="Edit message"
                     variant="SurfaceVariant"
                     size="300"
                     radii="300"
@@ -1148,6 +1152,7 @@ export const Message = as<'div', MessageProps>(
                     size="300"
                     radii="300"
                     onClick={handleOpenMenu}
+                    aria-label="More message actions"
                     aria-pressed={!!menuAnchor}
                   >
                     <Icon src={Icons.VerticalDots} size="100" />
@@ -1314,6 +1319,7 @@ export const Event = as<'div', EventProps>(
                     size="300"
                     radii="300"
                     onClick={handleOpenMenu}
+                    aria-label="More message actions"
                     aria-pressed={!!menuAnchor}
                   >
                     <Icon src={Icons.VerticalDots} size="100" />

@@ -74,7 +74,7 @@ export function Devices({ requestClose }: DevicesProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>

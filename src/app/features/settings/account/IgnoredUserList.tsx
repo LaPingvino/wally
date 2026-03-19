@@ -69,6 +69,7 @@ function IgnoreUserInput({ userList }: { userList: string[] }) {
               <IconButton
                 type="reset"
                 onClick={handleReset}
+                aria-label="Clear user ID"
                 size="300"
                 radii="300"
                 variant="Secondary"

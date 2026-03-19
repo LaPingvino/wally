@@ -571,7 +571,7 @@ function ClosedSpaceFolder({
         >
           <SidebarItemTooltip tooltip={disabled ? undefined : tooltipName}>
             {(tooltipRef) => (
-              <SidebarFolder data-id={folder.id} as="button" ref={tooltipRef} onClick={onOpen}>
+              <SidebarFolder data-id={folder.id} as="button" ref={tooltipRef} aria-label={`${tooltipName} folder, collapsed`} onClick={onOpen}>
                 {folder.content.map((sId) => {
                   const space = mx.getRoom(sId);
                   if (!space) return null;

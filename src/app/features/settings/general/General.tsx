@@ -601,6 +601,7 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
           variant="Secondary"
           size="300"
           radii="300"
+          aria-label="Date format information"
           aria-pressed={!!anchor}
         >
           <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />

@@ -24,7 +24,7 @@ export function About({ requestClose }: AboutProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>
