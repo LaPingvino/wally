@@ -436,7 +436,7 @@ export function Lobby() {
             powerLevels={roomsPowerLevels.get(space.roomId) ?? {}}
           />
           <Box style={{ position: 'relative' }} grow="Yes">
-            <Scroll ref={scrollRef} hideTrack visibility="Hover">
+            <Scroll ref={scrollRef} hideTrack visibility="Hover" id="cinny-lobby" tabIndex={-1} role="feed" aria-label="Space lobby">
               <PageContent>
                 <PageContentCenter>
                   <ScrollTopContainer

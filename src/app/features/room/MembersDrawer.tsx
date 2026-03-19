@@ -260,9 +260,12 @@ export function MembersDrawer({ room, members, width = 266, isFullWidth, onToggl
 
   return (
     <Box
+      id="cinny-members-panel"
       className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
       shrink="No"
       direction="Column"
+      role="complementary"
+      aria-label="Members panel"
     >
       <MemberDrawerHeader room={room} isFullWidth={isFullWidth} onToggleFullWidth={onToggleFullWidth} />
       <Box className={css.MemberDrawerContentBase} grow="Yes">
