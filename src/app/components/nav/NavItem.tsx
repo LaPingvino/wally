@@ -22,12 +22,12 @@ export const NavItem = as<
 
 export const NavLink = forwardRef<HTMLAnchorElement, ComponentProps<typeof Link>>(
   ({ className, ...props }, ref) => (
-    <Link className={classNames(css.NavLink, className)} {...props} ref={ref} />
+    <Link className={classNames(css.NavLink, className)} data-nav-item="" {...props} ref={ref} />
   )
 );
 
 export const NavButton = as<'button'>(
   ({ as: AsNavButton = 'button', className, ...props }, ref) => (
-    <AsNavButton className={classNames(css.NavLink, className)} {...props} ref={ref} />
+    <AsNavButton className={classNames(css.NavLink, className)} data-nav-item="" {...props} ref={ref} />
   )
 );
