@@ -97,7 +97,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       {
         intent: hasOngoingCall ? 'join_existing' : intentParam,
         skipLobby: true,
-        returnToLobby: 'false',
+        returnToLobby: 'true',
         perParticipantE2EE: 'false',
         theme: theme.kind,
         callIntent: callIntentParam,
