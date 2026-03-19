@@ -107,6 +107,11 @@ export const Reply = as<'div', ReplyProps>(
         )}
         <ReplyLayout
           as="button"
+          aria-label={
+            sender
+              ? `Go to original message by ${getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender}`
+              : 'Go to original message'
+          }
           userColor={usernameColor}
           username={
             sender && (
