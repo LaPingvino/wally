@@ -267,32 +267,26 @@ export function MembersDrawer({ room, members, width = 266, isFullWidth, onToggl
       role="region"
       aria-label="Members panel"
       tabIndex={-1}
+      onKeyDown={(evt: React.KeyboardEvent) => {
+        if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
+        if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
+        const panel = document.getElementById('cinny-members-panel');
+        if (!panel) return;
+        const items = Array.from(panel.querySelectorAll<HTMLElement>('[data-user-id]'));
+        if (items.length === 0) return;
+        const active = document.activeElement as HTMLElement;
+        const idx = items.indexOf(active);
+        evt.preventDefault();
+        const next = evt.key === 'ArrowDown'
+          ? Math.min((idx < 0 ? 0 : idx + 1), items.length - 1)
+          : Math.max((idx < 0 ? items.length - 1 : idx - 1), 0);
+        items[next]?.focus({ preventScroll: true });
+        items[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }}
     >
       <MemberDrawerHeader room={room} isFullWidth={isFullWidth} onToggleFullWidth={onToggleFullWidth} />
       <Box className={css.MemberDrawerContentBase} grow="Yes">
-        <Scroll
-          ref={scrollRef}
-          variant="Background"
-          size="300"
-          visibility="Hover"
-          hideTrack
-          onKeyDown={(evt: React.KeyboardEvent) => {
-            if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
-            if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
-            const container = scrollRef.current;
-            if (!container) return;
-            const items = Array.from(container.querySelectorAll<HTMLElement>('[data-user-id]'));
-            const active = document.activeElement as HTMLElement;
-            const idx = items.indexOf(active);
-            if (idx < 0 && !container.contains(active)) return;
-            evt.preventDefault();
-            const next = evt.key === 'ArrowDown'
-              ? Math.min((idx < 0 ? 0 : idx + 1), items.length - 1)
-              : Math.max((idx < 0 ? items.length - 1 : idx - 1), 0);
-            items[next]?.focus({ preventScroll: true });
-            items[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-          }}
-        >
+        <Scroll ref={scrollRef} variant="Background" size="300" visibility="Hover" hideTrack>
           <Box className={css.MemberDrawerContent} direction="Column" gap="200">
             <Box ref={scrollTopAnchorRef} className={css.DrawerGroup} direction="Column" gap="200">
               <Box alignItems="Center" justifyContent="SpaceBetween" gap="200">
