@@ -101,6 +101,8 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
 
     const handleKeydown: KeyboardEventHandler = useCallback(
       (evt) => {
+        // Let F6 (section cycling) bubble to the window handler unimpeded.
+        if (evt.key === 'F6') return;
         onKeyDown?.(evt);
         const shortcutToggled = toggleKeyboardShortcut(editor, evt, isMarkdown);
         if (shortcutToggled) evt.preventDefault();

@@ -30,6 +30,7 @@ export function RoomListbox({
       aria-label={ariaLabel}
       aria-activedescendant={activedescendant}
       aria-orientation="vertical"
+      tabIndex={-1}
     >
       {children}
     </div>
