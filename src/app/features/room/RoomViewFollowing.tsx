@@ -68,6 +68,7 @@ export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
         <Box
           as={names.length > 0 ? 'button' : 'div'}
           onClick={names.length > 0 ? () => setOpen(true) : undefined}
+          aria-label={names.length > 0 ? 'View read receipts' : undefined}
           className={classNames(css.RoomViewFollowing({ clickable: names.length > 0 }), className)}
           alignItems="Center"
           justifyContent="End"
