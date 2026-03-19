@@ -79,11 +79,14 @@ function serverMatrixSdkCryptoWasm(wasmFilePath) {
 // E2EE on any encrypted Matrix room, but our LiveKit SFU doesn't support it.
 // This causes "e2ee not configured" errors that break call connections.
 // The patch replaces the PER_PARTICIPANT branch with NONE.
+// Patch EC source in node_modules BEFORE viteStaticCopy copies it to dist.
+// This runs at buildStart, before any files are copied or bundled.
 function patchElementCallE2EE() {
   return {
     name: 'patch-element-call-e2ee',
-    closeBundle() {
-      const ecDir = path.join(path.resolve(), 'dist/public/element-call/assets');
+    enforce: 'pre',
+    buildStart() {
+      const ecDir = path.join(path.resolve(), 'node_modules/@element-hq/element-call-embedded/dist/assets');
       if (!fs.existsSync(ecDir)) return;
       for (const file of fs.readdirSync(ecDir)) {
         if (!file.endsWith('.js')) continue;
@@ -95,6 +98,7 @@ function patchElementCallE2EE() {
             '.hasEncryptionStateEvent()?{kind:hn.NONE}'
           );
           fs.writeFileSync(filePath, content);
+          console.log(`[patch-element-call-e2ee] Patched ${file}: PER_PARTICIPANT → NONE`);
         }
       }
     },
