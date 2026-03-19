@@ -738,6 +738,25 @@ export const Message = as<'div', MessageProps>(
     const [menuAnchor, setMenuAnchor] = useState<RectCords>();
     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
 
+    // Single-key shortcuts when a message is focused:
+    //   r = reply, e = edit, t = open thread
+    const handleMsgKeyDown = useCallback(
+      (evt: React.KeyboardEvent<HTMLDivElement>) => {
+        if (edit) return;
+        const noMod = !evt.ctrlKey && !evt.altKey && !evt.metaKey && !evt.shiftKey;
+        if (evt.key === 'r' && noMod) {
+          (evt.currentTarget.querySelector('[aria-label="Reply"]') as HTMLElement | null)?.click();
+        }
+        if (evt.key === 'e' && noMod) {
+          (evt.currentTarget.querySelector('[aria-label="Edit message"]') as HTMLElement | null)?.click();
+        }
+        if (evt.key === 't' && noMod) {
+          (evt.currentTarget.querySelector('[aria-label="Open thread"]') as HTMLElement | null)?.click();
+        }
+      },
+      [edit]
+    );
+
     const perMsgProfile = getPerMsgProfile(mEvent.getContent() as Record<string, unknown>);
     const senderDisplayName =
       perMsgProfile?.displayname ||
@@ -914,6 +933,7 @@ export const Message = as<'div', MessageProps>(
         collapse={collapse}
         highlight={highlight}
         selected={!!menuAnchor || !!emojiBoardAnchor}
+        onKeyDown={handleMsgKeyDown}
         {...props}
         {...hoverProps}
         {...focusWithinProps}
