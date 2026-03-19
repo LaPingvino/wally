@@ -106,11 +106,12 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
             widgetId,
             {
               intent: effectiveIntent,
-              // Always skip EC's own lobby — we show our own pre-join screen instead.
-              // skipLobby=true also means EC goes straight to the in-call grid with no
-              // intermediate states that would otherwise require a reload.
-              skipLobby: true,
-              returnToLobby: 'true',
+              // Let EC handle its own lobby — skipLobby=true caused EC to attempt an
+              // auto-join that silently failed, leaving the grid empty. EC's lobby
+              // renders correctly (video preview + join button) and the manual join
+              // flow through EC's own UI works reliably.
+              skipLobby: false,
+              returnToLobby: 'false',
               // Per-participant E2EE requires the LiveKit SFU to be configured for it.
               // Passing 'true' on a non-E2EE SFU causes EC to throw "e2ee not configured".
               // Always pass 'false' here; the SFU/JWT service controls E2EE at the room level.
@@ -170,18 +171,16 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   );
 
   useEffect(() => {
-    // Load EC when: autoJoin is on (pendingJoin=false from the start), OR when the user
-    // has explicitly confirmed via the pre-join screen (joinConfirmedRef). Checking the
-    // ref rather than pendingJoin alone avoids a one-render race where pendingJoin is
-    // still false on the first render after activeCallRoomId is set (before the
-    // pendingJoin effect in CallProvider runs).
-    if (activeCallRoomId && (!pendingJoin || joinConfirmedRef.current)) {
+    // Load EC immediately when a call room is set. EC now handles its own lobby
+    // (skipLobby=false), so we don't need to wait for the user to confirm via
+    // Cinny's pre-join screen. EC's lobby provides video preview + join button.
+    if (activeCallRoomId) {
       setupWidget(callWidgetApiRef, callSmallWidgetRef, callIframeRef, theme.kind);
     }
-    // Refs (callWidgetApiRef, callSmallWidgetRef, callIframeRef, joinConfirmedRef) are
-    // stable and never change — intentionally excluded from deps.
+    // Refs (callWidgetApiRef, callSmallWidgetRef, callIframeRef) are stable and
+    // never change — intentionally excluded from deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme.kind, setupWidget, activeCallRoomId, pendingJoin]);
+  }, [theme.kind, setupWidget, activeCallRoomId]);
 
   // Watch the widget channel health and reload EC if it fails to establish.
   // SmallWidget emits 'ready' when ContentLoaded + capabilities negotiation succeed, and
@@ -264,7 +263,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
           width: 0,
           height: 0,
           border: 'none',
-          display: activeCallRoomId && !pendingJoin && isCallViewOpen && !(isMobile && isChatOpen) ? 'block' : 'none',
+          display: activeCallRoomId && isCallViewOpen && !(isMobile && isChatOpen) ? 'block' : 'none',
         }}
         title="Persistent Element Call"
         sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads"
