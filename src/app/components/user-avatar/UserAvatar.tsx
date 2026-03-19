@@ -23,6 +23,8 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
       <AvatarFallback
         style={{ backgroundColor: colorMXID(userId), color: color.Surface.Container }}
         className={classNames(css.UserAvatar, className)}
+        role="img"
+        aria-label={alt ?? undefined}
       >
         {renderFallback()}
       </AvatarFallback>

@@ -23,6 +23,8 @@ export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps
       <AvatarFallback
         style={{ backgroundColor: colorMXID(roomId ?? ''), color: color.Surface.Container }}
         className={css.RoomAvatar}
+        role="img"
+        aria-label={alt ?? undefined}
       >
         {renderFallback()}
       </AvatarFallback>
