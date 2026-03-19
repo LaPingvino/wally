@@ -5,7 +5,9 @@ import { useCallback, RefObject } from 'react';
  * Works across static NavItems, Favorites, and virtualized room items.
  * Attach the returned onKeyDown to the scroll container element.
  */
-const FOCUSABLE = 'a[href], button:not([disabled]), [tabindex="0"], [role="option"]';
+// Only target primary navigation elements (NavButton, NavLink) — not nested
+// action buttons inside room items (call, chat, more options).
+const FOCUSABLE = '[data-nav-item]';
 
 export function useNavArrowKeys(scrollRef: RefObject<HTMLElement | null>) {
   return useCallback(
