@@ -157,7 +157,7 @@ function getRegionSections(): HTMLElement[] {
     .sort((a, b) => {
       const rA = a.getBoundingClientRect();
       const rB = b.getBoundingClientRect();
-      return rA.top !== rB.top ? rA.top - rB.top : rA.left - rB.left;
+      return rA.left !== rB.left ? rA.left - rB.left : rA.top - rB.top;
     });
 }
 
@@ -278,7 +278,7 @@ const handleUnreadNavKeyDown = useCallback(
     const sections = [...fixed, ...regions].sort((a, b) => {
       const rA = a.getBoundingClientRect();
       const rB = b.getBoundingClientRect();
-      return rA.top !== rB.top ? rA.top - rB.top : rA.left - rB.left;
+      return rA.left !== rB.left ? rA.left - rB.left : rA.top - rB.top;
     });
     if (sections.length === 0) return;
     evt.preventDefault();
