@@ -164,6 +164,30 @@ export function Profile() {
           // so we have to update the defaults explicitly here
           setFieldDefaults(fields);
         }
+
+        // Propagate display name and avatar to joined rooms explicitly.
+        // Some servers don't propagate global profile changes into room
+        // member events for restricted rooms (missing join authorization).
+        // Updating each room's member event directly works around this.
+        const myId = mx.getSafeUserId();
+        const newName = fields.displayname ?? '';
+        const newAvatar = fields.avatar_url ?? '';
+        const joinedRooms = mx.getRooms().filter((r) => r.getMyMembership() === 'join');
+        await Promise.allSettled(
+          joinedRooms.map(async (r) => {
+            const memberEvt = r.currentState.getStateEvents('m.room.member', myId);
+            if (!memberEvt) return;
+            const content = memberEvt.getContent();
+            const needsUpdate =
+              content.displayname !== newName || content.avatar_url !== newAvatar;
+            if (!needsUpdate) return;
+            await mx.sendStateEvent(r.roomId, 'm.room.member' as any, {
+              ...content,
+              displayname: newName,
+              avatar_url: newAvatar || undefined,
+            }, myId);
+          })
+        );
       },
       [mx, userId, refreshExtendedProfile, extendedProfileSupported, setFieldDefaults]
     )
