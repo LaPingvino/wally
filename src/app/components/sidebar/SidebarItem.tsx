@@ -34,6 +34,11 @@ export function SidebarItemTooltip({
     return children(() => undefined);
   }
 
+  // Automatically set aria-label on the trigger element from the tooltip text,
+  // so screen readers announce sidebar buttons correctly without requiring
+  // every caller to add aria-label manually.
+  const ariaLabel = typeof tooltip === 'string' ? tooltip : undefined;
+
   return (
     <TooltipProvider
       delay={400}
@@ -44,7 +49,13 @@ export function SidebarItemTooltip({
         </Tooltip>
       }
     >
-      {children}
+      {ariaLabel
+        ? (triggerRef: RefCallback<HTMLElement | SVGElement>) =>
+            children((el) => {
+              triggerRef(el);
+              if (el) el.setAttribute('aria-label', ariaLabel);
+            })
+        : children}
     </TooltipProvider>
   );
 }
