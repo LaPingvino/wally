@@ -39,6 +39,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     isCallViewOpen,
     registerActiveClientWidgetApi,
     activeClientWidget,
+    pendingJoin,
+    joinConfirmedRef,
   } = useCallState();
   const mx = useMatrixClient();
   const clientConfig = useClientConfig();
@@ -56,8 +58,11 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   }, [activeCallRoomId]);
 
   // ── Widget setup: load EC when a call room is active ──────────────
+  // Respects the callAutoJoin setting: if off, pendingJoin=true until the
+  // user confirms via the pre-join screen (joinConfirmedRef).
   useEffect(() => {
     if (!activeCallRoomId || !mx?.getUserId() || isActiveCallReady) return;
+    if (pendingJoin && !joinConfirmedRef.current) return;
 
     const iframeElement = callIframeRef.current;
     if (!iframeElement) return;
@@ -125,7 +130,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     registerActiveClientWidgetApi(roomId, widgetApi, smallWidget, iframeElement);
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCallRoomId, isActiveCallReady, mx, theme.kind, clientConfig.elementCallUrl, registerActiveClientWidgetApi]);
+  }, [activeCallRoomId, isActiveCallReady, pendingJoin, mx, theme.kind, clientConfig.elementCallUrl, registerActiveClientWidgetApi]);
 
   // ── Health check: reload EC if widget channel fails to establish ───
   useEffect(() => {
@@ -156,7 +161,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   }, [activeClientWidget, isActiveCallReady]);
 
   // ── Resize nudge: tell EC to re-layout when iframe becomes visible ─
-  const iframeVisible = !!(activeCallRoomId && isCallViewOpen && !(isMobile && isChatOpen));
+  const iframeVisible = !!(activeCallRoomId && !pendingJoin && isCallViewOpen && !(isMobile && isChatOpen));
   useEffect(() => {
     if (!iframeVisible) return;
     const iframe = callIframeRef.current;
