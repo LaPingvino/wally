@@ -132,9 +132,8 @@ const SECTION_FINDERS: Array<() => HTMLElement | null> = [
   () => {
     const listbox = document.querySelector<HTMLElement>('#cinny-room-listbox');
     if (!listbox) return null;
-    // Focus the first focusable room item inside the listbox, not the container.
-    // NavButton renders as <button> inside NavItem[role="option"].
-    return listbox.querySelector<HTMLElement>('button, a[href], [tabindex="0"]') ?? listbox;
+    // Focus the first nav item inside the listbox.
+    return listbox.querySelector<HTMLElement>('[data-nav-item]') ?? listbox;
   },
   // First enabled button in the room header toolbar (skips disabled buttons)
   () => document.querySelector<HTMLElement>('#cinny-room-header-toolbar button:not([disabled])'),
