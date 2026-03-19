@@ -93,7 +93,7 @@ export function DirectTab() {
   };
   return (
     <SidebarItem active={directSelected}>
-      <SidebarItemTooltip tooltip="Direct Messages">
+      <SidebarItemTooltip tooltip="Direct Messages (Alt+D)">
         {(triggerRef) => (
           <SidebarAvatar
             as="button"

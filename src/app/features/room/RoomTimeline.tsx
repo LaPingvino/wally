@@ -2017,7 +2017,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
           )}
         </TimelineFloat>
       )}
-      <Scroll ref={scrollRef} visibility="Hover" id="cinny-timeline" tabIndex={-1} role="log" aria-label="Message timeline">
+      <Scroll ref={scrollRef} visibility="Hover" id="cinny-timeline" tabIndex={0} role="log" aria-label="Message timeline" aria-live="polite">
         <Box
           direction="Column"
           justifyContent="End"

@@ -733,6 +733,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 >
                   <IconButton
                     onClick={() => setReplyDraft(undefined)}
+                    aria-label="Cancel reply"
                     variant="SurfaceVariant"
                     size="300"
                     radii="300"
@@ -765,9 +766,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           before={
             <IconButton
               onClick={() => pickFile('*')}
+              aria-label="Attach file"
               variant="SurfaceVariant"
               size="300"
               radii="300"
+              tabIndex={-1}
             >
               <Icon src={Icons.PlusCircle} />
             </IconButton>
@@ -779,6 +782,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 size="300"
                 radii="300"
                 onClick={() => setToolbar(!toolbar)}
+                aria-label={toolbar ? 'Hide formatting toolbar' : 'Show formatting toolbar'}
+                aria-pressed={toolbar}
               >
                 <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
               </IconButton>
@@ -817,6 +822,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   >
                     {!hideStickerBtn && (
                       <IconButton
+                        aria-label="Open sticker picker"
                         aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
                         onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
                         variant="SurfaceVariant"
@@ -831,6 +837,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     )}
                     <IconButton
                       ref={emojiBtnRef}
+                      aria-label="Open emoji picker"
                       aria-pressed={
                         hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
                       }
