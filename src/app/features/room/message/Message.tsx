@@ -907,6 +907,8 @@ export const Message = as<'div', MessageProps>(
         className={classNames(css.MessageBase, className, {
           [css.MessageBaseBubbleCollapsed]: messageLayout === MessageLayout.Bubble && collapse,
         })}
+        data-timeline-message=""
+        data-event-id={mEvent.getId()}
         tabIndex={0}
         space={messageSpacing}
         collapse={collapse}
@@ -1240,6 +1242,8 @@ export const Event = as<'div', EventProps>(
     return (
       <MessageBase
         className={classNames(css.MessageBase, className)}
+        data-timeline-message=""
+        data-event-id={mEvent.getId()}
         tabIndex={0}
         space={messageSpacing}
         autoCollapse
