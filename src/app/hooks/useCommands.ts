@@ -154,6 +154,7 @@ export enum Command {
   MyRoomNick = 'myroomnick',
   ResetNick = 'resetnick',
   MyRoomAvatar = 'myroomavatar',
+  ResetAvatar = 'resetavatar',
   ConvertToDm = 'converttodm',
   ConvertToRoom = 'converttoroom',
   TableFlip = 'tableflip',
@@ -420,6 +421,28 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
               mx.getSafeUserId()
             );
           }
+        },
+      },
+      [Command.ResetAvatar]: {
+        name: Command.ResetAvatar,
+        description: 'Reset room avatar to your global profile picture.',
+        exe: async () => {
+          const globalAvatar = mx.getUser(mx.getSafeUserId())?.avatarUrl;
+          const mEvent = room
+            .getLiveTimeline()
+            .getState(EventTimeline.FORWARDS)
+            ?.getStateEvents(StateEvent.RoomMember, mx.getSafeUserId());
+          const content = mEvent?.getContent();
+          if (!content) return;
+          await mx.sendStateEvent(
+            room.roomId,
+            StateEvent.RoomMember as any,
+            {
+              ...content,
+              avatar_url: globalAvatar ?? undefined,
+            },
+            mx.getSafeUserId()
+          );
         },
       },
       [Command.ConvertToDm]: {
