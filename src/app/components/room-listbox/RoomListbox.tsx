@@ -5,7 +5,8 @@ interface RoomListboxProps {
   'aria-label': string;
   items: string[];
   focusedIndex: number;
-  onKeyDown: React.KeyboardEventHandler<HTMLDivElement>;
+  // keyboard handling is done by PageNavContent's useNavArrowKeys
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onFocus?: React.FocusEventHandler<HTMLDivElement>;
   children: ReactNode;
 }
@@ -15,8 +16,6 @@ export function RoomListbox({
   'aria-label': ariaLabel,
   items,
   focusedIndex,
-  onKeyDown,
-  onFocus,
   children,
 }: RoomListboxProps) {
   const activedescendant =
@@ -31,14 +30,6 @@ export function RoomListbox({
       aria-label={ariaLabel}
       aria-activedescendant={activedescendant}
       aria-orientation="vertical"
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      onFocus={(evt) => {
-        if (evt.target === evt.currentTarget) onFocus?.(evt);
-      }}
-      onMouseDown={(evt) => {
-        if (evt.target === evt.currentTarget) evt.preventDefault();
-      }}
     >
       {children}
     </div>
