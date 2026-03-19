@@ -2,6 +2,7 @@ import React, {
   ChangeEventHandler,
   MouseEventHandler,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -258,6 +259,32 @@ export function MembersDrawer({ room, members, width = 266, isFullWidth, onToggl
     openUserRoomProfile(room.roomId, space?.roomId, userId, btn.getBoundingClientRect(), 'Left');
   };
 
+  // Arrow key navigation between member items.
+  // Uses a native DOM listener because the F6-focused Box needs to handle
+  // keys even when no child has focus yet (first arrow press after F6).
+  useEffect(() => {
+    const panel = document.getElementById('cinny-members-panel');
+    if (!panel) return;
+    const handler = (evt: KeyboardEvent) => {
+      if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
+      if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
+      const items = Array.from(panel.querySelectorAll<HTMLElement>('[data-user-id]'));
+      if (items.length === 0) return;
+      const active = document.activeElement as HTMLElement;
+      const idx = items.indexOf(active);
+      // Only handle if focus is on/inside the panel
+      if (idx < 0 && !panel.contains(active)) return;
+      evt.preventDefault();
+      const next = evt.key === 'ArrowDown'
+        ? Math.min((idx < 0 ? 0 : idx + 1), items.length - 1)
+        : Math.max((idx < 0 ? items.length - 1 : idx - 1), 0);
+      items[next]?.focus({ preventScroll: true });
+      items[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    };
+    panel.addEventListener('keydown', handler);
+    return () => panel.removeEventListener('keydown', handler);
+  }, []);
+
   return (
     <Box
       id="cinny-members-panel"
@@ -267,22 +294,6 @@ export function MembersDrawer({ room, members, width = 266, isFullWidth, onToggl
       role="region"
       aria-label="Members panel"
       tabIndex={-1}
-      onKeyDown={(evt: React.KeyboardEvent) => {
-        if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
-        if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
-        const panel = document.getElementById('cinny-members-panel');
-        if (!panel) return;
-        const items = Array.from(panel.querySelectorAll<HTMLElement>('[data-user-id]'));
-        if (items.length === 0) return;
-        const active = document.activeElement as HTMLElement;
-        const idx = items.indexOf(active);
-        evt.preventDefault();
-        const next = evt.key === 'ArrowDown'
-          ? Math.min((idx < 0 ? 0 : idx + 1), items.length - 1)
-          : Math.max((idx < 0 ? items.length - 1 : idx - 1), 0);
-        items[next]?.focus({ preventScroll: true });
-        items[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }}
     >
       <MemberDrawerHeader room={room} isFullWidth={isFullWidth} onToggleFullWidth={onToggleFullWidth} />
       <Box className={css.MemberDrawerContentBase} grow="Yes">
