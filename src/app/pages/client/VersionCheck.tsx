@@ -72,6 +72,14 @@ export function VersionCheck() {
 
   if (!updateAvailable) return null;
 
+  // Navigate with a cache-busting query param so CDNs (Cloudflare) can't
+  // serve the old cached index.html. A plain reload() uses default cache
+  // behavior and Cloudflare returns the stale page.
+  const hardReload = () => {
+    const base = window.location.pathname + window.location.hash;
+    window.location.replace(`${base}?_cb=${Date.now()}`);
+  };
+
   return (
     <Box direction="Column" shrink="No">
       <Box
@@ -80,11 +88,11 @@ export function VersionCheck() {
         alignItems="Center"
         justifyContent="Center"
         gap="200"
-        onClick={() => window.location.reload()}
+        onClick={hardReload}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') window.location.reload();
+          if (e.key === 'Enter' || e.key === ' ') hardReload();
         }}
       >
         <Text size="L400">
