@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useDeferredValue } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon, Icons } from 'folds';
 import { useAtomValue } from 'jotai';
@@ -21,7 +21,8 @@ export function FavoritesTab() {
   const favoritesSelected = useFavoritesSelected();
   const allRooms = useAtomValue(allRoomsAtom);
   const favoriteRoomIds = useFavoriteRooms(allRooms);
-  const favoriteUnread = useRoomsUnread(favoriteRoomIds, roomToUnreadAtom);
+  const favoriteUnreadRaw = useRoomsUnread(favoriteRoomIds, roomToUnreadAtom);
+  const favoriteUnread = useDeferredValue(favoriteUnreadRaw);
 
   return (
     <SidebarItem active={favoritesSelected}>
