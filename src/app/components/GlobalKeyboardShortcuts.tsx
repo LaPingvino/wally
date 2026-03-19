@@ -130,10 +130,11 @@ function findSidebarFocus(): HTMLElement | null {
 const SECTION_FINDERS: Array<() => HTMLElement | null> = [
   findSidebarFocus,
   () => {
-    const listbox = document.querySelector('#cinny-room-listbox');
+    const listbox = document.querySelector<HTMLElement>('#cinny-room-listbox');
     if (!listbox) return null;
-    // Focus the first room item inside the listbox, not the container itself
-    return listbox.querySelector<HTMLElement>('[tabindex="0"], a, button') ?? listbox as HTMLElement;
+    // Focus the first focusable room item inside the listbox, not the container.
+    // NavButton renders as <button> inside NavItem[role="option"].
+    return listbox.querySelector<HTMLElement>('button, a[href], [tabindex="0"]') ?? listbox;
   },
   // First enabled button in the room header toolbar (skips disabled buttons)
   () => document.querySelector<HTMLElement>('#cinny-room-header-toolbar button:not([disabled])'),

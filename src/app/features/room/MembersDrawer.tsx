@@ -264,8 +264,9 @@ export function MembersDrawer({ room, members, width = 266, isFullWidth, onToggl
       className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
       shrink="No"
       direction="Column"
-      role="complementary"
+      role="region"
       aria-label="Members panel"
+      tabIndex={-1}
     >
       <MemberDrawerHeader room={room} isFullWidth={isFullWidth} onToggleFullWidth={onToggleFullWidth} />
       <Box className={css.MemberDrawerContentBase} grow="Yes">
