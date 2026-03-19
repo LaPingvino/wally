@@ -207,7 +207,7 @@ function RoomProfile({
       </Avatar>
       <Box grow="Yes" direction="Column">
         <Box gap="200" alignItems="Center">
-          <Text size="H5" truncate>
+          <Text as="h3" size="H5" truncate>
             {name}
           </Text>
           {suggested && (
@@ -327,6 +327,8 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
         variant="SurfaceVariant"
         gap="300"
         alignItems="Center"
+        role="article"
+        aria-label={room?.name || roomId}
         {...props}
         ref={ref}
       >
