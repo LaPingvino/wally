@@ -57,6 +57,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
 import { RoomPinMenu } from './room-pin-menu';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
+import { RoomSettingsPage } from '../../state/roomSettings';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
 import {
   getRoomNotificationMode,
@@ -649,7 +650,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
   const openSettings = useOpenRoomSettings();
   const parentSpace = useSpaceOptionally();
   const handleMemberToggle = () => {
-    if (callView) {
+    if (isActiveCall) {
       openSettings(room.roomId, parentSpace?.roomId, RoomSettingsPage.MembersPage);
       return;
     }
