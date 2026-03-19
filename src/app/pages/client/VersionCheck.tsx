@@ -96,7 +96,7 @@ export function VersionCheck() {
         }}
       >
         <Text size="L400">
-          A new version is available — click here to reload
+          Wally detected that some old files might still be served. Click here for a quick and easy cache refresh.
         </Text>
       </Box>
     </Box>
