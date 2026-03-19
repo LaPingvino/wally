@@ -270,6 +270,10 @@ export function Search({ requestClose }: SearchProps) {
                 radii="400"
                 outlined
                 placeholder="Search"
+                role="combobox"
+                aria-label="Search rooms and spaces"
+                aria-autocomplete="list"
+                aria-expanded={!!result}
                 before={<Icon size="200" src={Icons.Search} />}
                 onChange={handleInputChange}
                 onKeyDown={handleInputKeyDown}

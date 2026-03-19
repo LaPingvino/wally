@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MatchHandler,
   AsyncSearch,
@@ -110,9 +110,11 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
   options?: UseAsyncSearchOptions
 ): [UseAsyncSearchResult<TSearchItem> | undefined, AsyncSearchHandler, SearchResetHandler] => {
   const [result, setResult] = useState<UseAsyncSearchResult<TSearchItem>>();
+  const activeQueryRef = useRef<string | undefined>();
 
   const [searchCallback, terminateSearch] = useMemo(() => {
-    setResult(undefined);
+    // Don't clear results when list/options change — re-run the active query
+    // instead so results stay visible while the room list updates.
 
     const handleMatch: MatchHandler<TSearchItem> = (item, query) => {
       const itemStr = getItemStr(item, query);
@@ -130,8 +132,17 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
     return AsyncSearch(list, handleMatch, handleResult, options);
   }, [list, options, getItemStr]);
 
+  // Re-run the active query when the list/options change so results stay visible
+  useEffect(() => {
+    if (activeQueryRef.current !== undefined) {
+      const normalizedQuery = normalize(activeQueryRef.current, options?.normalizeOptions);
+      searchCallback(normalizedQuery);
+    }
+  }, [searchCallback, options?.normalizeOptions]);
+
   const searchHandler: AsyncSearchHandler = useCallback(
     (query) => {
+      activeQueryRef.current = query;
       const normalizedQuery = normalize(query, options?.normalizeOptions);
       searchCallback(normalizedQuery);
     },
@@ -139,6 +150,7 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
   );
 
   const resetHandler: SearchResetHandler = useCallback(() => {
+    activeQueryRef.current = undefined;
     terminateSearch();
     setResult(undefined);
   }, [terminateSearch]);
