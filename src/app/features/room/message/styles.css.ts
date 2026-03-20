@@ -4,6 +4,20 @@ import { DefaultReset, config, toRem } from 'folds';
 export const MessageBase = style({
   position: 'relative',
 });
+
+// CSS-only hover for action buttons — avoids React state changes on mouse movement.
+// The options bar is always in the DOM but hidden; :hover or [data-options-visible]
+// makes it visible. This eliminates per-message re-renders on mouseover.
+export const MessageOptionsHidden = style({
+  visibility: 'hidden',
+  pointerEvents: 'none',
+  selectors: {
+    [`${MessageBase}:hover &, ${MessageBase}:focus-within &, &[data-options-visible="true"]`]: {
+      visibility: 'visible',
+      pointerEvents: 'auto',
+    },
+  },
+});
 export const MessageBaseBubbleCollapsed = style({
   paddingTop: 0,
 });
