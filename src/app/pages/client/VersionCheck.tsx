@@ -100,7 +100,7 @@ export function VersionCheck() {
         }}
       >
         <Text size="L400">
-          Wally detected that some old files might still be served. Click here for a quick and easy cache refresh.
+          A new version is available — click here to reload
         </Text>
       </Box>
     </Box>
