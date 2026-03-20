@@ -1,8 +1,9 @@
 import { atom, useSetAtom } from 'jotai';
 import { MatrixClient, RoomMemberEvent, RoomMemberEventHandlerMap } from 'matrix-js-sdk';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSetting } from './hooks/settings';
 import { settingsAtom } from './settings';
+import { SyncBatchScheduler } from './syncBatchScheduler';
 
 export const TYPING_TIMEOUT_MS = 5000; // 5 seconds
 const CLEANUP_INTERVAL_MS = 3000; // Single interval to sweep expired entries
@@ -98,8 +99,27 @@ export const useBindRoomIdToTypingMembersAtom = (
 ) => {
   const setTypingMembers = useSetAtom(typingMembersAtom);
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const schedulerRef = useRef<SyncBatchScheduler | null>(null);
 
   useEffect(() => {
+    const scheduler = new SyncBatchScheduler();
+    schedulerRef.current = scheduler;
+
+    // Batch typing events: collect all changes and flush once per rAF.
+    // On busy servers, dozens of typing events can fire per sync batch.
+    const pendingActions: IRoomIdToTypingMembersAction[] = [];
+
+    const scheduleFlush = () => {
+      scheduler.enqueue('typing', () => {
+        if (pendingActions.length === 0) return;
+        const actions = [...pendingActions];
+        pendingActions.length = 0;
+        for (const action of actions) {
+          setTypingMembers(action);
+        }
+      });
+    };
+
     const handleTypingEvent: RoomMemberEventHandlerMap[RoomMemberEvent.Typing] = (
       event,
       member
@@ -107,20 +127,18 @@ export const useBindRoomIdToTypingMembersAtom = (
       if (hideActivity) {
         return;
       }
-      setTypingMembers({
+      pendingActions.push({
         type: member.typing ? 'PUT' : 'DELETE',
         roomId: member.roomId,
         userId: member.userId,
         ts: Date.now(),
       });
+      scheduleFlush();
     };
 
     mx.on(RoomMemberEvent.Typing, handleTypingEvent);
 
     // Single cleanup interval replaces per-event setTimeout.
-    // Before: each typing event created its own timer (hundreds of timers
-    // on busy servers, consuming 8% CPU in TimeoutManager).
-    // After: one interval sweeps expired entries every 3 seconds.
     const cleanupInterval = setInterval(() => {
       setTypingMembers({ type: 'CLEANUP' });
     }, CLEANUP_INTERVAL_MS);
@@ -128,6 +146,7 @@ export const useBindRoomIdToTypingMembersAtom = (
     return () => {
       mx.removeListener(RoomMemberEvent.Typing, handleTypingEvent);
       clearInterval(cleanupInterval);
+      scheduler.dispose();
     };
   }, [mx, setTypingMembers, hideActivity]);
 };

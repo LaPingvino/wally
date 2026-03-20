@@ -1,7 +1,8 @@
 import { useSetAtom, WritableAtom } from 'jotai';
 import { ClientEvent, ClientEventHandlerMap, MatrixClient, Room, RoomEvent, SyncState } from 'matrix-js-sdk';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Membership } from '../../../types/matrix/room';
+import { SyncBatchScheduler } from '../syncBatchScheduler';
 
 export type RoomsAction =
   | {
@@ -11,6 +12,11 @@ export type RoomsAction =
   | {
       type: 'PUT' | 'DELETE';
       roomId: string;
+    }
+  | {
+      type: 'PUT_BATCH';
+      puts: string[];
+      deletes: string[];
     };
 
 export const useBindRoomsWithMembershipsAtom = (
@@ -19,8 +25,29 @@ export const useBindRoomsWithMembershipsAtom = (
   memberships: Membership[]
 ) => {
   const setRoomsAtom = useSetAtom(roomsAtom);
+  const schedulerRef = useRef<SyncBatchScheduler | null>(null);
 
   useEffect(() => {
+    const scheduler = new SyncBatchScheduler();
+    schedulerRef.current = scheduler;
+
+    // Pending changes accumulated between rAF flushes
+    const pendingPuts = new Set<string>();
+    const pendingDeletes = new Set<string>();
+
+    const scheduleFlush = () => {
+      scheduler.enqueue(`rooms-${memberships.join(',')}`, () => {
+        if (pendingPuts.size === 0 && pendingDeletes.size === 0) return;
+        setRoomsAtom({
+          type: 'PUT_BATCH',
+          puts: Array.from(pendingPuts),
+          deletes: Array.from(pendingDeletes),
+        });
+        pendingPuts.clear();
+        pendingDeletes.clear();
+      });
+    };
+
     const satisfyMembership = (room: Room): boolean =>
       !!memberships.find((membership) => membership === room.getMyMembership());
     const initRooms = () =>
@@ -41,20 +68,27 @@ export const useBindRoomsWithMembershipsAtom = (
 
     const handleAddRoom = (room: Room) => {
       if (satisfyMembership(room)) {
-        setRoomsAtom({ type: 'PUT', roomId: room.roomId });
+        pendingDeletes.delete(room.roomId);
+        pendingPuts.add(room.roomId);
+        scheduleFlush();
       }
     };
 
     const handleMembershipChange = (room: Room) => {
       if (satisfyMembership(room)) {
-        setRoomsAtom({ type: 'PUT', roomId: room.roomId });
+        pendingDeletes.delete(room.roomId);
+        pendingPuts.add(room.roomId);
       } else {
-        setRoomsAtom({ type: 'DELETE', roomId: room.roomId });
+        pendingPuts.delete(room.roomId);
+        pendingDeletes.add(room.roomId);
       }
+      scheduleFlush();
     };
 
     const handleDeleteRoom = (roomId: string) => {
-      setRoomsAtom({ type: 'DELETE', roomId });
+      pendingPuts.delete(roomId);
+      pendingDeletes.add(roomId);
+      scheduleFlush();
     };
 
     mx.on(ClientEvent.Sync, handleSync);
@@ -66,6 +100,7 @@ export const useBindRoomsWithMembershipsAtom = (
       mx.removeListener(ClientEvent.Room, handleAddRoom);
       mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
       mx.removeListener(ClientEvent.DeleteRoom, handleDeleteRoom);
+      scheduler.dispose();
     };
   }, [mx, memberships, setRoomsAtom]);
 };

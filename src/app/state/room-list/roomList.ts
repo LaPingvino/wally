@@ -12,6 +12,14 @@ export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
       set(baseRoomsAtom, action.rooms);
       return;
     }
+    if (action.type === 'PUT_BATCH') {
+      const deleteSet = new Set(action.deletes);
+      const putSet = new Set(action.puts);
+      const ids = get(baseRoomsAtom).filter((id) => !deleteSet.has(id) && !putSet.has(id));
+      ids.push(...action.puts);
+      set(baseRoomsAtom, ids);
+      return;
+    }
     set(baseRoomsAtom, (ids) => {
       const newIds = ids.filter((id) => id !== action.roomId);
       if (action.type === 'PUT') newIds.push(action.roomId);
