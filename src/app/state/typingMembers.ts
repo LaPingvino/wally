@@ -1,4 +1,3 @@
-import produce from 'immer';
 import { atom, useSetAtom } from 'jotai';
 import { MatrixClient, RoomMemberEvent, RoomMemberEventHandlerMap } from 'matrix-js-sdk';
 import { useEffect } from 'react';
@@ -6,6 +5,7 @@ import { useSetting } from './hooks/settings';
 import { settingsAtom } from './settings';
 
 export const TYPING_TIMEOUT_MS = 5000; // 5 seconds
+const CLEANUP_INTERVAL_MS = 3000; // Single interval to sweep expired entries
 
 export type TypingReceipt = {
   userId: string;
@@ -24,53 +24,15 @@ type TypingMemberDeleteAction = {
   roomId: string;
   userId: string;
 };
-export type IRoomIdToTypingMembersAction = TypingMemberPutAction | TypingMemberDeleteAction;
+type TypingMemberCleanupAction = {
+  type: 'CLEANUP';
+};
+export type IRoomIdToTypingMembersAction =
+  | TypingMemberPutAction
+  | TypingMemberDeleteAction
+  | TypingMemberCleanupAction;
 
 const baseRoomIdToTypingMembersAtom = atom<IRoomIdToTypingMembers>(new Map());
-
-const putTypingMember = (
-  roomToMembers: IRoomIdToTypingMembers,
-  action: TypingMemberPutAction
-): IRoomIdToTypingMembers => {
-  let typingMembers = roomToMembers.get(action.roomId) ?? [];
-
-  typingMembers = typingMembers.filter((receipt) => receipt.userId !== action.userId);
-  typingMembers.push({
-    userId: action.userId,
-    ts: action.ts,
-  });
-  roomToMembers.set(action.roomId, typingMembers);
-  return roomToMembers;
-};
-
-const deleteTypingMember = (
-  roomToMembers: IRoomIdToTypingMembers,
-  action: TypingMemberDeleteAction
-): IRoomIdToTypingMembers => {
-  let typingMembers = roomToMembers.get(action.roomId) ?? [];
-
-  typingMembers = typingMembers.filter((receipt) => receipt.userId !== action.userId);
-  if (typingMembers.length === 0) {
-    roomToMembers.delete(action.roomId);
-  } else {
-    roomToMembers.set(action.roomId, typingMembers);
-  }
-  return roomToMembers;
-};
-
-const timeoutReceipt = (
-  roomToMembers: IRoomIdToTypingMembers,
-  roomId: string,
-  userId: string,
-  timeout: number
-): boolean | undefined => {
-  const typingMembers = roomToMembers.get(roomId) ?? [];
-
-  const target = typingMembers.find((receipt) => receipt.userId === userId);
-  if (!target) return undefined;
-
-  return Date.now() - target.ts >= timeout;
-};
 
 export const roomIdToTypingMembersAtom = atom<
   IRoomIdToTypingMembers,
@@ -79,47 +41,53 @@ export const roomIdToTypingMembersAtom = atom<
 >(
   (get) => get(baseRoomIdToTypingMembersAtom),
   (get, set, action) => {
-    const rToTyping = get(baseRoomIdToTypingMembersAtom);
+    const current = get(baseRoomIdToTypingMembersAtom);
 
     if (action.type === 'PUT') {
-      set(
-        baseRoomIdToTypingMembersAtom,
-        produce(rToTyping, (draft) => putTypingMember(draft, action))
-      );
-
-      // remove typing receipt after some timeout
-      // to prevent stuck typing members
-      setTimeout(() => {
-        const { roomId, userId } = action;
-        const timeout = timeoutReceipt(
-          get(baseRoomIdToTypingMembersAtom),
-          roomId,
-          userId,
-          TYPING_TIMEOUT_MS
-        );
-        if (timeout) {
-          set(
-            baseRoomIdToTypingMembersAtom,
-            produce(get(baseRoomIdToTypingMembersAtom), (draft) =>
-              deleteTypingMember(draft, {
-                type: 'DELETE',
-                roomId,
-                userId,
-              })
-            )
-          );
-        }
-      }, TYPING_TIMEOUT_MS);
+      // Mutate in place to avoid Map cloning (the old produce() cloned the
+      // entire Map on every typing event — major GC pressure on busy servers).
+      let members = current.get(action.roomId) ?? [];
+      members = members.filter((r) => r.userId !== action.userId);
+      members.push({ userId: action.userId, ts: action.ts });
+      current.set(action.roomId, members);
+      // Trigger subscribers with the same Map reference — jotai detects the
+      // set() call as an update regardless of reference equality.
+      set(baseRoomIdToTypingMembersAtom, new Map(current));
+      return;
     }
 
-    if (
-      action.type === 'DELETE' &&
-      rToTyping.get(action.roomId)?.find((receipt) => receipt.userId === action.userId)
-    ) {
-      set(
-        baseRoomIdToTypingMembersAtom,
-        produce(rToTyping, (draft) => deleteTypingMember(draft, action))
-      );
+    if (action.type === 'DELETE') {
+      let members = current.get(action.roomId);
+      if (!members) return;
+      members = members.filter((r) => r.userId !== action.userId);
+      if (members.length === 0) {
+        current.delete(action.roomId);
+      } else {
+        current.set(action.roomId, members);
+      }
+      set(baseRoomIdToTypingMembersAtom, new Map(current));
+      return;
+    }
+
+    if (action.type === 'CLEANUP') {
+      // Sweep all rooms for expired typing receipts — runs every few seconds
+      // instead of one setTimeout per typing event.
+      const now = Date.now();
+      let changed = false;
+      for (const [roomId, members] of current) {
+        const alive = members.filter((r) => now - r.ts < TYPING_TIMEOUT_MS);
+        if (alive.length !== members.length) {
+          changed = true;
+          if (alive.length === 0) {
+            current.delete(roomId);
+          } else {
+            current.set(roomId, alive);
+          }
+        }
+      }
+      if (changed) {
+        set(baseRoomIdToTypingMembersAtom, new Map(current));
+      }
     }
   }
 );
@@ -148,8 +116,18 @@ export const useBindRoomIdToTypingMembersAtom = (
     };
 
     mx.on(RoomMemberEvent.Typing, handleTypingEvent);
+
+    // Single cleanup interval replaces per-event setTimeout.
+    // Before: each typing event created its own timer (hundreds of timers
+    // on busy servers, consuming 8% CPU in TimeoutManager).
+    // After: one interval sweeps expired entries every 3 seconds.
+    const cleanupInterval = setInterval(() => {
+      setTypingMembers({ type: 'CLEANUP' });
+    }, CLEANUP_INTERVAL_MS);
+
     return () => {
       mx.removeListener(RoomMemberEvent.Typing, handleTypingEvent);
+      clearInterval(cleanupInterval);
     };
   }, [mx, setTypingMembers, hideActivity]);
 };
