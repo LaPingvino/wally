@@ -732,11 +732,11 @@ export const Message = as<'div', MessageProps>(
     const useAuthentication = useMediaAuthentication();
     const senderId = mEvent.getSender() ?? '';
 
-    const [hover, setHover] = useState(false);
-    const { hoverProps } = useHover({ onHoverChange: setHover });
-    const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
+    // Hover is now CSS-only (MessageOptionsHidden) to avoid per-message
+    // re-renders on mouse movement. React state is only needed for menus.
     const [menuAnchor, setMenuAnchor] = useState<RectCords>();
     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
+    const optionsVisible = !!menuAnchor || !!emojiBoardAnchor;
 
     // Single-key shortcuts when a message is focused:
     //   r = reply, e = edit, t = open thread
@@ -815,15 +815,15 @@ export const Message = as<'div', MessageProps>(
           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
         </Box>
         <Box shrink="No" gap="100">
-          {messageLayout === MessageLayout.Modern && hover && (
-            <>
+          {messageLayout === MessageLayout.Modern && (
+            <span className={css.MessageOptionsHidden}>
               <Text as="span" size="T200" priority="300">
                 {senderId}
               </Text>
               <Text as="span" size="T200" priority="300">
-                |
+                {' | '}
               </Text>
-            </>
+            </span>
           )}
           <Time
             ts={mEvent.getTs()}
@@ -935,12 +935,10 @@ export const Message = as<'div', MessageProps>(
         selected={!!menuAnchor || !!emojiBoardAnchor}
         onKeyDown={handleMsgKeyDown}
         {...props}
-        {...hoverProps}
-        {...focusWithinProps}
         ref={ref}
       >
-        {!edit && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
-          <div className={css.MessageOptionsBase}>
+        {!edit && (
+          <div className={classNames(css.MessageOptionsBase, css.MessageOptionsHidden)} data-options-visible={optionsVisible || undefined}>
             <Menu className={css.MessageOptionsBar} variant="SurfaceVariant">
               <Box gap="100">
                 {canSendReaction && (
