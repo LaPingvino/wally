@@ -39,10 +39,14 @@ export function VersionCheck() {
       const html = await resp.text();
       const serverHashes = extractBundleHashes(html);
 
+      // Only trigger if our loaded scripts are NOT in the server's latest HTML.
+      // New files existing on the server is fine (old files linger in CDN caches).
+      // We only care when OUR files are stale — i.e., the server no longer
+      // references the scripts we're running.
       if (
         CURRENT_SCRIPTS.length > 0 &&
         serverHashes.length > 0 &&
-        JSON.stringify(serverHashes) !== JSON.stringify(CURRENT_SCRIPTS)
+        CURRENT_SCRIPTS.some((script) => !serverHashes.includes(script))
       ) {
         setUpdateAvailable(true);
       }
