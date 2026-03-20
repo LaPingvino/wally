@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useDeferredValue, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Icon, Icons, Line, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
 import { useAtomValue } from 'jotai';
@@ -102,8 +102,7 @@ export function HomeTab() {
   const mDirects = useAtomValue(mDirectAtom);
   const roomToParents = useAtomValue(roomToParentsAtom);
   const orphanRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
-  const homeUnreadRaw = useRoomsUnread(orphanRooms, roomToUnreadAtom);
-  const homeUnread = useDeferredValue(homeUnreadRaw);
+  const homeUnread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
   const homeSelected = useHomeSelected();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
