@@ -1,4 +1,4 @@
-import React, { CSSProperties, ReactNode, memo } from 'react';
+import React, { CSSProperties, ReactNode } from 'react';
 import { Box, Badge, toRem, Text } from 'folds';
 import { millify } from '../../plugins/millify';
 
@@ -17,10 +17,7 @@ export function UnreadBadgeCenter({ children }: { children: ReactNode }) {
   );
 }
 
-// Memoized: the sidebar re-renders badge parents on every sync event,
-// but the actual count/highlight rarely change. Without memo, each badge
-// re-runs millify + full Badge render tree on every sync — ~13% of CPU.
-export const UnreadBadge = memo(function UnreadBadge({ highlight, count }: UnreadBadgeProps) {
+export function UnreadBadge({ highlight, count }: UnreadBadgeProps) {
   return (
     <Badge
       variant={highlight ? 'Success' : 'Secondary'}
@@ -36,4 +33,4 @@ export const UnreadBadge = memo(function UnreadBadge({ highlight, count }: Unrea
       )}
     </Badge>
   );
-});
+}
