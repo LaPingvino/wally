@@ -196,6 +196,22 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   );
 
   useEffect(() => {
+    // Throttled unread updates: collect dirty room IDs and flush at most
+    // every 2 seconds. Without throttling, every incoming event across all
+    // rooms triggers getUnreadInfo + atom comparison + potential re-render
+    // of every sidebar badge — pinning the CPU on busy servers.
+    const dirtyRooms = new Set<string>();
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const flush = () => {
+      flushTimer = null;
+      dirtyRooms.forEach((roomId) => {
+        const room = mx.getRoom(roomId);
+        if (room) setUnreadAtom({ type: 'PUT', unreadInfo: getUnreadInfo(room) });
+      });
+      dirtyRooms.clear();
+    };
+
     const handleTimelineEvent = (
       mEvent: MatrixEvent,
       room: Room | undefined,
@@ -213,11 +229,17 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       }
 
       if (mEvent.getSender() === mx.getUserId()) return;
-      setUnreadAtom({ type: 'PUT', unreadInfo: getUnreadInfo(room) });
+      dirtyRooms.add(room.roomId);
+      if (!flushTimer) {
+        flushTimer = setTimeout(flush, 2000);
+      }
     };
     mx.on(RoomEvent.Timeline, handleTimelineEvent);
     return () => {
       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      if (flushTimer) clearTimeout(flushTimer);
+      // Flush remaining dirty rooms on cleanup
+      if (dirtyRooms.size > 0) flush();
     };
   }, [mx, setUnreadAtom]);
 
