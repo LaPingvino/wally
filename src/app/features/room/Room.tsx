@@ -139,6 +139,8 @@ export function Room() {
   // Auto-join voice rooms on direct navigation (URL navigation or page reload).
   // RoomNavItem handles the click case; this effect covers the URL case where
   // setActiveCallRoomId was never called and isCallViewOpen stays false.
+  // Skip if the call is already active for this room (prevents overwriting
+  // isChatOpen state set by the chat button click).
   useEffect(() => {
     if (isVoiceRoom && activeCallRoomId !== room.roomId) {
       if (activeCallRoomId) hangUp();

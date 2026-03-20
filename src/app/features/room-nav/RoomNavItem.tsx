@@ -359,6 +359,12 @@ export function RoomNavItem({
   // Open chat panel for voice rooms
   const handleChatButtonClick = (evt: MouseEvent<HTMLButtonElement>) => {
     evt.stopPropagation();
+    // Ensure the call is active first (so Room.tsx's auto-join effect
+    // doesn't re-fire and overwrite isChatOpen with false).
+    if (activeCallRoomId !== room.roomId) {
+      hangUp();
+      setActiveCallRoomId(room.roomId, true);
+    }
     if (!isChatOpen) toggleChat();
     setViewedCallRoomId(room.roomId);
     navigate(linkPath);

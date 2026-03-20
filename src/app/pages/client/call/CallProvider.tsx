@@ -126,14 +126,10 @@ export function CallProvider({ children }: CallProviderProps) {
   // setupWidget effect checks this ref so it doesn't load the iframe too early.
   const joinConfirmedRef = useRef(false);
 
-  // Reset pending-join state whenever the active call room changes.
-  // callAutoJoin is intentionally read as a snapshot (not in deps) so that
-  // changing the setting mid-call doesn't reset pending state unexpectedly.
-  useEffect(() => {
-    joinConfirmedRef.current = false;
-    setPendingJoin(activeCallRoomId ? !callAutoJoin : false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCallRoomId]);
+  // pendingJoin and joinConfirmedRef are now set synchronously inside
+  // setActiveCallRoomId — no separate effect needed. This eliminates the
+  // one-render race where pendingJoin was still false when
+  // PersistentCallContainer's setup effect ran.
 
   const confirmJoin = useCallback(() => {
     joinConfirmedRef.current = true;
@@ -151,6 +147,11 @@ export function CallProvider({ children }: CallProviderProps) {
     }
     setActiveCallRoomIdState(roomId);
     callNotifySentRef.current = false;
+    // Set pendingJoin synchronously (same batch as activeCallRoomId) to avoid
+    // the one-render race where PersistentCallContainer sees pendingJoin=false
+    // and loads EC before the user has confirmed via the pre-join screen.
+    joinConfirmedRef.current = false;
+    setPendingJoin(roomId ? !callAutoJoin : false);
     if (roomId !== null) {
       // Voice rooms: show call by default. Regular/DM rooms: show chat by default.
       setIsCallViewOpenState(isVoiceRoom);
@@ -160,7 +161,7 @@ export function CallProvider({ children }: CallProviderProps) {
       setIsAudioEnabledState(DEFAULT_AUDIO_ENABLED);
       setIsVideoEnabledState(DEFAULT_VIDEO_ENABLED);
     }
-  }, []);
+  }, [callAutoJoin]);
 
   const setViewedCallRoomId = useCallback(
     (roomId: string | null) => {
