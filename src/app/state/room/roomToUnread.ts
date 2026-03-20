@@ -9,7 +9,7 @@ import {
   SyncState,
 } from 'matrix-js-sdk';
 import { ReceiptContent, ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   Membership,
   NotificationType,
@@ -38,6 +38,10 @@ export type RoomToUnreadAction =
   | {
       type: 'PUT';
       unreadInfo: UnreadInfo;
+    }
+  | {
+      type: 'PUT_BATCH';
+      unreadInfos: UnreadInfo[];
     }
   | {
       type: 'DELETE';
@@ -151,6 +155,23 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
       );
       return;
     }
+    if (action.type === 'PUT_BATCH') {
+      // Single produce() for all rooms — avoids N separate Map clones.
+      set(
+        baseRoomToUnread,
+        produce(get(baseRoomToUnread), (draftRoomToUnread) => {
+          const roomToParents = get(roomToParentsAtom);
+          for (const unreadInfo of action.unreadInfos) {
+            const currentUnread = draftRoomToUnread.get(unreadInfo.roomId);
+            if (currentUnread && unreadEqual(currentUnread, unreadInfoToUnread(unreadInfo))) {
+              continue;
+            }
+            putUnreadInfo(draftRoomToUnread, getAllParents(roomToParents, unreadInfo.roomId), unreadInfo);
+          }
+        })
+      );
+      return;
+    }
     if (action.type === 'DELETE' && get(baseRoomToUnread).has(action.roomId)) {
       set(
         baseRoomToUnread,
@@ -169,6 +190,8 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
 export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roomToUnreadAtom) => {
   const setUnreadAtom = useSetAtom(unreadAtom);
   const roomsNotificationPreferences = useRoomsNotificationPreferencesContext();
+  // Shared between timeline and receipt effects so receipts can cancel pending unread updates.
+  const dirtyRoomsRef = useRef(new Set<string>());
 
   useEffect(() => {
     setUnreadAtom({
@@ -200,16 +223,20 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
     // every 2 seconds. Without throttling, every incoming event across all
     // rooms triggers getUnreadInfo + atom comparison + potential re-render
     // of every sidebar badge — pinning the CPU on busy servers.
-    const dirtyRooms = new Set<string>();
+    const dirtyRooms = dirtyRoomsRef.current;
     let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
     const flush = () => {
       flushTimer = null;
+      const infos: UnreadInfo[] = [];
       dirtyRooms.forEach((roomId) => {
         const room = mx.getRoom(roomId);
-        if (room) setUnreadAtom({ type: 'PUT', unreadInfo: getUnreadInfo(room) });
+        if (room) infos.push(getUnreadInfo(room));
       });
       dirtyRooms.clear();
+      if (infos.length > 0) {
+        setUnreadAtom({ type: 'PUT_BATCH', unreadInfos: infos });
+      }
     };
 
     const handleTimelineEvent = (
@@ -228,7 +255,12 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         return;
       }
 
-      if (mEvent.getSender() === mx.getUserId()) return;
+      if (mEvent.getSender() === mx.getUserId()) {
+        // Own messages mark the room as read — remove from dirty set
+        // so a pending flush doesn't re-add the unread badge.
+        dirtyRooms.delete(room.roomId);
+        return;
+      }
       dirtyRooms.add(room.roomId);
       if (!flushTimer) {
         flushTimer = setTimeout(flush, 2000);
@@ -256,6 +288,9 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         )
       );
       if (isMyReceipt) {
+        // Clear from pending throttled updates so the flush doesn't re-add
+        // the unread badge after the receipt already cleared it.
+        dirtyRoomsRef.current.delete(room.roomId);
         setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
       }
     };
