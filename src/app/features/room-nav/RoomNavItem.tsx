@@ -356,16 +356,16 @@ export function RoomNavItem({
     navigate(linkPath);
   };
 
-  // Open chat panel for voice rooms
+  // Open chat panel for voice rooms — NOT the call lobby.
+  // isVoiceRoom=false so setActiveCallRoomId sets isCallViewOpen=false + isChatOpen=true.
   const handleChatButtonClick = (evt: MouseEvent<HTMLButtonElement>) => {
     evt.stopPropagation();
-    // Ensure the call is active first (so Room.tsx's auto-join effect
-    // doesn't re-fire and overwrite isChatOpen with false).
     if (activeCallRoomId !== room.roomId) {
       hangUp();
-      setActiveCallRoomId(room.roomId, true);
+      setActiveCallRoomId(room.roomId, false);
+    } else if (!isChatOpen) {
+      toggleChat();
     }
-    if (!isChatOpen) toggleChat();
     setViewedCallRoomId(room.roomId);
     navigate(linkPath);
   };
