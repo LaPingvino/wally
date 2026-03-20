@@ -1,4 +1,4 @@
-import { ReactElement, useDeferredValue } from 'react';
+import { ReactElement } from 'react';
 import { Unread } from '../../types/matrix/room';
 import { useRoomUnread, useRoomsUnread } from '../state/hooks/unread';
 import { roomToUnreadAtom } from '../state/room/roomToUnread';
@@ -8,9 +8,7 @@ type RoomUnreadProviderProps = {
   children: (unread?: Unread) => ReactElement;
 };
 export function RoomUnreadProvider({ roomId, children }: RoomUnreadProviderProps) {
-  const raw = useRoomUnread(roomId, roomToUnreadAtom);
-  const unread = useDeferredValue(raw);
-
+  const unread = useRoomUnread(roomId, roomToUnreadAtom);
   return children(unread);
 }
 
@@ -19,8 +17,6 @@ type RoomsUnreadProviderProps = {
   children: (unread?: Unread) => ReactElement;
 };
 export function RoomsUnreadProvider({ rooms, children }: RoomsUnreadProviderProps) {
-  const raw = useRoomsUnread(rooms, roomToUnreadAtom);
-  const unread = useDeferredValue(raw);
-
+  const unread = useRoomsUnread(rooms, roomToUnreadAtom);
   return children(unread);
 }
