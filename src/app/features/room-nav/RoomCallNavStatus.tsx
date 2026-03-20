@@ -78,6 +78,7 @@ export function CallNavStatus() {
     toggleVideo,
     hangUp,
     setActiveCallRoomId,
+    pendingJoin,
   } = useCallState();
   const { navigateRoom } = useRoomNavigate();
 
@@ -165,7 +166,10 @@ export function CallNavStatus() {
   const notificationPreferences = useRoomsNotificationPreferences();
   const callRingScope = useAtomValue(settingsAtom).callRingScope ?? 'nonVoice';
 
-  const hasActiveCall = Boolean(activeCallRoomId);
+  // Don't show the calling indicator during pendingJoin — the user hasn't
+  // confirmed they want to join yet. Showing "in call" + hangup prematurely
+  // is confusing and the call hasn't actually started.
+  const hasActiveCall = Boolean(activeCallRoomId) && !pendingJoin;
   const isConnected = hasActiveCall && isActiveCallReady;
 
   const clearCallTimeout = useCallback((roomId: string) => {

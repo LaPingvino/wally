@@ -347,7 +347,8 @@ export function RoomNavItem({
     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
-  // Navigate to the room; for voice rooms also join the call so the call panel opens
+  // Navigate to the room; for voice rooms also activate the call so the
+  // call panel opens. Room.tsx's auto-join effect handles the actual join.
   const handleNavItemClick: MouseEventHandler<HTMLElement> = () => {
     if (room.isCallRoom() && activeCallRoomId !== room.roomId) {
       hangUp();
