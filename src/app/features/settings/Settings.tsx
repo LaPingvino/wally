@@ -30,6 +30,7 @@ import { EmojisStickers } from './emojis-stickers';
 import { DeveloperTools } from './developer-tools';
 import { About } from './about';
 import { KeyboardShortcuts } from './keyboard-shortcuts/KeyboardShortcuts';
+import { Performance } from './performance';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
@@ -43,6 +44,7 @@ export enum SettingsPages {
   DeveloperToolsPage,
   AboutPage,
   KeyboardShortcutsPage,
+  PerformancePage,
 }
 
 type SettingsMenuItem = {
@@ -93,6 +95,11 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         page: SettingsPages.KeyboardShortcutsPage,
         name: 'Keyboard Shortcuts',
         icon: Icons.Alphabet,
+      },
+      {
+        page: SettingsPages.PerformancePage,
+        name: 'Performance',
+        icon: Icons.Bulb,
       },
     ],
     []
@@ -236,6 +243,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
       {activePage === SettingsPages.AboutPage && <About requestClose={handlePageRequestClose} />}
       {activePage === SettingsPages.KeyboardShortcutsPage && (
         <KeyboardShortcuts requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SettingsPages.PerformancePage && (
+        <Performance requestClose={handlePageRequestClose} />
       )}
     </PageRoot>
   );

@@ -22,6 +22,37 @@
 
 export type FlushHandler = (items: string[]) => void;
 
+/**
+ * Performance statistics collected by sync batch schedulers.
+ * Exposed via syncBatchStats for the Performance settings page.
+ */
+export interface SyncBatchStats {
+  /** Total events enqueued across all schedulers since last reset. */
+  eventsEnqueued: number;
+  /** Total rAF flushes executed. */
+  flushesExecuted: number;
+  /** Events per key since last reset. */
+  eventsByKey: Map<string, number>;
+  /** Timestamp of last reset. */
+  resetAt: number;
+}
+
+/** Global stats shared across all SyncBatchScheduler instances. */
+export const syncBatchStats: SyncBatchStats = {
+  eventsEnqueued: 0,
+  flushesExecuted: 0,
+  eventsByKey: new Map(),
+  resetAt: Date.now(),
+};
+
+/** Reset stats (called from Performance settings page). */
+export function resetSyncBatchStats(): void {
+  syncBatchStats.eventsEnqueued = 0;
+  syncBatchStats.flushesExecuted = 0;
+  syncBatchStats.eventsByKey.clear();
+  syncBatchStats.resetAt = Date.now();
+}
+
 export class SyncBatchScheduler {
   /** Pending one-shot writes (last-write-wins per key). */
   private pending = new Map<string, () => void>();
@@ -44,6 +75,8 @@ export class SyncBatchScheduler {
    */
   enqueue(key: string, fn: () => void): void {
     if (this.disposed) return;
+    syncBatchStats.eventsEnqueued++;
+    syncBatchStats.eventsByKey.set(key, (syncBatchStats.eventsByKey.get(key) ?? 0) + 1);
     this.pending.set(key, fn);
     this.scheduleFlush();
   }
@@ -54,6 +87,8 @@ export class SyncBatchScheduler {
    */
   enqueueAccumulate(key: string, item: string): void {
     if (this.disposed) return;
+    syncBatchStats.eventsEnqueued++;
+    syncBatchStats.eventsByKey.set(key, (syncBatchStats.eventsByKey.get(key) ?? 0) + 1);
     let set = this.accumulated.get(key);
     if (!set) {
       set = new Set();
@@ -92,6 +127,7 @@ export class SyncBatchScheduler {
   private flush(): void {
     this.rafId = null;
     if (this.disposed) return;
+    syncBatchStats.flushesExecuted++;
 
     // Execute one-shot writes
     const pendingEntries = Array.from(this.pending.entries());
