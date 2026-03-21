@@ -69,14 +69,17 @@ export function Performance({ requestClose }: PerformanceProps) {
   const joinedRooms = rooms.filter((r) => r.getMyMembership() === 'join');
   const invitedRooms = rooms.filter((r) => r.getMyMembership() === 'invite');
   const spaces = joinedRooms.filter((r) => r.isSpaceRoom());
-  const dmRooms = joinedRooms.filter((r) => {
-    const isDirect = mx.getAccountData('m.direct');
-    if (!isDirect) return false;
-    const content = isDirect.getContent();
-    return Object.values(content).some(
-      (roomIds: unknown) => Array.isArray(roomIds) && roomIds.includes(r.roomId)
-    );
-  });
+  const mDirectEvent = mx.getAccountData('m.direct');
+  const dmRoomIds = new Set<string>();
+  if (mDirectEvent) {
+    const content = mDirectEvent.getContent();
+    for (const roomIds of Object.values(content)) {
+      if (Array.isArray(roomIds)) {
+        for (const id of roomIds) dmRoomIds.add(id);
+      }
+    }
+  }
+  const dmRooms = joinedRooms.filter((r) => dmRoomIds.has(r.roomId));
 
   // Memory usage (Chrome/Edge only)
   const memory = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number; totalJSHeapSize: number } }).memory;

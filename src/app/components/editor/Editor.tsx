@@ -57,23 +57,18 @@ const withVoid = (editor: Editor): Editor => {
     const { selection } = editor;
     if (selection && Range.isCollapsed(selection)) {
       const { anchor } = selection;
-      if (anchor.offset === 0) {
-        // Check if the previous sibling in the Slate tree is a void inline
-        const [, parentPath] = Editor.parent(editor, anchor);
-        if (anchor.path.length > 0) {
-          const nodeIndex = anchor.path[anchor.path.length - 1];
-          if (nodeIndex > 0) {
-            const prevPath = Path.previous(anchor.path);
-            try {
-              const prevNode = Node.get(editor, prevPath);
-              if ('type' in prevNode && editor.isVoid(prevNode as any)) {
-                Transforms.removeNodes(editor, { at: prevPath });
-                return;
-              }
-            } catch {
-              // Path doesn't exist — fall through to default
-            }
+      const nodeIndex = anchor.path[anchor.path.length - 1];
+      // Check if the previous sibling in the Slate tree is a void inline
+      if (anchor.offset === 0 && nodeIndex > 0) {
+        const prevPath = Path.previous(anchor.path);
+        try {
+          const prevNode = Node.get(editor, prevPath);
+          if ('type' in prevNode && editor.isVoid(prevNode as any)) {
+            Transforms.removeNodes(editor, { at: prevPath });
+            return;
           }
+        } catch {
+          // Path doesn't exist — fall through to default
         }
       }
     }
