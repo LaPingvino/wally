@@ -1,6 +1,6 @@
 import { atom, useSetAtom } from 'jotai';
 import { MatrixClient, RoomMemberEvent, RoomMemberEventHandlerMap } from 'matrix-js-sdk';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useSetting } from './hooks/settings';
 import { settingsAtom } from './settings';
 import { SyncBatchScheduler } from './syncBatchScheduler';
@@ -99,11 +99,8 @@ export const useBindRoomIdToTypingMembersAtom = (
 ) => {
   const setTypingMembers = useSetAtom(typingMembersAtom);
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const schedulerRef = useRef<SyncBatchScheduler | null>(null);
-
   useEffect(() => {
     const scheduler = new SyncBatchScheduler();
-    schedulerRef.current = scheduler;
 
     // Batch typing events: collect all changes and flush once per rAF.
     // On busy servers, dozens of typing events can fire per sync batch.

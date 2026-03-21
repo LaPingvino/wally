@@ -1,11 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Box, Text, IconButton, Icon, Icons, Scroll, Button, config, toRem } from 'folds';
+import { Box, Text, IconButton, Icon, Icons, Scroll, Button } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { syncBatchStats, resetSyncBatchStats } from '../../../state/syncBatchScheduler';
+import { Membership } from '../../../../types/matrix/room';
+import { getMDirects } from '../../../utils/room';
+import { bytesToSize } from '../../../utils/common';
 
 type PerformanceProps = {
   requestClose: () => void;
@@ -35,12 +38,6 @@ function formatDuration(ms: number): string {
   return `${hours}h ${remainMins}m`;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export function Performance({ requestClose }: PerformanceProps) {
   const mx = useMatrixClient();
   const [tick, setTick] = useState(0);
@@ -66,19 +63,11 @@ export function Performance({ requestClose }: PerformanceProps) {
 
   // Room/sync stats from Matrix client
   const rooms = mx.getRooms();
-  const joinedRooms = rooms.filter((r) => r.getMyMembership() === 'join');
-  const invitedRooms = rooms.filter((r) => r.getMyMembership() === 'invite');
+  const joinedRooms = rooms.filter((r) => r.getMyMembership() === Membership.Join);
+  const invitedRooms = rooms.filter((r) => r.getMyMembership() === Membership.Invite);
   const spaces = joinedRooms.filter((r) => r.isSpaceRoom());
   const mDirectEvent = mx.getAccountData('m.direct');
-  const dmRoomIds = new Set<string>();
-  if (mDirectEvent) {
-    const content = mDirectEvent.getContent();
-    for (const roomIds of Object.values(content)) {
-      if (Array.isArray(roomIds)) {
-        for (const id of roomIds) dmRoomIds.add(id);
-      }
-    }
-  }
+  const dmRoomIds = mDirectEvent ? getMDirects(mDirectEvent) : new Set<string>();
   const dmRooms = joinedRooms.filter((r) => dmRoomIds.has(r.roomId));
 
   // Memory usage (Chrome/Edge only)
@@ -197,15 +186,15 @@ export function Performance({ requestClose }: PerformanceProps) {
                   >
                     <SettingTile
                       title="JS Heap Used"
-                      description={formatBytes(memory.usedJSHeapSize)}
+                      description={bytesToSize(memory.usedJSHeapSize)}
                     />
                     <SettingTile
                       title="JS Heap Total"
-                      description={formatBytes(memory.totalJSHeapSize)}
+                      description={bytesToSize(memory.totalJSHeapSize)}
                     />
                     <SettingTile
                       title="JS Heap Limit"
-                      description={formatBytes(memory.jsHeapSizeLimit)}
+                      description={bytesToSize(memory.jsHeapSizeLimit)}
                     />
                   </SequenceCard>
                 </Box>

@@ -1,6 +1,6 @@
 import { useSetAtom, WritableAtom } from 'jotai';
 import { ClientEvent, ClientEventHandlerMap, MatrixClient, Room, RoomEvent, SyncState } from 'matrix-js-sdk';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Membership } from '../../../types/matrix/room';
 import { SyncBatchScheduler } from '../syncBatchScheduler';
 
@@ -25,11 +25,9 @@ export const useBindRoomsWithMembershipsAtom = (
   memberships: Membership[]
 ) => {
   const setRoomsAtom = useSetAtom(roomsAtom);
-  const schedulerRef = useRef<SyncBatchScheduler | null>(null);
 
   useEffect(() => {
     const scheduler = new SyncBatchScheduler();
-    schedulerRef.current = scheduler;
 
     // Pending changes accumulated between rAF flushes
     const pendingPuts = new Set<string>();
@@ -49,7 +47,7 @@ export const useBindRoomsWithMembershipsAtom = (
     };
 
     const satisfyMembership = (room: Room): boolean =>
-      !!memberships.find((membership) => membership === room.getMyMembership());
+      memberships.includes(room.getMyMembership() as Membership);
     const initRooms = () =>
       setRoomsAtom({
         type: 'INITIALIZE',

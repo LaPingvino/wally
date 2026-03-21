@@ -7,7 +7,7 @@ import {
   RoomEvent,
   RoomStateEvent,
 } from 'matrix-js-sdk';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { Membership, RoomToParents, StateEvent } from '../../../types/matrix/room';
 import {
   getRoomToParents,
@@ -39,6 +39,25 @@ export type RoomToParentsAction =
     };
 
 const baseRoomToParents = atom<RoomToParents>(new Map());
+
+const cloneRoomToParents = (current: RoomToParents): RoomToParents => {
+  const next = new Map(current);
+  next.forEach((parents, child) => {
+    next.set(child, new Set(parents));
+  });
+  return next;
+};
+
+const removeParent = (map: RoomToParents, roomId: string) => {
+  map.delete(roomId);
+  const noParentRooms: string[] = [];
+  map.forEach((parents, child) => {
+    parents.delete(roomId);
+    if (parents.size === 0) noParentRooms.push(child);
+  });
+  noParentRooms.forEach((room) => map.delete(room));
+};
+
 export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], undefined>(
   (get) => get(baseRoomToParents),
   (get, set, action) => {
@@ -47,51 +66,21 @@ export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], unde
       return;
     }
     if (action.type === 'PUT') {
-      const current = get(baseRoomToParents);
-      const next = new Map(current);
-      next.forEach((parents, child) => {
-        next.set(child, new Set(parents));
-      });
+      const next = cloneRoomToParents(get(baseRoomToParents));
       mapParentWithChildren(next, action.parent, action.children);
       set(baseRoomToParents, next);
       return;
     }
     if (action.type === 'PUT_BATCH') {
-      const current = get(baseRoomToParents);
-      const next = new Map(current);
-      next.forEach((parents, child) => {
-        next.set(child, new Set(parents));
-      });
-      // Apply all deletes
-      for (const roomId of action.deletes) {
-        const noParentRooms: string[] = [];
-        next.delete(roomId);
-        next.forEach((parents, child) => {
-          parents.delete(roomId);
-          if (parents.size === 0) noParentRooms.push(child);
-        });
-        noParentRooms.forEach((room) => next.delete(room));
-      }
-      // Apply all puts
-      for (const { parent, children } of action.puts) {
-        mapParentWithChildren(next, parent, children);
-      }
+      const next = cloneRoomToParents(get(baseRoomToParents));
+      for (const roomId of action.deletes) removeParent(next, roomId);
+      for (const { parent, children } of action.puts) mapParentWithChildren(next, parent, children);
       set(baseRoomToParents, next);
       return;
     }
     if (action.type === 'DELETE') {
-      const current = get(baseRoomToParents);
-      const next = new Map(current);
-      next.forEach((parents, child) => {
-        next.set(child, new Set(parents));
-      });
-      const noParentRooms: string[] = [];
-      next.delete(action.roomId);
-      next.forEach((parents, child) => {
-        parents.delete(action.roomId);
-        if (parents.size === 0) noParentRooms.push(child);
-      });
-      noParentRooms.forEach((room) => next.delete(room));
+      const next = cloneRoomToParents(get(baseRoomToParents));
+      removeParent(next, action.roomId);
       set(baseRoomToParents, next);
     }
   }
@@ -102,11 +91,9 @@ export const useBindRoomToParentsAtom = (
   roomToParents: typeof roomToParentsAtom
 ) => {
   const setRoomToParents = useSetAtom(roomToParents);
-  const schedulerRef = useRef<SyncBatchScheduler | null>(null);
 
   useEffect(() => {
     const scheduler = new SyncBatchScheduler();
-    schedulerRef.current = scheduler;
 
     // Pending changes accumulated between rAF flushes
     const pendingPuts: Array<{ parent: string; children: string[] }> = [];
