@@ -99,18 +99,20 @@ function SessionHealthMonitor() {
 function SystemEmojiFeature() {
   const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
 
-  switch (emojiFont) {
-    case EmojiFont.Twemoji:
-      document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
-      break;
-    case EmojiFont.NotoColorEmojiBahai:
-      document.documentElement.style.setProperty('--font-emoji', 'NotoColorEmojiBahai');
-      break;
-    case EmojiFont.System:
-    default:
-      document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
-      break;
-  }
+  useEffect(() => {
+    switch (emojiFont) {
+      case EmojiFont.Twemoji:
+        document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
+        break;
+      case EmojiFont.NotoColorEmojiBahai:
+        document.documentElement.style.setProperty('--font-emoji', 'NotoColorEmojiBahai');
+        break;
+      case EmojiFont.System:
+      default:
+        document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
+        break;
+    }
+  }, [emojiFont]);
 
   return null;
 }
@@ -118,11 +120,13 @@ function SystemEmojiFeature() {
 function PageZoomFeature() {
   const [pageZoom] = useSetting(settingsAtom, 'pageZoom');
 
-  if (pageZoom === 100) {
-    document.documentElement.style.removeProperty('font-size');
-  } else {
-    document.documentElement.style.setProperty('font-size', `calc(1em * ${pageZoom / 100})`);
-  }
+  useEffect(() => {
+    if (pageZoom === 100) {
+      document.documentElement.style.removeProperty('font-size');
+    } else {
+      document.documentElement.style.setProperty('font-size', `calc(1em * ${pageZoom / 100})`);
+    }
+  }, [pageZoom]);
 
   return null;
 }
