@@ -35,15 +35,18 @@ function RenderMentionElement({
   const focused = useFocused();
 
   return (
-    <span
-      {...attributes}
-      className={css.Mention({
-        highlight: element.highlight,
-        focus: selected && focused,
-      })}
-      contentEditable={false}
-    >
-      {element.name}
+    <span {...attributes}>
+      <InlineChromiumBugfix />
+      <span
+        className={css.Mention({
+          highlight: element.highlight,
+          focus: selected && focused,
+        })}
+        contentEditable={false}
+      >
+        {element.name}
+      </span>
+      <InlineChromiumBugfix />
       {children}
     </span>
   );
@@ -58,15 +61,18 @@ function RenderCommandElement({
   const editor = useSlate();
 
   return (
-    <span
-      {...attributes}
-      className={css.Command({
-        focus: selected && focused,
-        active: getBeginCommand(editor) === element.command,
-      })}
-      contentEditable={false}
-    >
-      {`/${element.command}`}
+    <span {...attributes}>
+      <InlineChromiumBugfix />
+      <span
+        className={css.Command({
+          focus: selected && focused,
+          active: getBeginCommand(editor) === element.command,
+        })}
+        contentEditable={false}
+      >
+        {`/${element.command}`}
+      </span>
+      <InlineChromiumBugfix />
       {children}
     </span>
   );
@@ -84,6 +90,7 @@ function RenderEmoticonElement({
 
   return (
     <span className={css.EmoticonBase} {...attributes}>
+      <InlineChromiumBugfix />
       <span
         className={css.Emoticon({
           focus: selected && focused,
@@ -99,8 +106,9 @@ function RenderEmoticonElement({
         ) : (
           element.key
         )}
-        {children}
       </span>
+      <InlineChromiumBugfix />
+      {children}
     </span>
   );
 }

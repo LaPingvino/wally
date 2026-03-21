@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { Box, Scroll, Text } from 'folds';
-import { Descendant, Editor, createEditor } from 'slate';
+import { Descendant, Editor, Node, Path, Range, Transforms, createEditor } from 'slate';
 import {
   Slate,
   Editable,
@@ -43,11 +43,42 @@ const withInline = (editor: Editor): Editor => {
 };
 
 const withVoid = (editor: Editor): Editor => {
-  const { isVoid } = editor;
+  const { isVoid, deleteBackward } = editor;
 
   editor.isVoid = (element) =>
     [BlockType.Mention, BlockType.Emoticon, BlockType.Command].includes(element.type) ||
     isVoid(element);
+
+  // Fix: mobile keyboards use beforeinput (not keydown) for backspace.
+  // Slate's default deleteBackward doesn't traverse into a preceding void
+  // inline when the cursor is at offset 0 in the adjacent text node.
+  // This override detects that case and removes the void node explicitly.
+  editor.deleteBackward = (unit) => {
+    const { selection } = editor;
+    if (selection && Range.isCollapsed(selection)) {
+      const { anchor } = selection;
+      if (anchor.offset === 0) {
+        // Check if the previous sibling in the Slate tree is a void inline
+        const [, parentPath] = Editor.parent(editor, anchor);
+        if (anchor.path.length > 0) {
+          const nodeIndex = anchor.path[anchor.path.length - 1];
+          if (nodeIndex > 0) {
+            const prevPath = Path.previous(anchor.path);
+            try {
+              const prevNode = Node.get(editor, prevPath);
+              if ('type' in prevNode && editor.isVoid(prevNode as any)) {
+                Transforms.removeNodes(editor, { at: prevPath });
+                return;
+              }
+            } catch {
+              // Path doesn't exist — fall through to default
+            }
+          }
+        }
+      }
+    }
+    deleteBackward(unit);
+  };
 
   return editor;
 };

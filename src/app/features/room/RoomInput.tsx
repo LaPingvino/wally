@@ -857,6 +857,24 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 )}
               </UseStateProvider>
               {perMessageProfiles && <PersonaPicker />}
+              {!isEmptyEditor(editor) && (
+                <IconButton
+                  onClick={() => {
+                    resetEditor(editor);
+                    resetEditorHistory(editor);
+                    setMsgDraft([]);
+                    setReplyDraft(undefined);
+                    sendTypingStatus(false);
+                    ReactEditor.focus(editor);
+                  }}
+                  aria-label="Clear input"
+                  variant="SurfaceVariant"
+                  size="300"
+                  radii="300"
+                >
+                  <Icon src={Icons.Delete} />
+                </IconButton>
+              )}
               <IconButton onClick={submit} aria-label="Send message" variant="SurfaceVariant" size="300" radii="300">
                 <Icon src={Icons.Send} />
               </IconButton>
