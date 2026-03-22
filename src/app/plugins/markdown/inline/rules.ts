@@ -74,15 +74,22 @@ export const StrikeRule: InlineMDRule = {
   },
 };
 
-const CODE_MD_1 = '`';
-const CODE_PREFIX_1 = `${ESC_NEG_LB}\``;
-const CODE_NEG_LA_1 = '(?!`)';
-const CODE_REG_1 = new RegExp(`${URL_NEG_LB}${CODE_PREFIX_1}(.+?)${CODE_PREFIX_1}${CODE_NEG_LA_1}`);
+// CommonMark inline code spans: a run of N backticks opens, the first
+// matching run of exactly N backticks closes. This allows embedding
+// backticks by using a longer delimiter, e.g. `` ` `` or ``` `` ```.
+// Note: \2 backreference (not \1) because URL_NEG_LB contains a capture group.
+const CODE_REG_1 = new RegExp(`${URL_NEG_LB}(?<!\\\\)(\`+)(.+?)(?<!\\\\)\\2(?!\`)`);
 export const CodeRule: InlineMDRule = {
   match: (text) => text.match(CODE_REG_1),
   html: (parse, match) => {
-    const [, , g2] = match;
-    return `<code data-md="${CODE_MD_1}">${g2}</code>`;
+    const [, , g2, g3] = match;
+    // CommonMark: strip one leading and one trailing space if content
+    // starts and ends with a space and is not all spaces.
+    let content = g3;
+    if (content.length >= 2 && content.startsWith(' ') && content.endsWith(' ') && content.trim().length > 0) {
+      content = content.slice(1, -1);
+    }
+    return `<code data-md="${g2}">${content}</code>`;
   },
 };
 

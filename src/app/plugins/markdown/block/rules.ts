@@ -10,18 +10,19 @@ export const HeadingRule: BlockMDRule = {
   },
 };
 
-const CODEBLOCK_MD_1 = '```';
-const CODEBLOCK_REG_1 = /^`{3}(\S*)\n((?:.*\n)+?)`{3} *(?!.)\n?/m;
+// CommonMark fenced code blocks: opening fence is 3+ backticks,
+// closing fence must be at least as many backticks as the opening.
+const CODEBLOCK_REG_1 = /^(`{3,})(\S*)\n((?:.*\n)+?)\1 *(?!.)\n?/m;
 export const CodeBlockRule: BlockMDRule = {
   match: (text) => text.match(CODEBLOCK_REG_1),
   html: (match) => {
-    const [, g1, g2] = match;
+    const [, fence, info, content] = match;
     // use last identifier after dot, e.g. for "example.json" gets us "json" as language code.
-    const langCode = g1 ? g1.substring(g1.lastIndexOf('.') + 1) : null;
-    const filename = g1 !== langCode ? g1 : null;
+    const langCode = info ? info.substring(info.lastIndexOf('.') + 1) : null;
+    const filename = info !== langCode ? info : null;
     const classNameAtt = langCode ? ` class="language-${langCode}"` : '';
     const filenameAtt = filename ? ` data-label="${filename}"` : '';
-    return `<pre data-md="${CODEBLOCK_MD_1}"><code${classNameAtt}${filenameAtt}>${g2}</code></pre>`;
+    return `<pre data-md="${fence}"><code${classNameAtt}${filenameAtt}>${content}</code></pre>`;
   },
 };
 
@@ -100,5 +101,5 @@ export const UnorderedListRule: BlockMDRule = {
   },
 };
 
-export const UN_ESC_BLOCK_SEQ = /^\\*(#{1,6} +|```|>|(-|[\da-zA-Z]\.) +|\* +)/;
-export const ESC_BLOCK_SEQ = /^\\(\\*(#{1,6} +|```|>|(-|[\da-zA-Z]\.) +|\* +))/;
+export const UN_ESC_BLOCK_SEQ = /^\\*(#{1,6} +|`{3,}|>|(-|[\da-zA-Z]\.) +|\* +)/;
+export const ESC_BLOCK_SEQ = /^\\(\\*(#{1,6} +|`{3,}|>|(-|[\da-zA-Z]\.) +|\* +))/;
