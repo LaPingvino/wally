@@ -74,36 +74,6 @@ function serverMatrixSdkCryptoWasm(wasmFilePath) {
   };
 }
 
-// Patch the bundled Element Call to disable per-participant LiveKit E2EE.
-// EC v0.16.3 checks room.hasEncryptionStateEvent() and forces PER_PARTICIPANT
-// E2EE on any encrypted Matrix room, but our LiveKit SFU doesn't support it.
-// This causes "e2ee not configured" errors that break call connections.
-// The patch replaces the PER_PARTICIPANT branch with NONE.
-// Patch EC source in node_modules BEFORE viteStaticCopy copies it to dist.
-// This runs at buildStart, before any files are copied or bundled.
-function patchElementCallE2EE() {
-  return {
-    name: 'patch-element-call-e2ee',
-    enforce: 'pre',
-    buildStart() {
-      const ecDir = path.join(path.resolve(), 'node_modules/@element-hq/element-call-embedded/dist/assets');
-      if (!fs.existsSync(ecDir)) return;
-      for (const file of fs.readdirSync(ecDir)) {
-        if (!file.endsWith('.js')) continue;
-        const filePath = path.join(ecDir, file);
-        let content = fs.readFileSync(filePath, 'utf-8');
-        if (content.includes('.hasEncryptionStateEvent()?{kind:hn.PER_PARTICIPANT}')) {
-          content = content.replace(
-            '.hasEncryptionStateEvent()?{kind:hn.PER_PARTICIPANT}',
-            '.hasEncryptionStateEvent()?{kind:hn.NONE}'
-          );
-          fs.writeFileSync(filePath, content);
-          console.log(`[patch-element-call-e2ee] Patched ${file}: PER_PARTICIPANT → NONE`);
-        }
-      }
-    },
-  };
-}
 
 export default defineConfig({
   appType: 'spa',
@@ -129,7 +99,6 @@ export default defineConfig({
     vanillaExtractPlugin(),
     wasm(),
     react(),
-    patchElementCallE2EE(),
     VitePWA({
       srcDir: 'src',
       filename: 'sw.ts',
