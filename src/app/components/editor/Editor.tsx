@@ -43,11 +43,25 @@ const withInline = (editor: Editor): Editor => {
 };
 
 const withVoid = (editor: Editor): Editor => {
-  const { isVoid, deleteBackward } = editor;
+  const { isVoid, deleteBackward, deleteForward } = editor;
 
   editor.isVoid = (element) =>
     [BlockType.Mention, BlockType.Emoticon, BlockType.Command].includes(element.type) ||
     isVoid(element);
+
+  // Helper: check if sibling at path is a void element and remove it if so.
+  const tryRemoveVoidAt = (path: Path): boolean => {
+    try {
+      const node = Node.get(editor, path);
+      if ('type' in node && editor.isVoid(node as any)) {
+        Transforms.removeNodes(editor, { at: path });
+        return true;
+      }
+    } catch {
+      // Path doesn't exist
+    }
+    return false;
+  };
 
   // Fix: mobile keyboards use beforeinput (not keydown) for backspace.
   // Slate's default deleteBackward doesn't traverse into a preceding void
@@ -58,21 +72,27 @@ const withVoid = (editor: Editor): Editor => {
     if (selection && Range.isCollapsed(selection)) {
       const { anchor } = selection;
       const nodeIndex = anchor.path[anchor.path.length - 1];
-      // Check if the previous sibling in the Slate tree is a void inline
+      // Cursor at start of a text node — check previous sibling for void
       if (anchor.offset === 0 && nodeIndex > 0) {
-        const prevPath = Path.previous(anchor.path);
-        try {
-          const prevNode = Node.get(editor, prevPath);
-          if ('type' in prevNode && editor.isVoid(prevNode as any)) {
-            Transforms.removeNodes(editor, { at: prevPath });
-            return;
-          }
-        } catch {
-          // Path doesn't exist — fall through to default
-        }
+        if (tryRemoveVoidAt(Path.previous(anchor.path))) return;
       }
     }
     deleteBackward(unit);
+  };
+
+  // Forward delete past a void inline (Delete key / mobile forward-delete)
+  editor.deleteForward = (unit) => {
+    const { selection } = editor;
+    if (selection && Range.isCollapsed(selection)) {
+      const { anchor } = selection;
+      const textNode = Node.get(editor, anchor.path);
+      // Cursor at end of a text node — check next sibling for void
+      if (Node.isText(textNode) && anchor.offset === textNode.text.length) {
+        const nextPath = Path.next(anchor.path);
+        if (tryRemoveVoidAt(nextPath)) return;
+      }
+    }
+    deleteForward(unit);
   };
 
   return editor;

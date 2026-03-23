@@ -257,12 +257,15 @@ export const getPrevWorldRange = (editor: Editor): BaseRange | undefined => {
 };
 
 export const isEmptyEditor = (editor: Editor): boolean => {
+  if (editor.children.length !== 1) return false;
   const firstChildren = editor.children[0];
-  if (firstChildren && Element.isElement(firstChildren)) {
-    const isEmpty = editor.children.length === 1 && Editor.isEmpty(editor, firstChildren);
-    return isEmpty;
-  }
-  return false;
+  if (!firstChildren || !Element.isElement(firstChildren)) return false;
+  // Editor.isEmpty only checks for empty text nodes — it doesn't account for
+  // void inline children (mentions, emoticons, commands) inside the paragraph.
+  // Check that every child is either an empty text node or doesn't exist.
+  return firstChildren.children.every(
+    (child) => Text.isText(child) && child.text === ''
+  );
 };
 
 export const getBeginCommand = (editor: Editor): string | undefined => {
