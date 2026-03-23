@@ -1,12 +1,15 @@
 import { Scroll, Text } from 'folds';
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
+  ReactEditor,
   RenderElementProps,
   RenderLeafProps,
   useFocused,
   useSelected,
+  useSlateStatic,
   useSlate,
 } from 'slate-react';
+import { Transforms } from 'slate';
 
 import * as css from '../../styles/CustomHtml.css';
 import { CommandElement, EmoticonElement, LinkElement, MentionElement } from './slate';
@@ -33,6 +36,18 @@ function RenderMentionElement({
 }: { element: MentionElement } & RenderElementProps) {
   const selected = useSelected();
   const focused = useFocused();
+  const editor = useSlateStatic();
+
+  const handleRemove = useCallback(
+    (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const path = ReactEditor.findPath(editor, element);
+      Transforms.removeNodes(editor, { at: path });
+      ReactEditor.focus(editor);
+    },
+    [editor, element]
+  );
 
   return (
     <span {...attributes}>
@@ -45,6 +60,21 @@ function RenderMentionElement({
         contentEditable={false}
       >
         {element.name}
+        <span
+          role="button"
+          aria-label={`Remove mention ${element.name}`}
+          onClick={handleRemove}
+          onTouchEnd={handleRemove}
+          style={{
+            marginLeft: '2px',
+            cursor: 'pointer',
+            opacity: 0.6,
+            fontSize: '0.85em',
+            userSelect: 'none',
+          }}
+        >
+          ×
+        </span>
       </span>
       <InlineChromiumBugfix />
       {children}
