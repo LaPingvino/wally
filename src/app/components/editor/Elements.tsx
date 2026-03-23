@@ -66,11 +66,19 @@ function RenderMentionElement({
           onClick={handleRemove}
           onTouchEnd={handleRemove}
           style={{
-            marginLeft: '2px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginLeft: '4px',
+            width: '16px',
+            height: '16px',
             cursor: 'pointer',
-            opacity: 0.6,
-            fontSize: '0.85em',
+            opacity: 0.7,
+            fontSize: '14px',
+            lineHeight: 1,
+            borderRadius: '50%',
             userSelect: 'none',
+            verticalAlign: 'middle',
           }}
         >
           ×
