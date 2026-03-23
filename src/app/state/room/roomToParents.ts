@@ -1,11 +1,13 @@
 import { atom, useSetAtom } from 'jotai';
 import {
   ClientEvent,
+  ClientEventHandlerMap,
   MatrixClient,
   MatrixEvent,
   Room,
   RoomEvent,
   RoomStateEvent,
+  SyncState,
 } from 'matrix-js-sdk';
 import { useEffect } from 'react';
 import { Membership, RoomToParents, StateEvent } from '../../../types/matrix/room';
@@ -112,7 +114,16 @@ export const useBindRoomToParentsAtom = (
       });
     };
 
-    setRoomToParents({ type: 'INITIALIZE', roomToParents: getRoomToParents(mx) });
+    const initParents = () =>
+      setRoomToParents({ type: 'INITIALIZE', roomToParents: getRoomToParents(mx) });
+    initParents();
+
+    // Re-build the full space hierarchy on initial sync completion and reconnect.
+    // Without this, spaces joined on other clients may not appear until cache clear,
+    // because ClientEvent.Room can fire before the room's m.space.child state is loaded.
+    const handleSync: ClientEventHandlerMap[ClientEvent.Sync] = (state) => {
+      if (state === SyncState.Prepared || state === SyncState.Catchup) initParents();
+    };
 
     const handleAddRoom = (room: Room) => {
       if (isSpace(room) && room.getMyMembership() !== Membership.Invite) {
@@ -153,11 +164,13 @@ export const useBindRoomToParentsAtom = (
       scheduleFlush();
     };
 
+    mx.on(ClientEvent.Sync, handleSync);
     mx.on(ClientEvent.Room, handleAddRoom);
     mx.on(RoomEvent.MyMembership, handleMembershipChange);
     mx.on(RoomStateEvent.Events, handleStateChange);
     mx.on(ClientEvent.DeleteRoom, handleDeleteRoom);
     return () => {
+      mx.removeListener(ClientEvent.Sync, handleSync);
       mx.removeListener(ClientEvent.Room, handleAddRoom);
       mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
       mx.removeListener(RoomStateEvent.Events, handleStateChange);
