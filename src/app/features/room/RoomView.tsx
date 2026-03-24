@@ -63,7 +63,15 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
   }
 
   const active = document.activeElement;
-  if (active && active.closest('[role="log"], [role="listbox"]')) return false;
+  // Block redirect when a specific message inside the timeline has focus
+  // (user is navigating with arrows), but allow it when the timeline
+  // container itself has focus (initial state after room entry).
+  if (active && active.closest('[role="listbox"]')) return false;
+  if (active && active.matches('[role="log"]')) {
+    // Timeline container itself — allow typing to redirect to editor
+    return true;
+  }
+  if (active && active.closest('[role="log"]')) return false;
 
   return true;
 };
@@ -103,8 +111,11 @@ export function RoomView({ eventId }: { eventId?: string }) {
     if (callMemberCount > 0)
       parts.push(`${callMemberCount} member${callMemberCount === 1 ? '' : 's'} in call`);
     announce(parts.join(', '));
-    // Don't steal focus from the editor — announce() uses a live region
-    // which screen readers pick up without needing DOM focus.
+    // Focus the timeline container for screen reader navigation.
+    // Sighted users can start typing immediately — shouldFocusMessageField()
+    // allows printable keys to redirect to the editor when the timeline
+    // container (not a specific message) has focus.
+    setTimeout(() => document.getElementById('cinny-timeline')?.focus(), 100);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
