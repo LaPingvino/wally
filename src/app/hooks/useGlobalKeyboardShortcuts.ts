@@ -40,13 +40,14 @@ const focusSection = (selector: string) => {
   el?.focus();
 };
 
-export const useGlobalKeyboardShortcuts = () => {
+/** Returns the shortcuts list without registering any keydown handlers. */
+export const useShortcutsList = (): KeyboardShortcut[] => {
   const navigate = useNavigate();
   const setOpenAtKeyboardShortcuts = useSetAtom(openSettingsAtKeyboardShortcutsAtom);
   const setSearchModal = useSetAtom(searchModalAtom);
   const customKeys = useAtomValue(customShortcutKeysAtom);
 
-  const shortcuts = useMemo<KeyboardShortcut[]>(
+  return useMemo<KeyboardShortcut[]>(
     () => {
       const c = (desc: string, defaultKey: string) => customKeys[desc] ?? defaultKey;
       return [
@@ -124,6 +125,10 @@ export const useGlobalKeyboardShortcuts = () => {
     },
     [navigate, setOpenAtKeyboardShortcuts, setSearchModal, customKeys]
   );
+};
+
+export const useGlobalKeyboardShortcuts = () => {
+  const shortcuts = useShortcutsList();
 
   const handleKeyDown = useCallback(
     (evt: KeyboardEvent) => {

@@ -59,6 +59,7 @@ import { useKeyDown } from '../../hooks/useKeyDown';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
+import { useShortcutsList, KeyboardShortcut } from '../../hooks/useGlobalKeyboardShortcuts';
 
 enum SearchRoomType {
   Rooms = '#',
@@ -66,11 +67,30 @@ enum SearchRoomType {
   Directs = '@',
 }
 
+const COMMAND_PREFIX = '/';
+
 const getSearchPrefixToRoomType = (prefix: string): SearchRoomType | undefined => {
   if (prefix === '#') return SearchRoomType.Rooms;
   if (prefix === '*') return SearchRoomType.Spaces;
   if (prefix === '@') return SearchRoomType.Directs;
   return undefined;
+};
+
+const formatShortcutKey = (key: string): string => {
+  return key
+    .replace('mod', isMacOS() ? KeySymbol.Command : 'Ctrl')
+    .replace('alt', 'Alt')
+    .replace('shift', 'Shift')
+    .split('+')
+    .map((k) => k.charAt(0).toUpperCase() + k.slice(1))
+    .join('+');
+};
+
+const COMMAND_ICON_MAP: Record<string, string> = {
+  Navigation: 'Compass',
+  Search: 'Search',
+  Actions: 'Setting',
+  Help: 'Info',
 };
 
 const useTopActiveRooms = (
@@ -143,6 +163,23 @@ export function Search({ requestClose }: SearchProps) {
   const roomToUnread = useAtomValue(roomToUnreadAtom);
 
   const [searchRoomType, setSearchRoomType] = useState<SearchRoomType>();
+  const [commandMode, setCommandMode] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const shortcuts = useShortcutsList();
+
+  const filteredCommands = useMemo(() => {
+    if (!commandMode && commandQuery === '') return [];
+    const q = commandQuery.toLowerCase();
+    const cmds = shortcuts.filter((s) => {
+      if (q === '') return true;
+      return (
+        s.description.toLowerCase().includes(q) ||
+        s.key.toLowerCase().includes(q) ||
+        s.category.toLowerCase().includes(q)
+      );
+    });
+    return cmds;
+  }, [shortcuts, commandMode, commandQuery]);
 
   const allRoomsSet = useAllJoinedRoomsSet();
   const getRoom = useGetRoom(allRoomsSet);
@@ -171,8 +208,9 @@ export function Search({ requestClose }: SearchProps) {
   );
 
   const [result, search, resetSearch] = useAsyncSearch(targetRooms, getTargetStr, SEARCH_OPTIONS);
-  const roomsToRender = result ? result.items : topActiveRooms;
-  const listFocus = useListFocusIndex(roomsToRender.length, 0);
+  const roomsToRender = commandMode ? [] : (result ? result.items : topActiveRooms);
+  const totalItems = commandMode ? filteredCommands.length : roomsToRender.length;
+  const listFocus = useListFocusIndex(totalItems, 0);
 
   const queryHighlighRegex = result?.query
     ? makeHighlightRegex(result.query.split(' '))
@@ -189,6 +227,18 @@ export function Search({ requestClose }: SearchProps) {
 
     const target = evt.currentTarget;
     let value = target.value.trim();
+
+    // Command mode: / prefix
+    if (value.startsWith(COMMAND_PREFIX)) {
+      setCommandMode(true);
+      setCommandQuery(value.slice(1));
+      setSearchRoomType(undefined);
+      resetSearch();
+      return;
+    }
+    setCommandMode(false);
+    setCommandQuery('');
+
     const prefix = value.match(/^[#@*]/)?.[0];
     const searchType = typeof prefix === 'string' && getSearchPrefixToRoomType(prefix);
     if (searchType) {
@@ -206,9 +256,17 @@ export function Search({ requestClose }: SearchProps) {
   };
 
   const handleInputKeyDown: KeyboardEventHandler<HTMLInputElement> = (evt) => {
-    const roomId = roomsToRender[listFocus.index];
-    if (isKeyHotkey('enter', evt) && roomId) {
-      openRoomId(roomId, spaces.includes(roomId));
+    if (isKeyHotkey('enter', evt)) {
+      if (commandMode) {
+        const cmd = filteredCommands[listFocus.index];
+        if (cmd) {
+          requestClose();
+          cmd.action();
+        }
+      } else {
+        const roomId = roomsToRender[listFocus.index];
+        if (roomId) openRoomId(roomId, spaces.includes(roomId));
+      }
       return;
     }
     if (isKeyHotkey('arrowdown', evt)) {
@@ -269,9 +327,9 @@ export function Search({ requestClose }: SearchProps) {
                 variant="Background"
                 radii="400"
                 outlined
-                placeholder="Search"
+                placeholder={commandMode ? 'Search commands...' : 'Search rooms, DMs, spaces...'}
                 role="combobox"
-                aria-label="Search rooms and spaces"
+                aria-label="Search rooms, spaces, and commands"
                 aria-autocomplete="list"
                 aria-expanded={!!result}
                 before={<Icon size="200" src={Icons.Search} />}
@@ -280,7 +338,68 @@ export function Search({ requestClose }: SearchProps) {
               />
             </Box>
             <Box grow="Yes">
-              {roomsToRender.length === 0 && (
+              {commandMode && filteredCommands.length === 0 && (
+                <Box
+                  style={{ paddingTop: config.space.S700 }}
+                  grow="Yes"
+                  alignItems="Center"
+                  justifyContent="Center"
+                  direction="Column"
+                  gap="100"
+                >
+                  <Text size="H6" align="Center">
+                    No Commands Found
+                  </Text>
+                  <Text size="T200" align="Center">
+                    {commandQuery
+                      ? `No command matching "${commandQuery}".`
+                      : 'Type to search commands.'}
+                  </Text>
+                </Box>
+              )}
+              {commandMode && filteredCommands.length > 0 && (
+                <Scroll ref={scrollRef} size="300" hideTrack>
+                  <div style={{ padding: config.space.S400, paddingRight: config.space.S200 }}>
+                    {filteredCommands.map((cmd, index) => (
+                      <MenuItem
+                        key={cmd.description}
+                        as="button"
+                        data-focus-index={index}
+                        onClick={() => {
+                          requestClose();
+                          cmd.action();
+                        }}
+                        variant={listFocus.index === index ? 'Primary' : 'Surface'}
+                        aria-pressed={listFocus.index === index}
+                        radii="400"
+                        after={
+                          <Text size="T200" priority="300">
+                            <b>{formatShortcutKey(cmd.key)}</b>
+                          </Text>
+                        }
+                        before={
+                          <Avatar size="200" radii="300">
+                            <Icon
+                              size="100"
+                              src={Icons[COMMAND_ICON_MAP[cmd.category] as keyof typeof Icons] ?? Icons.Setting}
+                            />
+                          </Avatar>
+                        }
+                      >
+                        <Box grow="Yes" alignItems="Center" gap="100">
+                          <Text size="T400" truncate>
+                            {cmd.description}
+                          </Text>
+                          <Text as="span" size="T200" priority="300">
+                            {cmd.category}
+                          </Text>
+                        </Box>
+                      </MenuItem>
+                    ))}
+                  </div>
+                </Scroll>
+              )}
+              {!commandMode && roomsToRender.length === 0 && (
                 <Box
                   style={{ paddingTop: config.space.S700 }}
                   grow="Yes"
@@ -299,7 +418,7 @@ export function Search({ requestClose }: SearchProps) {
                   </Text>
                 </Box>
               )}
-              {roomsToRender.length > 0 && (
+              {!commandMode && roomsToRender.length > 0 && (
                 <Scroll ref={scrollRef} size="300" hideTrack>
                   <div style={{ padding: config.space.S400, paddingRight: config.space.S200 }}>
                     {roomsToRender.map((roomId, index) => {
@@ -413,8 +532,8 @@ export function Search({ requestClose }: SearchProps) {
             <Line size="300" />
             <Box shrink="No" justifyContent="Center" style={{ padding: config.space.S200 }}>
               <Text size="T200" priority="300">
-                Type <b>#</b> for rooms, <b>@</b> for DMs and <b>*</b> for spaces. Hotkey:{' '}
-                <b>{isMacOS() ? KeySymbol.Command : 'Ctrl'} + k</b>
+                Type <b>#</b> rooms, <b>@</b> DMs, <b>*</b> spaces, <b>/</b> commands. Hotkey:{' '}
+                <b>{isMacOS() ? KeySymbol.Command : 'Ctrl'}+K</b>
               </Text>
             </Box>
           </Modal>
