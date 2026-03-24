@@ -25,7 +25,7 @@ export function FavoritesTab() {
 
   return (
     <SidebarItem active={favoritesSelected}>
-      <SidebarItemTooltip tooltip="Favorites (Alt+F)">
+      <SidebarItemTooltip tooltip="Favorites (Alt+G)">
         {(triggerRef) => (
           <SidebarAvatar
             as="button"

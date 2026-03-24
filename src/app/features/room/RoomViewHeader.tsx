@@ -632,10 +632,10 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
 
   const handleHeaderKeyDown = useCallback(
     (evt: KeyboardEvent) => {
-      if (isKeyHotkey('alt+shift+t', evt)) {
+      if (isKeyHotkey('alt+shift+q', evt)) {
         evt.preventDefault();
         onToggleThreadsDrawer?.();
-      } else if (isKeyHotkey('alt+f', evt)) {
+      } else if (isKeyHotkey('alt+shift+s', evt)) {
         evt.preventDefault();
         handleSearchClick();
       } else if (isKeyHotkey('alt+shift+c', evt) && (isActiveCall || room.isCallRoom())) {

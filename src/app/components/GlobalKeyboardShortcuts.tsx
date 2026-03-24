@@ -78,13 +78,13 @@ const PEOPLE_DRAWER_SHORTCUT: DisplayShortcut = {
 };
 
 const THREADS_SHORTCUT: DisplayShortcut = {
-  key: 'alt+shift+t',
+  key: 'alt+shift+q',
   description: 'Toggle threads panel',
   category: 'Actions',
 };
 
 const SEARCH_ROOM_SHORTCUT: DisplayShortcut = {
-  key: 'alt+f',
+  key: 'alt+shift+s',
   description: 'Search in room',
   category: 'Search',
 };

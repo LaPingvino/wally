@@ -103,10 +103,10 @@ export function RoomView({ eventId }: { eventId?: string }) {
     if (callMemberCount > 0)
       parts.push(`${callMemberCount} member${callMemberCount === 1 ? '' : 's'} in call`);
     announce(parts.join(', '));
-    // Don't focus the timeline — Chrome/ChromeOS intercepts Alt+key shortcuts
-    // (like Alt+D, Alt+R) when a non-editable element has focus.
-    // Screen readers pick up the announce() live region without DOM focus.
-    // Users can press Alt+T to focus the timeline for arrow navigation.
+    // Don't focus the timeline — Chrome/ChromeOS intercepts some Alt+key
+    // shortcuts when a non-editable element has focus. Editor focus is set
+    // by RoomInput. Screen readers pick up announce() via live region.
+    // Users can press Alt+L to focus the timeline for arrow navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
