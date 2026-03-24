@@ -127,7 +127,16 @@ export const useGlobalKeyboardShortcuts = () => {
       const inEditable = !stopPropagation(evt);
 
       for (const shortcut of shortcuts) {
-        if (!isKeyHotkey(shortcut.key, evt)) continue;
+        // isKeyHotkey uses evt.key which on Linux can produce composed
+        // characters for Alt+key (e.g. Alt+R → '®'). Fall back to
+        // matching via evt.code when Alt is held.
+        let matches = isKeyHotkey(shortcut.key, evt);
+        if (!matches && evt.altKey && shortcut.key.startsWith('alt+')) {
+          const expectedKey = shortcut.key.replace(/^alt\+/, '').toLowerCase();
+          const codeKey = evt.code.replace(/^Key/, '').toLowerCase();
+          matches = codeKey === expectedKey;
+        }
+        if (!matches) continue;
         if (inEditable && !shortcut.allowInEditable) continue;
         evt.preventDefault();
         shortcut.action();
