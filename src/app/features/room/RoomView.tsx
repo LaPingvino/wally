@@ -135,12 +135,6 @@ export function RoomView({ eventId }: { eventId?: string }) {
         }
         if (shouldFocusMessageField(evt) || isKeyHotkey('mod+v', evt)) {
           ReactEditor.focus(editor);
-          // Insert the typed character and prevent the browser from also
-          // dispatching it into the now-focused editor (avoids duplication).
-          if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
-            evt.preventDefault();
-            Transforms.insertText(editor, evt.key);
-          }
         }
       },
       [editor]
