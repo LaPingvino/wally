@@ -261,6 +261,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     useEffect(() => {
       Transforms.insertFragment(editor, msgDraft);
+      // Auto-focus the editor when entering a room (skip on mobile to avoid keyboard popup).
+      // Editor focus ensures Chrome/ChromeOS doesn't intercept Alt+key shortcuts.
+      if (!mobileOrTablet()) {
+        requestAnimationFrame(() => {
+          try {
+            ReactEditor.focus(editor);
+          } catch {
+            // Editor not yet mounted
+          }
+        });
+      }
     }, [editor, msgDraft]);
 
     useEffect(
