@@ -74,6 +74,49 @@ function serverMatrixSdkCryptoWasm(wasmFilePath) {
   };
 }
 
+// Patch Element Call to accept a pre-issued LiveKit JWT via URL parameter.
+// When livekitToken + livekitUrl are in the URL query, EC skips the normal
+// OpenID → lk-jwt-service exchange and uses the provided token directly.
+// This enables guest (non-Matrix) users to join calls via Wally Conference bot.
+// Inert when livekitToken is absent — zero behavioral change for normal users.
+// Patches EC source in node_modules BEFORE viteStaticCopy copies it to dist.
+function patchElementCallGuestJWT() {
+  return {
+    name: 'patch-element-call-guest-jwt',
+    enforce: 'pre',
+    buildStart() {
+      const ecDir = path.join(path.resolve(), 'node_modules/@element-hq/element-call-embedded/dist/assets');
+      if (!fs.existsSync(ecDir)) return;
+      for (const file of fs.readdirSync(ecDir)) {
+        if (!file.endsWith('.js')) continue;
+        const filePath = path.join(ecDir, file);
+        let content = fs.readFileSync(filePath, 'utf-8');
+        // Match the async function that calls getOpenIdToken() — the JWT acquisition function.
+        // Pattern: opening brace, variable declaration, try block calling getOpenIdToken.
+        // We inject a URL param check right after the opening brace so it returns early
+        // before the OpenID exchange when a pre-issued token is present.
+        const marker = 'async()=>t.getOpenIdToken()';
+        if (!content.includes(marker)) continue;
+        // Find the function body start: match "{let <var>;try{<var>=await <fn>(async()=>t.getOpenIdToken())"
+        const re = /\{(let \w+;try\{\w+=await \w+\(async\(\)=>t\.getOpenIdToken\(\)\))/;
+        const m = content.match(re);
+        if (!m) {
+          console.warn(`[patch-ec-guest-jwt] Found getOpenIdToken marker but regex didn't match in ${file}`);
+          continue;
+        }
+        const guestCheck = [
+          'const _wp=new URLSearchParams(window.location.search);',
+          'const _wj=_wp.get("livekitToken");',
+          'const _wu=_wp.get("livekitUrl");',
+          'if(_wj&&_wu){return{url:_wu,jwt:_wj}}',
+        ].join('');
+        content = content.replace(re, '{' + guestCheck + '$1');
+        fs.writeFileSync(filePath, content);
+        console.log(`[patch-ec-guest-jwt] Patched ${file}: guest JWT shortcut injected`);
+      }
+    },
+  };
+}
 
 export default defineConfig({
   appType: 'spa',
@@ -99,6 +142,7 @@ export default defineConfig({
     vanillaExtractPlugin(),
     wasm(),
     react(),
+    patchElementCallGuestJWT(),
     VitePWA({
       srcDir: 'src',
       filename: 'sw.ts',
