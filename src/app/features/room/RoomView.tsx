@@ -103,7 +103,8 @@ export function RoomView({ eventId }: { eventId?: string }) {
     if (callMemberCount > 0)
       parts.push(`${callMemberCount} member${callMemberCount === 1 ? '' : 's'} in call`);
     announce(parts.join(', '));
-    setTimeout(() => document.getElementById('cinny-timeline')?.focus(), 100);
+    // Don't steal focus from the editor — announce() uses a live region
+    // which screen readers pick up without needing DOM focus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
 
