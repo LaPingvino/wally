@@ -493,3 +493,8 @@ export function useCallState(): CallContextState {
   }
   return context;
 }
+
+/** Safe version that returns undefined when outside CallProvider. */
+export function useCallStateSafe(): CallContextState | undefined {
+  return useContext(CallContext);
+}

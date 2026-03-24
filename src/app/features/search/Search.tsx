@@ -60,7 +60,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
 import { useShortcutsList, KeyboardShortcut } from '../../hooks/useGlobalKeyboardShortcuts';
-import { useCallState } from '../../pages/client/call/CallProvider';
+import { useCallStateSafe } from '../../pages/client/call/CallProvider';
 import { useSetSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { useNavigateUnread } from '../../hooks/useNavigateUnread';
@@ -172,7 +172,8 @@ export function Search({ requestClose }: SearchProps) {
   const [commandMode, setCommandMode] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
   const baseShortcuts = useShortcutsList();
-  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = useCallState();
+  const callState = useCallStateSafe();
+  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = callState ?? {};
   const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
   const { navigateNext: navigateNextUnread, navigatePrev: navigatePrevUnread, navigateFirst: navigateFirstUnread } = useNavigateUnread();
   const location = useLocation();
@@ -196,7 +197,7 @@ export function Search({ requestClose }: SearchProps) {
     const cmds: KeyboardShortcut[] = [...baseShortcuts];
 
     // Call actions (only when in a call)
-    if (activeCallRoomId) {
+    if (activeCallRoomId && toggleAudio && toggleVideo && hangUp) {
       cmds.push(
         { key: 'mod+shift+m', defaultKey: 'mod+shift+m', description: 'Toggle mute', category: 'Actions', action: toggleAudio },
         { key: 'mod+shift+v', defaultKey: 'mod+shift+v', description: 'Toggle video', category: 'Actions', action: toggleVideo },
@@ -205,7 +206,7 @@ export function Search({ requestClose }: SearchProps) {
     }
 
     // Room actions (only when viewing a room)
-    if (currentRoomId) {
+    if (currentRoomId && setActiveCallRoomId) {
       if (!activeCallRoomId) {
         cmds.push({
           key: 'alt+j', defaultKey: 'alt+j', description: 'Start or join call',
