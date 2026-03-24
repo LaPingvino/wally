@@ -60,6 +60,12 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
 import { useShortcutsList, KeyboardShortcut } from '../../hooks/useGlobalKeyboardShortcuts';
+import { useCallState } from '../../pages/client/call/CallProvider';
+import { useSetSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
+import { useNavigateUnread } from '../../hooks/useNavigateUnread';
+import { useLocation, matchPath } from 'react-router-dom';
+import { HOME_ROOM_PATH, DIRECT_ROOM_PATH, SPACE_ROOM_PATH } from '../../pages/paths';
 
 enum SearchRoomType {
   Rooms = '#',
@@ -165,12 +171,67 @@ export function Search({ requestClose }: SearchProps) {
   const [searchRoomType, setSearchRoomType] = useState<SearchRoomType>();
   const [commandMode, setCommandMode] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
-  const shortcuts = useShortcutsList();
+  const baseShortcuts = useShortcutsList();
+  const { hangUp, toggleAudio, toggleVideo, activeCallRoomId, setActiveCallRoomId } = useCallState();
+  const setPeopleDrawer = useSetSetting(settingsAtom, 'isPeopleDrawer');
+  const { navigateNext: navigateNextUnread, navigatePrev: navigatePrevUnread, navigateFirst: navigateFirstUnread } = useNavigateUnread();
+  const location = useLocation();
+
+  // Detect current room context
+  const roomMatch =
+    matchPath(HOME_ROOM_PATH, location.pathname) ??
+    matchPath(DIRECT_ROOM_PATH, location.pathname) ??
+    matchPath(SPACE_ROOM_PATH, location.pathname);
+  const currentRoomId = useMemo(() => {
+    const alias = roomMatch?.params.roomIdOrAlias
+      ? decodeURIComponent(roomMatch.params.roomIdOrAlias)
+      : undefined;
+    if (!alias) return null;
+    if (alias.startsWith('!')) return alias;
+    return mx.getRooms().find((r) => r.getCanonicalAlias() === alias)?.roomId ?? null;
+  }, [roomMatch, mx]);
+
+  // Build contextual commands
+  const allCommands = useMemo<KeyboardShortcut[]>(() => {
+    const cmds: KeyboardShortcut[] = [...baseShortcuts];
+
+    // Call actions (only when in a call)
+    if (activeCallRoomId) {
+      cmds.push(
+        { key: 'mod+shift+m', defaultKey: 'mod+shift+m', description: 'Toggle mute', category: 'Actions', action: toggleAudio },
+        { key: 'mod+shift+v', defaultKey: 'mod+shift+v', description: 'Toggle video', category: 'Actions', action: toggleVideo },
+        { key: 'mod+shift+h', defaultKey: 'mod+shift+h', description: 'Hang up call', category: 'Actions', action: hangUp },
+      );
+    }
+
+    // Room actions (only when viewing a room)
+    if (currentRoomId) {
+      if (!activeCallRoomId) {
+        cmds.push({
+          key: 'alt+j', defaultKey: 'alt+j', description: 'Start or join call',
+          category: 'Actions', allowInEditable: true,
+          action: () => setActiveCallRoomId(currentRoomId, true),
+        });
+      }
+      cmds.push(
+        { key: 'alt+p', defaultKey: 'alt+p', description: 'Toggle members panel', category: 'Actions', allowInEditable: true, action: () => setPeopleDrawer((v: boolean) => !v) },
+      );
+    }
+
+    // Unread navigation (always available)
+    cmds.push(
+      { key: 'alt+n', defaultKey: 'alt+n', description: 'Go to next unread room', category: 'Navigation', allowInEditable: true, action: navigateFirstUnread },
+      { key: 'alt+shift+down', defaultKey: 'alt+shift+down', description: 'Next unread room', category: 'Navigation', allowInEditable: true, action: navigateNextUnread },
+      { key: 'alt+shift+up', defaultKey: 'alt+shift+up', description: 'Previous unread room', category: 'Navigation', allowInEditable: true, action: navigatePrevUnread },
+    );
+
+    return cmds;
+  }, [baseShortcuts, activeCallRoomId, currentRoomId, toggleAudio, toggleVideo, hangUp, setActiveCallRoomId, setPeopleDrawer, navigateFirstUnread, navigateNextUnread, navigatePrevUnread]);
 
   const filteredCommands = useMemo(() => {
     if (!commandMode && commandQuery === '') return [];
     const q = commandQuery.toLowerCase();
-    const cmds = shortcuts.filter((s) => {
+    const cmds = allCommands.filter((s) => {
       if (q === '') return true;
       return (
         s.description.toLowerCase().includes(q) ||
@@ -179,7 +240,7 @@ export function Search({ requestClose }: SearchProps) {
       );
     });
     return cmds;
-  }, [shortcuts, commandMode, commandQuery]);
+  }, [allCommands, commandMode, commandQuery]);
 
   const allRoomsSet = useAllJoinedRoomsSet();
   const getRoom = useGetRoom(allRoomsSet);
