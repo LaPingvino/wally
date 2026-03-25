@@ -93,3 +93,8 @@ export const ROOM_SETTINGS_PATH = '/room-settings/';
 
 export const FAVORITES_PATH = '/favorites/';
 export const FAVORITES_ROOM_PATH = `/favorites/${_ROOM_PATH}`;
+
+export type GuestJoinPathSearchParams = {
+  endpoint?: string;
+};
+export const GUEST_JOIN_PATH = '/call/guest/:roomId/';

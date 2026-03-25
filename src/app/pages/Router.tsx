@@ -15,6 +15,7 @@ import {
   EXPLORE_PATH,
   FAVORITES_PATH,
   FAVORITES_ROOM_PATH,
+  GUEST_JOIN_PATH,
   HOME_PATH,
   LOGIN_PATH,
   INBOX_PATH,
@@ -78,6 +79,7 @@ import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
 import { getFallbackSession } from '../state/sessions';
 import { CallStatusRenderer } from './CallStatusRenderer';
 import { CallEmbedProvider } from '../components/CallEmbedProvider';
+import { GuestJoin } from './GuestJoin';
 
 export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize, basePath?: string) => {
   const { hashRouter } = clientConfig;
@@ -113,6 +115,16 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize,
         <Route path={REGISTER_PATH} element={<Register />} />
         <Route path={RESET_PASSWORD_PATH} element={<ResetPassword />} />
       </Route>
+
+      <Route
+        path={GUEST_JOIN_PATH}
+        element={
+          <>
+            <GuestJoin />
+            <UnAuthRouteThemeManager />
+          </>
+        }
+      />
 
       <Route
         loader={() => {
