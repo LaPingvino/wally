@@ -272,7 +272,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
         {wallyConference.available && wallyConference.endpoint && (
           <MenuItem
             onClick={() => {
-              const joinUrl = `${wallyConference.endpoint}/join?room=${encodeURIComponent(room.roomId)}`;
+              const joinUrl = `${wallyConference.endpoint}/guest/${encodeURIComponent(room.roomId)}`;
               copyToClipboard(joinUrl);
               requestClose();
             }}
@@ -493,7 +493,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
   const [guestLinkCopied, setGuestLinkCopied] = useState(false);
   const handleCopyGuestLink = () => {
     if (!wallyConference.endpoint) return;
-    const joinUrl = `${wallyConference.endpoint}/join?room=${encodeURIComponent(room.roomId)}`;
+    const joinUrl = `${wallyConference.endpoint}/guest/${encodeURIComponent(room.roomId)}`;
     copyToClipboard(joinUrl);
     setGuestLinkCopied(true);
     setTimeout(() => setGuestLinkCopied(false), 2000);
