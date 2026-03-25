@@ -40,6 +40,8 @@ export enum StateEvent {
 
   PoniesRoomEmotes = 'im.ponies.room_emotes',
   PowerLevelTags = 'in.cinny.room.power_level_tags',
+
+  WallyConference = 'eu.kiefte.wally.conference',
 }
 
 export enum MessageEvent {

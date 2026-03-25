@@ -70,6 +70,7 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useCallState } from '../../pages/client/call/CallProvider';
+import { useWallyConference } from '../../hooks/useWallyConference';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { isKeyHotkey } from 'is-hotkey';
@@ -101,6 +102,7 @@ type RoomMenuProps = {
 };
 const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose, onOpenIssueBoard, onToggleThreadsDrawer, isThreadsDrawer, unpinnedItems, onPin }, ref) => {
   const mx = useMatrixClient();
+  const wallyConference = useWallyConference(room);
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [issueTrackerEnabled] = useSetting(settingsAtom, 'issueTracker');
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
@@ -267,6 +269,22 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             Copy Link
           </Text>
         </MenuItem>
+        {wallyConference.available && wallyConference.endpoint && (
+          <MenuItem
+            onClick={() => {
+              const joinUrl = `${wallyConference.endpoint}/join?room=${encodeURIComponent(room.roomId)}`;
+              copyToClipboard(joinUrl);
+              requestClose();
+            }}
+            size="300"
+            after={<Icon size="100" src={Icons.External} />}
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              Share Guest Link
+            </Text>
+          </MenuItem>
+        )}
         <MenuItem
           onClick={handleOpenSettings}
           size="300"
@@ -470,6 +488,16 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
   const { isChatOpen, isCallViewOpen, toggleChat, toggleCallView, setActiveCallRoomId, hangUp, activeCallRoomId } = useCallState();
   // NOTE: isActiveCall hides the phone button and shows the chat toggle for active calls.
   const isActiveCall = activeCallRoomId === room.roomId;
+
+  const wallyConference = useWallyConference(room);
+  const [guestLinkCopied, setGuestLinkCopied] = useState(false);
+  const handleCopyGuestLink = () => {
+    if (!wallyConference.endpoint) return;
+    const joinUrl = `${wallyConference.endpoint}/join?room=${encodeURIComponent(room.roomId)}`;
+    copyToClipboard(joinUrl);
+    setGuestLinkCopied(true);
+    setTimeout(() => setGuestLinkCopied(false), 2000);
+  };
 
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
@@ -734,6 +762,30 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
         <Box id="cinny-room-header-toolbar" data-section-label="Room actions" role="toolbar" aria-label="Room actions" aria-orientation="horizontal" shrink="No" onKeyDown={handleToolbarKeyDown}>
           {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
               Wobble here (left side of group) is less noticeable than at the right. */}
+
+          {/* Guest link — shown when Wally Conference bot is present */}
+          {wallyConference.available && wallyConference.endpoint && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{guestLinkCopied ? 'Link Copied!' : 'Share Guest Link'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={handleCopyGuestLink}
+                  aria-label="Share guest link"
+                >
+                  <Icon size="400" src={Icons.Link} filled={guestLinkCopied} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
 
           {/* Call button — hidden when canCall is false AND no call is active/running.
               Unified: "Start Call" before a call, "Show/Hide Call" toggle once active. */}
