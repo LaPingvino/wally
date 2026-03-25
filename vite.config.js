@@ -97,6 +97,11 @@ function patchElementCallGuestJWT() {
         // before the OpenID exchange when a pre-issued token is present.
         const marker = 'async()=>t.getOpenIdToken()';
         if (!content.includes(marker)) continue;
+        // Already patched? Skip.
+        if (content.includes('livekitToken')) {
+          console.log(`[patch-ec-guest-jwt] ${file}: already patched, skipping`);
+          continue;
+        }
         // Find the function body start: match "{let <var>;try{<var>=await <fn>(async()=>t.getOpenIdToken())"
         const re = /\{(let \w+;try\{\w+=await \w+\(async\(\)=>t\.getOpenIdToken\(\)\))/;
         const m = content.match(re);
