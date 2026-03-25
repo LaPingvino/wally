@@ -12,6 +12,29 @@ import { scaleSystemEmoji } from '../../plugins/react-custom-html-parser';
 import { useRoomEvent } from '../../hooks/useRoomEvent';
 import colorMXID from '../../../util/colorMXID';
 import { GetMemberPowerTag } from '../../hooks/useMemberPowerTag';
+import { getPerMsgProfile } from '../../state/personas';
+
+/**
+ * Resolve @user:server and !room:server IDs in plain text to display names.
+ */
+const resolveIdsInBody = (text: string, room: Room): string =>
+  text.replace(
+    /(@[a-zA-Z0-9._=/+-]+:[a-zA-Z0-9.-]+)|(![a-zA-Z0-9]+:[a-zA-Z0-9.-]+)/g,
+    (match) => {
+      if (match.startsWith('@')) {
+        const name = getMemberDisplayName(room, match);
+        if (name) return name;
+        const localPart = getMxIdLocalPart(match);
+        return localPart ?? match;
+      }
+      if (match.startsWith('!')) {
+        const mx = room.client;
+        const targetRoom = mx.getRoom(match);
+        if (targetRoom?.name) return targetRoom.name;
+      }
+      return match;
+    }
+  );
 
 type ReplyLayoutProps = {
   userColor?: string;
@@ -84,8 +107,13 @@ export const Reply = as<'div', ReplyProps>(
     );
     const replyEvent = useRoomEvent(room, replyEventId, getFromLocalTimeline);
 
-    const { body } = replyEvent?.getContent() ?? {};
+    const content = replyEvent?.getContent() ?? {};
+    const { body } = content;
     const sender = replyEvent?.getSender();
+    const perMsgProfile = getPerMsgProfile(content as Record<string, unknown>);
+    const senderDisplayName = perMsgProfile?.displayname
+      ?? (sender ? getMemberDisplayName(room, sender) : undefined)
+      ?? (sender ? getMxIdLocalPart(sender) : undefined);
     const powerTag = sender ? getMemberPowerTag?.(sender) : undefined;
     const tagColor = powerTag?.color ? accessibleTagColors?.get(powerTag.color) : undefined;
 
@@ -98,7 +126,8 @@ export const Reply = as<'div', ReplyProps>(
     );
 
     const badEncryption = replyEvent?.getContent().msgtype === 'm.bad.encrypted';
-    const bodyJSX = body ? scaleSystemEmoji(trimReplyFromBody(body)) : fallbackBody;
+    const resolvedBody = body ? resolveIdsInBody(trimReplyFromBody(body), room) : undefined;
+    const bodyJSX = resolvedBody ? scaleSystemEmoji(resolvedBody) : fallbackBody;
 
     return (
       <Box direction="Row" gap="200" alignItems="Center" {...props} ref={ref}>
@@ -108,15 +137,15 @@ export const Reply = as<'div', ReplyProps>(
         <ReplyLayout
           as="button"
           aria-label={
-            sender
-              ? `Go to original message by ${getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender}`
+            senderDisplayName
+              ? `Go to original message by ${senderDisplayName}`
               : 'Go to original message'
           }
           userColor={usernameColor}
           username={
-            sender && (
+            senderDisplayName && (
               <Text size="T300" truncate>
-                <b>{getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender)}</b>
+                <b>{senderDisplayName}</b>
               </Text>
             )
           }
