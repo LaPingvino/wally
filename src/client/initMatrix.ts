@@ -207,9 +207,196 @@ export const repairIDBAndReload = async () => {
   if (!localStorage.getItem('cinny_access_token')) {
     await restoreSessionFromCache();
   }
+
+  // Try restoring from checkpoint before nuking everything.
+  const restored = await restoreFromCheckpoint();
+  if (restored) {
+    window.location.reload();
+    return;
+  }
+
+  // No checkpoint available — full wipe.
   const dbs = await window.indexedDB.databases();
   dbs.forEach(({ name }) => {
     if (name) window.indexedDB.deleteDatabase(name);
   });
   window.location.reload();
 };
+
+// ---------------------------------------------------------------------------
+// IndexedDB checkpoint system — periodic snapshots of crypto stores.
+//
+// After a successful startup + sync, we clone the crypto databases to
+// checkpoint copies. On corruption, we restore from the checkpoint instead
+// of wiping everything (which forces recovery password re-entry).
+// ---------------------------------------------------------------------------
+const CHECKPOINT_SUFFIX = '_checkpoint';
+const CHECKPOINT_TS_KEY = 'cinny_checkpoint_ts';
+
+/** Names of databases that hold crypto material worth checkpointing. */
+function getCryptoDbNames(): string[] {
+  const userId = localStorage.getItem('cinny_user_id');
+  if (!userId) return [];
+  return [
+    `crypto${userId}`,            // legacy crypto store
+    `matrix-js-sdk${userId}`,     // rust crypto store
+  ];
+}
+
+/**
+ * Clone an IndexedDB database to a new name.
+ * Opens source read-only, recreates all object stores + indexes in dest,
+ * and copies every record.
+ */
+async function cloneIDB(srcName: string, destName: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const openSrc = indexedDB.open(srcName);
+    openSrc.onerror = () => resolve(false);
+    openSrc.onsuccess = () => {
+      const srcDb = openSrc.result;
+      const version = srcDb.version;
+      const storeNames = Array.from(srcDb.objectStoreNames);
+
+      if (storeNames.length === 0) {
+        srcDb.close();
+        resolve(false);
+        return;
+      }
+
+      // Delete existing checkpoint first.
+      const delReq = indexedDB.deleteDatabase(destName);
+      delReq.onsuccess = () => createAndCopy();
+      delReq.onerror = () => createAndCopy();
+
+      function createAndCopy() {
+        const openDest = indexedDB.open(destName, version);
+        openDest.onupgradeneeded = () => {
+          const destDb = openDest.result;
+          for (const storeName of storeNames) {
+            const srcStore = srcDb.transaction(storeName, 'readonly').objectStore(storeName);
+            const destStore = destDb.createObjectStore(storeName, {
+              keyPath: srcStore.keyPath as string | string[] | null,
+              autoIncrement: srcStore.autoIncrement,
+            });
+            for (const idxName of Array.from(srcStore.indexNames)) {
+              const idx = srcStore.index(idxName);
+              destStore.createIndex(idxName, idx.keyPath, {
+                unique: idx.unique,
+                multiEntry: idx.multiEntry,
+              });
+            }
+          }
+        };
+        openDest.onsuccess = () => {
+          const destDb = openDest.result;
+          // Copy data store by store.
+          let pending = storeNames.length;
+          if (pending === 0) {
+            srcDb.close();
+            destDb.close();
+            resolve(true);
+            return;
+          }
+
+          for (const storeName of storeNames) {
+            const srcTx = srcDb.transaction(storeName, 'readonly');
+            const destTx = destDb.transaction(storeName, 'readwrite');
+            const srcStore = srcTx.objectStore(storeName);
+            const destStore = destTx.objectStore(storeName);
+
+            const cursorReq = srcStore.openCursor();
+            cursorReq.onsuccess = () => {
+              const cursor = cursorReq.result;
+              if (cursor) {
+                destStore.put(cursor.value);
+                cursor.continue();
+              }
+            };
+
+            destTx.oncomplete = () => {
+              pending--;
+              if (pending === 0) {
+                srcDb.close();
+                destDb.close();
+                resolve(true);
+              }
+            };
+            destTx.onerror = () => {
+              pending--;
+              if (pending === 0) {
+                srcDb.close();
+                destDb.close();
+                resolve(false);
+              }
+            };
+          }
+        };
+        openDest.onerror = () => {
+          srcDb.close();
+          resolve(false);
+        };
+      }
+    };
+  });
+}
+
+/**
+ * Create a checkpoint of all crypto databases.
+ * Call after a successful startup + initial sync.
+ */
+export const checkpointCryptoStores = async (): Promise<void> => {
+  const dbNames = getCryptoDbNames();
+  let ok = true;
+  for (const name of dbNames) {
+    const success = await cloneIDB(name, name + CHECKPOINT_SUFFIX);
+    if (!success) ok = false;
+  }
+  if (ok && dbNames.length > 0) {
+    localStorage.setItem(CHECKPOINT_TS_KEY, String(Date.now()));
+  }
+};
+
+/**
+ * Restore crypto databases from their checkpoint copies.
+ * Returns true if at least one checkpoint was restored.
+ */
+async function restoreFromCheckpoint(): Promise<boolean> {
+  const ts = localStorage.getItem(CHECKPOINT_TS_KEY);
+  if (!ts) return false;
+
+  const dbNames = getCryptoDbNames();
+  if (dbNames.length === 0) return false;
+
+  // Verify checkpoints exist before deleting originals.
+  const allDbs = await indexedDB.databases();
+  const allDbNames = new Set(allDbs.map((d) => d.name));
+  const checkpointNames = dbNames.map((n) => n + CHECKPOINT_SUFFIX);
+  const hasCheckpoints = checkpointNames.some((n) => allDbNames.has(n));
+  if (!hasCheckpoints) return false;
+
+  let restored = false;
+  for (const name of dbNames) {
+    const cpName = name + CHECKPOINT_SUFFIX;
+    if (!allDbNames.has(cpName)) continue;
+
+    // Delete corrupted original.
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.deleteDatabase(name);
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+    });
+
+    // Clone checkpoint back to original.
+    const ok = await cloneIDB(cpName, name);
+    if (ok) restored = true;
+  }
+
+  // Also delete the sync store — it'll rebuild from server.
+  const userId = localStorage.getItem('cinny_user_id');
+  if (userId) {
+    indexedDB.deleteDatabase(`sync${userId}`);
+    indexedDB.deleteDatabase('web-sync-store');
+  }
+
+  return restored;
+}

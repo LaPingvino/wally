@@ -199,6 +199,11 @@ export function ClientRoot({ children }: ClientRootProps) {
   // Record session start time so mention search can limit how far back it looks.
   useEffect(() => { recordSessionStart(); }, []);
 
+  // Request persistent storage — prevents ChromeOS from evicting IndexedDB.
+  useEffect(() => {
+    navigator.storage?.persist?.().catch(() => {});
+  }, []);
+
   // Fetch spec versions in parallel with initClient — children use empty fallback until resolved
   const [specVersionsData, setSpecVersionsData] = useState<SpecVersionsData>({ versions: [] });
   useEffect(() => {

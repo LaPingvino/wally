@@ -29,7 +29,7 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
-import { repairIDBAndReload, backupSessionToCache } from '../../../client/initMatrix';
+import { repairIDBAndReload, backupSessionToCache, checkpointCryptoStores } from '../../../client/initMatrix';
 
 /**
  * Monitors session health after tab suspension (common on Chromebooks).
@@ -91,6 +91,49 @@ function SessionHealthMonitor() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [mx]);
+
+  return null;
+}
+
+/**
+ * Periodically checkpoints crypto IndexedDB stores so that crash recovery
+ * can restore from the checkpoint instead of requiring recovery password.
+ *
+ * - First checkpoint: after initial sync completes.
+ * - Repeat: every 30 minutes while the tab is healthy.
+ */
+function CryptoCheckpointManager() {
+  const mx = useMatrixClient();
+  const checkpointedRef = useRef(false);
+
+  useEffect(() => {
+    const CHECKPOINT_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+    const doCheckpoint = () => {
+      checkpointCryptoStores().catch((e) => {
+        console.warn('Crypto checkpoint failed:', e);
+      });
+    };
+
+    // Checkpoint once sync is prepared (initial sync done).
+    const onSync = (state: SyncState | null) => {
+      if (state === SyncState.Syncing && !checkpointedRef.current) {
+        checkpointedRef.current = true;
+        // Small delay to let crypto settle after first sync.
+        setTimeout(doCheckpoint, 5_000);
+      }
+    };
+
+    mx.on('sync' as any, onSync);
+
+    // Also checkpoint periodically.
+    const interval = setInterval(doCheckpoint, CHECKPOINT_INTERVAL);
+
+    return () => {
+      mx.off('sync' as any, onSync);
+      clearInterval(interval);
+    };
   }, [mx]);
 
   return null;
@@ -385,6 +428,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
     <>
       <SessionHealthMonitor />
+      <CryptoCheckpointManager />
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
