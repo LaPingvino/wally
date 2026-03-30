@@ -18,6 +18,7 @@ import { useParams } from 'react-router-dom';
 import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { SmallWidget } from '../../../features/call/SmallWidget';
+import { callDebug } from '../../../features/call/callDebug';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 
@@ -146,6 +147,7 @@ export function CallProvider({ children }: CallProviderProps) {
       hangUpTimerRef.current = null;
     }
     setActiveCallRoomIdState(roomId);
+    callDebug('state', 'setActiveCallRoomId', { roomId, isVoiceRoom, callAutoJoin, pendingJoin: roomId ? !callAutoJoin : false });
     callNotifySentRef.current = false;
     // Set pendingJoin synchronously (same batch as activeCallRoomId) to avoid
     // the one-render race where PersistentCallContainer sees pendingJoin=false
@@ -232,6 +234,7 @@ export function CallProvider({ children }: CallProviderProps) {
         return Promise.reject(new Error('Mismatched active call clientWidgetApi'));
       }
 
+      callDebug('widget', 'sendWidgetAction', { action, data });
       await activeClientWidgetApi.transport.send(action as WidgetApiAction, data);
 
       return Promise.resolve();
@@ -289,6 +292,7 @@ export function CallProvider({ children }: CallProviderProps) {
 
     const handleHangup = (ev: CustomEvent) => {
       ev.preventDefault();
+      callDebug('widget', 'handleHangup received', { widgetId: ev.detail.widgetId });
       if (isActiveCallReadyRef.current && ev.detail.widgetId === activeClientWidgetApi.widget.id) {
         activeClientWidgetApi.transport.reply(ev.detail, {});
         const iframeToBlank = activeClientWidgetIframeRef;
@@ -309,6 +313,7 @@ export function CallProvider({ children }: CallProviderProps) {
       // Always preventDefault so the widget API sends a reply — without this,
       // EC's transport times out waiting for the host to acknowledge device_mute.
       ev.preventDefault();
+      callDebug('widget', 'handleMediaStateUpdate', ev.detail.data);
       if (!isActiveCallReadyRef.current) return;
 
       /* eslint-disable camelcase */
@@ -334,6 +339,7 @@ export function CallProvider({ children }: CallProviderProps) {
 
     const handleJoin = (ev: CustomEvent) => {
       ev.preventDefault();
+      callDebug('widget', 'handleJoin (io.element.join) — EC joined successfully', { roomId: activeCallRoomIdRef.current });
       activeClientWidgetApi.transport.reply(ev.detail, {});
 
       // Wrap iframe access in try-catch to prevent cross-origin errors
@@ -384,10 +390,12 @@ export function CallProvider({ children }: CallProviderProps) {
     };
 
     // Send initial A/V state once when the widget API is first registered.
+    callDebug('widget', 'Sending initial device_mute', { audio_enabled: isAudioEnabledRef.current, video_enabled: isVideoEnabledRef.current });
     void activeClientWidgetApi.transport.send(WIDGET_MEDIA_STATE_UPDATE_ACTION, {
       audio_enabled: isAudioEnabledRef.current,
       video_enabled: isVideoEnabledRef.current,
-    }).catch(() => {
+    }).catch((err) => {
+      callDebug('error', 'Initial device_mute send failed', err);
       // Widget transport may reject while call/session setup is still in progress.
     });
 

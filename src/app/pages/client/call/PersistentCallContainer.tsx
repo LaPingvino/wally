@@ -16,6 +16,7 @@ import {
   getCallIntentParams,
 } from '../../../features/call/SmallWidget';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { callDebug } from '../../../features/call/callDebug';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useTheme } from '../../../hooks/useTheme';
@@ -51,6 +52,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   // ── Cleanup: clear stale widget ref when the call ends ─────────────
   useEffect(() => {
     if (!activeCallRoomId && callSmallWidgetRef.current) {
+      callDebug('state', 'Cleanup: tearing down widget (call ended)');
       callSmallWidgetRef.current.stopMessaging();
       callSmallWidgetRef.current = null;
       callWidgetApiRef.current = null;
@@ -93,6 +95,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       ? MatrixRTCSession.callMembershipsForRoom(room).length > 0
       : false;
 
+    callDebug('widget', 'Widget setup start', { roomId, intent: hasOngoingCall ? 'join_existing' : intentParam, hasOngoingCall, elementCallUrl: clientConfig.elementCallUrl ?? '(bundled)' });
+
     const widgetId = `element-call-${roomId}-${Date.now()}`;
     const url = getWidgetUrl(
       mx,
@@ -126,6 +130,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     // Start widget API messaging AFTER src is set (same tick — the page load
     // is async so the listener is ready long before EC sends ContentLoaded).
     const widgetApi = smallWidget.startMessaging(iframeElement);
+    callDebug('widget', 'Widget API created', { widgetId });
     callWidgetApiRef.current = widgetApi;
     registerActiveClientWidgetApi(roomId, widgetApi, smallWidget, iframeElement);
 
@@ -141,6 +146,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     const reload = () => {
       if (reloaded) return;
       reloaded = true;
+      callDebug('error', 'Health check: reloading EC iframe');
       const el = callIframeRef.current;
       if (el && el.src && el.src !== 'about:blank') {
         // eslint-disable-next-line no-self-assign

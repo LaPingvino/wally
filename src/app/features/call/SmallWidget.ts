@@ -29,6 +29,7 @@ import {
 } from 'matrix-widget-api';
 import { CinnyWidget } from './CinnyWidget';
 import { SmallWidgetDriver } from './SmallWidgetDriver';
+import { callDebug } from './callDebug';
 
 /**
  * Returns the appropriate EC `intent` and `callIntent` URL params for a room.
@@ -101,6 +102,7 @@ export const getWidgetUrl = (
   const replacedParams = params.toString().replace(/%24/g, '$');
   url.search = `?${replacedParams}`;
 
+  callDebug('widget', 'getWidgetUrl', url.toString());
   return url;
 };
 
@@ -149,6 +151,7 @@ export class SmallWidget extends EventEmitter {
    * @returns The initialized ClientWidgetApi instance.
    */
   startMessaging(iframe: HTMLIFrameElement): ClientWidgetApi {
+    callDebug('widget', 'startMessaging', { roomId: this.roomId, widgetUrl: this.url });
     // Ensure the driver is correctly instantiated
     // The capabilities array might need adjustment based on required permissions
     const driver = new SmallWidgetDriver(
@@ -357,6 +360,9 @@ export class SmallWidget extends EventEmitter {
         this.eventsToFeed.add(ev);
       } else {
         const raw = ev.getEffectiveEvent();
+        if (ev.getType() === 'org.matrix.msc3401.call.member' || ev.getType() === 'm.call.member') {
+          callDebug('sfu', 'feedEvent call.member', { type: ev.getType(), sender: ev.getSender(), roomId: ev.getRoomId() });
+        }
         this.messaging.feedEvent(raw as IRoomEvent, this.roomId ?? '').catch(() => null);
       }
     }
@@ -366,6 +372,7 @@ export class SmallWidget extends EventEmitter {
    * Stops the widget messaging and cleans up resources.
    */
   stopMessaging() {
+    callDebug('widget', 'stopMessaging', { roomId: this.roomId });
     this.client.off(ClientEvent.Event, this.onEvent);
     this.client.off(MatrixEventEvent.Decrypted, this.onEventDecrypted);
     this.client.off(ClientEvent.ToDeviceEvent, this.onToDeviceEvent);
@@ -401,6 +408,7 @@ export const getWidgetData = (
   // domain differs from the homeserver URL, or due to CORS in the iframe).
   const wellKnown = client.getClientWellKnown() as Record<string, unknown> | undefined;
   const fociPreferred = wellKnown?.['org.matrix.msc4143.rtc_foci'] ?? [];
+  callDebug('focus', 'getWidgetData fociPreferred', fociPreferred);
 
   return {
     ...currentData,
