@@ -161,20 +161,18 @@ export function CallView({ room }: { room: Room }) {
     <Box
       grow="Yes"
       direction="Column"
-      style={{ display: isCallViewVisible ? 'flex' : 'none' }}
+      style={{ display: isCallViewVisible ? 'flex' : 'none', position: 'relative', overflow: 'hidden' }}
     >
-      {/* Pre-join screen */}
+      {/* Pre-join screen — fills this call panel only (position: relative on parent) */}
       {isActiveCallRoom && pendingJoin && (
         <Box
           role="dialog"
-          aria-modal="true"
           aria-labelledby={joinHeadingId}
           grow="Yes"
           direction="Column"
           alignItems="Center"
           justifyContent="Center"
           gap="400"
-          style={{ position: 'absolute', inset: 0, zIndex: 1 }}
         >
           <Box
             direction="Column"
