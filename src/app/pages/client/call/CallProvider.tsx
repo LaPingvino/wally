@@ -61,10 +61,36 @@ interface CallProviderProps {
 const DEFAULT_AUDIO_ENABLED = false;
 const DEFAULT_VIDEO_ENABLED = false;
 const DEFAULT_CHAT_OPENED = false;
+const SESSION_KEY = 'cinny_active_call';
+
+interface PersistedCallState {
+  roomId: string;
+  audio: boolean;
+  video: boolean;
+  isVoiceRoom: boolean;
+}
+
+function loadPersistedCall(): PersistedCallState | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function persistCall(state: PersistedCallState | null): void {
+  if (state) {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(state));
+  } else {
+    sessionStorage.removeItem(SESSION_KEY);
+  }
+}
 
 export function CallProvider({ children }: CallProviderProps) {
   const mx = useMatrixClient();
-  const [activeCallRoomId, setActiveCallRoomIdState] = useState<string | null>(null);
+  const restored = useRef(loadPersistedCall());
+
+  const [activeCallRoomId, setActiveCallRoomIdState] = useState<string | null>(restored.current?.roomId ?? null);
   const [viewedCallRoomId, setViewedCallRoomIdState] = useState<string | null>(null);
 
   // LiveKit connection state
@@ -72,10 +98,10 @@ export function CallProvider({ children }: CallProviderProps) {
   const [lkToken, setLkToken] = useState<string>('');
   const [lkConnected, setLkConnectedState] = useState<boolean>(false);
 
-  const [isAudioEnabled, setIsAudioEnabledState] = useState<boolean>(DEFAULT_AUDIO_ENABLED);
-  const [isVideoEnabled, setIsVideoEnabledState] = useState<boolean>(DEFAULT_VIDEO_ENABLED);
+  const [isAudioEnabled, setIsAudioEnabledState] = useState<boolean>(restored.current?.audio ?? DEFAULT_AUDIO_ENABLED);
+  const [isVideoEnabled, setIsVideoEnabledState] = useState<boolean>(restored.current?.video ?? DEFAULT_VIDEO_ENABLED);
   const [isChatOpen, setIsChatOpenState] = useState<boolean>(DEFAULT_CHAT_OPENED);
-  const [isCallViewOpen, setIsCallViewOpenState] = useState<boolean>(false);
+  const [isCallViewOpen, setIsCallViewOpenState] = useState<boolean>(restored.current?.isVoiceRoom ?? false);
 
   // Refs keep handler closures up-to-date without being effect dependencies.
   const activeCallRoomIdRef = useRef(activeCallRoomId);
@@ -84,11 +110,13 @@ export function CallProvider({ children }: CallProviderProps) {
   const callNotifySentRef = useRef<boolean>(false);
 
   const [callAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
+  // On restore from sessionStorage, skip pre-join — go straight to connecting
+  const isRestored = !!restored.current;
   const [pendingJoin, setPendingJoin] = useState(false);
-  // Ref avoids a one-render race: when activeCallRoomId first becomes non-null,
-  // the pendingJoin state update hasn't flushed yet. PersistentCallContainer's
-  // setup effect checks this ref so it doesn't start connecting too early.
-  const joinConfirmedRef = useRef(false);
+  const joinConfirmedRef = useRef(isRestored);
+
+  // Clear restored state after first render so it doesn't affect future calls
+  useEffect(() => { restored.current = null; }, []);
 
   const confirmJoin = useCallback(() => {
     joinConfirmedRef.current = true;
@@ -101,19 +129,16 @@ export function CallProvider({ children }: CallProviderProps) {
     setActiveCallRoomIdState(roomId);
     callDebug('state', 'setActiveCallRoomId', { roomId, isVoiceRoom, callAutoJoin, pendingJoin: roomId ? !callAutoJoin : false });
     callNotifySentRef.current = false;
-    // Set pendingJoin synchronously (same batch as activeCallRoomId) to avoid
-    // the one-render race where PersistentCallContainer sees pendingJoin=false
-    // and connects before the user has confirmed via the pre-join screen.
     joinConfirmedRef.current = false;
     setPendingJoin(roomId ? !callAutoJoin : false);
     if (roomId !== null) {
-      // Voice rooms: show call by default. Regular/DM rooms: show chat by default.
       setIsCallViewOpenState(isVoiceRoom);
       setIsChatOpenState(!isVoiceRoom);
-      // Reset A/V state to defaults for each new call so a previously muted call
-      // doesn't carry over into the pre-join screen of the next one.
       setIsAudioEnabledState(DEFAULT_AUDIO_ENABLED);
       setIsVideoEnabledState(DEFAULT_VIDEO_ENABLED);
+      persistCall({ roomId, audio: DEFAULT_AUDIO_ENABLED, video: DEFAULT_VIDEO_ENABLED, isVoiceRoom });
+    } else {
+      persistCall(null);
     }
   }, [callAutoJoin]);
 
@@ -143,7 +168,20 @@ export function CallProvider({ children }: CallProviderProps) {
     setLkConnectedState(false);
     setIsCallViewOpenState(false);
     setPendingJoin(false);
+    persistCall(null);
   }, []);
+
+  // Persist current media state on page unload so refresh reconnects with same settings
+  useEffect(() => {
+    const onBeforeUnload = () => {
+      const roomId = activeCallRoomIdRef.current;
+      if (roomId) {
+        persistCall({ roomId, audio: isAudioEnabled, video: isVideoEnabled, isVoiceRoom: isCallViewOpen });
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [isAudioEnabled, isVideoEnabled, isCallViewOpen]);
 
   // Send m.call.notify (MSC4075) when LK connects, so other clients ring.
   useEffect(() => {
