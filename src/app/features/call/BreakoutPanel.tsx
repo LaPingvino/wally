@@ -190,11 +190,6 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
         </Button>
       </Box>
 
-      {/* Error */}
-      {error && (
-        <Text size="T200" style={{ color: 'var(--mx-critical)' }}>{error}</Text>
-      )}
-
       {/* List */}
       <Box
         direction="Column"
@@ -206,7 +201,12 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
             <Spinner size="200" />
           </Box>
         )}
-        {!loading && breakouts.length === 0 && (
+        {!loading && error && (
+          <Text size="T200" style={{ textAlign: 'center', padding: '8px', opacity: 0.7 }}>
+            {error}
+          </Text>
+        )}
+        {!loading && !error && breakouts.length === 0 && (
           <Text size="T200" style={{ textAlign: 'center', padding: '8px', opacity: 0.7 }}>
             No active breakout rooms
           </Text>
