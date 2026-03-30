@@ -8,7 +8,7 @@ import React, {
   useState,
   ReactNode,
 } from 'react';
-import { Box, Button, config, Icon, Icons, Spinner, Text } from 'folds';
+import { Box, Button, config, Icon, IconButton, Icons, Spinner, Text, Tooltip, TooltipProvider } from 'folds';
 import { ConnectionState } from 'livekit-client';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { useCallMembers } from '../../hooks/useCallMemberships';
@@ -27,6 +27,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useRoomName } from '../../hooks/useRoomMeta';
+import { useWallyConference } from '../../hooks/useWallyConference';
 
 /**
  * Global keyboard shortcuts for active calls.
@@ -90,6 +91,8 @@ export function CallView({ room }: { room: Room }) {
   const creators = useRoomCreators(room);
 
   const roomName = useRoomName(room);
+  const wallyConference = useWallyConference(room);
+  const [guestLinkCopied, setGuestLinkCopied] = useState(false);
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
@@ -260,6 +263,37 @@ export function CallView({ room }: { room: Room }) {
               <MicrophoneButton enabled={lkCtx.isMicEnabled} onToggle={lkCtx.toggleMicrophone} />
               <VideoButton enabled={lkCtx.isCamEnabled} onToggle={lkCtx.toggleCamera} />
               <ScreenShareButton enabled={lkCtx.isScreenShareEnabled} onToggle={lkCtx.toggleScreenShare} />
+              {wallyConference.available && wallyConference.endpoint && (
+                <TooltipProvider
+                  position="Top"
+                  delay={500}
+                  tooltip={
+                    <Tooltip>
+                      <Text size="T200">{guestLinkCopied ? 'Link Copied!' : 'Invite Guest'}</Text>
+                    </Tooltip>
+                  }
+                >
+                  {(anchorRef) => (
+                    <IconButton
+                      ref={anchorRef}
+                      variant={guestLinkCopied ? 'Success' : 'Surface'}
+                      fill="Soft"
+                      radii="400"
+                      size="400"
+                      outlined
+                      aria-label={guestLinkCopied ? 'Guest link copied' : 'Invite guest to call'}
+                      onClick={() => {
+                        const joinUrl = `${wallyConference.endpoint}/${encodeURIComponent(room.roomId)}`;
+                        navigator.clipboard.writeText(joinUrl);
+                        setGuestLinkCopied(true);
+                        setTimeout(() => setGuestLinkCopied(false), 2000);
+                      }}
+                    >
+                      <Icon size="400" src={Icons.Link} filled={guestLinkCopied} />
+                    </IconButton>
+                  )}
+                </TooltipProvider>
+              )}
               <Button variant="Critical" fill="Solid" onClick={hangUp} aria-label="End call">
                 <Text size="B400">End</Text>
               </Button>
