@@ -1,5 +1,11 @@
-import React, { useEffect, useRef, useCallback } from 'react';
-import { RemoteParticipant, LocalParticipant, Track, TrackPublication } from 'livekit-client';
+import React, { useEffect, useRef, useCallback, useState, memo } from 'react';
+import {
+  RemoteParticipant,
+  LocalParticipant,
+  Track,
+  TrackPublication,
+  ParticipantEvent,
+} from 'livekit-client';
 import { Box, Text } from 'folds';
 
 interface VideoTileProps {
@@ -7,16 +13,21 @@ interface VideoTileProps {
   isLocal?: boolean;
 }
 
-function VideoTile({ participant, isLocal }: VideoTileProps) {
+const VideoTile = memo(function VideoTile({ participant, isLocal }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Force re-render when tracks change so hasVideo/isMuted update
+  const [, setTrackVersion] = useState(0);
 
   const attachTracks = useCallback(() => {
     const camPub = participant.getTrackPublication(Track.Source.Camera)
       ?? participant.getTrackPublication(Track.Source.ScreenShare);
 
     if (camPub?.track && videoRef.current) {
-      camPub.track.attach(videoRef.current);
+      // Only attach if not already attached to this element
+      if (videoRef.current.srcObject !== camPub.track.mediaStream) {
+        camPub.track.attach(videoRef.current);
+      }
     } else if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
@@ -24,17 +35,40 @@ function VideoTile({ participant, isLocal }: VideoTileProps) {
     if (!isLocal) {
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
       if (micPub?.track && audioRef.current) {
-        micPub.track.attach(audioRef.current);
+        if (audioRef.current.srcObject !== micPub.track.mediaStream) {
+          micPub.track.attach(audioRef.current);
+        }
       }
     }
   }, [participant, isLocal]);
 
   useEffect(() => {
     attachTracks();
-    // Re-attach when tracks change
-    const interval = setInterval(attachTracks, 1000);
+
+    // Listen to participant track events instead of polling
+    const onTrackChange = () => {
+      attachTracks();
+      setTrackVersion((v) => v + 1);
+    };
+
+    participant.on(ParticipantEvent.TrackPublished, onTrackChange);
+    participant.on(ParticipantEvent.TrackUnpublished, onTrackChange);
+    participant.on(ParticipantEvent.TrackSubscribed, onTrackChange);
+    participant.on(ParticipantEvent.TrackUnsubscribed, onTrackChange);
+    participant.on(ParticipantEvent.TrackMuted, onTrackChange);
+    participant.on(ParticipantEvent.TrackUnmuted, onTrackChange);
+    participant.on(ParticipantEvent.LocalTrackPublished, onTrackChange);
+    participant.on(ParticipantEvent.LocalTrackUnpublished, onTrackChange);
+
     return () => {
-      clearInterval(interval);
+      participant.off(ParticipantEvent.TrackPublished, onTrackChange);
+      participant.off(ParticipantEvent.TrackUnpublished, onTrackChange);
+      participant.off(ParticipantEvent.TrackSubscribed, onTrackChange);
+      participant.off(ParticipantEvent.TrackUnsubscribed, onTrackChange);
+      participant.off(ParticipantEvent.TrackMuted, onTrackChange);
+      participant.off(ParticipantEvent.TrackUnmuted, onTrackChange);
+      participant.off(ParticipantEvent.LocalTrackPublished, onTrackChange);
+      participant.off(ParticipantEvent.LocalTrackUnpublished, onTrackChange);
       // Detach tracks on unmount
       participant.trackPublications.forEach((pub: TrackPublication) => {
         if (pub.track) {
@@ -123,7 +157,7 @@ function VideoTile({ participant, isLocal }: VideoTileProps) {
       </div>
     </div>
   );
-}
+});
 
 interface LiveKitVideoGridProps {
   localParticipant: LocalParticipant | null;

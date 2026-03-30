@@ -183,24 +183,34 @@ export function useLiveKitRoom({ url, token, connect, onDisconnected }: UseLiveK
 
   const toggleMicrophone = useCallback(async () => {
     const next = !room.localParticipant.isMicrophoneEnabled;
-    await room.localParticipant.setMicrophoneEnabled(next);
-    setIsMicEnabled(next);
+    setIsMicEnabled(next); // optimistic — update UI immediately
+    try {
+      await room.localParticipant.setMicrophoneEnabled(next);
+    } catch (e) {
+      setIsMicEnabled(!next); // revert on failure
+      callDebug('error', 'Mic toggle failed', e);
+    }
   }, [room]);
 
   const toggleCamera = useCallback(async () => {
     const next = !room.localParticipant.isCameraEnabled;
-    await room.localParticipant.setCameraEnabled(next);
-    setIsCamEnabled(next);
+    setIsCamEnabled(next); // optimistic
+    try {
+      await room.localParticipant.setCameraEnabled(next);
+    } catch (e) {
+      setIsCamEnabled(!next); // revert on failure
+      callDebug('error', 'Camera toggle failed', e);
+    }
   }, [room]);
 
   const toggleScreenShare = useCallback(async () => {
+    const next = !room.localParticipant.isScreenShareEnabled;
+    setIsScreenShareEnabled(next); // optimistic
     try {
-      const next = !room.localParticipant.isScreenShareEnabled;
       await room.localParticipant.setScreenShareEnabled(next);
-      setIsScreenShareEnabled(next);
     } catch (e) {
+      setIsScreenShareEnabled(false); // revert
       callDebug('error', 'Screen share error', e);
-      setIsScreenShareEnabled(false);
     }
   }, [room]);
 
