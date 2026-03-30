@@ -187,12 +187,14 @@ export function CallView({ room }: { room: Room }) {
           {/* Connection status overlay */}
           {lkCtx && lkCtx.connectionState !== ConnectionState.Connected && (
             <Box
+              role="status"
+              aria-live="polite"
               justifyContent="Center"
               alignItems="Center"
               style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'rgba(0,0,0,0.5)' }}
             >
               <Box direction="Column" alignItems="Center" gap="200">
-                <Spinner />
+                <Spinner aria-hidden="true" />
                 <Text size="T300" style={{ color: '#eee' }}>
                   {lkCtx.connectionState === ConnectionState.Reconnecting ? 'Reconnecting...' : 'Connecting...'}
                 </Text>
@@ -208,18 +210,18 @@ export function CallView({ room }: { room: Room }) {
           )}
           {/* Call controls */}
           {lkCtx && (
-            <Box justifyContent="Center" alignItems="Center" gap="200" style={{ padding: '8px' }}>
+            <Box role="toolbar" aria-label="Call controls" justifyContent="Center" alignItems="Center" gap="200" style={{ padding: '8px' }}>
               <MicrophoneButton enabled={lkCtx.isMicEnabled} onToggle={lkCtx.toggleMicrophone} />
               <VideoButton enabled={lkCtx.isCamEnabled} onToggle={lkCtx.toggleCamera} />
               <ScreenShareButton enabled={lkCtx.isScreenShareEnabled} onToggle={lkCtx.toggleScreenShare} />
-              <Button variant="Critical" fill="Solid" onClick={hangUp}>
+              <Button variant="Critical" fill="Solid" onClick={hangUp} aria-label="End call">
                 <Text size="B400">End</Text>
               </Button>
             </Box>
           )}
           {/* Error display */}
           {lkCtx?.error && (
-            <Box justifyContent="Center" style={{ padding: '8px' }}>
+            <Box role="alert" justifyContent="Center" style={{ padding: '8px' }}>
               <Text size="T200" style={{ color: 'var(--mx-critical)' }}>{lkCtx.error}</Text>
             </Box>
           )}
