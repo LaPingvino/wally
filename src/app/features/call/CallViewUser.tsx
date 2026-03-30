@@ -39,11 +39,23 @@ export function CallViewUser({ room, callMembership }: CallViewUserProps) {
   const openProfile = useOpenUserRoomProfile();
   const space = useSpaceOptionally();
   const userId = callMembership.sender ?? '';
-  const avatarMxcUrl = getMemberAvatarMxc(room, userId);
+
+  // Guests have device_id starting with GUEST_ and display_name in the event content
+  const isGuest = callMembership.deviceId?.startsWith('GUEST_') ?? false;
+  const guestDisplayName = isGuest
+    ? (room.currentState.getStateEvents(
+        'org.matrix.msc3401.call.member' as any,
+        `_${userId}_${callMembership.deviceId}_m.call`
+      )?.getContent<{ display_name?: string }>()?.display_name)
+    : undefined;
+
+  const avatarMxcUrl = isGuest ? undefined : getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxcUrl
     ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
     : undefined;
-  const getName = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
+  const getName = isGuest && guestDisplayName
+    ? `${guestDisplayName} (Guest)`
+    : (getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId));
 
   const handleUserClick: React.MouseEventHandler<HTMLButtonElement> = (evt) => {
     openProfile(room.roomId, space?.roomId, userId, evt.currentTarget.getBoundingClientRect());
