@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Room, MatrixClient, RoomStateEvent } from 'matrix-js-sdk';
 import {
   Box,
   Button,
@@ -14,80 +15,57 @@ import {
   TooltipProvider,
 } from 'folds';
 import { callDebug } from './callDebug';
+import { StateEvent } from '../../../types/matrix/room';
 
 export interface Breakout {
   id: string;
   topic: string;
   created_by: string;
-  created_at: number;
-  participants: number;
+  lk_alias: string;
+  active: boolean;
 }
 
 interface BreakoutPanelProps {
+  room: Room;
+  mx: MatrixClient;
   endpoint: string;
-  roomId: string;
   userId: string;
   onClose: () => void;
-  /** Called when the user joins a breakout — provides new LK credentials */
   onJoinBreakout?: (lkUrl: string, lkToken: string, breakoutId: string) => void;
-  /** Called when the user returns to the main room */
   onReturnToMain?: () => void;
-  /** MatrixClient for OpenID token */
-  mx?: { getOpenIdToken: () => Promise<{ access_token: string; token_type: string; matrix_server_name: string; expires_in: number }>; getDeviceId: () => string | null };
-  /** Currently active breakout ID, if any */
   activeBreakoutId?: string | null;
 }
 
-async function fetchBreakouts(endpoint: string, roomId: string): Promise<Breakout[]> {
-  const url = `${endpoint.replace(/\/$/, '')}/breakout/list/${encodeURIComponent(roomId)}`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`Failed to fetch breakouts: ${resp.status}`);
-  const data = await resp.json();
-  return data.breakouts ?? [];
-}
-
-async function createBreakout(
-  endpoint: string,
-  roomId: string,
-  topic: string,
-  userId: string
-): Promise<{ breakout_id: string }> {
-  const url = `${endpoint.replace(/\/$/, '')}/breakout/create`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ room_id: roomId, topic, user_id: userId }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(text);
+function getBreakoutsFromState(room: Room): Breakout[] {
+  const events = room.currentState.getStateEvents(StateEvent.WallyBreakout);
+  const result: Breakout[] = [];
+  for (const evt of events) {
+    const content = evt.getContent<{
+      topic?: string;
+      created_by?: string;
+      lk_alias?: string;
+      active?: boolean;
+    }>();
+    if (content.active) {
+      result.push({
+        id: evt.getStateKey() ?? '',
+        topic: content.topic ?? '',
+        created_by: content.created_by ?? '',
+        lk_alias: content.lk_alias ?? '',
+        active: true,
+      });
+    }
   }
-  return resp.json();
-}
-
-async function endBreakout(
-  endpoint: string,
-  breakoutId: string,
-  userId: string
-): Promise<void> {
-  const url = `${endpoint.replace(/\/$/, '')}/breakout/end`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ breakout_id: breakoutId, user_id: userId }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(text);
-  }
+  return result;
 }
 
 async function joinBreakoutRoom(
   endpoint: string,
   breakoutId: string,
-  openIdToken: { access_token: string; token_type: string; matrix_server_name: string; expires_in: number },
-  deviceId: string
+  mx: MatrixClient,
 ): Promise<{ jwt: string; livekit_url: string; livekit_room: string }> {
+  const openIdToken = await mx.getOpenIdToken();
+  const deviceId = mx.getDeviceId() ?? 'UNKNOWN';
   const url = `${endpoint.replace(/\/$/, '')}/breakout/join`;
   const resp = await fetch(url, {
     method: 'POST',
@@ -101,89 +79,103 @@ async function joinBreakoutRoom(
   return resp.json();
 }
 
-export function BreakoutPanel({ endpoint, roomId, userId, onClose, onJoinBreakout, onReturnToMain, mx, activeBreakoutId }: BreakoutPanelProps) {
-  const [breakouts, setBreakouts] = useState<Breakout[]>([]);
-  const [loading, setLoading] = useState(true);
+export function BreakoutPanel({
+  room,
+  mx,
+  endpoint,
+  userId,
+  onClose,
+  onJoinBreakout,
+  onReturnToMain,
+  activeBreakoutId,
+}: BreakoutPanelProps) {
+  const [breakouts, setBreakouts] = useState<Breakout[]>(() => getBreakoutsFromState(room));
   const [error, setError] = useState<string | null>(null);
   const topicRef = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false);
 
-  const loadBreakouts = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    fetchBreakouts(endpoint, roomId)
-      .then((list) => {
-        setBreakouts(list);
-        setLoading(false);
-      })
-      .catch((err) => {
-        callDebug('breakout', 'Failed to fetch breakouts', err);
-        setError('Failed to load breakout rooms');
-        setLoading(false);
-      });
-  }, [endpoint, roomId]);
-
+  // Re-read breakouts when room state changes
   useEffect(() => {
-    loadBreakouts();
-  }, [loadBreakouts]);
+    const onStateEvent = () => {
+      setBreakouts(getBreakoutsFromState(room));
+    };
+    room.on(RoomStateEvent.Events, onStateEvent);
+    return () => { room.off(RoomStateEvent.Events, onStateEvent); };
+  }, [room]);
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
     const topic = topicRef.current?.value.trim() ?? '';
     if (!topic || creating) return;
     setCreating(true);
-    createBreakout(endpoint, roomId, topic, userId)
-      .then((result) => {
-        callDebug('breakout', 'Created breakout', result);
-        if (topicRef.current) topicRef.current.value = '';
-        setCreating(false);
-        loadBreakouts();
-      })
-      .catch((err) => {
-        callDebug('breakout', 'Failed to create breakout', err);
-        setError('Failed to create breakout');
-        setCreating(false);
+    setError(null);
+    try {
+      // Send the state event directly as the user
+      const breakoutId = Math.random().toString(36).substring(2, 10);
+      // We need the bot to create it (for the LK alias + DB tracking)
+      // Use the HTTP endpoint for creation
+      const url = `${endpoint.replace(/\/$/, '')}/breakout/create`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: room.roomId, topic, user_id: userId }),
       });
-  }, [endpoint, roomId, userId, creating, loadBreakouts]);
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `Failed (${resp.status})`);
+      }
+      if (topicRef.current) topicRef.current.value = '';
+      // State event from bot will trigger the RoomStateEvent.Events listener
+    } catch (err) {
+      callDebug('breakout', 'Failed to create breakout', err);
+      setError(err instanceof Error ? err.message : 'Failed to create breakout');
+    }
+    setCreating(false);
+  }, [endpoint, room.roomId, userId, creating]);
+
+  const handleEnd = useCallback(
+    async (breakoutId: string) => {
+      setError(null);
+      try {
+        const url = `${endpoint.replace(/\/$/, '')}/breakout/end`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ breakout_id: breakoutId, user_id: userId }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data.error || 'Failed to end breakout');
+        }
+      } catch (err) {
+        callDebug('breakout', 'Failed to end breakout', err);
+        setError(err instanceof Error ? err.message : 'Failed to end breakout');
+      }
+    },
+    [endpoint, userId]
+  );
 
   const handleJoinBreakout = useCallback(
     async (breakoutId: string) => {
-      if (!mx || !onJoinBreakout) return;
+      if (!onJoinBreakout) return;
       setError(null);
       try {
-        const openIdToken = await mx.getOpenIdToken();
-        const deviceId = mx.getDeviceId() ?? 'UNKNOWN';
-        const result = await joinBreakoutRoom(endpoint, breakoutId, openIdToken, deviceId);
+        const result = await joinBreakoutRoom(endpoint, breakoutId, mx);
         onJoinBreakout(result.livekit_url, result.jwt, breakoutId);
         onClose();
       } catch (err) {
         callDebug('breakout', 'Failed to join breakout', err);
-        setError('Failed to join breakout');
+        setError(err instanceof Error ? err.message : 'Failed to join breakout');
       }
     },
     [mx, endpoint, onJoinBreakout, onClose]
   );
 
-  const handleEnd = useCallback(
-    (breakoutId: string) => {
-      endBreakout(endpoint, breakoutId, userId)
-        .then(() => {
-          callDebug('breakout', 'Ended breakout', { breakoutId });
-          loadBreakouts();
-        })
-        .catch((err) => {
-          callDebug('breakout', 'Failed to end breakout', err);
-          setError('Failed to end breakout');
-        });
-    },
-    [endpoint, userId, loadBreakouts]
-  );
-
   const handleCopyGuestLink = useCallback(
     (breakoutId: string) => {
-      const joinUrl = `${endpoint}/${encodeURIComponent(roomId)}?breakout=${breakoutId}`;
+      const joinUrl = `${endpoint}/${encodeURIComponent(room.roomId)}?breakout=${breakoutId}`;
       navigator.clipboard.writeText(joinUrl);
     },
-    [endpoint, roomId]
+    [endpoint, room.roomId]
   );
 
   return (
@@ -234,23 +226,18 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose, onJoinBreakou
         </Button>
       </Box>
 
+      {/* Error */}
+      {error && (
+        <Text size="T200" style={{ color: 'var(--mx-critical)' }}>{error}</Text>
+      )}
+
       {/* List */}
       <Box
         direction="Column"
         gap="100"
         style={{ overflowY: 'auto', flexGrow: 1, minHeight: 0 }}
       >
-        {loading && (
-          <Box justifyContent="Center" style={{ padding: '12px' }}>
-            <Spinner size="200" />
-          </Box>
-        )}
-        {!loading && error && (
-          <Text size="T200" style={{ textAlign: 'center', padding: '8px', opacity: 0.7 }}>
-            {error}
-          </Text>
-        )}
-        {!loading && !error && breakouts.length === 0 && (
+        {breakouts.length === 0 && (
           <Text size="T200" style={{ textAlign: 'center', padding: '8px', opacity: 0.7 }}>
             No active breakout rooms
           </Text>
@@ -268,11 +255,8 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose, onJoinBreakou
           >
             <Box grow="Yes" direction="Column" gap="100" style={{ minWidth: 0 }}>
               <Text size="T300" truncate>{br.topic || br.id}</Text>
-              <Text size="T200" style={{ opacity: 0.6 }}>
-                {br.participants} guest{br.participants !== 1 ? 's' : ''}
-              </Text>
             </Box>
-            {onJoinBreakout && mx && (
+            {onJoinBreakout && (
               <Button
                 variant={activeBreakoutId === br.id ? 'Success' : 'Secondary'}
                 size="300"

@@ -42,6 +42,7 @@ export enum StateEvent {
   PowerLevelTags = 'in.cinny.room.power_level_tags',
 
   WallyConference = 'eu.kiefte.wally.conference',
+  WallyBreakout = 'eu.kiefte.wally.breakout',
 }
 
 export enum MessageEvent {

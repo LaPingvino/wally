@@ -450,13 +450,13 @@ export function CallView({ room }: { room: Room }) {
                     content={
                       breakoutAnchor ? (
                         <BreakoutPanel
+                          room={room}
+                          mx={mx}
                           endpoint={wallyConference.endpoint!}
-                          roomId={room.roomId}
                           userId={mx.getSafeUserId()}
                           onClose={() => setBreakoutAnchor(undefined)}
                           onJoinBreakout={handleJoinBreakout}
                           onReturnToMain={handleReturnToMain}
-                          mx={mx}
                           activeBreakoutId={activeBreakoutId}
                         />
                       ) : null
