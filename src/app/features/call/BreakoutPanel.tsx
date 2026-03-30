@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Button,
@@ -78,7 +78,7 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
   const [breakouts, setBreakouts] = useState<Breakout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [newTopic, setNewTopic] = useState('');
+  const topicRef = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false);
 
   const loadBreakouts = useCallback(() => {
@@ -101,13 +101,13 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
   }, [loadBreakouts]);
 
   const handleCreate = useCallback(() => {
-    const topic = newTopic.trim();
+    const topic = topicRef.current?.value.trim() ?? '';
     if (!topic || creating) return;
     setCreating(true);
     createBreakout(endpoint, roomId, topic, userId)
       .then((result) => {
         callDebug('breakout', 'Created breakout', result);
-        setNewTopic('');
+        if (topicRef.current) topicRef.current.value = '';
         setCreating(false);
         loadBreakouts();
       })
@@ -116,7 +116,7 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
         setError('Failed to create breakout');
         setCreating(false);
       });
-  }, [endpoint, roomId, userId, newTopic, creating, loadBreakouts]);
+  }, [endpoint, roomId, userId, creating, loadBreakouts]);
 
   const handleEnd = useCallback(
     (breakoutId: string) => {
@@ -142,7 +142,7 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
   );
 
   return (
-    <Menu style={{ minWidth: '280px', maxWidth: '360px', maxHeight: '400px' }}>
+    <Menu style={{ minWidth: '320px', maxWidth: '420px', maxHeight: '400px' }}>
     <Box
       direction="Column"
       gap="200"
@@ -166,12 +166,11 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
       <Box direction="Row" gap="200" alignItems="Center">
         <Box grow="Yes">
           <Input
+            ref={topicRef}
             variant="Background"
             size="300"
             radii="300"
             placeholder="Breakout topic..."
-            value={newTopic}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTopic(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleCreate();
             }}
@@ -182,7 +181,7 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
           variant="Secondary"
           size="300"
           radii="300"
-          disabled={!newTopic.trim() || creating}
+          disabled={creating}
           onClick={handleCreate}
           aria-label="Create breakout room"
         >
