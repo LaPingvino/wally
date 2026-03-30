@@ -28,6 +28,43 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useRoomName } from '../../hooks/useRoomMeta';
 
+/**
+ * Global keyboard shortcuts for active calls.
+ * M = toggle mic, V = toggle camera, Escape = end call.
+ * Only active when not focused on an input/textarea.
+ */
+function CallKeyboardShortcuts({
+  toggleMic,
+  toggleCam,
+  hangUp,
+}: {
+  toggleMic: () => void;
+  toggleCam: () => void;
+  hangUp: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
+
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        toggleMic();
+      } else if (e.key === 'v' || e.key === 'V') {
+        e.preventDefault();
+        toggleCam();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        hangUp();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [toggleMic, toggleCam, hangUp]);
+
+  return null;
+}
+
 export function CallViewUserGrid({ children }: { children: ReactNode }) {
   return (
     <Box
@@ -179,6 +216,15 @@ export function CallView({ room }: { room: Room }) {
             </Box>
           </Box>
         </Box>
+      )}
+
+      {/* Keyboard shortcuts for call controls */}
+      {isActiveCallRoom && !pendingJoin && lkCtx && (
+        <CallKeyboardShortcuts
+          toggleMic={lkCtx.toggleMicrophone}
+          toggleCam={lkCtx.toggleCamera}
+          hangUp={hangUp}
+        />
       )}
 
       {/* Active call: LK video grid + controls */}
