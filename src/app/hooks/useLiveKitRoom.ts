@@ -52,8 +52,8 @@ export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAud
   const [remoteParticipants, setRemoteParticipants] = useState<RemoteParticipant[]>([]);
   const [localParticipant, setLocalParticipant] = useState<LocalParticipant | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isMicEnabled, setIsMicEnabled] = useState(true);
-  const [isCamEnabled, setIsCamEnabled] = useState(false);
+  const [isMicEnabled, setIsMicEnabled] = useState(initialAudio);
+  const [isCamEnabled, setIsCamEnabled] = useState(initialVideo);
   const [isScreenShareEnabled, setIsScreenShareEnabled] = useState(false);
   const onDisconnectedRef = useRef(onDisconnected);
   onDisconnectedRef.current = onDisconnected;
