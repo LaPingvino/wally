@@ -255,7 +255,9 @@ export function CallView({ room }: { room: Room }) {
   const handleReturnToMain = useCallback(() => {
     setActiveBreakoutId(null);
     setActiveCallRoomId(room.roomId, room.isCallRoom());
-  }, [setActiveCallRoomId, room]);
+    // Skip pre-join — we're already in a call
+    confirmJoin();
+  }, [setActiveCallRoomId, confirmJoin, room]);
 
   const isActiveCallRoom = activeCallRoomId === room.roomId;
   const callIsCurrentAndReady = isActiveCallRoom && lkConnected;
