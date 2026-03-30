@@ -405,6 +405,7 @@ export function CallView({ room }: { room: Room }) {
               localParticipant={lkCtx.localParticipant}
               remoteParticipants={lkCtx.remoteParticipants}
               isScreenShareEnabled={lkCtx.isScreenShareEnabled}
+              matrixRoom={room}
             />
           )}
           {/* Call controls */}

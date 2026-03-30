@@ -6,7 +6,9 @@ import {
   TrackPublication,
   ParticipantEvent,
 } from 'livekit-client';
+import { Room } from 'matrix-js-sdk';
 import { Box, Text } from 'folds';
+import { getMemberDisplayName } from '../../utils/room';
 
 /**
  * Resolve a readable display name from a LiveKit participant.
@@ -15,31 +17,34 @@ import { Box, Text } from 'folds';
  * Identity format is "userId:deviceId" (e.g. "@alice:example.com:ABCD1234").
  * For guests, deviceId starts with "GUEST_".
  */
-function resolveDisplayName(participant: RemoteParticipant | LocalParticipant): {
-  name: string;
-  isGuest: boolean;
-} {
-  // participant.name is set from JWT claims — most reliable
+function resolveDisplayName(
+  participant: RemoteParticipant | LocalParticipant,
+  matrixRoom?: Room,
+): { name: string; isGuest: boolean } {
+  const identity = participant.identity || '';
+  // Identity format: @user:server:deviceId — split on last colon
+  const lastColon = identity.lastIndexOf(':');
+  const userId = lastColon > 0 ? identity.substring(0, lastColon) : '';
+  const deviceId = lastColon > 0 ? identity.substring(lastColon + 1) : '';
+  const isGuest = deviceId.startsWith('GUEST_');
+
+  // 1. participant.name from JWT claims (guests get their chosen name here)
   if (participant.name) {
-    const isGuest = participant.identity?.includes(':GUEST_') ?? false;
     const suffix = isGuest ? ' (Guest)' : '';
     return { name: participant.name + suffix, isGuest };
   }
 
-  const identity = participant.identity || '';
-  // Identity format: @user:server:deviceId
-  // Split on the LAST colon to separate userId from deviceId
-  const lastColon = identity.lastIndexOf(':');
-  if (lastColon > 0) {
-    const userId = identity.substring(0, lastColon);
-    const deviceId = identity.substring(lastColon + 1);
-    const isGuest = deviceId.startsWith('GUEST_');
+  // 2. Matrix room member display name (for authenticated users)
+  if (matrixRoom && userId.startsWith('@')) {
+    const memberName = getMemberDisplayName(matrixRoom, userId);
+    if (memberName) return { name: memberName, isGuest: false };
+  }
 
-    // Extract localpart from @user:server
+  // 3. Fallback: localpart from userId
+  if (userId) {
     const localpart = userId.startsWith('@') ? userId.slice(1).split(':')[0] : userId;
-    const displayName = localpart || userId;
     const suffix = isGuest ? ' (Guest)' : '';
-    return { name: displayName + suffix, isGuest };
+    return { name: (localpart || userId) + suffix, isGuest };
   }
 
   return { name: identity || 'Unknown', isGuest: false };
@@ -50,12 +55,14 @@ interface VideoTileProps {
   isLocal?: boolean;
   /** Which video source to show. Defaults to Camera. */
   trackSource?: Track.Source;
+  matrixRoom?: Room;
 }
 
 const VideoTile = memo(function VideoTile({
   participant,
   isLocal,
   trackSource = Track.Source.Camera,
+  matrixRoom,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -123,7 +130,7 @@ const VideoTile = memo(function VideoTile({
 
   const hasVideo = !!participant.getTrackPublication(trackSource)?.track;
 
-  const { name: displayName } = resolveDisplayName(participant);
+  const { name: displayName } = resolveDisplayName(participant, matrixRoom);
   const initial = displayName.replace(/[^a-zA-Z0-9]/, '').charAt(0).toUpperCase() || '?';
 
   const isMuted = !participant.getTrackPublication(Track.Source.Microphone)?.track
@@ -214,6 +221,7 @@ interface LiveKitVideoGridProps {
   remoteParticipants: RemoteParticipant[];
   /** Pass-through to force re-render when local screenshare toggles */
   isScreenShareEnabled?: boolean;
+  matrixRoom?: Room;
 }
 
 /**
@@ -236,7 +244,7 @@ function getScreenShareParticipants(
   return result;
 }
 
-export function LiveKitVideoGrid({ localParticipant, remoteParticipants, isScreenShareEnabled: _ssHint }: LiveKitVideoGridProps) {
+export function LiveKitVideoGrid({ localParticipant, remoteParticipants, isScreenShareEnabled: _ssHint, matrixRoom }: LiveKitVideoGridProps) {
   const screenSharers = getScreenShareParticipants(localParticipant, remoteParticipants);
   const tileCount =
     remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
@@ -267,14 +275,15 @@ export function LiveKitVideoGrid({ localParticipant, remoteParticipants, isScree
           participant={p}
           isLocal={p === localParticipant}
           trackSource={Track.Source.ScreenShare}
+          matrixRoom={matrixRoom}
         />
       ))}
       {/* Camera tiles */}
       {localParticipant && (
-        <VideoTile key="local" participant={localParticipant} isLocal />
+        <VideoTile key="local" participant={localParticipant} isLocal matrixRoom={matrixRoom} />
       )}
       {remoteParticipants.map((p) => (
-        <VideoTile key={p.sid} participant={p} />
+        <VideoTile key={p.sid} participant={p} matrixRoom={matrixRoom} />
       ))}
       {tileCount === 0 && (
         <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)' }}>
