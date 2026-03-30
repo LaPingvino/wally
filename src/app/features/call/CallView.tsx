@@ -227,6 +227,7 @@ export function CallView({ room }: { room: Room }) {
   const wallyConference = useWallyConference(room);
   const [guestLinkCopied, setGuestLinkCopied] = useState(false);
   const [breakoutAnchor, setBreakoutAnchor] = useState<RectCords | undefined>();
+  const [activeBreakoutId, setActiveBreakoutId] = useState<string | null>(null);
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
@@ -235,6 +236,7 @@ export function CallView({ room }: { room: Room }) {
     lkConnected,
     isCallViewOpen,
     setActiveCallRoomId,
+    setLkCredentials,
     hangUp,
     setViewedCallRoomId,
     pendingJoin,
@@ -244,6 +246,16 @@ export function CallView({ room }: { room: Room }) {
     setAudioEnabled,
     setVideoEnabled,
   } = useCallState();
+
+  const handleJoinBreakout = useCallback((lkUrl: string, lkToken: string, breakoutId: string) => {
+    setLkCredentials(lkUrl, lkToken);
+    setActiveBreakoutId(breakoutId);
+  }, [setLkCredentials]);
+
+  const handleReturnToMain = useCallback(() => {
+    setActiveBreakoutId(null);
+    setActiveCallRoomId(room.roomId, room.isCallRoom());
+  }, [setActiveCallRoomId, room]);
 
   const isActiveCallRoom = activeCallRoomId === room.roomId;
   const callIsCurrentAndReady = isActiveCallRoom && lkConnected;
@@ -442,6 +454,10 @@ export function CallView({ room }: { room: Room }) {
                           roomId={room.roomId}
                           userId={mx.getSafeUserId()}
                           onClose={() => setBreakoutAnchor(undefined)}
+                          onJoinBreakout={handleJoinBreakout}
+                          onReturnToMain={handleReturnToMain}
+                          mx={mx}
+                          activeBreakoutId={activeBreakoutId}
                         />
                       ) : null
                     }

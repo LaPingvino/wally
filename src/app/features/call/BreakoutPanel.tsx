@@ -28,6 +28,14 @@ interface BreakoutPanelProps {
   roomId: string;
   userId: string;
   onClose: () => void;
+  /** Called when the user joins a breakout — provides new LK credentials */
+  onJoinBreakout?: (lkUrl: string, lkToken: string, breakoutId: string) => void;
+  /** Called when the user returns to the main room */
+  onReturnToMain?: () => void;
+  /** MatrixClient for OpenID token */
+  mx?: { getOpenIdToken: () => Promise<{ access_token: string; token_type: string; matrix_server_name: string; expires_in: number }>; getDeviceId: () => string | null };
+  /** Currently active breakout ID, if any */
+  activeBreakoutId?: string | null;
 }
 
 async function fetchBreakouts(endpoint: string, roomId: string): Promise<Breakout[]> {
@@ -74,7 +82,26 @@ async function endBreakout(
   }
 }
 
-export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPanelProps) {
+async function joinBreakoutRoom(
+  endpoint: string,
+  breakoutId: string,
+  openIdToken: { access_token: string; token_type: string; matrix_server_name: string; expires_in: number },
+  deviceId: string
+): Promise<{ jwt: string; livekit_url: string; livekit_room: string }> {
+  const url = `${endpoint.replace(/\/$/, '')}/breakout/join`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ breakout_id: breakoutId, openid_token: openIdToken, device_id: deviceId }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(text);
+  }
+  return resp.json();
+}
+
+export function BreakoutPanel({ endpoint, roomId, userId, onClose, onJoinBreakout, onReturnToMain, mx, activeBreakoutId }: BreakoutPanelProps) {
   const [breakouts, setBreakouts] = useState<Breakout[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +144,24 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
         setCreating(false);
       });
   }, [endpoint, roomId, userId, creating, loadBreakouts]);
+
+  const handleJoinBreakout = useCallback(
+    async (breakoutId: string) => {
+      if (!mx || !onJoinBreakout) return;
+      setError(null);
+      try {
+        const openIdToken = await mx.getOpenIdToken();
+        const deviceId = mx.getDeviceId() ?? 'UNKNOWN';
+        const result = await joinBreakoutRoom(endpoint, breakoutId, openIdToken, deviceId);
+        onJoinBreakout(result.livekit_url, result.jwt, breakoutId);
+        onClose();
+      } catch (err) {
+        callDebug('breakout', 'Failed to join breakout', err);
+        setError('Failed to join breakout');
+      }
+    },
+    [mx, endpoint, onJoinBreakout, onClose]
+  );
 
   const handleEnd = useCallback(
     (breakoutId: string) => {
@@ -227,6 +272,18 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
                 {br.participants} guest{br.participants !== 1 ? 's' : ''}
               </Text>
             </Box>
+            {onJoinBreakout && mx && (
+              <Button
+                variant={activeBreakoutId === br.id ? 'Success' : 'Secondary'}
+                size="300"
+                radii="300"
+                disabled={activeBreakoutId === br.id}
+                onClick={() => handleJoinBreakout(br.id)}
+                aria-label={activeBreakoutId === br.id ? `In ${br.topic}` : `Join ${br.topic}`}
+              >
+                <Text size="B300">{activeBreakoutId === br.id ? 'Joined' : 'Join'}</Text>
+              </Button>
+            )}
             <TooltipProvider
               position="Top"
               delay={400}
@@ -266,6 +323,17 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
           </Box>
         ))}
       </Box>
+      {activeBreakoutId && onReturnToMain && (
+        <Button
+          variant="Secondary"
+          size="300"
+          radii="300"
+          onClick={() => { onReturnToMain(); onClose(); }}
+          aria-label="Return to main room"
+        >
+          <Text size="B300">Return to Main Room</Text>
+        </Button>
+      )}
     </Box>
     </Menu>
   );
