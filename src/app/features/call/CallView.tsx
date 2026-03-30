@@ -390,6 +390,7 @@ export function CallView({ room }: { room: Room }) {
             <LiveKitVideoGrid
               localParticipant={lkCtx.localParticipant}
               remoteParticipants={lkCtx.remoteParticipants}
+              isScreenShareEnabled={lkCtx.isScreenShareEnabled}
             />
           )}
           {/* Call controls */}

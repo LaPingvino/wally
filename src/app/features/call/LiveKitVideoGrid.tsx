@@ -212,6 +212,8 @@ const VideoTile = memo(function VideoTile({
 interface LiveKitVideoGridProps {
   localParticipant: LocalParticipant | null;
   remoteParticipants: RemoteParticipant[];
+  /** Pass-through to force re-render when local screenshare toggles */
+  isScreenShareEnabled?: boolean;
 }
 
 /**
@@ -234,7 +236,7 @@ function getScreenShareParticipants(
   return result;
 }
 
-export function LiveKitVideoGrid({ localParticipant, remoteParticipants }: LiveKitVideoGridProps) {
+export function LiveKitVideoGrid({ localParticipant, remoteParticipants, isScreenShareEnabled: _ssHint }: LiveKitVideoGridProps) {
   const screenSharers = getScreenShareParticipants(localParticipant, remoteParticipants);
   const tileCount =
     remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
