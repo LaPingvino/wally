@@ -31,7 +31,7 @@ interface BreakoutPanelProps {
 }
 
 async function fetchBreakouts(endpoint: string, roomId: string): Promise<Breakout[]> {
-  const url = `${endpoint.replace(/\/$/, '')}/guest/breakout/list/${encodeURIComponent(roomId)}`;
+  const url = `${endpoint.replace(/\/$/, '')}/breakout/list/${encodeURIComponent(roomId)}`;
   const resp = await fetch(url);
   if (!resp.ok) throw new Error(`Failed to fetch breakouts: ${resp.status}`);
   const data = await resp.json();
@@ -44,7 +44,7 @@ async function createBreakout(
   topic: string,
   userId: string
 ): Promise<{ breakout_id: string }> {
-  const url = `${endpoint.replace(/\/$/, '')}/guest/breakout/create`;
+  const url = `${endpoint.replace(/\/$/, '')}/breakout/create`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -62,7 +62,7 @@ async function endBreakout(
   breakoutId: string,
   userId: string
 ): Promise<void> {
-  const url = `${endpoint.replace(/\/$/, '')}/guest/breakout/end`;
+  const url = `${endpoint.replace(/\/$/, '')}/breakout/end`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
