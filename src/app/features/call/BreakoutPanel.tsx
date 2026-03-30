@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
+  config,
   Icon,
   IconButton,
   Icons,
   Input,
+  Menu,
   Spinner,
   Text,
   Tooltip,
@@ -140,18 +142,11 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
   );
 
   return (
+    <Menu style={{ minWidth: '280px', maxWidth: '360px', maxHeight: '400px' }}>
     <Box
       direction="Column"
       gap="200"
-      style={{
-        padding: '12px',
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--bg-surface-border)',
-        borderRadius: '8px',
-        minWidth: '280px',
-        maxWidth: '360px',
-        maxHeight: '400px',
-      }}
+      style={{ padding: config.space.S200 }}
     >
       {/* Header */}
       <Box justifyContent="SpaceBetween" alignItems="Center">
@@ -223,9 +218,8 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
             alignItems="Center"
             gap="200"
             style={{
-              padding: '6px 8px',
-              borderRadius: '6px',
-              background: 'var(--bg-surface-hover)',
+              padding: config.space.S100,
+              borderRadius: config.radii.R300,
             }}
           >
             <Box grow="Yes" direction="Column" gap="100" style={{ minWidth: 0 }}>
@@ -274,5 +268,6 @@ export function BreakoutPanel({ endpoint, roomId, userId, onClose }: BreakoutPan
         ))}
       </Box>
     </Box>
+    </Menu>
   );
 }
