@@ -59,8 +59,8 @@ export const useShortcutsList = (): KeyboardShortcut[] => {
           action: () => setSearchModal(true),
         },
         {
-          key: c('Focus room list', 'alt+s'),
-          defaultKey: 'alt+s',
+          key: c('Focus room list', 'alt+r'),
+          defaultKey: 'alt+r',
           description: 'Focus room list',
           category: 'Navigation',
           allowInEditable: true,

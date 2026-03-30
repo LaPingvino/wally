@@ -1573,7 +1573,6 @@ export function IssueBoard({ room }: IssueBoardProps) {
   }, [canWriteIssues, openEdit]);
 
   const handleSaveIssue = useCallback(async (content: IssueContent) => {
-    const isNew = editing === 'new';
     const entry = editing !== 'new' && editing !== null ? editing : null;
     const stateKey = entry ? entry.event.getStateKey()! : generateId();
     await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, content, stateKey);
