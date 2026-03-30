@@ -207,6 +207,7 @@ export function BreakoutPanel({
             variant="Background"
             size="300"
             radii="300"
+            style={{ width: '100%' }}
             placeholder="Breakout topic..."
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleCreate();
