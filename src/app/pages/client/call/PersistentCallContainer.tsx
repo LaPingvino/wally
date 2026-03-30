@@ -5,7 +5,7 @@ import React, {
   useRef,
   useCallback,
 } from 'react';
-import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
+import { EventType } from 'matrix-js-sdk';
 import { ConnectionState } from 'livekit-client';
 import { useCallState } from './CallProvider';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -152,34 +152,51 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
     const lkServiceUrl = rtcFoci?.find((f) => f.type === 'livekit')?.livekit_service_url ?? '';
 
-    const content = {
-      application: 'm.call',
-      call_id: '',
-      scope: 'm.room',
-      device_id: deviceId,
-      expires: 7200000,
-      created_ts: Date.now(),
-      focus_active: {
-        type: 'livekit',
-        focus_selection: 'oldest_membership',
-      },
-      foci_preferred: [{
-        type: 'livekit',
-        livekit_alias: activeCallRoomId,
-        livekit_service_url: lkServiceUrl,
-      }],
+    const joinedAt = Date.now();
+    const EXPIRE_DURATION = 14_400_000; // 4 hours (matches SDK default)
+    const RENEW_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+    const sendMembership = (expires: number) => {
+      const content = {
+        application: 'm.call',
+        call_id: '',
+        scope: 'm.room',
+        device_id: deviceId,
+        expires,
+        created_ts: joinedAt,
+        focus_active: {
+          type: 'livekit',
+          focus_selection: 'oldest_membership',
+        },
+        foci_preferred: [{
+          type: 'livekit',
+          livekit_alias: activeCallRoomId,
+          livekit_service_url: lkServiceUrl,
+        }],
+      };
+      callDebug('sfu', 'Sending call.member state event', { stateKey, deviceId, expires });
+      mx.sendStateEvent(activeCallRoomId, EventType.GroupCallMemberPrefix, content, stateKey)
+        .catch((err: unknown) => callDebug('error', 'Failed to send call.member', err));
     };
 
-    callDebug('sfu', 'Sending call.member state event', { stateKey, deviceId });
-    mx.sendStateEvent(activeCallRoomId, 'org.matrix.msc3401.call.member' as any, content, stateKey)
-      .catch((err: unknown) => callDebug('error', 'Failed to send call.member', err));
+    // Initial membership event
+    sendMembership(EXPIRE_DURATION);
+
+    // Renew periodically so long calls don't expire
+    let renewCount = 1;
+    const renewTimer = setInterval(() => {
+      renewCount += 1;
+      sendMembership(EXPIRE_DURATION * renewCount);
+      callDebug('sfu', 'Renewed call.member expiry', { renewCount });
+    }, RENEW_INTERVAL);
 
     // Clear on unmount/call end
     return () => {
+      clearInterval(renewTimer);
       if (callMemberSentRef.current === activeCallRoomId) {
         callMemberSentRef.current = null;
         // Send empty content to signal departure
-        mx.sendStateEvent(activeCallRoomId, 'org.matrix.msc3401.call.member' as any, {}, stateKey)
+        mx.sendStateEvent(activeCallRoomId, EventType.GroupCallMemberPrefix, {}, stateKey)
           .catch(() => {});
       }
     };
