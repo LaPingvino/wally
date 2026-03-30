@@ -4,19 +4,19 @@ import React, {
   useCallback,
   useEffect,
   useId,
-  useRef,
   MouseEventHandler,
   useState,
   ReactNode,
 } from 'react';
 import { Box, Button, config, Icon, Icons, Spinner, Text } from 'folds';
+import { ConnectionState } from 'livekit-client';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { useCallMembers } from '../../hooks/useCallMemberships';
-import { MicrophoneButton, VideoButton } from './Controls';
+import { MicrophoneButton, VideoButton, ScreenShareButton } from './Controls';
 
-import { CallRefContext } from '../../pages/client/call/PersistentCallContainer';
+import { LiveKitRoomContext } from '../../pages/client/call/PersistentCallContainer';
+import { LiveKitVideoGrid } from './LiveKitVideoGrid';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
-import { useDebounce } from '../../hooks/useDebounce';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { CallViewUser } from './CallViewUser';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
@@ -27,18 +27,6 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useRoomName } from '../../hooks/useRoomMeta';
-
-type OriginalStyles = {
-  position?: string;
-  top?: string;
-  left?: string;
-  width?: string;
-  height?: string;
-  zIndex?: string;
-  visibility?: string;
-  pointerEvents?: string;
-  border?: string;
-};
 
 export function CallViewUserGrid({ children }: { children: ReactNode }) {
   return (
@@ -54,10 +42,8 @@ export function CallViewUserGrid({ children }: { children: ReactNode }) {
 }
 
 export function CallView({ room }: { room: Room }) {
-  const callIframeRef = useContext(CallRefContext);
-  const iframeHostRef = useRef<HTMLDivElement>(null);
+  const lkCtx = useContext(LiveKitRoomContext);
 
-  const originalIframeStylesRef = useRef<OriginalStyles | null>(null);
   const mx = useMatrixClient();
 
   const [visibleCallNames, setVisibleCallNames] = useState('');
@@ -71,8 +57,8 @@ export function CallView({ room }: { room: Room }) {
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
   const {
-    isActiveCallReady,
     activeCallRoomId,
+    lkConnected,
     isCallViewOpen,
     setActiveCallRoomId,
     hangUp,
@@ -86,7 +72,7 @@ export function CallView({ room }: { room: Room }) {
   } = useCallState();
 
   const isActiveCallRoom = activeCallRoomId === room.roomId;
-  const callIsCurrentAndReady = isActiveCallRoom && isActiveCallReady;
+  const callIsCurrentAndReady = isActiveCallRoom && lkConnected;
   const callMembers = useCallMembers(mx, room.roomId);
 
   const getName = (userId: string) =>
@@ -99,112 +85,6 @@ export function CallView({ room }: { room: Room }) {
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
-
-  const activeIframeDisplayRef = callIframeRef;
-
-  // When no call is active, signal Element Call to stop its tracks, then navigate away.
-  // Sending the Widget API terminate action first gives EC a chance to call track.stop()
-  // on its own MediaStreamTracks — needed on Firefox which doesn't release them on src change.
-  useEffect(() => {
-    if (!activeCallRoomId && activeIframeDisplayRef?.current) {
-      const iframe = activeIframeDisplayRef.current;
-      try {
-        iframe.contentWindow?.postMessage(
-          JSON.stringify({ api: 'toWidget', action: 'terminate', requestId: `hangup-${Date.now()}`, widgetId: 'element-call' }),
-          '*'
-        );
-      } catch {
-        // ignore — contentWindow access itself is safe cross-origin for postMessage
-      }
-      // Give EC ~300ms to stop its own tracks before we navigate the iframe away
-      const timer = setTimeout(() => {
-        if (activeIframeDisplayRef.current) {
-          activeIframeDisplayRef.current.src = 'about:blank';
-        }
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [activeCallRoomId, activeIframeDisplayRef]);
-
-  const applyFixedPositioningToIframe = useCallback(() => {
-    const iframeElement = activeIframeDisplayRef?.current;
-    const hostElement = iframeHostRef?.current;
-
-    if (iframeElement && hostElement) {
-      if (!originalIframeStylesRef.current) {
-        const computed = window.getComputedStyle(iframeElement);
-        originalIframeStylesRef.current = {
-          position: iframeElement.style.position || computed.position,
-          top: iframeElement.style.top || computed.top,
-          left: iframeElement.style.left || computed.left,
-          width: iframeElement.style.width || computed.width,
-          height: iframeElement.style.height || computed.height,
-          zIndex: iframeElement.style.zIndex || computed.zIndex,
-          visibility: iframeElement.style.visibility || computed.visibility,
-          pointerEvents: iframeElement.style.pointerEvents || computed.pointerEvents,
-          border: iframeElement.style.border || computed.border,
-        };
-      }
-
-      const hostRect = hostElement.getBoundingClientRect();
-
-      iframeElement.style.position = 'fixed';
-      iframeElement.style.top = `${hostRect.top}px`;
-      iframeElement.style.left = `${hostRect.left}px`;
-      iframeElement.style.width = `${hostRect.width}px`;
-      iframeElement.style.height = `${hostRect.height}px`;
-      iframeElement.style.border = 'none';
-      iframeElement.style.zIndex = '1000';
-      // display is NOT set here — PersistentCallContainer's React style prop owns it.
-      // This avoids a fight where React sets display:none (pendingJoin) but the effect
-      // immediately overrides it to display:block.
-      iframeElement.style.visibility = 'visible';
-      iframeElement.style.pointerEvents = 'auto';
-    }
-  }, [activeIframeDisplayRef, room, isActiveCallRoom]);
-
-  const debouncedApplyFixedPositioning = useDebounce(applyFixedPositioningToIframe, {
-    wait: 50,
-    immediate: false,
-  });
-  useEffect(() => {
-    const iframeElement = activeIframeDisplayRef?.current;
-    const hostElement = iframeHostRef?.current;
-
-    // Show the iframe as soon as the call is active (not just when ready) so that
-    // the Element Call lobby is visible and interactive when callAutoJoin is off.
-    if (room.isCallRoom() || (isActiveCallRoom && iframeElement && hostElement)) {
-      applyFixedPositioningToIframe();
-
-      const resizeObserver = new ResizeObserver(debouncedApplyFixedPositioning);
-      if (hostElement) resizeObserver.observe(hostElement);
-      window.addEventListener('scroll', debouncedApplyFixedPositioning, true);
-
-      return () => {
-        resizeObserver.disconnect();
-        window.removeEventListener('scroll', debouncedApplyFixedPositioning, true);
-
-        if (iframeElement && originalIframeStylesRef.current) {
-          const originalStyles = originalIframeStylesRef.current;
-          (Object.keys(originalStyles) as Array<keyof OriginalStyles>).forEach((key) => {
-            if (key in iframeElement.style) {
-              iframeElement.style[key as any] = originalStyles[key] || '';
-            }
-          });
-        }
-        originalIframeStylesRef.current = null;
-      };
-    }
-
-    return undefined;
-  }, [
-    activeIframeDisplayRef,
-    applyFixedPositioningToIframe,
-    debouncedApplyFixedPositioning,
-    isActiveCallRoom,
-    room,
-  ]);
 
   const handleJoinVCClick: MouseEventHandler<HTMLElement> = (evt) => {
     if (!canJoin) return;
@@ -241,23 +121,9 @@ export function CallView({ room }: { room: Room }) {
     <Box
       grow="Yes"
       direction="Column"
-      style={{ display: isCallViewVisible ? 'flex' : 'none', position: 'relative' }}
+      style={{ display: isCallViewVisible ? 'flex' : 'none' }}
     >
-      {/* iframe host: reserves space for the fixed-position EC iframe.
-          Always visible when the call is active — even during pendingJoin — so that
-          getBoundingClientRect() returns a valid rect and the iframe is positioned correctly
-          before the pre-join screen is dismissed. */}
-      <div
-        ref={iframeHostRef}
-        style={{
-          height: '100%',
-          width: '100%',
-          position: 'relative',
-          pointerEvents: 'none',
-          display: isActiveCallRoom ? 'flex' : 'none',
-        }}
-      />
-      {/* Pre-join screen: overlaid absolutely so the iframe host below it still has dimensions */}
+      {/* Pre-join screen */}
       {isActiveCallRoom && pendingJoin && (
         <Box
           role="dialog"
@@ -314,59 +180,104 @@ export function CallView({ room }: { room: Room }) {
           </Box>
         </Box>
       )}
-      <Box
-        grow="Yes"
-        justifyContent="Center"
-        alignItems="Center"
-        direction="Column"
-        gap="300"
-        style={{
-          // Show cinny's own join UI only when no call is active yet.
-          display: isActiveCallRoom ? 'none' : 'flex',
-        }}
-      >
-        <CallViewUserGrid>
-          {callMembers.slice(0, 6).map((callMember) => (
-            <CallViewUser key={callMember.membershipID} room={room} callMembership={callMember} />
-          ))}
-        </CallViewUserGrid>
 
+      {/* Active call: LK video grid + controls */}
+      {isActiveCallRoom && !pendingJoin && (
+        <Box grow="Yes" direction="Column" style={{ position: 'relative' }}>
+          {/* Connection status overlay */}
+          {lkCtx && lkCtx.connectionState !== ConnectionState.Connected && (
+            <Box
+              justifyContent="Center"
+              alignItems="Center"
+              style={{ position: 'absolute', inset: 0, zIndex: 2, background: 'rgba(0,0,0,0.5)' }}
+            >
+              <Box direction="Column" alignItems="Center" gap="200">
+                <Spinner />
+                <Text size="T300" style={{ color: '#eee' }}>
+                  {lkCtx.connectionState === ConnectionState.Reconnecting ? 'Reconnecting...' : 'Connecting...'}
+                </Text>
+              </Box>
+            </Box>
+          )}
+          {/* Video grid */}
+          {lkCtx && (
+            <LiveKitVideoGrid
+              localParticipant={lkCtx.localParticipant}
+              remoteParticipants={lkCtx.remoteParticipants}
+            />
+          )}
+          {/* Call controls */}
+          {lkCtx && (
+            <Box justifyContent="Center" alignItems="Center" gap="200" style={{ padding: '8px' }}>
+              <MicrophoneButton enabled={lkCtx.isMicEnabled} onToggle={lkCtx.toggleMicrophone} />
+              <VideoButton enabled={lkCtx.isCamEnabled} onToggle={lkCtx.toggleCamera} />
+              <ScreenShareButton enabled={lkCtx.isScreenShareEnabled} onToggle={lkCtx.toggleScreenShare} />
+              <Button variant="Critical" fill="Solid" onClick={hangUp}>
+                <Text size="B400">End</Text>
+              </Button>
+            </Box>
+          )}
+          {/* Error display */}
+          {lkCtx?.error && (
+            <Box justifyContent="Center" style={{ padding: '8px' }}>
+              <Text size="T200" style={{ color: 'var(--mx-critical)' }}>{lkCtx.error}</Text>
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Not in call: member avatars + join button */}
+      {!isActiveCallRoom && (
         <Box
-          direction="Column"
+          grow="Yes"
+          justifyContent="Center"
           alignItems="Center"
-          style={{
-            paddingBlock: config.space.S200,
-          }}
+          direction="Column"
+          gap="300"
         >
-          <Text
-            size="H1"
-            as="h2"
+          <CallViewUserGrid>
+            {callMembers.slice(0, 6).map((callMember) => (
+              <CallViewUser key={callMember.membershipID} room={room} callMembership={callMember} />
+            ))}
+          </CallViewUserGrid>
+
+          <Box
+            direction="Column"
+            alignItems="Center"
             style={{
-              paddingBottom: config.space.S300,
+              paddingBlock: config.space.S200,
             }}
           >
-            {roomName}
-          </Text>
-          <Text size="T200">
-            {visibleCallNames !== '' ? visibleCallNames : 'No one'}{' '}
-            {memberDisplayNames.length > 1 ? 'are' : 'is'} currently in voice
-          </Text>
+            <Text
+              size="H1"
+              as="h2"
+              style={{
+                paddingBottom: config.space.S300,
+              }}
+            >
+              {roomName}
+            </Text>
+            <Text size="T200">
+              {visibleCallNames !== '' ? visibleCallNames : 'No one'}{' '}
+              {memberDisplayNames.length > 1 ? 'are' : 'is'} currently in voice
+            </Text>
+          </Box>
+          <Button
+            variant="Secondary"
+            disabled={!canJoin || isActiveCallRoom}
+            onClick={handleJoinVCClick}
+          >
+            {isActiveCallRoom ? (
+              <Box justifyContent="Center" alignItems="Center" gap="200">
+                <Spinner />
+                <Text size="B500">{activeCallRoomId === room.roomId ? `Joining` : 'Join Voice'}</Text>
+              </Box>
+            ) : (
+              <Text size="B500">{canJoin ? 'Join Voice' : 'Channel Locked'}</Text>
+            )}
+          </Button>
         </Box>
-        <Button
-          variant="Secondary"
-          disabled={!canJoin || isActiveCallRoom}
-          onClick={handleJoinVCClick}
-        >
-          {isActiveCallRoom ? (
-            <Box justifyContent="Center" alignItems="Center" gap="200">
-              <Spinner />
-              <Text size="B500">{activeCallRoomId === room.roomId ? `Joining` : 'Join Voice'}</Text>
-            </Box>
-          ) : (
-            <Text size="B500">{canJoin ? 'Join Voice' : 'Channel Locked'}</Text>
-          )}
-        </Button>
-      </Box>
+      )}
     </Box>
   );
 }

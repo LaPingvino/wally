@@ -21,8 +21,8 @@ export function RoomNavUser({ room, callMembership }: RoomNavUserProps) {
   const useAuthentication = useMediaAuthentication();
   const openProfile = useOpenUserRoomProfile();
   const space = useSpaceOptionally();
-  const { isActiveCallReady, activeCallRoomId } = useCallState();
-  const isActiveCall = isActiveCallReady && activeCallRoomId === room.roomId;
+  const { lkConnected, activeCallRoomId } = useCallState();
+  const isActiveCall = lkConnected && activeCallRoomId === room.roomId;
   const userId = callMembership.sender ?? '';
   const avatarMxcUrl = getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxcUrl

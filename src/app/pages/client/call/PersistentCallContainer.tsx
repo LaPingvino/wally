@@ -2,207 +2,188 @@ import React, {
   createContext,
   ReactNode,
   useEffect,
-  useMemo,
   useRef,
+  useCallback,
 } from 'react';
 import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
-import { ClientWidgetApi } from 'matrix-widget-api';
+import { ConnectionState } from 'livekit-client';
 import { useCallState } from './CallProvider';
-import {
-  createVirtualWidget,
-  SmallWidget,
-  getWidgetData,
-  getWidgetUrl,
-  getCallIntentParams,
-} from '../../../features/call/SmallWidget';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { callDebug } from '../../../features/call/callDebug';
-import { useClientConfig } from '../../../hooks/useClientConfig';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
-import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
-import { useTheme } from '../../../hooks/useTheme';
+import { callDebug } from '../../../features/call/callDebug';
+import { fetchSfuToken } from '../../../hooks/useSfuToken';
+import { useLiveKitRoom } from '../../../hooks/useLiveKitRoom';
+
+// Context to pass LK room state to CallView
+export interface LiveKitRoomContextValue {
+  localParticipant: import('livekit-client').LocalParticipant | null;
+  remoteParticipants: import('livekit-client').RemoteParticipant[];
+  connectionState: ConnectionState;
+  isMicEnabled: boolean;
+  isCamEnabled: boolean;
+  isScreenShareEnabled: boolean;
+  toggleMicrophone: () => Promise<void>;
+  toggleCamera: () => Promise<void>;
+  toggleScreenShare: () => Promise<void>;
+  error: string | null;
+}
+
+export const LiveKitRoomContext = createContext<LiveKitRoomContextValue | null>(null);
 
 interface PersistentCallContainerProps {
   children: ReactNode;
 }
 
-export const CallRefContext =
-  createContext<React.MutableRefObject<HTMLIFrameElement | null> | null>(null);
-
 export function PersistentCallContainer({ children }: PersistentCallContainerProps) {
-  const callIframeRef = useRef<HTMLIFrameElement | null>(null);
-  const callWidgetApiRef = useRef<ClientWidgetApi | null>(null);
-  const callSmallWidgetRef = useRef<SmallWidget | null>(null);
-
   const {
     activeCallRoomId,
-    isChatOpen,
-    isActiveCallReady,
-    isCallViewOpen,
-    registerActiveClientWidgetApi,
-    activeClientWidget,
     pendingJoin,
     joinConfirmedRef,
+    setLkCredentials,
+    setLkConnected,
+    lkUrl,
+    lkToken,
+    hangUp,
   } = useCallState();
   const mx = useMatrixClient();
-  const clientConfig = useClientConfig();
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
-  const screenSize = useScreenSizeContext();
-  const theme = useTheme();
-  const isMobile = screenSize === ScreenSize.Mobile;
 
-  // ── Cleanup: clear stale widget ref when the call ends ─────────────
-  useEffect(() => {
-    if (!activeCallRoomId && callSmallWidgetRef.current) {
-      callDebug('state', 'Cleanup: tearing down widget (call ended)');
-      callSmallWidgetRef.current.stopMessaging();
-      callSmallWidgetRef.current = null;
-      callWidgetApiRef.current = null;
-    }
-  }, [activeCallRoomId]);
+  // Track whether we've fetched token for this room to avoid re-fetching
+  const tokenFetchedForRef = useRef<string | null>(null);
 
-  // ── Widget setup: load EC when a call room is active ──────────────
-  // Respects the callAutoJoin setting: if off, pendingJoin=true until the
-  // user confirms via the pre-join screen (joinConfirmedRef).
+  // ── Fetch SFU token when call room becomes active ──
   useEffect(() => {
-    if (!activeCallRoomId || !mx?.getUserId() || isActiveCallReady) return;
+    if (!activeCallRoomId || !mx?.getUserId()) return;
     if (pendingJoin && !joinConfirmedRef.current) return;
+    if (tokenFetchedForRef.current === activeCallRoomId) return;
 
-    const iframeElement = callIframeRef.current;
-    if (!iframeElement) return;
+    tokenFetchedForRef.current = activeCallRoomId;
 
-    // Skip if already set up for this room AND the iframe is actually loaded
-    // (not about:blank). After hangup, callSmallWidgetRef keeps the old widget
-    // but the iframe navigates to about:blank — the ref is stale and must not
-    // block re-creation.
-    if (
-      callSmallWidgetRef.current?.roomId &&
-      callSmallWidgetRef.current.roomId === activeCallRoomId &&
-      iframeElement.src !== 'about:blank' &&
-      iframeElement.src !== ''
-    ) {
+    // Find lk-jwt-service URL from .well-known
+    const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
+    const lkFocus = rtcFoci?.find((f) => f.type === 'livekit' && f.livekit_service_url);
+
+    if (!lkFocus?.livekit_service_url) {
+      callDebug('error', 'No livekit_service_url in .well-known rtc_foci', rtcFoci);
       return;
     }
 
-    // Tear down any previous widget instance cleanly.
-    if (callSmallWidgetRef.current) {
-      callSmallWidgetRef.current.stopMessaging();
-      callSmallWidgetRef.current = null;
-    }
-
+    const serviceUrl = lkFocus.livekit_service_url;
     const roomId = activeCallRoomId;
-    const room = mx.getRoom(roomId);
-    const { intent: intentParam, callIntentParam } = getCallIntentParams(room);
-    const hasOngoingCall = room
-      ? MatrixRTCSession.callMembershipsForRoom(room).length > 0
-      : false;
 
-    callDebug('widget', 'Widget setup start', { roomId, intent: hasOngoingCall ? 'join_existing' : intentParam, hasOngoingCall, elementCallUrl: clientConfig.elementCallUrl ?? '(bundled)' });
+    callDebug('sfu', 'Fetching SFU token', { serviceUrl, roomId });
 
-    const widgetId = `element-call-${roomId}-${Date.now()}`;
-    const url = getWidgetUrl(
-      mx,
-      roomId,
-      clientConfig.elementCallUrl ?? '',
-      widgetId,
-      {
-        intent: hasOngoingCall ? 'join_existing' : intentParam,
-        skipLobby: true,
-        returnToLobby: 'true',
-        perParticipantE2EE: 'false',
-        theme: theme.kind,
-        callIntent: callIntentParam,
-      },
-    );
+    let cancelled = false;
+    fetchSfuToken(mx, serviceUrl, roomId, mx.getDeviceId() ?? 'UNKNOWN')
+      .then((result) => {
+        if (!cancelled) {
+          callDebug('sfu', 'Got SFU credentials', { url: result.url });
+          setLkCredentials(result.url, result.jwt);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          callDebug('error', 'SFU token fetch failed', err);
+        }
+      });
 
-    const userId = mx.getUserId() ?? '';
-    const app = createVirtualWidget(
-      mx, widgetId, userId, 'Element Call', 'm.call', url,
-      false, // waitForIframeLoad — EC sends ContentLoaded when ready
-      getWidgetData(mx, roomId, {}, { callIntent: callIntentParam }, autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as unknown[]),
-      roomId,
-    );
+    return () => { cancelled = true; };
+  }, [activeCallRoomId, pendingJoin, mx, autoDiscoveryInfo, setLkCredentials, joinConfirmedRef]);
 
-    const smallWidget = new SmallWidget(app);
-    callSmallWidgetRef.current = smallWidget;
-
-    // Navigate iframe FIRST — PostmessageTransport needs a valid contentWindow.
-    iframeElement.src = url.toString();
-
-    // Start widget API messaging AFTER src is set (same tick — the page load
-    // is async so the listener is ready long before EC sends ContentLoaded).
-    const widgetApi = smallWidget.startMessaging(iframeElement);
-    callDebug('widget', 'Widget API created', { widgetId });
-    callWidgetApiRef.current = widgetApi;
-    registerActiveClientWidgetApi(roomId, widgetApi, smallWidget, iframeElement);
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCallRoomId, isActiveCallReady, pendingJoin, mx, theme.kind, clientConfig.elementCallUrl, registerActiveClientWidgetApi]);
-
-  // ── Health check: reload EC if widget channel fails to establish ───
+  // Reset token fetch ref when call ends
   useEffect(() => {
-    const iframe = callIframeRef.current;
-    if (!activeClientWidget || isActiveCallReady || !iframe) return;
+    if (!activeCallRoomId) {
+      tokenFetchedForRef.current = null;
+    }
+  }, [activeCallRoomId]);
 
-    let reloaded = false;
-    const reload = () => {
-      if (reloaded) return;
-      reloaded = true;
-      callDebug('error', 'Health check: reloading EC iframe');
-      const el = callIframeRef.current;
-      if (el && el.src && el.src !== 'about:blank') {
-        // eslint-disable-next-line no-self-assign
-        el.src = el.src;
+  // ── LiveKit room connection ──
+  const shouldConnect = !!(activeCallRoomId && lkUrl && lkToken && (!pendingJoin || joinConfirmedRef.current));
+
+  const lkRoom = useLiveKitRoom({
+    url: lkUrl,
+    token: lkToken,
+    connect: shouldConnect,
+    onDisconnected: useCallback(() => {
+      callDebug('sfu', 'LiveKit disconnected, hanging up');
+      hangUp();
+    }, [hangUp]),
+  });
+
+  // Sync LK connected state to CallProvider
+  const prevConnected = useRef(false);
+  useEffect(() => {
+    const isConnected = lkRoom.connectionState === ConnectionState.Connected;
+    if (isConnected !== prevConnected.current) {
+      prevConnected.current = isConnected;
+      setLkConnected(isConnected);
+    }
+  }, [lkRoom.connectionState, setLkConnected]);
+
+  // ── Send call.member state event when connected ──
+  const callMemberSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lkRoom.connectionState !== ConnectionState.Connected || !activeCallRoomId || !mx) return;
+    if (callMemberSentRef.current === activeCallRoomId) return;
+
+    callMemberSentRef.current = activeCallRoomId;
+    const userId = mx.getUserId()!;
+    const deviceId = mx.getDeviceId()!;
+    const stateKey = userId;
+
+    // Find service URL from .well-known
+    const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
+    const lkServiceUrl = rtcFoci?.find((f) => f.type === 'livekit')?.livekit_service_url ?? '';
+
+    const content = {
+      application: 'm.call',
+      call_id: '',
+      scope: 'm.room',
+      device_id: deviceId,
+      expires: 7200000,
+      created_ts: Date.now(),
+      focus_active: {
+        type: 'livekit',
+        focus_selection: 'oldest_membership',
+      },
+      foci_preferred: [{
+        type: 'livekit',
+        livekit_alias: activeCallRoomId,
+        livekit_service_url: lkServiceUrl,
+      }],
+    };
+
+    callDebug('sfu', 'Sending call.member state event', { stateKey, deviceId });
+    mx.sendStateEvent(activeCallRoomId, 'org.matrix.msc3401.call.member' as any, content, stateKey)
+      .catch((err: unknown) => callDebug('error', 'Failed to send call.member', err));
+
+    // Clear on unmount/call end
+    return () => {
+      if (callMemberSentRef.current === activeCallRoomId) {
+        callMemberSentRef.current = null;
+        // Send empty content to signal departure
+        mx.sendStateEvent(activeCallRoomId, 'org.matrix.msc3401.call.member' as any, {}, stateKey)
+          .catch(() => {});
       }
     };
+  }, [lkRoom.connectionState, activeCallRoomId, mx, autoDiscoveryInfo]);
 
-    activeClientWidget.once('error:preparing', reload);
-    const timer = setTimeout(reload, 8000);
-    const onReady = () => clearTimeout(timer);
-    activeClientWidget.once('ready', onReady);
-
-    return () => {
-      clearTimeout(timer);
-      activeClientWidget.off('error:preparing', reload);
-      activeClientWidget.off('ready', onReady);
-    };
-  }, [activeClientWidget, isActiveCallReady]);
-
-  // ── Resize nudge: tell EC to re-layout when iframe becomes visible ─
-  const iframeVisible = !!(activeCallRoomId && !pendingJoin && isCallViewOpen && !(isMobile && isChatOpen));
-  useEffect(() => {
-    if (!iframeVisible) return;
-    const iframe = callIframeRef.current;
-    if (!iframe) return;
-    const timer = setTimeout(() => {
-      try { iframe.contentWindow?.dispatchEvent(new Event('resize')); } catch { /* cross-origin */ }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, [iframeVisible, isActiveCallReady]);
-
-  const memoizedIframeRef = useMemo(() => callIframeRef, [callIframeRef]);
+  const contextValue: LiveKitRoomContextValue = {
+    localParticipant: lkRoom.localParticipant,
+    remoteParticipants: lkRoom.remoteParticipants,
+    connectionState: lkRoom.connectionState,
+    isMicEnabled: lkRoom.isMicEnabled,
+    isCamEnabled: lkRoom.isCamEnabled,
+    isScreenShareEnabled: lkRoom.isScreenShareEnabled,
+    toggleMicrophone: lkRoom.toggleMicrophone,
+    toggleCamera: lkRoom.toggleCamera,
+    toggleScreenShare: lkRoom.toggleScreenShare,
+    error: lkRoom.error,
+  };
 
   return (
-    <CallRefContext.Provider value={memoizedIframeRef}>
-      <iframe
-        ref={callIframeRef}
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: 0,
-          height: 0,
-          border: 'none',
-          // Visible as soon as the call room is active and call view is open.
-          // EC's own lobby is the join screen — no need to wait for pendingJoin.
-          display: iframeVisible ? 'block' : 'none',
-        }}
-        title="Element Call"
-        sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-modals allow-downloads"
-        allow="microphone; camera; display-capture; autoplay; clipboard-write;"
-        src="about:blank"
-      />
+    <LiveKitRoomContext.Provider value={contextValue}>
       {children}
-    </CallRefContext.Provider>
+    </LiveKitRoomContext.Provider>
   );
 }

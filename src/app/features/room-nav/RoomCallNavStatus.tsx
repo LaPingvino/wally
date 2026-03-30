@@ -71,7 +71,7 @@ export function CallNavStatus() {
   const mx = useMatrixClient();
   const {
     activeCallRoomId,
-    isActiveCallReady,
+    lkConnected,
     isAudioEnabled,
     isVideoEnabled,
     toggleAudio,
@@ -170,7 +170,7 @@ export function CallNavStatus() {
   // confirmed they want to join yet. Showing "in call" + hangup prematurely
   // is confusing and the call hasn't actually started.
   const hasActiveCall = Boolean(activeCallRoomId) && !pendingJoin;
-  const isConnected = hasActiveCall && isActiveCallReady;
+  const isConnected = hasActiveCall && lkConnected;
 
   const clearCallTimeout = useCallback((roomId: string) => {
     const t = callTimeoutsRef.current.get(roomId);
