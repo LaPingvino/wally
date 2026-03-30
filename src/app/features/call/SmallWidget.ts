@@ -397,6 +397,7 @@ export const getWidgetData = (
   roomId: string,
   currentData: object,
   overwriteData: object,
+  rtcFoci?: unknown[],
 ): IWidgetData => {
   // Always false — per-participant E2EE requires the LiveKit SFU to be provisioned for it.
   // Passing true on a standard SFU causes EC to throw "e2ee not configured" on connect.
@@ -406,8 +407,15 @@ export const getWidgetData = (
   // Pass the LiveKit foci from .well-known/matrix/client explicitly so EC
   // doesn't have to re-fetch .well-known itself (which can fail if the server
   // domain differs from the homeserver URL, or due to CORS in the iframe).
-  const wellKnown = client.getClientWellKnown() as Record<string, unknown> | undefined;
-  const fociPreferred = wellKnown?.['org.matrix.msc4143.rtc_foci'] ?? [];
+  // Prefer the rtcFoci argument (from Cinny's AutoDiscoveryInfo) over the SDK's
+  // getClientWellKnown() which may be empty/stale.
+  let fociPreferred: unknown[];
+  if (rtcFoci && rtcFoci.length > 0) {
+    fociPreferred = rtcFoci;
+  } else {
+    const wellKnown = client.getClientWellKnown() as Record<string, unknown> | undefined;
+    fociPreferred = (wellKnown?.['org.matrix.msc4143.rtc_foci'] as unknown[]) ?? [];
+  }
   callDebug('focus', 'getWidgetData fociPreferred', fociPreferred);
 
   return {

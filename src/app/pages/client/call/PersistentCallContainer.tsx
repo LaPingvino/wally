@@ -18,6 +18,7 @@ import {
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { callDebug } from '../../../features/call/callDebug';
 import { useClientConfig } from '../../../hooks/useClientConfig';
+import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useTheme } from '../../../hooks/useTheme';
 
@@ -45,6 +46,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   } = useCallState();
   const mx = useMatrixClient();
   const clientConfig = useClientConfig();
+  const autoDiscoveryInfo = useAutoDiscoveryInfo();
   const screenSize = useScreenSizeContext();
   const theme = useTheme();
   const isMobile = screenSize === ScreenSize.Mobile;
@@ -117,7 +119,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     const app = createVirtualWidget(
       mx, widgetId, userId, 'Element Call', 'm.call', url,
       false, // waitForIframeLoad — EC sends ContentLoaded when ready
-      getWidgetData(mx, roomId, {}, { callIntent: callIntentParam }),
+      getWidgetData(mx, roomId, {}, { callIntent: callIntentParam }, autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as unknown[]),
       roomId,
     );
 
