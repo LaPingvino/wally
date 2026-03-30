@@ -100,12 +100,27 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   // ── LiveKit room connection ──
   const shouldConnect = !!(activeCallRoomId && lkUrl && lkToken && (!pendingJoin || joinConfirmedRef.current));
 
+  // Track intentional disconnects to avoid re-triggering hangUp
+  const intentionalDisconnectRef = useRef(false);
+  useEffect(() => {
+    if (!shouldConnect && activeCallRoomId === null) {
+      // hangUp() was called — mark disconnect as intentional
+      intentionalDisconnectRef.current = true;
+    } else {
+      intentionalDisconnectRef.current = false;
+    }
+  }, [shouldConnect, activeCallRoomId]);
+
   const lkRoom = useLiveKitRoom({
     url: lkUrl,
     token: lkToken,
     connect: shouldConnect,
     onDisconnected: useCallback(() => {
-      callDebug('sfu', 'LiveKit disconnected, hanging up');
+      if (intentionalDisconnectRef.current) {
+        callDebug('sfu', 'LiveKit disconnected (intentional, skipping hangUp)');
+        return;
+      }
+      callDebug('sfu', 'LiveKit disconnected unexpectedly, hanging up');
       hangUp();
     }, [hangUp]),
   });
