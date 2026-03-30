@@ -155,6 +155,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize,
                           }
                         >
                           <PersistentCallContainer>
+                            <CallStatusRenderer />
                             <Outlet />
                           </PersistentCallContainer>
                         </ClientLayout>
