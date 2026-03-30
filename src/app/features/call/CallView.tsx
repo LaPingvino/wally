@@ -5,10 +5,11 @@ import React, {
   useEffect,
   useId,
   MouseEventHandler,
+  useRef,
   useState,
   ReactNode,
 } from 'react';
-import { Box, Button, config, Icon, IconButton, Icons, Spinner, Text, Tooltip, TooltipProvider } from 'folds';
+import { Box, Button, config, Icon, IconButton, Icons, PopOut, RectCords, Spinner, Text, Tooltip, TooltipProvider } from 'folds';
 import { ConnectionState } from 'livekit-client';
 import { useCallState } from '../../pages/client/call/CallProvider';
 import { useCallMembers } from '../../hooks/useCallMemberships';
@@ -28,6 +29,138 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { useWallyConference } from '../../hooks/useWallyConference';
+import { BreakoutPanel } from './BreakoutPanel';
+
+/**
+ * Video preview for the pre-join screen.
+ * Requests camera when video is enabled, releases on disable/unmount.
+ */
+function PreJoinVideoPreview({ isVideoEnabled }: { isVideoEnabled: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    if (!isVideoEnabled) {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) videoRef.current.srcObject = null;
+      return;
+    }
+
+    let cancelled = false;
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+      })
+      .catch(() => {
+        // Camera not available — silently ignore
+      });
+
+    return () => {
+      cancelled = true;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [isVideoEnabled]);
+
+  // Clean up on unmount
+  useEffect(
+    () => () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+      }
+    },
+    []
+  );
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        aspectRatio: '16/9',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        background: 'var(--bg-surface-low, #16213e)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {isVideoEnabled ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          aria-label="Camera preview"
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transform: 'scaleX(-1)',
+          }}
+        />
+      ) : (
+        <Icon src={Icons.VideoCameraMute} size="600" />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Visually hidden live region that announces call state changes to screen readers.
+ */
+function CallAriaAnnouncer({ isMicOn, isCamOn }: { isMicOn: boolean; isCamOn: boolean }) {
+  const [announcement, setAnnouncement] = useState('');
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      setAnnouncement(
+        `Joined call. Microphone ${isMicOn ? 'on' : 'off'}. Camera ${isCamOn ? 'on' : 'off'}.`
+      );
+      return;
+    }
+    // Only announce individual toggle changes after initial join
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const prevMic = useRef(isMicOn);
+  const prevCam = useRef(isCamOn);
+  useEffect(() => {
+    if (prevMic.current !== isMicOn) {
+      prevMic.current = isMicOn;
+      setAnnouncement(`Microphone ${isMicOn ? 'on' : 'off'}`);
+    }
+  }, [isMicOn]);
+  useEffect(() => {
+    if (prevCam.current !== isCamOn) {
+      prevCam.current = isCamOn;
+      setAnnouncement(`Camera ${isCamOn ? 'on' : 'off'}`);
+    }
+  }, [isCamOn]);
+
+  return (
+    <div
+      role="status"
+      aria-live="assertive"
+      aria-atomic="true"
+      style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }}
+    >
+      {announcement}
+    </div>
+  );
+}
 
 /**
  * Global keyboard shortcuts for active calls.
@@ -93,6 +226,7 @@ export function CallView({ room }: { room: Room }) {
   const roomName = useRoomName(room);
   const wallyConference = useWallyConference(room);
   const [guestLinkCopied, setGuestLinkCopied] = useState(false);
+  const [breakoutAnchor, setBreakoutAnchor] = useState<RectCords | undefined>();
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
@@ -180,7 +314,7 @@ export function CallView({ room }: { room: Room }) {
             gap="400"
             style={{ padding: '32px', maxWidth: '280px', width: '100%' }}
           >
-            <Icon src={Icons.Phone} size="600" />
+            <PreJoinVideoPreview isVideoEnabled={isVideoEnabled} />
             <Text id={joinHeadingId} size="H4" style={{ textAlign: 'center' }}>
               {roomName}
             </Text>
@@ -219,13 +353,16 @@ export function CallView({ room }: { room: Room }) {
         </Box>
       )}
 
-      {/* Keyboard shortcuts for call controls */}
+      {/* Keyboard shortcuts + ARIA announcements for call controls */}
       {isActiveCallRoom && !pendingJoin && lkCtx && (
-        <CallKeyboardShortcuts
-          toggleMic={lkCtx.toggleMicrophone}
-          toggleCam={lkCtx.toggleCamera}
-          hangUp={hangUp}
-        />
+        <>
+          <CallKeyboardShortcuts
+            toggleMic={lkCtx.toggleMicrophone}
+            toggleCam={lkCtx.toggleCamera}
+            hangUp={hangUp}
+          />
+          <CallAriaAnnouncer isMicOn={lkCtx.isMicEnabled} isCamOn={lkCtx.isCamEnabled} />
+        </>
       )}
 
       {/* Active call: LK video grid + controls */}
@@ -262,35 +399,82 @@ export function CallView({ room }: { room: Room }) {
               <VideoButton enabled={lkCtx.isCamEnabled} onToggle={lkCtx.toggleCamera} />
               <ScreenShareButton enabled={lkCtx.isScreenShareEnabled} onToggle={lkCtx.toggleScreenShare} />
               {wallyConference.available && wallyConference.endpoint && (
-                <TooltipProvider
-                  position="Top"
-                  delay={500}
-                  tooltip={
-                    <Tooltip>
-                      <Text size="T200">{guestLinkCopied ? 'Link Copied!' : 'Invite Guest'}</Text>
-                    </Tooltip>
-                  }
-                >
-                  {(anchorRef) => (
-                    <IconButton
-                      ref={anchorRef}
-                      variant={guestLinkCopied ? 'Success' : 'Surface'}
-                      fill="Soft"
-                      radii="400"
-                      size="400"
-                      outlined
-                      aria-label={guestLinkCopied ? 'Guest link copied' : 'Invite guest to call'}
-                      onClick={() => {
-                        const joinUrl = `${wallyConference.endpoint}/${encodeURIComponent(room.roomId)}`;
-                        navigator.clipboard.writeText(joinUrl);
-                        setGuestLinkCopied(true);
-                        setTimeout(() => setGuestLinkCopied(false), 2000);
-                      }}
+                <>
+                  <TooltipProvider
+                    position="Top"
+                    delay={500}
+                    tooltip={
+                      <Tooltip>
+                        <Text size="T200">{guestLinkCopied ? 'Link Copied!' : 'Invite Guest'}</Text>
+                      </Tooltip>
+                    }
+                  >
+                    {(anchorRef) => (
+                      <IconButton
+                        ref={anchorRef}
+                        variant={guestLinkCopied ? 'Success' : 'Surface'}
+                        fill="Soft"
+                        radii="400"
+                        size="400"
+                        outlined
+                        aria-label={guestLinkCopied ? 'Guest link copied' : 'Invite guest to call'}
+                        onClick={() => {
+                          const joinUrl = `${wallyConference.endpoint}/${encodeURIComponent(room.roomId)}`;
+                          navigator.clipboard.writeText(joinUrl);
+                          setGuestLinkCopied(true);
+                          setTimeout(() => setGuestLinkCopied(false), 2000);
+                        }}
+                      >
+                        <Icon size="400" src={Icons.Link} filled={guestLinkCopied} />
+                      </IconButton>
+                    )}
+                  </TooltipProvider>
+                  <PopOut
+                    anchor={breakoutAnchor}
+                    position="Top"
+                    align="End"
+                    offset={8}
+                    content={
+                      breakoutAnchor ? (
+                        <BreakoutPanel
+                          endpoint={wallyConference.endpoint!}
+                          roomId={room.roomId}
+                          userId={mx.getSafeUserId()}
+                          onClose={() => setBreakoutAnchor(undefined)}
+                        />
+                      ) : null
+                    }
+                  >
+                    <TooltipProvider
+                      position="Top"
+                      delay={500}
+                      tooltip={
+                        <Tooltip>
+                          <Text size="T200">Breakout Rooms</Text>
+                        </Tooltip>
+                      }
                     >
-                      <Icon size="400" src={Icons.Link} filled={guestLinkCopied} />
-                    </IconButton>
-                  )}
-                </TooltipProvider>
+                      {(anchorRef) => (
+                        <IconButton
+                          ref={anchorRef}
+                          variant={breakoutAnchor ? 'Success' : 'Surface'}
+                          fill="Soft"
+                          radii="400"
+                          size="400"
+                          outlined
+                          aria-label="Manage breakout rooms"
+                          onClick={(evt: React.MouseEvent<HTMLButtonElement>) => {
+                            setBreakoutAnchor(
+                              breakoutAnchor ? undefined : evt.currentTarget.getBoundingClientRect()
+                            );
+                          }}
+                        >
+                          <Icon size="400" src={Icons.Hash} filled={!!breakoutAnchor} />
+                        </IconButton>
+                      )}
+                    </TooltipProvider>
+                  </PopOut>
+                </>
               )}
               <Button variant="Critical" fill="Solid" onClick={hangUp} aria-label="End call">
                 <Text size="B400">End</Text>

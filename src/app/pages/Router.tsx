@@ -78,7 +78,6 @@ import { IncomingCallNotification } from '../features/call/IncomingCallNotificat
 import { GlobalKeyboardShortcuts } from '../components/GlobalKeyboardShortcuts';
 import { getFallbackSession } from '../state/sessions';
 import { CallStatusRenderer } from './CallStatusRenderer';
-import { CallEmbedProvider } from '../components/CallEmbedProvider';
 import { GuestJoin } from './GuestJoin';
 
 export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize, basePath?: string) => {

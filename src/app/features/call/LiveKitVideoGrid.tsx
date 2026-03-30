@@ -8,31 +8,74 @@ import {
 } from 'livekit-client';
 import { Box, Text } from 'folds';
 
+/**
+ * Resolve a readable display name from a LiveKit participant.
+ * Priority: participant.name > parsed identity > 'Unknown'
+ *
+ * Identity format is "userId:deviceId" (e.g. "@alice:example.com:ABCD1234").
+ * For guests, deviceId starts with "GUEST_".
+ */
+function resolveDisplayName(participant: RemoteParticipant | LocalParticipant): {
+  name: string;
+  isGuest: boolean;
+} {
+  // participant.name is set from JWT claims — most reliable
+  if (participant.name) {
+    const isGuest = participant.identity?.includes(':GUEST_') ?? false;
+    const suffix = isGuest ? ' (Guest)' : '';
+    return { name: participant.name + suffix, isGuest };
+  }
+
+  const identity = participant.identity || '';
+  // Identity format: @user:server:deviceId
+  // Split on the LAST colon to separate userId from deviceId
+  const lastColon = identity.lastIndexOf(':');
+  if (lastColon > 0) {
+    const userId = identity.substring(0, lastColon);
+    const deviceId = identity.substring(lastColon + 1);
+    const isGuest = deviceId.startsWith('GUEST_');
+
+    // Extract localpart from @user:server
+    const localpart = userId.startsWith('@') ? userId.slice(1).split(':')[0] : userId;
+    const displayName = localpart || userId;
+    const suffix = isGuest ? ' (Guest)' : '';
+    return { name: displayName + suffix, isGuest };
+  }
+
+  return { name: identity || 'Unknown', isGuest: false };
+}
+
 interface VideoTileProps {
   participant: RemoteParticipant | LocalParticipant;
   isLocal?: boolean;
+  /** Which video source to show. Defaults to Camera. */
+  trackSource?: Track.Source;
 }
 
-const VideoTile = memo(function VideoTile({ participant, isLocal }: VideoTileProps) {
+const VideoTile = memo(function VideoTile({
+  participant,
+  isLocal,
+  trackSource = Track.Source.Camera,
+}: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const isScreenShare = trackSource === Track.Source.ScreenShare;
   // Force re-render when tracks change so hasVideo/isMuted update
   const [, setTrackVersion] = useState(0);
 
   const attachTracks = useCallback(() => {
-    const camPub = participant.getTrackPublication(Track.Source.Camera)
-      ?? participant.getTrackPublication(Track.Source.ScreenShare);
+    const videoPub = participant.getTrackPublication(trackSource);
 
-    if (camPub?.track && videoRef.current) {
-      // Only attach if not already attached to this element
-      if (videoRef.current.srcObject !== camPub.track.mediaStream) {
-        camPub.track.attach(videoRef.current);
+    if (videoPub?.track && videoRef.current) {
+      if (videoRef.current.srcObject !== videoPub.track.mediaStream) {
+        videoPub.track.attach(videoRef.current);
       }
     } else if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
 
-    if (!isLocal) {
+    // Only attach audio on the camera tile (not screenshare) to avoid double audio
+    if (!isLocal && !isScreenShare) {
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
       if (micPub?.track && audioRef.current) {
         if (audioRef.current.srcObject !== micPub.track.mediaStream) {
@@ -40,12 +83,11 @@ const VideoTile = memo(function VideoTile({ participant, isLocal }: VideoTilePro
         }
       }
     }
-  }, [participant, isLocal]);
+  }, [participant, isLocal, isScreenShare, trackSource]);
 
   useEffect(() => {
     attachTracks();
 
-    // Listen to participant track events instead of polling
     const onTrackChange = () => {
       attachTracks();
       setTrackVersion((v) => v + 1);
@@ -69,28 +111,36 @@ const VideoTile = memo(function VideoTile({ participant, isLocal }: VideoTilePro
       participant.off(ParticipantEvent.TrackUnmuted, onTrackChange);
       participant.off(ParticipantEvent.LocalTrackPublished, onTrackChange);
       participant.off(ParticipantEvent.LocalTrackUnpublished, onTrackChange);
-      // Detach tracks on unmount
-      participant.trackPublications.forEach((pub: TrackPublication) => {
-        if (pub.track) {
-          pub.track.detach();
-        }
-      });
+      // Only detach the specific track source on unmount
+      const pub = participant.getTrackPublication(trackSource);
+      if (pub?.track) pub.track.detach();
+      if (!isScreenShare) {
+        const micPub = participant.getTrackPublication(Track.Source.Microphone);
+        if (micPub?.track) micPub.track.detach();
+      }
     };
-  }, [participant, attachTracks]);
+  }, [participant, attachTracks, trackSource, isScreenShare]);
 
-  const hasVideo = !!participant.getTrackPublication(Track.Source.Camera)?.track
-    || !!participant.getTrackPublication(Track.Source.ScreenShare)?.track;
+  const hasVideo = !!participant.getTrackPublication(trackSource)?.track;
 
-  const displayName = participant.name || participant.identity || 'Guest';
-  const initial = displayName.charAt(0).toUpperCase();
+  const { name: displayName } = resolveDisplayName(participant);
+  const initial = displayName.replace(/[^a-zA-Z0-9]/, '').charAt(0).toUpperCase() || '?';
 
   const isMuted = !participant.getTrackPublication(Track.Source.Microphone)?.track
     || participant.getTrackPublication(Track.Source.Microphone)?.isMuted;
 
+  const label = isScreenShare
+    ? `${displayName}'s screen share`
+    : `${displayName}${isLocal ? ' (You)' : ''}${isMuted ? ', muted' : ''}`;
+
+  const nameLabel = isScreenShare
+    ? `${displayName} (Screen)`
+    : `${displayName}${isLocal ? ' (You)' : ''}`;
+
   return (
     <div
       role="group"
-      aria-label={`${displayName}${isLocal ? ' (You)' : ''}${isMuted ? ', muted' : ''}`}
+      aria-label={label}
       style={{
         position: 'relative',
         borderRadius: '8px',
@@ -108,16 +158,16 @@ const VideoTile = memo(function VideoTile({ participant, isLocal }: VideoTilePro
         autoPlay
         playsInline
         muted={isLocal}
-        aria-label={`${displayName}'s video`}
+        aria-label={`${displayName}'s ${isScreenShare ? 'screen share' : 'video'}`}
         style={{
           width: '100%',
           height: '100%',
-          objectFit: 'cover',
+          objectFit: isScreenShare ? 'contain' : 'cover',
           display: hasVideo ? 'block' : 'none',
-          transform: isLocal ? 'scaleX(-1)' : undefined,
+          transform: isLocal && !isScreenShare ? 'scaleX(-1)' : undefined,
         }}
       />
-      {!isLocal && <audio ref={audioRef} autoPlay aria-hidden="true" />}
+      {!isLocal && !isScreenShare && <audio ref={audioRef} autoPlay aria-hidden="true" />}
       {!hasVideo && (
         <div
           role="img"
@@ -153,7 +203,7 @@ const VideoTile = memo(function VideoTile({ participant, isLocal }: VideoTilePro
           whiteSpace: 'nowrap',
         }}
       >
-        {displayName}{isLocal ? ' (You)' : ''}
+        {nameLabel}
       </div>
     </div>
   );
@@ -164,17 +214,40 @@ interface LiveKitVideoGridProps {
   remoteParticipants: RemoteParticipant[];
 }
 
+/**
+ * Collect participants that have an active screenshare track.
+ * These get rendered as separate tiles in addition to their camera tile.
+ */
+function getScreenShareParticipants(
+  local: LocalParticipant | null,
+  remotes: RemoteParticipant[]
+): (RemoteParticipant | LocalParticipant)[] {
+  const result: (RemoteParticipant | LocalParticipant)[] = [];
+  if (local?.getTrackPublication(Track.Source.ScreenShare)?.track) {
+    result.push(local);
+  }
+  for (const p of remotes) {
+    if (p.getTrackPublication(Track.Source.ScreenShare)?.track) {
+      result.push(p);
+    }
+  }
+  return result;
+}
+
 export function LiveKitVideoGrid({ localParticipant, remoteParticipants }: LiveKitVideoGridProps) {
-  const count = remoteParticipants.length + (localParticipant ? 1 : 0);
+  const screenSharers = getScreenShareParticipants(localParticipant, remoteParticipants);
+  const tileCount =
+    remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
+
   let cols = 1;
-  if (count >= 2) cols = 2;
-  if (count >= 5) cols = 3;
-  if (count >= 10) cols = 4;
+  if (tileCount >= 2) cols = 2;
+  if (tileCount >= 5) cols = 3;
+  if (tileCount >= 10) cols = 4;
 
   return (
     <div
       role="region"
-      aria-label={`Call with ${count} participant${count !== 1 ? 's' : ''}`}
+      aria-label={`Call with ${tileCount} tile${tileCount !== 1 ? 's' : ''}`}
       aria-live="polite"
       style={{
         flex: 1,
@@ -185,13 +258,23 @@ export function LiveKitVideoGrid({ localParticipant, remoteParticipants }: LiveK
         overflow: 'hidden',
       }}
     >
+      {/* Screenshare tiles first (most prominent) */}
+      {screenSharers.map((p) => (
+        <VideoTile
+          key={`ss-${p.sid}`}
+          participant={p}
+          isLocal={p === localParticipant}
+          trackSource={Track.Source.ScreenShare}
+        />
+      ))}
+      {/* Camera tiles */}
       {localParticipant && (
         <VideoTile key="local" participant={localParticipant} isLocal />
       )}
       {remoteParticipants.map((p) => (
         <VideoTile key={p.sid} participant={p} />
       ))}
-      {count === 0 && (
+      {tileCount === 0 && (
         <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)' }}>
           <Text size="T300">Waiting for participants...</Text>
         </Box>
