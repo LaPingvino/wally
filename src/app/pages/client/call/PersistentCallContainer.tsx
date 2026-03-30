@@ -144,7 +144,9 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     callMemberSentRef.current = activeCallRoomId;
     const userId = mx.getUserId()!;
     const deviceId = mx.getDeviceId()!;
-    const stateKey = userId;
+    // State key format must match what matrix-js-sdk's MembershipManager uses:
+    // _userId_deviceId_applicationcall_id (prefixed with _ for non-MSC3757 rooms)
+    const stateKey = `_${userId}_${deviceId}_m.call`;
 
     // Find service URL from .well-known
     const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
