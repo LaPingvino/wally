@@ -11,9 +11,10 @@ import {
   TooltipProvider,
   color,
 } from 'folds';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { EventType } from 'matrix-js-sdk';
+import { LiveKitRoomContext } from '../../pages/client/call/PersistentCallContainer';
 import { MatrixRTCSessionManagerEvents } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager';
 import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { useCallState } from '../../pages/client/call/CallProvider';
@@ -72,14 +73,11 @@ export function CallNavStatus() {
   const {
     activeCallRoomId,
     lkConnected,
-    isAudioEnabled,
-    isVideoEnabled,
-    toggleAudio,
-    toggleVideo,
     hangUp,
     setActiveCallRoomId,
     pendingJoin,
   } = useCallState();
+  const lkCtx = useContext(LiveKitRoomContext);
   const { navigateRoom } = useRoomNavigate();
 
   const [incomingCalls, setIncomingCalls] = useState<IncomingCall[]>([]);
@@ -487,36 +485,40 @@ export function CallNavStatus() {
             </IconButton>
           )}
         </TooltipProvider>
-        <TooltipProvider
-          position="Top"
-          offset={4}
-          tooltip={
-            <Tooltip>
-              <Text>{!isAudioEnabled ? 'Unmute' : 'Mute'}</Text>
-            </Tooltip>
-          }
-        >
-          {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isAudioEnabled ? 'Mute microphone' : 'Unmute microphone'} onClick={() => { toggleAudio(); announce(isAudioEnabled ? 'Microphone muted' : 'Microphone unmuted'); }}>
-              <Icon src={!isAudioEnabled ? Icons.MicMute : Icons.Mic} />
-            </IconButton>
-          )}
-        </TooltipProvider>
-        <TooltipProvider
-          position="Top"
-          offset={4}
-          tooltip={
-            <Tooltip>
-              <Text>{!isVideoEnabled ? 'Video On' : 'Video Off'}</Text>
-            </Tooltip>
-          }
-        >
-          {(triggerRef) => (
-            <IconButton fill="None" size="300" ref={triggerRef} aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'} onClick={() => { toggleVideo(); announce(isVideoEnabled ? 'Camera off' : 'Camera on'); }}>
-              <Icon src={!isVideoEnabled ? Icons.VideoCameraMute : Icons.VideoCamera} />
-            </IconButton>
-          )}
-        </TooltipProvider>
+        {lkCtx && (
+          <>
+            <TooltipProvider
+              position="Top"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{!lkCtx.isMicEnabled ? 'Unmute' : 'Mute'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton fill="None" size="300" ref={triggerRef} aria-label={lkCtx.isMicEnabled ? 'Mute microphone' : 'Unmute microphone'} onClick={() => { lkCtx.toggleMicrophone(); announce(lkCtx.isMicEnabled ? 'Microphone muted' : 'Microphone unmuted'); }}>
+                  <Icon src={!lkCtx.isMicEnabled ? Icons.MicMute : Icons.Mic} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+            <TooltipProvider
+              position="Top"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>{!lkCtx.isCamEnabled ? 'Video On' : 'Video Off'}</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton fill="None" size="300" ref={triggerRef} aria-label={lkCtx.isCamEnabled ? 'Turn off camera' : 'Turn on camera'} onClick={() => { lkCtx.toggleCamera(); announce(lkCtx.isCamEnabled ? 'Camera off' : 'Camera on'); }}>
+                  <Icon src={!lkCtx.isCamEnabled ? Icons.VideoCameraMute : Icons.VideoCamera} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          </>
+        )}
       </Box>
     </Box>
   );
