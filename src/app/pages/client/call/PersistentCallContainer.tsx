@@ -17,6 +17,7 @@ import { useLiveKitRoom } from '../../../hooks/useLiveKitRoom';
 
 // Context to pass LK room state to CallView
 export interface LiveKitRoomContextValue {
+  room: import('livekit-client').Room | null;
   localParticipant: import('livekit-client').LocalParticipant | null;
   remoteParticipants: import('livekit-client').RemoteParticipant[];
   connectionState: ConnectionState;
@@ -237,6 +238,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   }, [lkRoom.connectionState, activeCallRoomId, mx, autoDiscoveryInfo]);
 
   const contextValue: LiveKitRoomContextValue = {
+    room: lkRoom.room,
     localParticipant: lkRoom.localParticipant,
     remoteParticipants: lkRoom.remoteParticipants,
     connectionState: lkRoom.connectionState,

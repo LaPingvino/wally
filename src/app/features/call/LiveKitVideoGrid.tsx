@@ -5,42 +5,39 @@ import {
   Track,
   TrackPublication,
   ParticipantEvent,
+  Participant,
+  RoomEvent,
+  Room as LKRoom,
 } from 'livekit-client';
 import { Room } from 'matrix-js-sdk';
 import { Box, Text } from 'folds';
 import { getMemberDisplayName } from '../../utils/room';
 
+export type GridLayout = 'equal' | 'spotlight';
+
 /**
  * Resolve a readable display name from a LiveKit participant.
- * Priority: participant.name > parsed identity > 'Unknown'
- *
- * Identity format is "userId:deviceId" (e.g. "@alice:example.com:ABCD1234").
- * For guests, deviceId starts with "GUEST_".
  */
 function resolveDisplayName(
   participant: RemoteParticipant | LocalParticipant,
   matrixRoom?: Room,
 ): { name: string; isGuest: boolean } {
   const identity = participant.identity || '';
-  // Identity format: @user:server:deviceId — split on last colon
   const lastColon = identity.lastIndexOf(':');
   const userId = lastColon > 0 ? identity.substring(0, lastColon) : '';
   const deviceId = lastColon > 0 ? identity.substring(lastColon + 1) : '';
   const isGuest = deviceId.startsWith('GUEST_');
 
-  // 1. participant.name from JWT claims (guests get their chosen name here)
   if (participant.name) {
     const suffix = isGuest ? ' (Guest)' : '';
     return { name: participant.name + suffix, isGuest };
   }
 
-  // 2. Matrix room member display name (for authenticated users)
   if (matrixRoom && userId.startsWith('@')) {
     const memberName = getMemberDisplayName(matrixRoom, userId);
     if (memberName) return { name: memberName, isGuest: false };
   }
 
-  // 3. Fallback: localpart from userId
   if (userId) {
     const localpart = userId.startsWith('@') ? userId.slice(1).split(':')[0] : userId;
     const suffix = isGuest ? ' (Guest)' : '';
@@ -53,9 +50,11 @@ function resolveDisplayName(
 interface VideoTileProps {
   participant: RemoteParticipant | LocalParticipant;
   isLocal?: boolean;
-  /** Which video source to show. Defaults to Camera. */
   trackSource?: Track.Source;
   matrixRoom?: Room;
+  /** When true, renders larger for spotlight mode */
+  isSpotlight?: boolean;
+  onClick?: () => void;
 }
 
 const VideoTile = memo(function VideoTile({
@@ -63,11 +62,12 @@ const VideoTile = memo(function VideoTile({
   isLocal,
   trackSource = Track.Source.Camera,
   matrixRoom,
+  isSpotlight,
+  onClick,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const isScreenShare = trackSource === Track.Source.ScreenShare;
-  // Force re-render when tracks change so hasVideo/isMuted update
   const [, setTrackVersion] = useState(0);
 
   const attachTracks = useCallback(() => {
@@ -81,7 +81,6 @@ const VideoTile = memo(function VideoTile({
       videoRef.current.srcObject = null;
     }
 
-    // Only attach audio on the camera tile (not screenshare) to avoid double audio
     if (!isLocal && !isScreenShare) {
       const micPub = participant.getTrackPublication(Track.Source.Microphone);
       if (micPub?.track && audioRef.current) {
@@ -118,7 +117,6 @@ const VideoTile = memo(function VideoTile({
       participant.off(ParticipantEvent.TrackUnmuted, onTrackChange);
       participant.off(ParticipantEvent.LocalTrackPublished, onTrackChange);
       participant.off(ParticipantEvent.LocalTrackUnpublished, onTrackChange);
-      // Only detach the specific track source on unmount
       const pub = participant.getTrackPublication(trackSource);
       if (pub?.track) pub.track.detach();
       if (!isScreenShare) {
@@ -148,6 +146,7 @@ const VideoTile = memo(function VideoTile({
     <div
       role="group"
       aria-label={label}
+      onClick={onClick}
       style={{
         position: 'relative',
         borderRadius: '8px',
@@ -157,7 +156,9 @@ const VideoTile = memo(function VideoTile({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 0,
-        aspectRatio: '16/9',
+        aspectRatio: isSpotlight ? undefined : '16/9',
+        cursor: onClick ? 'pointer' : undefined,
+        ...(isSpotlight ? { flex: 1 } : {}),
       }}
     >
       <video
@@ -185,7 +186,7 @@ const VideoTile = memo(function VideoTile({
             justifyContent: 'center',
             width: '100%',
             height: '100%',
-            fontSize: '2.5rem',
+            fontSize: isSpotlight ? '4rem' : '2.5rem',
             color: 'var(--text-muted, #aaa)',
             background: 'var(--bg-surface, #0f3460)',
           }}
@@ -219,15 +220,15 @@ const VideoTile = memo(function VideoTile({
 interface LiveKitVideoGridProps {
   localParticipant: LocalParticipant | null;
   remoteParticipants: RemoteParticipant[];
-  /** Pass-through to force re-render when local screenshare toggles */
   isScreenShareEnabled?: boolean;
   matrixRoom?: Room;
+  layout?: GridLayout;
+  /** The LK Room object for active speaker tracking */
+  lkRoom?: LKRoom | null;
+  pinnedParticipantSid?: string | null;
+  onPinParticipant?: (sid: string | null) => void;
 }
 
-/**
- * Collect participants that have an active screenshare track.
- * These get rendered as separate tiles in addition to their camera tile.
- */
 function getScreenShareParticipants(
   local: LocalParticipant | null,
   remotes: RemoteParticipant[]
@@ -244,51 +245,170 @@ function getScreenShareParticipants(
   return result;
 }
 
-export function LiveKitVideoGrid({ localParticipant, remoteParticipants, isScreenShareEnabled: _ssHint, matrixRoom }: LiveKitVideoGridProps) {
+export function LiveKitVideoGrid({
+  localParticipant,
+  remoteParticipants,
+  isScreenShareEnabled: _ssHint,
+  matrixRoom,
+  layout = 'equal',
+  lkRoom,
+  pinnedParticipantSid,
+  onPinParticipant,
+}: LiveKitVideoGridProps) {
   const screenSharers = getScreenShareParticipants(localParticipant, remoteParticipants);
-  const tileCount =
-    remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
+  const allParticipants: (RemoteParticipant | LocalParticipant)[] = [];
+  if (localParticipant) allParticipants.push(localParticipant);
+  allParticipants.push(...remoteParticipants);
 
-  let cols = 1;
-  if (tileCount >= 2) cols = 2;
-  if (tileCount >= 5) cols = 3;
-  if (tileCount >= 10) cols = 4;
+  // Track active speaker
+  const [activeSpeakerSid, setActiveSpeakerSid] = useState<string | null>(null);
+  useEffect(() => {
+    if (!lkRoom) return;
+    const onActiveSpeakers = (speakers: Participant[]) => {
+      // First non-local active speaker, or first speaker
+      const remote = speakers.find((s) => s !== localParticipant);
+      setActiveSpeakerSid(remote?.sid ?? speakers[0]?.sid ?? null);
+    };
+    lkRoom.on(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers);
+    return () => { lkRoom.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers); };
+  }, [lkRoom, localParticipant]);
+
+  // Determine spotlight participant
+  const spotlightSid = pinnedParticipantSid ?? activeSpeakerSid;
+  const spotlightParticipant = spotlightSid
+    ? allParticipants.find((p) => p.sid === spotlightSid) ?? null
+    : null;
+
+  const handleTileClick = useCallback((sid: string) => {
+    if (!onPinParticipant) return;
+    // Toggle pin: click pinned = unpin, click other = pin
+    onPinParticipant(pinnedParticipantSid === sid ? null : sid);
+  }, [onPinParticipant, pinnedParticipantSid]);
+
+  // ── Equal grid layout ──
+  if (layout === 'equal' || !spotlightParticipant) {
+    const tileCount =
+      remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
+
+    let cols = 1;
+    if (tileCount >= 2) cols = 2;
+    if (tileCount >= 5) cols = 3;
+    if (tileCount >= 10) cols = 4;
+
+    return (
+      <div
+        role="region"
+        aria-label={`Call with ${tileCount} participant${tileCount !== 1 ? 's' : ''}`}
+        aria-live="polite"
+        style={{
+          flex: 1,
+          display: 'grid',
+          gap: '4px',
+          padding: '4px',
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          overflow: 'hidden',
+        }}
+      >
+        {screenSharers.map((p) => (
+          <VideoTile
+            key={`ss-${p.sid}`}
+            participant={p}
+            isLocal={p === localParticipant}
+            trackSource={Track.Source.ScreenShare}
+            matrixRoom={matrixRoom}
+            onClick={() => handleTileClick(p.sid)}
+          />
+        ))}
+        {localParticipant && (
+          <VideoTile
+            key="local"
+            participant={localParticipant}
+            isLocal
+            matrixRoom={matrixRoom}
+            onClick={() => handleTileClick(localParticipant.sid)}
+          />
+        )}
+        {remoteParticipants.map((p) => (
+          <VideoTile
+            key={p.sid}
+            participant={p}
+            matrixRoom={matrixRoom}
+            onClick={() => handleTileClick(p.sid)}
+          />
+        ))}
+        {tileCount === 0 && (
+          <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)' }}>
+            <Text size="T300">Waiting for participants...</Text>
+          </Box>
+        )}
+      </div>
+    );
+  }
+
+  // ── Spotlight layout ──
+  const sideParticipants = allParticipants.filter((p) => p.sid !== spotlightParticipant.sid);
 
   return (
     <div
       role="region"
-      aria-label={`Call with ${tileCount} tile${tileCount !== 1 ? 's' : ''}`}
+      aria-label={`Call — spotlight mode`}
       aria-live="polite"
       style={{
         flex: 1,
-        display: 'grid',
+        display: 'flex',
         gap: '4px',
         padding: '4px',
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
         overflow: 'hidden',
       }}
     >
-      {/* Screenshare tiles first (most prominent) */}
-      {screenSharers.map((p) => (
+      {/* Main spotlight */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+        {/* Screenshare tiles above spotlight if any */}
+        {screenSharers.length > 0 && (
+          <div style={{ display: 'flex', gap: '4px', maxHeight: '40%' }}>
+            {screenSharers.map((p) => (
+              <VideoTile
+                key={`ss-${p.sid}`}
+                participant={p}
+                isLocal={p === localParticipant}
+                trackSource={Track.Source.ScreenShare}
+                matrixRoom={matrixRoom}
+                isSpotlight
+              />
+            ))}
+          </div>
+        )}
         <VideoTile
-          key={`ss-${p.sid}`}
-          participant={p}
-          isLocal={p === localParticipant}
-          trackSource={Track.Source.ScreenShare}
+          key={`spot-${spotlightParticipant.sid}`}
+          participant={spotlightParticipant}
+          isLocal={spotlightParticipant === localParticipant}
           matrixRoom={matrixRoom}
+          isSpotlight
+          onClick={() => handleTileClick(spotlightParticipant.sid)}
         />
-      ))}
-      {/* Camera tiles */}
-      {localParticipant && (
-        <VideoTile key="local" participant={localParticipant} isLocal matrixRoom={matrixRoom} />
-      )}
-      {remoteParticipants.map((p) => (
-        <VideoTile key={p.sid} participant={p} matrixRoom={matrixRoom} />
-      ))}
-      {tileCount === 0 && (
-        <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)' }}>
-          <Text size="T300">Waiting for participants...</Text>
-        </Box>
+      </div>
+      {/* Sidebar strip */}
+      {sideParticipants.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
+            width: '160px',
+            flexShrink: 0,
+            overflowY: 'auto',
+          }}
+        >
+          {sideParticipants.map((p) => (
+            <VideoTile
+              key={p.sid}
+              participant={p}
+              isLocal={p === localParticipant}
+              matrixRoom={matrixRoom}
+              onClick={() => handleTileClick(p.sid)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

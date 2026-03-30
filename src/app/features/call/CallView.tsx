@@ -16,7 +16,7 @@ import { useCallMembers } from '../../hooks/useCallMemberships';
 import { MicrophoneButton, VideoButton, ScreenShareButton } from './Controls';
 
 import { LiveKitRoomContext } from '../../pages/client/call/PersistentCallContainer';
-import { LiveKitVideoGrid } from './LiveKitVideoGrid';
+import { LiveKitVideoGrid, GridLayout } from './LiveKitVideoGrid';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { CallViewUser } from './CallViewUser';
@@ -228,6 +228,8 @@ export function CallView({ room }: { room: Room }) {
   const [guestLinkCopied, setGuestLinkCopied] = useState(false);
   const [breakoutAnchor, setBreakoutAnchor] = useState<RectCords | undefined>();
   const [activeBreakoutId, setActiveBreakoutId] = useState<string | null>(null);
+  const [gridLayout, setGridLayout] = useState<GridLayout>('equal');
+  const [pinnedSid, setPinnedSid] = useState<string | null>(null);
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
@@ -406,6 +408,10 @@ export function CallView({ room }: { room: Room }) {
               remoteParticipants={lkCtx.remoteParticipants}
               isScreenShareEnabled={lkCtx.isScreenShareEnabled}
               matrixRoom={room}
+              layout={gridLayout}
+              lkRoom={lkCtx.room}
+              pinnedParticipantSid={pinnedSid}
+              onPinParticipant={setPinnedSid}
             />
           )}
           {/* Call controls */}
@@ -414,6 +420,30 @@ export function CallView({ room }: { room: Room }) {
               <MicrophoneButton enabled={lkCtx.isMicEnabled} onToggle={lkCtx.toggleMicrophone} />
               <VideoButton enabled={lkCtx.isCamEnabled} onToggle={lkCtx.toggleCamera} />
               <ScreenShareButton enabled={lkCtx.isScreenShareEnabled} onToggle={lkCtx.toggleScreenShare} />
+              <TooltipProvider
+                position="Top"
+                delay={500}
+                tooltip={<Tooltip><Text size="T200">{gridLayout === 'equal' ? 'Spotlight View' : 'Grid View'}</Text></Tooltip>}
+              >
+                {(anchorRef) => (
+                  <IconButton
+                    ref={anchorRef}
+                    variant={gridLayout === 'spotlight' ? 'Success' : 'Surface'}
+                    fill="Soft"
+                    radii="400"
+                    size="400"
+                    outlined
+                    aria-label={gridLayout === 'equal' ? 'Switch to spotlight view' : 'Switch to grid view'}
+                    aria-pressed={gridLayout === 'spotlight'}
+                    onClick={() => {
+                      setGridLayout((l) => l === 'equal' ? 'spotlight' : 'equal');
+                      setPinnedSid(null);
+                    }}
+                  >
+                    <Icon size="400" src={gridLayout === 'equal' ? Icons.User : Icons.Hash} />
+                  </IconButton>
+                )}
+              </TooltipProvider>
               {wallyConference.available && wallyConference.endpoint && (
                 <>
                   <TooltipProvider
