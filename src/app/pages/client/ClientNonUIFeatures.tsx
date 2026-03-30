@@ -23,7 +23,7 @@ import {
 } from '../../utils/room';
 import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
-import { playReactionSound, playTypingSound } from '../../utils/sounds';
+import { playCurrentRoomSound, playReactionSound, playTypingSound } from '../../utils/sounds';
 import { announce } from '../../utils/announce';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
@@ -357,6 +357,19 @@ function MessageNotifications() {
     };
     mx.on(RoomEvent.Timeline, handleTimelineEvent);
 
+    // In-room activity ding — plays for messages in the currently focused room
+    const handleInRoomSound: RoomEventHandlerMap[RoomEvent.Timeline] = (
+      mEvent, room, _toStart, _removed, data
+    ) => {
+      if (!inRoomActivitySound || !data.liveEvent) return;
+      if (!room || room.roomId !== selectedRoomId) return;
+      if (!document.hasFocus()) return;
+      if (mEvent.getSender() === mx.getUserId()) return;
+      if (!isNotificationEvent(mEvent)) return;
+      playCurrentRoomSound();
+    };
+    mx.on(RoomEvent.Timeline, handleInRoomSound);
+
     // Reaction to my own message
     const handleReactionEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
       mEvent,
@@ -397,6 +410,7 @@ function MessageNotifications() {
 
     return () => {
       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      mx.removeListener(RoomEvent.Timeline, handleInRoomSound);
       mx.removeListener(RoomEvent.Timeline, handleReactionEvent);
       mx.removeListener(RoomMemberEvent.Typing, handleTyping as any);
     };

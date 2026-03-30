@@ -6,6 +6,7 @@ import React, {
   useCallback,
 } from 'react';
 import { EventType } from 'matrix-js-sdk';
+import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { ConnectionState } from 'livekit-client';
 import { useCallState } from './CallProvider';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -44,6 +45,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     lkUrl,
     lkToken,
     hangUp,
+    isAudioEnabled,
+    isVideoEnabled,
   } = useCallState();
   const mx = useMatrixClient();
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
@@ -52,6 +55,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   const tokenFetchedForRef = useRef<string | null>(null);
 
   // ── Fetch SFU token when call room becomes active ──
+  // Uses "oldest_membership" algorithm: find the oldest active call.member event
+  // and use its foci_preferred livekit_service_url. Falls back to own .well-known.
   useEffect(() => {
     if (!activeCallRoomId || !mx?.getUserId()) return;
     if (pendingJoin && !joinConfirmedRef.current) return;
@@ -59,18 +64,45 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
 
     tokenFetchedForRef.current = activeCallRoomId;
 
-    // Find lk-jwt-service URL from .well-known
+    // Own lk-jwt-service from .well-known (fallback)
     const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
-    const lkFocus = rtcFoci?.find((f) => f.type === 'livekit' && f.livekit_service_url);
+    const ownLkFocus = rtcFoci?.find((f) => f.type === 'livekit' && f.livekit_service_url);
+    const ownServiceUrl = ownLkFocus?.livekit_service_url ?? '';
 
-    if (!lkFocus?.livekit_service_url) {
-      callDebug('error', 'No livekit_service_url in .well-known rtc_foci', rtcFoci);
+    // Resolve active focus via oldest_membership algorithm
+    let serviceUrl = ownServiceUrl;
+    const room = mx.getRoom(activeCallRoomId);
+    if (room) {
+      try {
+        const memberships = MatrixRTCSession.callMembershipsForRoom(room);
+        // Find oldest non-expired membership that has a livekit focus
+        let oldestTs = Infinity;
+        for (const m of memberships) {
+          const createdTs = (m as any).createdTs?.() ?? (m as any).created_ts ?? Date.now();
+          if (createdTs < oldestTs) {
+            // Check if this membership has a livekit preferred focus
+            const foci = (m as any).getPreferredFoci?.() ?? [];
+            const lkFocus = foci.find((f: any) => f.type === 'livekit' && f.livekit_service_url);
+            if (lkFocus?.livekit_service_url) {
+              oldestTs = createdTs;
+              serviceUrl = lkFocus.livekit_service_url;
+            }
+          }
+        }
+        if (serviceUrl !== ownServiceUrl) {
+          callDebug('sfu', 'Using oldest member focus (federated)', { serviceUrl, ownServiceUrl });
+        }
+      } catch (e) {
+        callDebug('error', 'Failed to resolve active focus', e);
+      }
+    }
+
+    if (!serviceUrl) {
+      callDebug('error', 'No livekit_service_url found', { rtcFoci });
       return;
     }
 
-    const serviceUrl = lkFocus.livekit_service_url;
     const roomId = activeCallRoomId;
-
     callDebug('sfu', 'Fetching SFU token', { serviceUrl, roomId });
 
     let cancelled = false;
@@ -115,6 +147,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     url: lkUrl,
     token: lkToken,
     connect: shouldConnect,
+    initialAudio: isAudioEnabled,
+    initialVideo: isVideoEnabled,
     onDisconnected: useCallback(() => {
       if (intentionalDisconnectRef.current) {
         callDebug('sfu', 'LiveKit disconnected (intentional, skipping hangUp)');
@@ -175,7 +209,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
         }],
       };
       callDebug('sfu', 'Sending call.member state event', { stateKey, deviceId, expires });
-      mx.sendStateEvent(activeCallRoomId, EventType.GroupCallMemberPrefix, content, stateKey)
+      mx.sendStateEvent(activeCallRoomId, EventType.GroupCallMemberPrefix, content as any, stateKey)
         .catch((err: unknown) => callDebug('error', 'Failed to send call.member', err));
     };
 

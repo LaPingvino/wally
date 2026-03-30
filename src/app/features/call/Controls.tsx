@@ -15,13 +15,14 @@ type MicrophoneButtonProps = {
   onToggle: () => void;
 };
 export function MicrophoneButton({ enabled, onToggle }: MicrophoneButtonProps) {
+  const label = enabled ? 'Turn Off Microphone' : 'Turn On Microphone';
   return (
     <TooltipProvider
       position="Top"
       delay={500}
       tooltip={
         <Tooltip>
-          <Text size="T200">{enabled ? 'Turn Off Microphone' : 'Turn On Microphone'}</Text>
+          <Text size="T200">{label}</Text>
         </Tooltip>
       }
     >
@@ -34,6 +35,8 @@ export function MicrophoneButton({ enabled, onToggle }: MicrophoneButtonProps) {
           size="400"
           onClick={() => onToggle()}
           outlined
+          aria-label={label}
+          aria-pressed={enabled}
         >
           <Icon size="400" src={enabled ? Icons.Mic : Icons.MicMute} filled={!enabled} />
         </IconButton>
@@ -47,13 +50,14 @@ type SoundButtonProps = {
   onToggle: () => void;
 };
 export function SoundButton({ enabled, onToggle }: SoundButtonProps) {
+  const label = enabled ? 'Turn Off Sound' : 'Turn On Sound';
   return (
     <TooltipProvider
       position="Top"
       delay={500}
       tooltip={
         <Tooltip>
-          <Text size="T200">{enabled ? 'Turn Off Sound' : 'Turn On Sound'}</Text>
+          <Text size="T200">{label}</Text>
         </Tooltip>
       }
     >
@@ -66,6 +70,8 @@ export function SoundButton({ enabled, onToggle }: SoundButtonProps) {
           size="400"
           onClick={() => onToggle()}
           outlined
+          aria-label={label}
+          aria-pressed={enabled}
         >
           <Icon
             size="400"
@@ -83,13 +89,14 @@ type VideoButtonProps = {
   onToggle: () => void;
 };
 export function VideoButton({ enabled, onToggle }: VideoButtonProps) {
+  const label = enabled ? 'Stop Camera' : 'Start Camera';
   return (
     <TooltipProvider
       position="Top"
       delay={500}
       tooltip={
         <Tooltip>
-          <Text size="T200">{enabled ? 'Stop Camera' : 'Start Camera'}</Text>
+          <Text size="T200">{label}</Text>
         </Tooltip>
       }
     >
@@ -102,6 +109,8 @@ export function VideoButton({ enabled, onToggle }: VideoButtonProps) {
           size="400"
           onClick={() => onToggle()}
           outlined
+          aria-label={label}
+          aria-pressed={enabled}
         >
           <Icon
             size="400"
@@ -119,13 +128,14 @@ type ScreenShareButtonProps = {
   onToggle: () => void;
 };
 export function ScreenShareButton({ enabled, onToggle }: ScreenShareButtonProps) {
+  const label = enabled ? 'Stop Screenshare' : 'Start Screenshare';
   return (
     <TooltipProvider
       position="Top"
       delay={500}
       tooltip={
         <Tooltip>
-          <Text size="T200">{enabled ? 'Stop Screenshare' : 'Start Screenshare'}</Text>
+          <Text size="T200">{label}</Text>
         </Tooltip>
       }
     >
@@ -138,6 +148,8 @@ export function ScreenShareButton({ enabled, onToggle }: ScreenShareButtonProps)
           size="400"
           onClick={() => onToggle()}
           outlined
+          aria-label={label}
+          aria-pressed={enabled}
         >
           <Icon size="400" src={Icons.ScreenShare} filled={enabled} />
         </IconButton>
@@ -148,6 +160,7 @@ export function ScreenShareButton({ enabled, onToggle }: ScreenShareButtonProps)
 
 export function ChatButton() {
   const [chat, setChat] = useAtom(callChatAtom);
+  const label = chat ? 'Close Chat' : 'Open Chat';
 
   return (
     <TooltipProvider
@@ -155,7 +168,7 @@ export function ChatButton() {
       delay={500}
       tooltip={
         <Tooltip>
-          <Text size="T200">{chat ? 'Close Chat' : 'Open Chat'}</Text>
+          <Text size="T200">{label}</Text>
         </Tooltip>
       }
     >
@@ -168,6 +181,8 @@ export function ChatButton() {
           size="400"
           onClick={() => setChat(!chat)}
           outlined
+          aria-label={label}
+          aria-pressed={chat}
         >
           <Icon size="400" src={Icons.Message} filled={chat} />
         </IconButton>

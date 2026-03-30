@@ -26,6 +26,10 @@ export interface UseLiveKitRoomOptions {
   token: string;
   connect: boolean; // only connect when true (allows pre-join)
   onDisconnected?: () => void;
+  /** Initial microphone state from pre-join screen. Default: false (off). */
+  initialAudio?: boolean;
+  /** Initial camera state from pre-join screen. Default: false (off). */
+  initialVideo?: boolean;
 }
 
 /**
@@ -34,7 +38,7 @@ export interface UseLiveKitRoomOptions {
  * When `connect` is true and url+token are provided, connects to the LK room.
  * Returns room state, participants, and control functions.
  */
-export function useLiveKitRoom({ url, token, connect, onDisconnected }: UseLiveKitRoomOptions): LiveKitRoomState & {
+export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAudio = false, initialVideo = false }: UseLiveKitRoomOptions): LiveKitRoomState & {
   toggleMicrophone: () => Promise<void>;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
@@ -155,13 +159,22 @@ export function useLiveKitRoom({ url, token, connect, onDisconnected }: UseLiveK
           return;
         }
         connectedRef.current = true;
-        callDebug('sfu', 'Connected to LiveKit room', { name: room.name });
+        callDebug('sfu', 'Connected to LiveKit room', { name: room.name, initialAudio, initialVideo });
 
-        // Enable microphone by default
-        try {
-          await room.localParticipant.setMicrophoneEnabled(true);
-        } catch (e) {
-          callDebug('error', 'Failed to enable microphone', e);
+        // Apply initial media state from pre-join screen
+        if (initialAudio) {
+          try {
+            await room.localParticipant.setMicrophoneEnabled(true);
+          } catch (e) {
+            callDebug('error', 'Failed to enable microphone', e);
+          }
+        }
+        if (initialVideo) {
+          try {
+            await room.localParticipant.setCameraEnabled(true);
+          } catch (e) {
+            callDebug('error', 'Failed to enable camera', e);
+          }
         }
       } catch (e) {
         if (!cancelled) {
