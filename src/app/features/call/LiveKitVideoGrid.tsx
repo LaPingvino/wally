@@ -14,6 +14,7 @@ import { Box, Text } from 'folds';
 import { getMemberDisplayName } from '../../utils/room';
 
 export type GridLayout = 'equal' | 'spotlight';
+export type SidebarPosition = 'right' | 'bottom';
 
 /**
  * Resolve a readable display name from a LiveKit participant.
@@ -223,6 +224,8 @@ interface LiveKitVideoGridProps {
   isScreenShareEnabled?: boolean;
   matrixRoom?: Room;
   layout?: GridLayout;
+  /** Sidebar strip position in spotlight mode */
+  sidebarPosition?: SidebarPosition;
   /** The LK Room object for active speaker tracking */
   lkRoom?: LKRoom | null;
   pinnedParticipantSid?: string | null;
@@ -251,6 +254,7 @@ export function LiveKitVideoGrid({
   isScreenShareEnabled: _ssHint,
   matrixRoom,
   layout = 'equal',
+  sidebarPosition = 'right',
   lkRoom,
   pinnedParticipantSid,
   onPinParticipant,
@@ -348,6 +352,8 @@ export function LiveKitVideoGrid({
   // ── Spotlight layout ──
   const sideParticipants = allParticipants.filter((p) => p.sid !== spotlightParticipant.sid);
 
+  const isHorizontal = sidebarPosition === 'right';
+
   return (
     <div
       role="region"
@@ -356,14 +362,14 @@ export function LiveKitVideoGrid({
       style={{
         flex: 1,
         display: 'flex',
+        flexDirection: isHorizontal ? 'row' : 'column',
         gap: '4px',
         padding: '4px',
         overflow: 'hidden',
       }}
     >
       {/* Main spotlight */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-        {/* Screenshare tiles above spotlight if any */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, minHeight: 0 }}>
         {screenSharers.length > 0 && (
           <div style={{ display: 'flex', gap: '4px', maxHeight: '40%' }}>
             {screenSharers.map((p) => (
@@ -387,26 +393,27 @@ export function LiveKitVideoGrid({
           onClick={() => handleTileClick(spotlightParticipant.sid)}
         />
       </div>
-      {/* Sidebar strip */}
+      {/* Sidebar strip — vertical (right) or horizontal (bottom) */}
       {sideParticipants.length > 0 && (
         <div
           style={{
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: isHorizontal ? 'column' : 'row',
             gap: '4px',
-            width: '160px',
-            flexShrink: 0,
-            overflowY: 'auto',
+            ...(isHorizontal
+              ? { width: '160px', flexShrink: 0, overflowY: 'auto' as const }
+              : { height: '120px', flexShrink: 0, overflowX: 'auto' as const }),
           }}
         >
           {sideParticipants.map((p) => (
-            <VideoTile
-              key={p.sid}
-              participant={p}
-              isLocal={p === localParticipant}
-              matrixRoom={matrixRoom}
-              onClick={() => handleTileClick(p.sid)}
-            />
+            <div key={p.sid} style={isHorizontal ? undefined : { minWidth: '160px', flexShrink: 0 }}>
+              <VideoTile
+                participant={p}
+                isLocal={p === localParticipant}
+                matrixRoom={matrixRoom}
+                onClick={() => handleTileClick(p.sid)}
+              />
+            </div>
           ))}
         </div>
       )}

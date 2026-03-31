@@ -16,7 +16,7 @@ import { useCallMembers } from '../../hooks/useCallMemberships';
 import { MicrophoneButton, VideoButton, ScreenShareButton } from './Controls';
 
 import { LiveKitRoomContext } from '../../pages/client/call/PersistentCallContainer';
-import { LiveKitVideoGrid, GridLayout } from './LiveKitVideoGrid';
+import { LiveKitVideoGrid, GridLayout, SidebarPosition } from './LiveKitVideoGrid';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { CallViewUser } from './CallViewUser';
@@ -230,6 +230,7 @@ export function CallView({ room }: { room: Room }) {
   const [activeBreakoutId, setActiveBreakoutId] = useState<string | null>(null);
   const [gridLayout, setGridLayout] = useState<GridLayout>('equal');
   const [pinnedSid, setPinnedSid] = useState<string | null>(null);
+  const [sidebarPos, setSidebarPos] = useState<SidebarPosition>('right');
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
@@ -275,6 +276,10 @@ export function CallView({ room }: { room: Room }) {
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
+  // Default sidebar to bottom on mobile
+  useEffect(() => {
+    if (isMobile) setSidebarPos('bottom');
+  }, [isMobile]);
 
   const handleJoinVCClick: MouseEventHandler<HTMLElement> = (evt) => {
     if (!canJoin) return;
@@ -409,6 +414,7 @@ export function CallView({ room }: { room: Room }) {
               isScreenShareEnabled={lkCtx.isScreenShareEnabled}
               matrixRoom={room}
               layout={gridLayout}
+              sidebarPosition={sidebarPos}
               lkRoom={lkCtx.room}
               pinnedParticipantSid={pinnedSid}
               onPinParticipant={setPinnedSid}
@@ -444,6 +450,28 @@ export function CallView({ room }: { room: Room }) {
                   </IconButton>
                 )}
               </TooltipProvider>
+              {gridLayout === 'spotlight' && (
+                <TooltipProvider
+                  position="Top"
+                  delay={500}
+                  tooltip={<Tooltip><Text size="T200">{sidebarPos === 'right' ? 'Bottom Strip' : 'Side Strip'}</Text></Tooltip>}
+                >
+                  {(anchorRef) => (
+                    <IconButton
+                      ref={anchorRef}
+                      variant="Surface"
+                      fill="Soft"
+                      radii="400"
+                      size="400"
+                      outlined
+                      aria-label={sidebarPos === 'right' ? 'Switch to bottom strip' : 'Switch to side strip'}
+                      onClick={() => setSidebarPos((p) => p === 'right' ? 'bottom' : 'right')}
+                    >
+                      <Icon size="400" src={sidebarPos === 'right' ? Icons.ChevronBottom : Icons.ChevronRight} />
+                    </IconButton>
+                  )}
+                </TooltipProvider>
+              )}
               {wallyConference.available && wallyConference.endpoint && (
                 <>
                   <TooltipProvider
