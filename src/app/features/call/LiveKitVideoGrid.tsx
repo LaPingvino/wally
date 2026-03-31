@@ -203,18 +203,29 @@ const VideoTile = memo(function VideoTile({
           position: 'absolute',
           bottom: '6px',
           left: '6px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
           background: 'rgba(0,0,0,0.6)',
           color: '#eee',
           padding: '2px 8px',
           borderRadius: '4px',
           fontSize: '0.8rem',
           maxWidth: 'calc(100% - 12px)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
         }}
       >
-        {nameLabel}
+        {!isScreenShare && (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ flexShrink: 0, opacity: isMuted ? 0.5 : 1 }}>
+            {isMuted ? (
+              <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+            ) : (
+              <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3zm-1 4.93A7.004 7.004 0 015 12h2a5 5 0 0010 0h2a7.004 7.004 0 01-6 6.93V22h-2v-3.07z"/>
+            )}
+          </svg>
+        )}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {nameLabel}
+        </span>
       </div>
     </div>
   );
@@ -358,7 +369,10 @@ export function LiveKitVideoGrid({
   }
 
   // ── Spotlight layout ──
-  const sideParticipants = allParticipants.filter((p) => p.sid !== spotlightParticipant.sid);
+  // Exclude spotlight AND local (local shown as PiP) from sidebar
+  const sideParticipants = allParticipants.filter(
+    (p) => p.sid !== spotlightParticipant.sid && p !== localParticipant
+  );
 
   const isHorizontal = sidebarPosition === 'right';
 
@@ -374,6 +388,7 @@ export function LiveKitVideoGrid({
         gap: '4px',
         padding: '4px',
         overflow: 'hidden',
+        position: 'relative',
       }}
     >
       {/* Main spotlight */}
@@ -401,6 +416,29 @@ export function LiveKitVideoGrid({
           onClick={() => handleTileClick(spotlightParticipant.sid)}
         />
       </div>
+      {/* PiP self-view when not the spotlight */}
+      {localParticipant && spotlightParticipant !== localParticipant && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '12px',
+            right: isHorizontal ? '180px' : '12px',
+            width: '160px',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
+            zIndex: 5,
+          }}
+        >
+          <VideoTile
+            participant={localParticipant}
+            isLocal
+            matrixRoom={matrixRoom}
+            tileAspect={tileAspect}
+            onClick={() => handleTileClick(localParticipant.sid)}
+          />
+        </div>
+      )}
       {/* Sidebar strip — vertical (right) or horizontal (bottom) */}
       {sideParticipants.length > 0 && (
         <div

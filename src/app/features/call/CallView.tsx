@@ -337,7 +337,7 @@ export function CallView({ room }: { room: Room }) {
             direction="Column"
             alignItems="Center"
             gap="400"
-            style={{ padding: '32px', maxWidth: '280px', width: '100%' }}
+            style={{ padding: '32px', maxWidth: '480px', width: '100%' }}
           >
             <PreJoinVideoPreview isVideoEnabled={isVideoEnabled} />
             <Text id={joinHeadingId} size="H4" style={{ textAlign: 'center' }}>
