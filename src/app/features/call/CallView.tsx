@@ -269,6 +269,7 @@ export function CallView({ room }: { room: Room }) {
   /** Resolve display name for a call membership, including guests */
   const getMemberName = useCallback((m: typeof callMembers[number]) => {
     const isGuest = m.deviceId?.startsWith('GUEST_') ?? false;
+    console.log('[WallyCall:member]', { sender: m.sender, deviceId: m.deviceId, isGuest, membershipID: m.membershipID });
     if (isGuest) {
       // Read display_name from the call.member state event content
       const allEvents = room.currentState.getStateEvents(EventType.GroupCallMemberPrefix);
