@@ -42,12 +42,18 @@ export function CallViewUser({ room, callMembership }: CallViewUserProps) {
 
   // Guests have device_id starting with GUEST_ and display_name in the event content
   const isGuest = callMembership.deviceId?.startsWith('GUEST_') ?? false;
-  const guestDisplayName = isGuest
-    ? (room.currentState.getStateEvents(
-        EventType.GroupCallMemberPrefix,
-        `_${userId}_${callMembership.deviceId}_m.call`
-      )?.getContent<{ display_name?: string }>()?.display_name)
-    : undefined;
+  let guestDisplayName: string | undefined;
+  if (isGuest) {
+    // Find the call.member state event matching this guest's device_id
+    const allCallMembers = room.currentState.getStateEvents(EventType.GroupCallMemberPrefix);
+    for (const evt of allCallMembers) {
+      const content = evt.getContent<{ device_id?: string; display_name?: string }>();
+      if (content.device_id === callMembership.deviceId && content.display_name) {
+        guestDisplayName = content.display_name;
+        break;
+      }
+    }
+  }
 
   const avatarMxcUrl = isGuest ? undefined : getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxcUrl
