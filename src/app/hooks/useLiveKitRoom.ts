@@ -11,7 +11,22 @@ import {
   Track,
   Participant,
 } from 'livekit-client';
+import type { BaseKeyProvider } from 'livekit-client';
 import { callDebug } from '../features/call/callDebug';
+
+function createRoom(e2eeKeyProvider?: BaseKeyProvider): Room {
+  const opts: ConstructorParameters<typeof Room>[0] = { adaptiveStream: true, dynacast: true };
+  if (e2eeKeyProvider) {
+    opts.e2ee = {
+      keyProvider: e2eeKeyProvider,
+      worker: new Worker(new URL('livekit-client/e2ee-worker', import.meta.url), { type: 'module' }),
+    };
+    callDebug('sfu', 'Room created WITH E2EE key provider');
+  } else {
+    callDebug('sfu', 'Room created WITHOUT E2EE (no key provider)');
+  }
+  return new Room(opts);
+}
 
 export interface LiveKitRoomState {
   room: Room | null;
@@ -49,16 +64,23 @@ export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAud
   isCamEnabled: boolean;
   isScreenShareEnabled: boolean;
 } {
-  const [room] = useState(() => {
-    const opts: ConstructorParameters<typeof Room>[0] = { adaptiveStream: true, dynacast: true };
-    if (e2eeKeyProvider) {
-      opts.e2ee = {
-        keyProvider: e2eeKeyProvider,
-        worker: new Worker(new URL('livekit-client/e2ee-worker', import.meta.url), { type: 'module' }),
-      };
+  // Always configure E2EE if a key provider exists — the Room is created once
+  // via useState, so the provider must be available at construction time.
+  // If it's undefined on first render but available later, E2EE would silently
+  // be missing for the entire Room lifetime.
+  const e2eeKeyProviderRef = useRef(e2eeKeyProvider);
+  e2eeKeyProviderRef.current = e2eeKeyProvider;
+  const [room, setRoom] = useState(() => createRoom(e2eeKeyProvider));
+  // Recreate room if E2EE availability changed (undefined → provider or vice versa)
+  const prevHadE2EE = useRef(!!e2eeKeyProvider);
+  useEffect(() => {
+    const hasE2EE = !!e2eeKeyProvider;
+    if (hasE2EE !== prevHadE2EE.current) {
+      prevHadE2EE.current = hasE2EE;
+      callDebug('sfu', `E2EE availability changed (${hasE2EE}), recreating Room`);
+      setRoom(createRoom(e2eeKeyProvider));
     }
-    return new Room(opts);
-  });
+  }, [e2eeKeyProvider]);
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [remoteParticipants, setRemoteParticipants] = useState<RemoteParticipant[]>([]);
   const [localParticipant, setLocalParticipant] = useState<LocalParticipant | null>(null);
