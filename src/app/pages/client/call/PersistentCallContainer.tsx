@@ -241,6 +241,13 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   // is registered before the other party sends their encryption keys.
   // Keys received early are buffered in the MatrixKeyProvider and picked
   // up when LiveKit connects.
+  // Track key exchange for diagnostics
+  const keysReceivedRef = useRef(0);
+  const rtcJoinedAtRef = useRef(0);
+  const lkConnectedAtRef = useRef(0);
+  const lkStateRef = useRef(lkRoom.connectionState);
+  lkStateRef.current = lkRoom.connectionState;
+
   const rtcSessionRef = useRef<MatrixRTCSession | null>(null);
   useEffect(() => {
     if (!activeCallRoomId || !mx) return;
@@ -251,18 +258,34 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
 
     const rtcSession = mx.matrixRTC.getRoomSession(room);
     rtcSessionRef.current = rtcSession;
+    keysReceivedRef.current = 0;
 
     const isEncrypted = room.hasEncryptionStateEvent();
+    const lkState = lkRoom.connectionState;
+
+    callDebug('e2ee', '── E2EE KEY TIMING FIX ACTIVE (patch-15) ──');
+    callDebug('e2ee', `Room encrypted: ${isEncrypted}, LiveKit state: ${lkState}`);
 
     // Bridge encryption keys from MatrixRTC to LiveKit's key provider.
     // Keys are stored in the provider immediately — LiveKit reads them
     // when it connects (or right away if already connected).
     const onEncryptionKey = (key: Uint8Array, keyIndex: number, participantId: string) => {
+      keysReceivedRef.current++;
+      const lkNow = lkStateRef.current;
+      callDebug('e2ee', `Key #${keysReceivedRef.current} received from ${participantId} (idx=${keyIndex}, ${key.length}B)`, {
+        lkConnected: lkNow === ConnectionState.Connected,
+        lkState: lkNow,
+        msSinceRtcJoin: rtcJoinedAtRef.current ? Date.now() - rtcJoinedAtRef.current : 'n/a',
+        msSinceLkConnect: lkConnectedAtRef.current ? Date.now() - lkConnectedAtRef.current : 'not yet',
+      });
       keyProvider.setEncryptionKey(key, keyIndex, participantId);
     };
 
     if (isEncrypted) {
       rtcSession.on(MatrixRTCSessionEvent.EncryptionKeyChanged, onEncryptionKey);
+      callDebug('e2ee', 'EncryptionKeyChanged listener registered');
+    } else {
+      callDebug('e2ee', 'Room NOT encrypted — skipping key management');
     }
 
     // Find preferred foci from .well-known
@@ -274,7 +297,11 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       livekit_alias: activeCallRoomId,
     }] : [];
 
-    callDebug('sfu', 'Joining MatrixRTCSession (before LiveKit connect)', { roomId: activeCallRoomId, isEncrypted });
+    callDebug('sfu', 'Joining MatrixRTCSession (before LiveKit connect)', {
+      roomId: activeCallRoomId, isEncrypted, lkState,
+      useToDevice: true, manageMediaKeys: isEncrypted,
+    });
+    rtcJoinedAtRef.current = Date.now();
     rtcSession.joinRoomSession(fociPreferred, {
       type: 'livekit',
       focus_selection: 'oldest_membership',
@@ -285,14 +312,19 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
 
     // Re-emit our keys so late joiners get them
     if (isEncrypted) {
+      callDebug('e2ee', 'Re-emitting our encryption keys (initial)');
       rtcSession.reemitEncryptionKeys();
     }
 
     return () => {
-      callDebug('sfu', 'Leaving MatrixRTCSession');
+      callDebug('sfu', 'Leaving MatrixRTCSession', {
+        keysReceived: keysReceivedRef.current,
+        sessionDurationMs: Date.now() - rtcJoinedAtRef.current,
+      });
       rtcSession.off(MatrixRTCSessionEvent.EncryptionKeyChanged, onEncryptionKey);
       rtcSession.leaveRoomSession();
       rtcSessionRef.current = null;
+      rtcJoinedAtRef.current = 0;
     };
   }, [activeCallRoomId, pendingJoin, mx, autoDiscoveryInfo, keyProvider, joinConfirmedRef]);
 
@@ -300,12 +332,20 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   // gets our latest keys even if they joined after our MatrixRTC session.
   useEffect(() => {
     if (lkRoom.connectionState !== ConnectionState.Connected) return;
+    lkConnectedAtRef.current = Date.now();
     const rtcSession = rtcSessionRef.current;
-    if (!rtcSession) return;
+    const msSinceRtcJoin = rtcJoinedAtRef.current ? Date.now() - rtcJoinedAtRef.current : 'n/a';
+    callDebug('e2ee', `LiveKit connected (${msSinceRtcJoin}ms after RTC join, ${keysReceivedRef.current} keys already received)`);
+    if (!rtcSession) {
+      callDebug('e2ee', 'WARNING: LiveKit connected but no MatrixRTC session — keys will NOT be exchanged');
+      return;
+    }
     const room = activeCallRoomId ? mx.getRoom(activeCallRoomId) : null;
     if (room?.hasEncryptionStateEvent()) {
-      callDebug('sfu', 'LiveKit connected — re-emitting encryption keys');
+      callDebug('e2ee', 'Re-emitting our encryption keys (on LK connect)');
       rtcSession.reemitEncryptionKeys();
+    } else {
+      callDebug('e2ee', 'Room not encrypted — no keys to re-emit');
     }
   }, [lkRoom.connectionState, activeCallRoomId, mx]);
 
