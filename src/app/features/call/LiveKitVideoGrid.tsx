@@ -159,8 +159,10 @@ const VideoTile = memo(function VideoTile({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 0,
+        maxHeight: '100%',
         aspectRatio: isSpotlight ? undefined : (tileAspect === 'portrait' ? '3/4' : '16/9'),
         cursor: onClick ? 'pointer' : undefined,
+        margin: isSpotlight ? undefined : 'auto',
         ...(isSpotlight ? { flex: 1 } : {}),
       }}
     >
@@ -315,6 +317,8 @@ export function LiveKitVideoGrid({
     if (tileCount >= 5) cols = 3;
     if (tileCount >= 10) cols = 4;
 
+    const rows = Math.ceil(tileCount / cols);
+
     return (
       <div
         role="region"
@@ -326,6 +330,7 @@ export function LiveKitVideoGrid({
           gap: '4px',
           padding: '4px',
           gridTemplateColumns: `repeat(${cols}, 1fr)`,
+          gridTemplateRows: `repeat(${rows}, 1fr)`,
           overflow: 'hidden',
         }}
       >
