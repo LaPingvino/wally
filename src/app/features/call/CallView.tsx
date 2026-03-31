@@ -16,7 +16,7 @@ import { useCallMembers } from '../../hooks/useCallMemberships';
 import { MicrophoneButton, VideoButton, ScreenShareButton } from './Controls';
 
 import { LiveKitRoomContext } from '../../pages/client/call/PersistentCallContainer';
-import { LiveKitVideoGrid, GridLayout, SidebarPosition, TileAspect } from './LiveKitVideoGrid';
+import { LiveKitVideoGrid, GridLayout } from './LiveKitVideoGrid';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { CallViewUser } from './CallViewUser';
@@ -35,7 +35,7 @@ import { BreakoutPanel } from './BreakoutPanel';
  * Video preview for the pre-join screen.
  * Requests camera when video is enabled, releases on disable/unmount.
  */
-function PreJoinVideoPreview({ isVideoEnabled, aspect = 'landscape' }: { isVideoEnabled: boolean; aspect?: 'landscape' | 'portrait' }) {
+function PreJoinVideoPreview({ isVideoEnabled }: { isVideoEnabled: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -87,7 +87,7 @@ function PreJoinVideoPreview({ isVideoEnabled, aspect = 'landscape' }: { isVideo
     <div
       style={{
         width: '100%',
-        aspectRatio: aspect === 'portrait' ? '3/4' : '16/9',
+        aspectRatio: '16/9',
         borderRadius: '8px',
         overflow: 'hidden',
         background: 'var(--bg-surface-low, #16213e)',
@@ -230,8 +230,7 @@ export function CallView({ room }: { room: Room }) {
   const [activeBreakoutId, setActiveBreakoutId] = useState<string | null>(null);
   const [gridLayout, setGridLayout] = useState<GridLayout>('equal');
   const [pinnedSid, setPinnedSid] = useState<string | null>(null);
-  const [sidebarPos, setSidebarPos] = useState<SidebarPosition>('right');
-  const [tileAspect, setTileAspect] = useState<TileAspect>('landscape');
+  const [showPip, setShowPip] = useState(false);
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
@@ -277,12 +276,9 @@ export function CallView({ room }: { room: Room }) {
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
-  // Mobile defaults
+  // Mobile defaults: show PiP self-view
   useEffect(() => {
-    if (isMobile) {
-      setSidebarPos('bottom');
-      setTileAspect('portrait');
-    }
+    if (isMobile) setShowPip(true);
   }, [isMobile]);
 
   const handleJoinVCClick: MouseEventHandler<HTMLElement> = (evt) => {
@@ -339,7 +335,7 @@ export function CallView({ room }: { room: Room }) {
             gap="400"
             style={{ padding: '32px', maxWidth: '480px', width: '100%' }}
           >
-            <PreJoinVideoPreview isVideoEnabled={isVideoEnabled} aspect={tileAspect} />
+            <PreJoinVideoPreview isVideoEnabled={isVideoEnabled} />
             <Text id={joinHeadingId} size="H4" style={{ textAlign: 'center' }}>
               {roomName}
             </Text>
@@ -418,9 +414,8 @@ export function CallView({ room }: { room: Room }) {
               isScreenShareEnabled={lkCtx.isScreenShareEnabled}
               matrixRoom={room}
               layout={gridLayout}
-              sidebarPosition={sidebarPos}
-              tileAspect={tileAspect}
               lkRoom={lkCtx.room}
+              showPip={showPip}
               pinnedParticipantSid={pinnedSid}
               onPinParticipant={setPinnedSid}
             />
@@ -458,45 +453,24 @@ export function CallView({ room }: { room: Room }) {
               <TooltipProvider
                 position="Top"
                 delay={500}
-                tooltip={<Tooltip><Text size="T200">{tileAspect === 'landscape' ? 'Portrait Tiles' : 'Landscape Tiles'}</Text></Tooltip>}
+                tooltip={<Tooltip><Text size="T200">{showPip ? 'Show Self in Grid' : 'Float Self (PiP)'}</Text></Tooltip>}
               >
                 {(anchorRef) => (
                   <IconButton
                     ref={anchorRef}
-                    variant="Surface"
+                    variant={showPip ? 'Success' : 'Surface'}
                     fill="Soft"
                     radii="400"
                     size="400"
                     outlined
-                    aria-label={tileAspect === 'landscape' ? 'Switch to portrait tiles' : 'Switch to landscape tiles'}
-                    onClick={() => setTileAspect((a) => a === 'landscape' ? 'portrait' : 'landscape')}
+                    aria-label={showPip ? 'Show self in grid' : 'Float self as picture-in-picture'}
+                    aria-pressed={showPip}
+                    onClick={() => setShowPip((v) => !v)}
                   >
-                    <Icon size="400" src={tileAspect === 'landscape' ? Icons.ArrowGoRight : Icons.ArrowGoLeft} />
+                    <Icon size="400" src={Icons.Flag} />
                   </IconButton>
                 )}
               </TooltipProvider>
-              {gridLayout === 'spotlight' && (
-                <TooltipProvider
-                  position="Top"
-                  delay={500}
-                  tooltip={<Tooltip><Text size="T200">{sidebarPos === 'right' ? 'Bottom Strip' : 'Side Strip'}</Text></Tooltip>}
-                >
-                  {(anchorRef) => (
-                    <IconButton
-                      ref={anchorRef}
-                      variant="Surface"
-                      fill="Soft"
-                      radii="400"
-                      size="400"
-                      outlined
-                      aria-label={sidebarPos === 'right' ? 'Switch to bottom strip' : 'Switch to side strip'}
-                      onClick={() => setSidebarPos((p) => p === 'right' ? 'bottom' : 'right')}
-                    >
-                      <Icon size="400" src={sidebarPos === 'right' ? Icons.ChevronBottom : Icons.ChevronRight} />
-                    </IconButton>
-                  )}
-                </TooltipProvider>
-              )}
               {wallyConference.available && wallyConference.endpoint && (
                 <>
                   <TooltipProvider
