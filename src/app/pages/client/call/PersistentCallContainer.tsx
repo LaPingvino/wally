@@ -236,9 +236,15 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   }, [mx]);
 
   // ── MatrixRTCSession — manages call.member state events + E2EE keys ──
+  // Join the MatrixRTC session as soon as we have an active call room — NOT
+  // when LiveKit connects.  This ensures the ToDeviceKeyTransport listener
+  // is registered before the other party sends their encryption keys.
+  // Keys received early are buffered in the MatrixKeyProvider and picked
+  // up when LiveKit connects.
   const rtcSessionRef = useRef<MatrixRTCSession | null>(null);
   useEffect(() => {
-    if (lkRoom.connectionState !== ConnectionState.Connected || !activeCallRoomId || !mx) return;
+    if (!activeCallRoomId || !mx) return;
+    if (pendingJoin && !joinConfirmedRef.current) return;
 
     const room = mx.getRoom(activeCallRoomId);
     if (!room) return;
@@ -248,7 +254,9 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
 
     const isEncrypted = room.hasEncryptionStateEvent();
 
-    // Bridge encryption keys from MatrixRTC to LiveKit
+    // Bridge encryption keys from MatrixRTC to LiveKit's key provider.
+    // Keys are stored in the provider immediately — LiveKit reads them
+    // when it connects (or right away if already connected).
     const onEncryptionKey = (key: Uint8Array, keyIndex: number, participantId: string) => {
       keyProvider.setEncryptionKey(key, keyIndex, participantId);
     };
@@ -266,7 +274,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       livekit_alias: activeCallRoomId,
     }] : [];
 
-    callDebug('sfu', 'Joining MatrixRTCSession', { roomId: activeCallRoomId, isEncrypted });
+    callDebug('sfu', 'Joining MatrixRTCSession (before LiveKit connect)', { roomId: activeCallRoomId, isEncrypted });
     rtcSession.joinRoomSession(fociPreferred, {
       type: 'livekit',
       focus_selection: 'oldest_membership',
@@ -275,7 +283,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       useExperimentalToDeviceTransport: true,
     });
 
-    // Re-emit existing keys for late joiners
+    // Re-emit our keys so late joiners get them
     if (isEncrypted) {
       rtcSession.reemitEncryptionKeys();
     }
@@ -286,7 +294,20 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       rtcSession.leaveRoomSession();
       rtcSessionRef.current = null;
     };
-  }, [lkRoom.connectionState, activeCallRoomId, mx, autoDiscoveryInfo, keyProvider]);
+  }, [activeCallRoomId, pendingJoin, mx, autoDiscoveryInfo, keyProvider, joinConfirmedRef]);
+
+  // Re-emit encryption keys when LiveKit connects, so the other party
+  // gets our latest keys even if they joined after our MatrixRTC session.
+  useEffect(() => {
+    if (lkRoom.connectionState !== ConnectionState.Connected) return;
+    const rtcSession = rtcSessionRef.current;
+    if (!rtcSession) return;
+    const room = activeCallRoomId ? mx.getRoom(activeCallRoomId) : null;
+    if (room?.hasEncryptionStateEvent()) {
+      callDebug('sfu', 'LiveKit connected — re-emitting encryption keys');
+      rtcSession.reemitEncryptionKeys();
+    }
+  }, [lkRoom.connectionState, activeCallRoomId, mx]);
 
   const contextValue: LiveKitRoomContextValue = {
     room: lkRoom.room,
