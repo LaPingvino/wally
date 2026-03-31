@@ -6,7 +6,8 @@ import React, {
   useCallback,
   useState,
 } from 'react';
-import { EventType } from 'matrix-js-sdk';
+import { MatrixClient } from 'matrix-js-sdk';
+import { UnsupportedDelayedEventsEndpointError } from 'matrix-js-sdk/lib/errors';
 import { MatrixRTCSession, MatrixRTCSessionEvent } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { ConnectionState } from 'livekit-client';
 import { useCallState } from './CallProvider';
@@ -16,6 +17,56 @@ import { callDebug } from '../../../features/call/callDebug';
 import { fetchSfuToken } from '../../../hooks/useSfuToken';
 import { useLiveKitRoom } from '../../../hooks/useLiveKitRoom';
 import { MatrixKeyProvider } from '../../../features/call/MatrixKeyProvider';
+
+/**
+ * Disable MSC4140 delayed events on the MatrixClient if the server doesn't
+ * properly support them.  The MembershipManager's fallback path (regular state
+ * events with client-side expiry) works fine — delayed events are only an
+ * optimisation for auto-cleanup of stale memberships.
+ *
+ * Without this, Continuwuity (which advertises org.matrix.msc4140 but has a
+ * broken `restart` endpoint) causes MembershipManager to retry 10×, timeout,
+ * and report "Connection lost".
+ */
+async function disableDelayedEventsIfUnsupported(mx: MatrixClient): Promise<void> {
+  try {
+    const info = await mx.getVersions();
+    const supported =
+      info.unstable_features?.['org.matrix.msc4157'] === true ||
+      info.unstable_features?.['org.matrix.msc4140'] === true;
+    if (supported) {
+      // Server claims support — probe the endpoint to be sure
+      try {
+        // Try to update a nonexistent delayed event; a functioning server
+        // returns 404 (delay_id not found).  A broken server times out.
+        await (mx as any)._unstable_updateDelayedEvent('probe-nonexistent', 'cancel');
+      } catch (e: any) {
+        if (e instanceof UnsupportedDelayedEventsEndpointError) {
+          // Feature flag was true but the endpoint doesn't exist — disable
+          patchDelayedEvents(mx);
+          return;
+        }
+        // 404 / M_NOT_FOUND = endpoint exists and works, just no such delay_id.
+        // That's the expected response — delayed events are fine.
+        if (e?.errcode === 'M_NOT_FOUND' || e?.httpStatus === 404) return;
+        // Any other error (timeout, 500, etc.) = endpoint is broken
+        callDebug('sfu', 'Delayed events endpoint probe failed, disabling', e?.message);
+        patchDelayedEvents(mx);
+      }
+    }
+  } catch {
+    // getVersions failed — can't check, leave as-is
+  }
+}
+
+function patchDelayedEvents(mx: MatrixClient): void {
+  const err = () => Promise.reject(
+    new UnsupportedDelayedEventsEndpointError('Disabled: server delayed events are broken', 'updateDelayedEvent')
+  );
+  (mx as any)._unstable_sendDelayedStateEvent = err;
+  (mx as any)._unstable_updateDelayedEvent = err;
+  callDebug('sfu', 'Delayed events disabled — MembershipManager will use fallback path');
+}
 
 // Context to pass LK room state to CallView
 export interface LiveKitRoomContextValue {
@@ -175,6 +226,14 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       setLkConnected(isConnected);
     }
   }, [lkRoom.connectionState, setLkConnected]);
+
+  // ── Probe delayed event support once per client ──
+  const delayedEventsCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!mx || delayedEventsCheckedRef.current) return;
+    delayedEventsCheckedRef.current = true;
+    disableDelayedEventsIfUnsupported(mx);
+  }, [mx]);
 
   // ── MatrixRTCSession — manages call.member state events + E2EE keys ──
   const rtcSessionRef = useRef<MatrixRTCSession | null>(null);

@@ -55,8 +55,57 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
 
   mx.setMaxListeners(50);
 
+  // Wally uses MatrixRTC + direct LiveKit — disable the legacy 1:1 VoIP
+  // CallEventHandler so it doesn't spam "discarding possible call event"
+  // warnings for m.call.notify and other MatrixRTC events it doesn't understand.
+  if ((mx as any).callEventHandler) {
+    (mx as any).callEventHandler.stop?.();
+    (mx as any).callEventHandler = undefined;
+  }
+  if ((mx as any).groupCallEventHandler) {
+    (mx as any).groupCallEventHandler.stop?.();
+    (mx as any).groupCallEventHandler = undefined;
+  }
+
+  // Annotate known benign MatrixRTC log noise from the Rust crypto SDK and
+  // js-sdk internals so it's obvious these are harmless.
+  installMatrixRTCLogFilter();
+
   return mx;
 };
+
+let rtcLogFilterInstalled = false;
+function installMatrixRTCLogFilter(): void {
+  if (rtcLogFilterInstalled) return;
+  rtcLogFilterInstalled = true;
+
+  const origWarn = console.warn.bind(console);
+  console.warn = (...args: any[]) => {
+    const msg = String(args[0] ?? '');
+    // Rust crypto doesn't know about call E2EE key events — it decrypts the
+    // Olm layer fine and forwards the inner event to MatrixRTCSession.  Keys
+    // are delivered; the warning is cosmetic.  Print the original + an explanation.
+    if (msg.includes('unexpected encrypted to-device event') && msg.includes('call.encryption_keys')) {
+      origWarn(...args);
+      console.info('[Wally] ^ This is fine — Rust crypto decrypted a call E2EE key but doesn\'t recognise the inner event type. The key is still delivered to MatrixRTC normally.');
+      return;
+    }
+    origWarn(...args);
+  };
+
+  const origLog = console.log.bind(console);
+  console.log = (...args: any[]) => {
+    const msg = String(args[0] ?? '');
+    // "No targets found for sending key" fires when you're the only call member.
+    // Expected during join/leave transitions — nothing to send to.
+    if (msg.includes('No targets found for sending key')) {
+      origLog(...args);
+      console.info('[Wally] ^ Normal — no other call members to send E2EE keys to right now.');
+      return;
+    }
+    origLog(...args);
+  };
+}
 
 export const startClient = async (mx: MatrixClient) => {
   await mx.startClient({
