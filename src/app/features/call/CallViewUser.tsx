@@ -63,6 +63,7 @@ export function CallViewUser({ room, callMembership }: CallViewUserProps) {
     }
   }
 
+  console.log('[WallyCall:CallViewUser]', { userId, isGuest, deviceId: callMembership.deviceId, guestDisplayName });
   const avatarMxcUrl = isGuest ? undefined : getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxcUrl
     ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
