@@ -16,7 +16,7 @@ import { useCallMembers } from '../../hooks/useCallMemberships';
 import { MicrophoneButton, VideoButton, ScreenShareButton } from './Controls';
 
 import { LiveKitRoomContext } from '../../pages/client/call/PersistentCallContainer';
-import { LiveKitVideoGrid, GridLayout, SidebarPosition } from './LiveKitVideoGrid';
+import { LiveKitVideoGrid, GridLayout, SidebarPosition, TileAspect } from './LiveKitVideoGrid';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { CallViewUser } from './CallViewUser';
@@ -231,6 +231,7 @@ export function CallView({ room }: { room: Room }) {
   const [gridLayout, setGridLayout] = useState<GridLayout>('equal');
   const [pinnedSid, setPinnedSid] = useState<string | null>(null);
   const [sidebarPos, setSidebarPos] = useState<SidebarPosition>('right');
+  const [tileAspect, setTileAspect] = useState<TileAspect>('landscape');
   const permissions = useRoomPermissions(creators, powerLevels);
   const canJoin = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
 
@@ -276,9 +277,12 @@ export function CallView({ room }: { room: Room }) {
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
   const isMobile = screenSize === ScreenSize.Mobile;
-  // Default sidebar to bottom on mobile
+  // Mobile defaults
   useEffect(() => {
-    if (isMobile) setSidebarPos('bottom');
+    if (isMobile) {
+      setSidebarPos('bottom');
+      setTileAspect('portrait');
+    }
   }, [isMobile]);
 
   const handleJoinVCClick: MouseEventHandler<HTMLElement> = (evt) => {
@@ -415,6 +419,7 @@ export function CallView({ room }: { room: Room }) {
               matrixRoom={room}
               layout={gridLayout}
               sidebarPosition={sidebarPos}
+              tileAspect={tileAspect}
               lkRoom={lkCtx.room}
               pinnedParticipantSid={pinnedSid}
               onPinParticipant={setPinnedSid}
@@ -447,6 +452,26 @@ export function CallView({ room }: { room: Room }) {
                     }}
                   >
                     <Icon size="400" src={gridLayout === 'equal' ? Icons.User : Icons.Hash} />
+                  </IconButton>
+                )}
+              </TooltipProvider>
+              <TooltipProvider
+                position="Top"
+                delay={500}
+                tooltip={<Tooltip><Text size="T200">{tileAspect === 'landscape' ? 'Portrait Tiles' : 'Landscape Tiles'}</Text></Tooltip>}
+              >
+                {(anchorRef) => (
+                  <IconButton
+                    ref={anchorRef}
+                    variant="Surface"
+                    fill="Soft"
+                    radii="400"
+                    size="400"
+                    outlined
+                    aria-label={tileAspect === 'landscape' ? 'Switch to portrait tiles' : 'Switch to landscape tiles'}
+                    onClick={() => setTileAspect((a) => a === 'landscape' ? 'portrait' : 'landscape')}
+                  >
+                    <Icon size="400" src={tileAspect === 'landscape' ? Icons.VideoCamera : Icons.User} />
                   </IconButton>
                 )}
               </TooltipProvider>

@@ -15,6 +15,7 @@ import { getMemberDisplayName } from '../../utils/room';
 
 export type GridLayout = 'equal' | 'spotlight';
 export type SidebarPosition = 'right' | 'bottom';
+export type TileAspect = 'landscape' | 'portrait';
 
 /**
  * Resolve a readable display name from a LiveKit participant.
@@ -53,9 +54,9 @@ interface VideoTileProps {
   isLocal?: boolean;
   trackSource?: Track.Source;
   matrixRoom?: Room;
-  /** When true, renders larger for spotlight mode */
   isSpotlight?: boolean;
   onClick?: () => void;
+  tileAspect?: TileAspect;
 }
 
 const VideoTile = memo(function VideoTile({
@@ -65,6 +66,7 @@ const VideoTile = memo(function VideoTile({
   matrixRoom,
   isSpotlight,
   onClick,
+  tileAspect = 'landscape',
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -157,7 +159,7 @@ const VideoTile = memo(function VideoTile({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 0,
-        aspectRatio: isSpotlight ? undefined : '16/9',
+        aspectRatio: isSpotlight ? undefined : (tileAspect === 'portrait' ? '9/16' : '16/9'),
         cursor: onClick ? 'pointer' : undefined,
         ...(isSpotlight ? { flex: 1 } : {}),
       }}
@@ -226,6 +228,8 @@ interface LiveKitVideoGridProps {
   layout?: GridLayout;
   /** Sidebar strip position in spotlight mode */
   sidebarPosition?: SidebarPosition;
+  /** Tile aspect ratio */
+  tileAspect?: TileAspect;
   /** The LK Room object for active speaker tracking */
   lkRoom?: LKRoom | null;
   pinnedParticipantSid?: string | null;
@@ -255,6 +259,7 @@ export function LiveKitVideoGrid({
   matrixRoom,
   layout = 'equal',
   sidebarPosition = 'right',
+  tileAspect = 'landscape',
   lkRoom,
   pinnedParticipantSid,
   onPinParticipant,
@@ -320,6 +325,7 @@ export function LiveKitVideoGrid({
             isLocal={p === localParticipant}
             trackSource={Track.Source.ScreenShare}
             matrixRoom={matrixRoom}
+            tileAspect={tileAspect}
             onClick={() => handleTileClick(p.sid)}
           />
         ))}
@@ -329,6 +335,7 @@ export function LiveKitVideoGrid({
             participant={localParticipant}
             isLocal
             matrixRoom={matrixRoom}
+            tileAspect={tileAspect}
             onClick={() => handleTileClick(localParticipant.sid)}
           />
         )}
@@ -337,6 +344,7 @@ export function LiveKitVideoGrid({
             key={p.sid}
             participant={p}
             matrixRoom={matrixRoom}
+            tileAspect={tileAspect}
             onClick={() => handleTileClick(p.sid)}
           />
         ))}
