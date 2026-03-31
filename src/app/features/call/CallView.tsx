@@ -35,7 +35,7 @@ import { BreakoutPanel } from './BreakoutPanel';
  * Video preview for the pre-join screen.
  * Requests camera when video is enabled, releases on disable/unmount.
  */
-function PreJoinVideoPreview({ isVideoEnabled }: { isVideoEnabled: boolean }) {
+function PreJoinVideoPreview({ isVideoEnabled, aspect = 'landscape' }: { isVideoEnabled: boolean; aspect?: 'landscape' | 'portrait' }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -87,7 +87,7 @@ function PreJoinVideoPreview({ isVideoEnabled }: { isVideoEnabled: boolean }) {
     <div
       style={{
         width: '100%',
-        aspectRatio: '16/9',
+        aspectRatio: aspect === 'portrait' ? '3/4' : '16/9',
         borderRadius: '8px',
         overflow: 'hidden',
         background: 'var(--bg-surface-low, #16213e)',
@@ -339,7 +339,7 @@ export function CallView({ room }: { room: Room }) {
             gap="400"
             style={{ padding: '32px', maxWidth: '480px', width: '100%' }}
           >
-            <PreJoinVideoPreview isVideoEnabled={isVideoEnabled} />
+            <PreJoinVideoPreview isVideoEnabled={isVideoEnabled} aspect={tileAspect} />
             <Text id={joinHeadingId} size="H4" style={{ textAlign: 'center' }}>
               {roomName}
             </Text>
@@ -427,7 +427,7 @@ export function CallView({ room }: { room: Room }) {
           )}
           {/* Call controls */}
           {lkCtx && (
-            <Box role="toolbar" aria-label="Call controls" justifyContent="Center" alignItems="Center" gap="200" style={{ padding: '8px' }}>
+            <Box role="toolbar" aria-label="Call controls" justifyContent="Center" alignItems="Center" gap="200" style={{ padding: '8px', flexWrap: 'wrap' }}>
               <MicrophoneButton enabled={lkCtx.isMicEnabled} onToggle={lkCtx.toggleMicrophone} />
               <VideoButton enabled={lkCtx.isCamEnabled} onToggle={lkCtx.toggleCamera} />
               <ScreenShareButton enabled={lkCtx.isScreenShareEnabled} onToggle={lkCtx.toggleScreenShare} />
@@ -451,7 +451,7 @@ export function CallView({ room }: { room: Room }) {
                       setPinnedSid(null);
                     }}
                   >
-                    <Icon size="400" src={gridLayout === 'equal' ? Icons.User : Icons.Hash} />
+                    <Icon size="400" src={gridLayout === 'equal' ? Icons.Pin : Icons.Explore} />
                   </IconButton>
                 )}
               </TooltipProvider>
@@ -471,7 +471,7 @@ export function CallView({ room }: { room: Room }) {
                     aria-label={tileAspect === 'landscape' ? 'Switch to portrait tiles' : 'Switch to landscape tiles'}
                     onClick={() => setTileAspect((a) => a === 'landscape' ? 'portrait' : 'landscape')}
                   >
-                    <Icon size="400" src={tileAspect === 'landscape' ? Icons.VideoCamera : Icons.User} />
+                    <Icon size="400" src={tileAspect === 'landscape' ? Icons.ArrowGoRight : Icons.ArrowGoLeft} />
                   </IconButton>
                 )}
               </TooltipProvider>
@@ -572,7 +572,7 @@ export function CallView({ room }: { room: Room }) {
                             );
                           }}
                         >
-                          <Icon size="400" src={Icons.Hash} filled={!!breakoutAnchor} />
+                          <Icon size="400" src={Icons.Space} filled={!!breakoutAnchor} />
                         </IconButton>
                       )}
                     </TooltipProvider>

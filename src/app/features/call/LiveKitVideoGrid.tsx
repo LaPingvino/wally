@@ -159,7 +159,7 @@ const VideoTile = memo(function VideoTile({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 0,
-        aspectRatio: isSpotlight ? undefined : (tileAspect === 'portrait' ? '9/16' : '16/9'),
+        aspectRatio: isSpotlight ? undefined : (tileAspect === 'portrait' ? '3/4' : '16/9'),
         cursor: onClick ? 'pointer' : undefined,
         ...(isSpotlight ? { flex: 1 } : {}),
       }}
