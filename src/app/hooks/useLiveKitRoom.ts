@@ -30,6 +30,8 @@ export interface UseLiveKitRoomOptions {
   initialAudio?: boolean;
   /** Initial camera state from pre-join screen. Default: false (off). */
   initialVideo?: boolean;
+  /** E2EE key provider for encrypted rooms */
+  e2eeKeyProvider?: import('livekit-client').BaseKeyProvider;
 }
 
 /**
@@ -38,7 +40,7 @@ export interface UseLiveKitRoomOptions {
  * When `connect` is true and url+token are provided, connects to the LK room.
  * Returns room state, participants, and control functions.
  */
-export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAudio = false, initialVideo = false }: UseLiveKitRoomOptions): LiveKitRoomState & {
+export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAudio = false, initialVideo = false, e2eeKeyProvider }: UseLiveKitRoomOptions): LiveKitRoomState & {
   toggleMicrophone: () => Promise<void>;
   toggleCamera: () => Promise<void>;
   toggleScreenShare: () => Promise<void>;
@@ -47,7 +49,16 @@ export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAud
   isCamEnabled: boolean;
   isScreenShareEnabled: boolean;
 } {
-  const [room] = useState(() => new Room({ adaptiveStream: true, dynacast: true }));
+  const [room] = useState(() => {
+    const opts: ConstructorParameters<typeof Room>[0] = { adaptiveStream: true, dynacast: true };
+    if (e2eeKeyProvider) {
+      opts.e2ee = {
+        keyProvider: e2eeKeyProvider,
+        worker: new Worker(new URL('livekit-client/e2ee-worker', import.meta.url), { type: 'module' }),
+      };
+    }
+    return new Room(opts);
+  });
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [remoteParticipants, setRemoteParticipants] = useState<RemoteParticipant[]>([]);
   const [localParticipant, setLocalParticipant] = useState<LocalParticipant | null>(null);

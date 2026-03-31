@@ -4,9 +4,10 @@ import React, {
   useEffect,
   useRef,
   useCallback,
+  useState,
 } from 'react';
 import { EventType } from 'matrix-js-sdk';
-import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
+import { MatrixRTCSession, MatrixRTCSessionEvent } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import { ConnectionState } from 'livekit-client';
 import { useCallState } from './CallProvider';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -14,6 +15,7 @@ import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { callDebug } from '../../../features/call/callDebug';
 import { fetchSfuToken } from '../../../hooks/useSfuToken';
 import { useLiveKitRoom } from '../../../hooks/useLiveKitRoom';
+import { MatrixKeyProvider } from '../../../features/call/MatrixKeyProvider';
 
 // Context to pass LK room state to CallView
 export interface LiveKitRoomContextValue {
@@ -144,12 +146,16 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     }
   }, [shouldConnect, activeCallRoomId]);
 
+  // ── E2EE key provider (persists across reconnects) ──
+  const [keyProvider] = useState(() => new MatrixKeyProvider());
+
   const lkRoom = useLiveKitRoom({
     url: lkUrl,
     token: lkToken,
     connect: shouldConnect,
     initialAudio: isAudioEnabled,
     initialVideo: isVideoEnabled,
+    e2eeKeyProvider: activeCallRoomId ? (mx.getRoom(activeCallRoomId)?.hasEncryptionStateEvent() ? keyProvider : undefined) : undefined,
     onDisconnected: useCallback(() => {
       if (intentionalDisconnectRef.current) {
         callDebug('sfu', 'LiveKit disconnected (intentional, skipping hangUp)');
@@ -170,72 +176,58 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     }
   }, [lkRoom.connectionState, setLkConnected]);
 
-  // ── Send call.member state event when connected ──
-  const callMemberSentRef = useRef<string | null>(null);
+  // ── MatrixRTCSession — manages call.member state events + E2EE keys ──
+  const rtcSessionRef = useRef<MatrixRTCSession | null>(null);
   useEffect(() => {
     if (lkRoom.connectionState !== ConnectionState.Connected || !activeCallRoomId || !mx) return;
-    if (callMemberSentRef.current === activeCallRoomId) return;
 
-    callMemberSentRef.current = activeCallRoomId;
-    const userId = mx.getUserId()!;
-    const deviceId = mx.getDeviceId()!;
-    // State key format must match what matrix-js-sdk's MembershipManager uses:
-    // _userId_deviceId_applicationcall_id (prefixed with _ for non-MSC3757 rooms)
-    const stateKey = `_${userId}_${deviceId}_m.call`;
+    const room = mx.getRoom(activeCallRoomId);
+    if (!room) return;
 
-    // Find service URL from .well-known
-    const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
-    const lkServiceUrl = rtcFoci?.find((f) => f.type === 'livekit')?.livekit_service_url ?? '';
+    const rtcSession = mx.matrixRTC.getRoomSession(room);
+    rtcSessionRef.current = rtcSession;
 
-    const joinedAt = Date.now();
-    const EXPIRE_DURATION = 14_400_000; // 4 hours (matches SDK default)
-    const RENEW_INTERVAL = 30 * 60 * 1000; // 30 minutes
+    const isEncrypted = room.hasEncryptionStateEvent();
 
-    const sendMembership = (expires: number) => {
-      const content = {
-        application: 'm.call',
-        call_id: '',
-        scope: 'm.room',
-        device_id: deviceId,
-        expires,
-        created_ts: joinedAt,
-        focus_active: {
-          type: 'livekit',
-          focus_selection: 'oldest_membership',
-        },
-        foci_preferred: [{
-          type: 'livekit',
-          livekit_alias: activeCallRoomId,
-          livekit_service_url: lkServiceUrl,
-        }],
-      };
-      callDebug('sfu', 'Sending call.member state event', { stateKey, deviceId, expires });
-      mx.sendStateEvent(activeCallRoomId, EventType.GroupCallMemberPrefix, content as any, stateKey)
-        .catch((err: unknown) => callDebug('error', 'Failed to send call.member', err));
+    // Bridge encryption keys from MatrixRTC to LiveKit
+    const onEncryptionKey = (key: Uint8Array, keyIndex: number, participantId: string) => {
+      keyProvider.setEncryptionKey(key, keyIndex, participantId);
     };
 
-    // Initial membership event
-    sendMembership(EXPIRE_DURATION);
+    if (isEncrypted) {
+      rtcSession.on(MatrixRTCSessionEvent.EncryptionKeyChanged, onEncryptionKey);
+    }
 
-    // Renew periodically so long calls don't expire
-    let renewCount = 1;
-    const renewTimer = setInterval(() => {
-      renewCount += 1;
-      sendMembership(EXPIRE_DURATION * renewCount);
-      callDebug('sfu', 'Renewed call.member expiry', { renewCount });
-    }, RENEW_INTERVAL);
+    // Find preferred foci from .well-known
+    const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string; livekit_alias?: string }> | undefined;
+    const lkFocus = rtcFoci?.find((f) => f.type === 'livekit');
+    const fociPreferred = lkFocus ? [{
+      type: 'livekit' as const,
+      livekit_service_url: lkFocus.livekit_service_url ?? '',
+      livekit_alias: activeCallRoomId,
+    }] : [];
 
-    // Clear on unmount/call end
+    callDebug('sfu', 'Joining MatrixRTCSession', { roomId: activeCallRoomId, isEncrypted });
+    rtcSession.joinRoomSession(fociPreferred, {
+      type: 'livekit',
+      focus_selection: 'oldest_membership',
+    }, {
+      manageMediaKeys: isEncrypted,
+      useExperimentalToDeviceTransport: true,
+    });
+
+    // Re-emit existing keys for late joiners
+    if (isEncrypted) {
+      rtcSession.reemitEncryptionKeys();
+    }
+
     return () => {
-      clearInterval(renewTimer);
-      if (callMemberSentRef.current === activeCallRoomId) {
-        callMemberSentRef.current = null;
-        // Send empty content to signal departure
-        mx.sendStateEvent(activeCallRoomId, EventType.GroupCallMemberPrefix, {}, stateKey)
-          .catch(() => {});
-      }
+      callDebug('sfu', 'Leaving MatrixRTCSession');
+      rtcSession.off(MatrixRTCSessionEvent.EncryptionKeyChanged, onEncryptionKey);
+      rtcSession.leaveRoomSession();
+      rtcSessionRef.current = null;
     };
-  }, [lkRoom.connectionState, activeCallRoomId, mx, autoDiscoveryInfo]);
+  }, [lkRoom.connectionState, activeCallRoomId, mx, autoDiscoveryInfo, keyProvider]);
 
   const contextValue: LiveKitRoomContextValue = {
     room: lkRoom.room,
