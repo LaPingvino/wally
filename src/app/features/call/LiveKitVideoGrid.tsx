@@ -289,11 +289,19 @@ export function LiveKitVideoGrid({
 
   // ── Equal grid layout — auto-fill flowing grid ──
   if (layout === 'equal' || !spotlightParticipant) {
-    const tileCount =
-      remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
+    // Only PiP when there are remote participants
+    const hasRemotes = remoteParticipants.length > 0;
+    const pipActive = showPip && hasRemotes;
+    const gridLocal = pipActive ? null : localParticipant;
+    const gridTileCount = (gridLocal ? 1 : 0) + remoteParticipants.length + screenSharers.length;
+    const tileCount = remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
 
-    // Participants to show in grid (exclude local if PiP is on)
-    const gridLocal = showPip ? null : localParticipant;
+    // Single tile: fill the whole space. Otherwise auto-fill.
+    const gridCols = gridTileCount <= 1
+      ? '1fr'
+      : gridTileCount <= 4
+        ? `repeat(${Math.min(gridTileCount, 2)}, 1fr)`
+        : 'repeat(auto-fill, minmax(280px, 1fr))';
 
     return (
       <div
@@ -305,7 +313,7 @@ export function LiveKitVideoGrid({
           display: 'grid',
           gap: '4px',
           padding: '4px',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+          gridTemplateColumns: gridCols,
           gridAutoRows: '1fr',
           overflow: 'hidden',
           position: 'relative',
@@ -344,8 +352,8 @@ export function LiveKitVideoGrid({
             <Text size="T300">Waiting for participants...</Text>
           </Box>
         )}
-        {/* Floating PiP self-view */}
-        {showPip && localParticipant && (
+        {/* Floating PiP self-view — only when there are others */}
+        {pipActive && localParticipant && (
           <div
             style={{
               position: 'absolute',
