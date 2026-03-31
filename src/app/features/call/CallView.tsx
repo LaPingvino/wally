@@ -430,7 +430,10 @@ export function CallView({ room }: { room: Room }) {
               lkRoom={lkCtx.room}
               showPip={showPip}
               pinnedParticipantSid={pinnedSid}
-              onPinParticipant={setPinnedSid}
+              onPinParticipant={(sid) => {
+                setPinnedSid(sid);
+                if (sid) setGridLayout('spotlight');
+              }}
             />
           )}
           {/* Call controls */}
