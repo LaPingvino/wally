@@ -1,7 +1,7 @@
 import { as, Avatar, Box, Icon, Icons, Text } from 'folds';
 import React from 'react';
 import classNames from 'classnames';
-import { Room } from 'matrix-js-sdk';
+import { EventType, Room } from 'matrix-js-sdk';
 import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
 import { UserAvatar } from '../../components/user-avatar';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -44,7 +44,7 @@ export function CallViewUser({ room, callMembership }: CallViewUserProps) {
   const isGuest = callMembership.deviceId?.startsWith('GUEST_') ?? false;
   const guestDisplayName = isGuest
     ? (room.currentState.getStateEvents(
-        'org.matrix.msc3401.call.member' as any,
+        EventType.GroupCallMemberPrefix,
         `_${userId}_${callMembership.deviceId}_m.call`
       )?.getContent<{ display_name?: string }>()?.display_name)
     : undefined;
