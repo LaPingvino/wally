@@ -1,6 +1,6 @@
 import { Avatar, Box, Icon, Icons, Text } from 'folds';
-import React from 'react';
-import { Room } from 'matrix-js-sdk';
+import React, { useEffect, useState } from 'react';
+import { EventType, Room, RoomStateEvent } from 'matrix-js-sdk';
 import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
 import { NavButton, NavItem, NavItemContent } from '../../components/nav';
 import { UserAvatar } from '../../components/user-avatar';
@@ -24,11 +24,35 @@ export function RoomNavUser({ room, callMembership }: RoomNavUserProps) {
   const { lkConnected, activeCallRoomId } = useCallState();
   const isActiveCall = lkConnected && activeCallRoomId === room.roomId;
   const userId = callMembership.sender ?? '';
-  const avatarMxcUrl = getMemberAvatarMxc(room, userId);
+  const isGuest = callMembership.deviceId?.startsWith('GUEST_') ?? false;
+
+  // Re-render when state events update (guest display_name may arrive late)
+  const [, setVer] = useState(0);
+  useEffect(() => {
+    if (!isGuest) return;
+    const onState = () => setVer((v) => v + 1);
+    room.on(RoomStateEvent.Events, onState);
+    return () => { room.off(RoomStateEvent.Events, onState); };
+  }, [room, isGuest]);
+
+  let guestName: string | undefined;
+  if (isGuest) {
+    for (const evt of room.currentState.getStateEvents(EventType.GroupCallMemberPrefix)) {
+      const c = evt.getContent<{ device_id?: string; display_name?: string }>();
+      if (c.device_id === callMembership.deviceId && c.display_name) {
+        guestName = c.display_name;
+        break;
+      }
+    }
+  }
+
+  const avatarMxcUrl = isGuest ? undefined : getMemberAvatarMxc(room, userId);
   const avatarUrl = avatarMxcUrl
     ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
     : undefined;
-  const getName = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
+  const getName = isGuest
+    ? (guestName ? `${guestName} (Guest)` : `Guest (${callMembership.deviceId?.slice(6, 14) ?? '?'})`)
+    : (getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId));
   const isCallParticipant = isActiveCall && userId !== mx.getUserId();
 
   const handleNavUserClick: React.MouseEventHandler<HTMLButtonElement> = (evt) => {
