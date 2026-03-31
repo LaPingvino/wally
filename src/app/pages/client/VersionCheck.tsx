@@ -93,6 +93,7 @@ export function VersionCheck() {
         justifyContent="Center"
         gap="200"
         onClick={hardReload}
+        onTouchEnd={(e) => { e.preventDefault(); hardReload(); }}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {

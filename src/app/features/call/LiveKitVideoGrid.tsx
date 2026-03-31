@@ -296,12 +296,11 @@ export function LiveKitVideoGrid({
     const gridTileCount = (gridLocal ? 1 : 0) + remoteParticipants.length + screenSharers.length;
     const tileCount = remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
 
-    // Single tile: fill the whole space. Otherwise auto-fill.
-    const gridCols = gridTileCount <= 1
-      ? '1fr'
-      : gridTileCount <= 4
-        ? `repeat(${Math.min(gridTileCount, 2)}, 1fr)`
-        : 'repeat(auto-fill, minmax(280px, 1fr))';
+    // Responsive columns: 1 tile = full, 2 = side by side, 3-4 = 2 cols, 5+ = 3 cols
+    let cols = 1;
+    if (gridTileCount >= 2) cols = 2;
+    if (gridTileCount >= 5) cols = 3;
+    if (gridTileCount >= 10) cols = 4;
 
     return (
       <div
@@ -313,7 +312,7 @@ export function LiveKitVideoGrid({
           display: 'grid',
           gap: '4px',
           padding: '4px',
-          gridTemplateColumns: gridCols,
+          gridTemplateColumns: `repeat(${cols}, 1fr)`,
           gridAutoRows: '1fr',
           overflow: 'hidden',
           position: 'relative',
