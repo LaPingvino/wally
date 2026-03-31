@@ -15,6 +15,66 @@ import { getMemberDisplayName } from '../../utils/room';
 
 export type GridLayout = 'equal' | 'spotlight';
 
+// ── Predefined layouts ──
+
+interface LayoutDef {
+  name: string;
+  /** CSS grid-template-columns */
+  cols: string;
+  /** CSS grid-template-rows */
+  rows: string;
+  /** grid-column / grid-row for the "large" tile (index 0), if any */
+  largeSpan?: { col: string; row: string };
+}
+
+/**
+ * Pick the best predefined layout for the given tile count.
+ * Each layout is designed to fill the container predictably.
+ */
+function pickLayout(count: number): LayoutDef {
+  switch (count) {
+    case 0:
+    case 1:
+      return { name: '1', cols: '1fr', rows: '1fr' };
+    case 2:
+      return { name: '1x2', cols: '1fr 1fr', rows: '1fr' };
+    case 3:
+      return {
+        name: '1+2',
+        cols: '1fr 1fr',
+        rows: '2fr 1fr',
+        largeSpan: { col: '1 / -1', row: '1' },
+      };
+    case 4:
+      return { name: '2x2', cols: '1fr 1fr', rows: '1fr 1fr' };
+    case 5:
+      return {
+        name: '1+4',
+        cols: '1fr 1fr',
+        rows: '3fr 2fr 2fr',
+        largeSpan: { col: '1 / -1', row: '1' },
+      };
+    case 6:
+      return { name: '2x3', cols: '1fr 1fr 1fr', rows: '1fr 1fr' };
+    case 7:
+      return {
+        name: '1+6',
+        cols: '1fr 1fr 1fr',
+        rows: '2fr 1fr 1fr',
+        largeSpan: { col: '1 / -1', row: '1' },
+      };
+    case 8:
+      return { name: '2x4', cols: '1fr 1fr 1fr 1fr', rows: '1fr 1fr' };
+    default:
+      // 9+: 3x3 grid (paginate beyond 9)
+      return { name: '3x3', cols: '1fr 1fr 1fr', rows: '1fr 1fr 1fr' };
+  }
+}
+
+const MAX_TILES_PER_PAGE = 9;
+
+// ── Display name resolution ──
+
 function resolveDisplayName(
   participant: RemoteParticipant | LocalParticipant,
   matrixRoom?: Room,
@@ -39,24 +99,26 @@ function resolveDisplayName(
   return { name: identity || 'Unknown', isGuest: false };
 }
 
-/** Detect video aspect from track dimensions. Returns CSS aspect-ratio string. */
 function detectAspect(participant: RemoteParticipant | LocalParticipant, source: Track.Source): string {
   const pub = participant.getTrackPublication(source);
   const dims = pub?.dimensions;
   if (dims && dims.width && dims.height) {
     return dims.height > dims.width ? '3/4' : '16/9';
   }
-  return '16/9'; // default landscape
+  return '16/9';
 }
+
+// ── VideoTile ──
 
 interface VideoTileProps {
   participant: RemoteParticipant | LocalParticipant;
   isLocal?: boolean;
   trackSource?: Track.Source;
   matrixRoom?: Room;
-  isSpotlight?: boolean;
+  isLarge?: boolean;
   isPip?: boolean;
   onClick?: () => void;
+  gridArea?: { col: string; row: string };
 }
 
 const VideoTile = memo(function VideoTile({
@@ -64,9 +126,10 @@ const VideoTile = memo(function VideoTile({
   isLocal,
   trackSource = Track.Source.Camera,
   matrixRoom,
-  isSpotlight,
+  isLarge,
   isPip,
   onClick,
+  gridArea,
 }: VideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -134,9 +197,6 @@ const VideoTile = memo(function VideoTile({
     ? `${displayName} (Screen)`
     : `${displayName}${isLocal ? ' (You)' : ''}`;
 
-  // Auto-detect aspect from video dimensions
-  const aspect = isSpotlight || isPip ? undefined : detectAspect(participant, trackSource);
-
   return (
     <div
       role="group"
@@ -151,11 +211,9 @@ const VideoTile = memo(function VideoTile({
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: 0,
-        maxHeight: '100%',
-        aspectRatio: aspect,
+        minWidth: 0,
         cursor: onClick ? 'pointer' : undefined,
-        margin: isSpotlight || isPip ? undefined : 'auto',
-        ...(isSpotlight ? { flex: 1 } : {}),
+        ...(gridArea ? { gridColumn: gridArea.col, gridRow: gridArea.row } : {}),
       }}
     >
       <video
@@ -183,7 +241,7 @@ const VideoTile = memo(function VideoTile({
             justifyContent: 'center',
             width: '100%',
             height: '100%',
-            fontSize: isSpotlight ? '4rem' : isPip ? '1.5rem' : '2.5rem',
+            fontSize: isLarge ? '4rem' : isPip ? '1.5rem' : '2.5rem',
             color: 'var(--text-muted, #aaa)',
             background: 'var(--bg-surface, #0f3460)',
           }}
@@ -224,6 +282,8 @@ const VideoTile = memo(function VideoTile({
     </div>
   );
 });
+
+// ── Grid component ──
 
 interface LiveKitVideoGridProps {
   localParticipant: LocalParticipant | null;
@@ -287,186 +347,167 @@ export function LiveKitVideoGrid({
     onPinParticipant(pinnedParticipantSid === sid ? null : sid);
   }, [onPinParticipant, pinnedParticipantSid]);
 
-  // ── Equal grid layout — auto-fill flowing grid ──
-  if (layout === 'equal' || !spotlightParticipant) {
-    // Only PiP when there are remote participants
-    const hasRemotes = remoteParticipants.length > 0;
-    const pipActive = showPip && hasRemotes;
-    const gridLocal = pipActive ? null : localParticipant;
-    const gridTileCount = (gridLocal ? 1 : 0) + remoteParticipants.length + screenSharers.length;
-    const tileCount = remoteParticipants.length + (localParticipant ? 1 : 0) + screenSharers.length;
+  // Pagination
+  const [page, setPage] = useState(0);
 
-    // Responsive columns: 1 tile = full, 2 = side by side, 3-4 = 2 cols, 5+ = 3 cols
-    let cols = 1;
-    if (gridTileCount >= 2) cols = 2;
-    if (gridTileCount >= 5) cols = 3;
-    if (gridTileCount >= 10) cols = 4;
-
+  // ── Spotlight layout ──
+  if (layout === 'spotlight' && spotlightParticipant) {
+    const sideParticipants = allParticipants.filter(
+      (p) => p.sid !== spotlightParticipant.sid && p !== localParticipant
+    );
     return (
       <div
         role="region"
-        aria-label={`Call with ${tileCount} participant${tileCount !== 1 ? 's' : ''}`}
+        aria-label="Call — spotlight mode"
         aria-live="polite"
-        style={{
-          flex: 1,
-          display: 'grid',
-          gap: '4px',
-          padding: '4px',
-          gridTemplateColumns: `repeat(${cols}, 1fr)`,
-          gridAutoRows: '1fr',
-          overflow: 'hidden',
-          position: 'relative',
-          alignContent: 'center',
-        }}
+        style={{ flex: 1, display: 'flex', gap: '4px', padding: '4px', overflow: 'hidden', position: 'relative' }}
       >
-        {screenSharers.map((p) => (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, minHeight: 0 }}>
+          {screenSharers.length > 0 && (
+            <div style={{ display: 'flex', gap: '4px', maxHeight: '40%' }}>
+              {screenSharers.map((p) => (
+                <VideoTile key={`ss-${p.sid}`} participant={p} isLocal={p === localParticipant}
+                  trackSource={Track.Source.ScreenShare} matrixRoom={matrixRoom} isLarge />
+              ))}
+            </div>
+          )}
           <VideoTile
-            key={`ss-${p.sid}`}
-            participant={p}
-            isLocal={p === localParticipant}
-            trackSource={Track.Source.ScreenShare}
-            matrixRoom={matrixRoom}
-            onClick={() => handleTileClick(p.sid)}
+            key={`spot-${spotlightParticipant.sid}`}
+            participant={spotlightParticipant}
+            isLocal={spotlightParticipant === localParticipant}
+            matrixRoom={matrixRoom} isLarge
+            onClick={() => handleTileClick(spotlightParticipant.sid)}
           />
-        ))}
-        {gridLocal && (
-          <VideoTile
-            key="local"
-            participant={gridLocal}
-            isLocal
-            matrixRoom={matrixRoom}
-            onClick={() => handleTileClick(gridLocal.sid)}
-          />
+        </div>
+        {sideParticipants.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '160px', flexShrink: 0, overflowY: 'auto' }}>
+            {sideParticipants.map((p) => (
+              <VideoTile key={p.sid} participant={p} isLocal={p === localParticipant}
+                matrixRoom={matrixRoom} onClick={() => handleTileClick(p.sid)} />
+            ))}
+          </div>
         )}
-        {remoteParticipants.map((p) => (
-          <VideoTile
-            key={p.sid}
-            participant={p}
-            matrixRoom={matrixRoom}
-            onClick={() => handleTileClick(p.sid)}
-          />
-        ))}
-        {tileCount === 0 && (
-          <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)' }}>
-            <Text size="T300">Waiting for participants...</Text>
-          </Box>
-        )}
-        {/* Floating PiP self-view — only when there are others */}
-        {pipActive && localParticipant && (
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '8px',
-              right: '8px',
-              width: '140px',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-              zIndex: 5,
-            }}
-          >
-            <VideoTile
-              participant={localParticipant}
-              isLocal
-              isPip
-              matrixRoom={matrixRoom}
-              onClick={() => handleTileClick(localParticipant.sid)}
-            />
+        {localParticipant && spotlightParticipant !== localParticipant && (
+          <div style={{ position: 'absolute', bottom: '8px', right: sideParticipants.length > 0 ? '176px' : '8px',
+            width: '140px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 5 }}>
+            <VideoTile participant={localParticipant} isLocal isPip matrixRoom={matrixRoom}
+              onClick={() => handleTileClick(localParticipant.sid)} />
           </div>
         )}
       </div>
     );
   }
 
-  // ── Spotlight layout ──
-  // Exclude spotlight and local (PiP) from sidebar
-  const sideParticipants = allParticipants.filter(
-    (p) => p.sid !== spotlightParticipant.sid && p !== localParticipant
-  );
+  // ── Equal grid layout with predefined layouts ──
+  const hasRemotes = remoteParticipants.length > 0;
+  const pipActive = showPip && hasRemotes;
+  const gridLocal = pipActive ? null : localParticipant;
+
+  // Build ordered tile list: screenshares first, then local, then remotes
+  const allTiles: { key: string; participant: RemoteParticipant | LocalParticipant; isLocal: boolean; trackSource: Track.Source }[] = [];
+  for (const p of screenSharers) {
+    allTiles.push({ key: `ss-${p.sid}`, participant: p, isLocal: p === localParticipant, trackSource: Track.Source.ScreenShare });
+  }
+  if (gridLocal) {
+    allTiles.push({ key: 'local', participant: gridLocal, isLocal: true, trackSource: Track.Source.Camera });
+  }
+  for (const p of remoteParticipants) {
+    allTiles.push({ key: p.sid, participant: p, isLocal: false, trackSource: Track.Source.Camera });
+  }
+
+  const totalTiles = allTiles.length;
+  const totalPages = Math.max(1, Math.ceil(totalTiles / MAX_TILES_PER_PAGE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageTiles = totalTiles <= MAX_TILES_PER_PAGE
+    ? allTiles
+    : allTiles.slice(safePage * MAX_TILES_PER_PAGE, (safePage + 1) * MAX_TILES_PER_PAGE);
+
+  const layoutDef = pickLayout(pageTiles.length);
 
   return (
     <div
       role="region"
-      aria-label="Call — spotlight mode"
+      aria-label={`Call with ${allParticipants.length} participant${allParticipants.length !== 1 ? 's' : ''}`}
       aria-live="polite"
-      style={{
-        flex: 1,
-        display: 'flex',
-        gap: '4px',
-        padding: '4px',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
+      style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
     >
-      {/* Main spotlight */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, minHeight: 0 }}>
-        {screenSharers.length > 0 && (
-          <div style={{ display: 'flex', gap: '4px', maxHeight: '40%' }}>
-            {screenSharers.map((p) => (
-              <VideoTile
-                key={`ss-${p.sid}`}
-                participant={p}
-                isLocal={p === localParticipant}
-                trackSource={Track.Source.ScreenShare}
-                matrixRoom={matrixRoom}
-                isSpotlight
-              />
-            ))}
-          </div>
+      {/* Grid */}
+      <div
+        style={{
+          flex: 1,
+          display: 'grid',
+          gap: '4px',
+          padding: '4px',
+          gridTemplateColumns: layoutDef.cols,
+          gridTemplateRows: layoutDef.rows,
+          overflow: 'hidden',
+        }}
+      >
+        {pageTiles.map((tile, i) => (
+          <VideoTile
+            key={tile.key}
+            participant={tile.participant}
+            isLocal={tile.isLocal}
+            trackSource={tile.trackSource}
+            matrixRoom={matrixRoom}
+            isLarge={i === 0 && !!layoutDef.largeSpan}
+            gridArea={i === 0 ? layoutDef.largeSpan : undefined}
+            onClick={() => handleTileClick(tile.participant.sid)}
+          />
+        ))}
+        {totalTiles === 0 && (
+          <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)' }}>
+            <Text size="T300">Waiting for participants...</Text>
+          </Box>
         )}
-        <VideoTile
-          key={`spot-${spotlightParticipant.sid}`}
-          participant={spotlightParticipant}
-          isLocal={spotlightParticipant === localParticipant}
-          matrixRoom={matrixRoom}
-          isSpotlight
-          onClick={() => handleTileClick(spotlightParticipant.sid)}
-        />
       </div>
-      {/* Sidebar strip */}
-      {sideParticipants.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-            width: '160px',
-            flexShrink: 0,
-            overflowY: 'auto',
-          }}
-        >
-          {sideParticipants.map((p) => (
-            <VideoTile
-              key={p.sid}
-              participant={p}
-              isLocal={p === localParticipant}
-              matrixRoom={matrixRoom}
-              onClick={() => handleTileClick(p.sid)}
-            />
-          ))}
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '4px' }}>
+          <button
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+            aria-label="Previous page"
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: '1.2rem', opacity: safePage === 0 ? 0.3 : 1 }}
+          >
+            ‹
+          </button>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            {safePage + 1}/{totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            disabled={safePage >= totalPages - 1}
+            aria-label="Next page"
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: safePage >= totalPages - 1 ? 'default' : 'pointer', fontSize: '1.2rem', opacity: safePage >= totalPages - 1 ? 0.3 : 1 }}
+          >
+            ›
+          </button>
         </div>
       )}
-      {/* PiP self-view */}
-      {localParticipant && spotlightParticipant !== localParticipant && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '8px',
-            right: sideParticipants.length > 0 ? '176px' : '8px',
-            width: '140px',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-            zIndex: 5,
-          }}
-        >
-          <VideoTile
-            participant={localParticipant}
-            isLocal
-            isPip
-            matrixRoom={matrixRoom}
-            onClick={() => handleTileClick(localParticipant.sid)}
-          />
+      {/* Layout indicator */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
+          background: 'rgba(0,0,0,0.5)',
+          color: '#aaa',
+          padding: '2px 6px',
+          borderRadius: '4px',
+          fontSize: '0.65rem',
+          pointerEvents: 'none',
+        }}
+      >
+        [{layoutDef.name}]
+      </div>
+      {/* PiP */}
+      {pipActive && localParticipant && (
+        <div style={{ position: 'absolute', bottom: totalPages > 1 ? '32px' : '8px', right: '8px',
+          width: '140px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 5 }}>
+          <VideoTile participant={localParticipant} isLocal isPip matrixRoom={matrixRoom}
+            onClick={() => handleTileClick(localParticipant.sid)} />
         </div>
       )}
     </div>
