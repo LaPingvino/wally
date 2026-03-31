@@ -266,12 +266,24 @@ export function CallView({ room }: { room: Room }) {
   const callIsCurrentAndReady = isActiveCallRoom && lkConnected;
   const callMembers = useCallMembers(mx, room.roomId);
 
-  const getName = (userId: string) =>
-    getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
+  /** Resolve display name for a call membership, including guests */
+  const getMemberName = useCallback((m: typeof callMembers[number]) => {
+    const isGuest = m.deviceId?.startsWith('GUEST_') ?? false;
+    if (isGuest) {
+      // Read display_name from the call.member state event content
+      const allEvents = room.currentState.getStateEvents(EventType.GroupCallMemberPrefix);
+      for (const evt of allEvents) {
+        const c = evt.getContent<{ device_id?: string; display_name?: string }>();
+        if (c.device_id === m.deviceId && c.display_name) {
+          return `${c.display_name} (Guest)`;
+        }
+      }
+      return `Guest (${m.deviceId?.slice(6, 14) ?? '?'})`;
+    }
+    return getMemberDisplayName(room, m.sender ?? '') ?? getMxIdLocalPart(m.sender ?? '');
+  }, [room]);
 
-  const memberDisplayNames = callMembers.map((callMembership) =>
-    getName(callMembership.sender ?? '')
-  );
+  const memberDisplayNames = callMembers.map(getMemberName);
 
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
