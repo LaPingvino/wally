@@ -58,6 +58,10 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
   // Wally uses MatrixRTC + direct LiveKit — disable the legacy 1:1 VoIP
   // CallEventHandler so it doesn't spam "discarding possible call event"
   // warnings for m.call.notify and other MatrixRTC events it doesn't understand.
+  // Must also remove the Sync listener that tries to .start() them.
+  if ((mx as any).startCallEventHandler) {
+    mx.off('sync' as any, (mx as any).startCallEventHandler);
+  }
   if ((mx as any).callEventHandler) {
     (mx as any).callEventHandler.stop?.();
     (mx as any).callEventHandler = undefined;
