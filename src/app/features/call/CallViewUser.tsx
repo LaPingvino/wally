@@ -1,7 +1,7 @@
 import { as, Avatar, Box, Icon, Icons, Text } from 'folds';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import classNames from 'classnames';
-import { EventType, Room } from 'matrix-js-sdk';
+import { EventType, Room, RoomStateEvent } from 'matrix-js-sdk';
 import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
 import { UserAvatar } from '../../components/user-avatar';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -40,11 +40,19 @@ export function CallViewUser({ room, callMembership }: CallViewUserProps) {
   const space = useSpaceOptionally();
   const userId = callMembership.sender ?? '';
 
-  // Guests have device_id starting with GUEST_ and display_name in the event content
+  // Guests have device_id starting with GUEST_ and display_name in the event content.
+  // Re-render when state events change so we pick up display_name after it syncs.
   const isGuest = callMembership.deviceId?.startsWith('GUEST_') ?? false;
+  const [, setStateVersion] = useState(0);
+  useEffect(() => {
+    if (!isGuest) return;
+    const onState = () => setStateVersion((v) => v + 1);
+    room.on(RoomStateEvent.Events, onState);
+    return () => { room.off(RoomStateEvent.Events, onState); };
+  }, [room, isGuest]);
+
   let guestDisplayName: string | undefined;
   if (isGuest) {
-    // Find the call.member state event matching this guest's device_id
     const allCallMembers = room.currentState.getStateEvents(EventType.GroupCallMemberPrefix);
     for (const evt of allCallMembers) {
       const content = evt.getContent<{ device_id?: string; display_name?: string }>();
