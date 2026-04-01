@@ -86,14 +86,9 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         icon: Icons.Smile,
       },
       {
-        page: SettingsPages.DeveloperToolsPage,
-        name: 'Developer Tools',
-        icon: Icons.Terminal,
-      },
-      {
-        page: SettingsPages.AboutPage,
-        name: 'About',
-        icon: Icons.Info,
+        page: SettingsPages.AccessibilityPage,
+        name: 'Accessibility',
+        icon: Icons.User,
       },
       {
         page: SettingsPages.KeyboardShortcutsPage,
@@ -106,9 +101,14 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         icon: Icons.Bulb,
       },
       {
-        page: SettingsPages.AccessibilityPage,
-        name: 'Accessibility',
-        icon: Icons.User,
+        page: SettingsPages.DeveloperToolsPage,
+        name: 'Developer Tools',
+        icon: Icons.Terminal,
+      },
+      {
+        page: SettingsPages.AboutPage,
+        name: 'About',
+        icon: Icons.Info,
       },
     ],
     []

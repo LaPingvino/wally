@@ -8,7 +8,7 @@ type Modal500Props = {
 };
 export function Modal500({ requestClose, children }: Modal500Props) {
   return (
-    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
+    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog500}>
       {children}
     </NativeDialog>
   );

@@ -159,6 +159,19 @@ describe('Call accessibility', () => {
   });
 });
 
+describe('NativeDialog CSS variants', () => {
+  it('NativeDialog.css.ts exports both default and 500 variants', () => {
+    const src = readSrc('components/NativeDialog.css.ts');
+    expect(src).toMatch(/export const NativeDialog\b/);
+    expect(src).toMatch(/export const NativeDialog500\b/);
+  });
+
+  it('Modal500 uses NativeDialog500 (fixed-size) variant', () => {
+    const src = readSrc('components/Modal500.tsx');
+    expect(src).toMatch(/NativeDialog500/);
+  });
+});
+
 describe('No interactive elements without accessible names', () => {
   it('all <IconButton> usages have aria-label', () => {
     // Sample the most critical files
