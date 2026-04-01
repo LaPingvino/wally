@@ -136,17 +136,11 @@ export function Room() {
 
   const isVoiceRoom = room.isCallRoom();
 
-  // Auto-join voice rooms on direct navigation (URL navigation or page reload).
-  // RoomNavItem handles the click case; this effect covers the URL case where
-  // setActiveCallRoomId was never called and isCallViewOpen stays false.
-  // Skip if the call is already active for this room (prevents overwriting
-  // isChatOpen state set by the chat button click).
-  useEffect(() => {
-    if (isVoiceRoom && activeCallRoomId !== room.roomId) {
-      if (activeCallRoomId) hangUp();
-      setActiveCallRoomId(room.roomId, true);
-    }
-  }, [isVoiceRoom, room.roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Voice rooms: show the call UI but do NOT auto-join the call.
+  // The user joins explicitly via the call button in RoomNavItem or the
+  // pre-join screen.  Previously this effect auto-called setActiveCallRoomId
+  // on every navigation to a voice room, causing accidental joins on reload
+  // and when just browsing voice room chat.
 
   const isCallLayout = isVoiceRoom || isActiveCall;
   const showCallPanel = isCallLayout && isCallViewOpen;

@@ -90,6 +90,16 @@ export function CallProvider({ children }: CallProviderProps) {
   const mx = useMatrixClient();
   const restored = useRef(loadPersistedCall());
 
+  // Validate restored call — don't rejoin if we left the room or it was deleted
+  if (restored.current?.roomId) {
+    const restoredRoom = mx.getRoom(restored.current.roomId);
+    if (!restoredRoom || restoredRoom.getMyMembership() !== 'join') {
+      callDebug('state', 'Discarding stale session restore — room not joined', { roomId: restored.current.roomId });
+      persistCall(null);
+      restored.current = null;
+    }
+  }
+
   const [activeCallRoomId, setActiveCallRoomIdState] = useState<string | null>(restored.current?.roomId ?? null);
   const [viewedCallRoomId, setViewedCallRoomIdState] = useState<string | null>(null);
 
