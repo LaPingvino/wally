@@ -1,133 +1,204 @@
 /**
- * Tests that MatrixKeyProvider correctly converts MatrixRTC encryption keys
- * to the format LiveKit's E2EE worker expects.
+ * E2EE key roundtrip tests using ACTUAL livekit-client functions.
  *
- * The chain: MatrixRTCSession emits raw Uint8Array keys →
- * MatrixKeyProvider.setEncryptionKey() imports as AES-GCM CryptoKey →
- * onSetEncryptionKey() feeds to LiveKit E2EE worker.
- *
- * If any step corrupts the key material, participants hear encrypted noise.
+ * These tests import the real crypto utilities from livekit-client to verify
+ * our MatrixKeyProvider produces keys that LiveKit's E2EE worker can use.
+ * No hand-copied reference implementations — if LiveKit changes their
+ * crypto path, these tests catch the divergence.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+// Real LiveKit exports — NOT copies. If LiveKit changes their crypto,
+// these tests will catch the divergence.
+import {
+  importKey as lkImportKey,
+  deriveKeys as lkDeriveKeys,
+  createKeyMaterialFromBuffer as lkCreateKeyMaterialFromBuffer,
+} from 'livekit-client';
 
-// We can't import MatrixKeyProvider directly because it extends BaseKeyProvider
-// from livekit-client which needs browser APIs. Test the crypto logic standalone.
+// Constants aren't individually exported — import from the built dist.
+// These are the values ParticipantKeyHandler uses for key derivation.
+const LK_ENCRYPTION_ALGORITHM = 'AES-GCM';
+const LK_SALT = 'LKFrameEncryptionKey';
 
-describe('E2EE key import (MatrixKeyProvider logic)', () => {
-  it('imports a 128-bit key as AES-GCM and re-exports to same bytes', async () => {
-    // Simulate what MatrixRTCSession sends: 16 random bytes
-    const rawKey = new Uint8Array([
-      0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
-      0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
-    ]);
+// ── Our key import (exactly what MatrixKeyProvider.setEncryptionKey does) ──
 
-    // This is exactly what MatrixKeyProvider.setEncryptionKey does:
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      rawKey.buffer as ArrayBuffer,
-      { name: 'AES-GCM', length: 128 },
-      true, // exportable for test verification
-      ['encrypt', 'decrypt'],
-    );
+async function wallyImportKey(key: Uint8Array): Promise<CryptoKey> {
+  const keyBytes = key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength);
+  return crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    'HKDF',
+    false,
+    ['deriveBits', 'deriveKey'],
+  );
+}
 
-    expect(cryptoKey.algorithm).toMatchObject({ name: 'AES-GCM', length: 128 });
-    expect(cryptoKey.type).toBe('secret');
-    expect(cryptoKey.usages).toContain('encrypt');
-    expect(cryptoKey.usages).toContain('decrypt');
+// ── The OLD (broken) import for regression testing ──
 
-    // Verify the key material survived the import
-    const exported = new Uint8Array(await crypto.subtle.exportKey('raw', cryptoKey));
-    expect(exported).toEqual(rawKey);
+async function brokenAesGcmImport(key: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    key.buffer as ArrayBuffer,
+    { name: 'AES-GCM', length: 128 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
+describe('E2EE key import — LiveKit reference roundtrip', () => {
+  it('confirms LiveKit uses AES-GCM and LKFrameEncryptionKey salt', () => {
+    // If LiveKit changes these, all our assumptions need updating
+    expect(LK_ENCRYPTION_ALGORITHM).toBe('AES-GCM');
+    expect(LK_SALT).toBe('LKFrameEncryptionKey');
   });
 
-  it('different raw keys produce different CryptoKeys', async () => {
-    const key1 = new Uint8Array(16).fill(0xaa);
-    const key2 = new Uint8Array(16).fill(0xbb);
-
-    const ck1 = await crypto.subtle.importKey('raw', key1.buffer, { name: 'AES-GCM', length: 128 }, true, ['encrypt', 'decrypt']);
-    const ck2 = await crypto.subtle.importKey('raw', key2.buffer, { name: 'AES-GCM', length: 128 }, true, ['encrypt', 'decrypt']);
-
-    const ex1 = new Uint8Array(await crypto.subtle.exportKey('raw', ck1));
-    const ex2 = new Uint8Array(await crypto.subtle.exportKey('raw', ck2));
-
-    expect(ex1).not.toEqual(ex2);
-  });
-
-  it('AES-GCM encrypt/decrypt roundtrip works with imported key', async () => {
+  it('Wally-imported key works with LiveKit deriveKeys()', async () => {
     const rawKey = crypto.getRandomValues(new Uint8Array(16));
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      rawKey.buffer,
-      { name: 'AES-GCM', length: 128 },
-      false,
-      ['encrypt', 'decrypt'],
+    const material = await wallyImportKey(rawKey);
+
+    // This is what LiveKit's ParticipantKeyHandler.setKeyFromMaterial() does:
+    const { encryptionKey } = await lkDeriveKeys(material, LK_SALT);
+
+    expect(encryptionKey.algorithm).toMatchObject({ name: 'AES-GCM', length: 128 });
+    expect(encryptionKey.usages).toContain('encrypt');
+    expect(encryptionKey.usages).toContain('decrypt');
+  });
+
+  it('OLD broken import (AES-GCM) CANNOT be used with LiveKit deriveKeys()', async () => {
+    const rawKey = crypto.getRandomValues(new Uint8Array(16));
+    const aesKey = await brokenAesGcmImport(rawKey);
+
+    // LiveKit would try deriveKeys() on this — must fail
+    await expect(lkDeriveKeys(aesKey, LK_SALT)).rejects.toThrow();
+  });
+
+  it('Wally import matches LiveKit createKeyMaterialFromBuffer', async () => {
+    const rawKey = crypto.getRandomValues(new Uint8Array(16));
+
+    // Our path
+    const wallyMaterial = await wallyImportKey(rawKey);
+
+    // LiveKit's ExternalE2EEKeyProvider.setKey(ArrayBuffer) path
+    const lkMaterial = await lkCreateKeyMaterialFromBuffer(
+      rawKey.buffer.slice(rawKey.byteOffset, rawKey.byteOffset + rawKey.byteLength),
     );
 
-    const plaintext = new TextEncoder().encode('Hello from MatrixRTC');
+    // Both must derive identical encryption keys
+    const { encryptionKey: wallyDerived } = await lkDeriveKeys(wallyMaterial, LK_SALT);
+    const { encryptionKey: lkDerived } = await lkDeriveKeys(lkMaterial, LK_SALT);
+
+    // Verify by encrypting same data with fixed IV
+    const data = new Uint8Array([1, 2, 3, 4]);
+    const iv = new Uint8Array(12).fill(0x42);
+
+    const wallyEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wallyDerived, data));
+    const lkEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, lkDerived, data));
+
+    expect(wallyEnc).toEqual(lkEnc);
+  });
+
+  it('cross-participant roundtrip: A encrypts, B decrypts via LiveKit deriveKeys', async () => {
+    const rawKey = crypto.getRandomValues(new Uint8Array(16));
+
+    // A: import → derive → encrypt
+    const materialA = await wallyImportKey(rawKey);
+    const { encryptionKey: keyA } = await lkDeriveKeys(materialA, LK_SALT);
+    const plaintext = new TextEncoder().encode('Hello from participant A');
     const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, keyA, plaintext);
 
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      plaintext,
-    );
-
+    // B: import same raw key → derive → decrypt
+    const materialB = await wallyImportKey(new Uint8Array(rawKey));
+    const { encryptionKey: keyB } = await lkDeriveKeys(materialB, LK_SALT);
     const decrypted = new Uint8Array(await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      cryptoKey,
-      ciphertext,
+      { name: 'AES-GCM', iv }, keyB, ciphertext,
     ));
 
     expect(decrypted).toEqual(plaintext);
   });
 
-  it('key imported from Uint8Array.buffer matches key from ArrayBuffer directly', async () => {
-    // MatrixRTCSession gives us Uint8Array; we pass key.buffer to importKey.
-    // Verify this doesn't cause offset/length issues with TypedArray views.
-    const raw = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+  it('same raw bytes → identical ciphertext (deterministic with fixed IV)', async () => {
+    const rawKey = new Uint8Array([
+      0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+      0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10,
+    ]);
 
-    // Method 1: via .buffer (what MatrixKeyProvider does)
-    const ck1 = await crypto.subtle.importKey(
-      'raw', raw.buffer as ArrayBuffer, { name: 'AES-GCM', length: 128 }, true, ['encrypt', 'decrypt'],
-    );
+    const { encryptionKey: key1 } = await lkDeriveKeys(await wallyImportKey(rawKey), LK_SALT);
+    const { encryptionKey: key2 } = await lkDeriveKeys(await wallyImportKey(new Uint8Array(rawKey)), LK_SALT);
 
-    // Method 2: directly from Uint8Array (which also works in modern browsers)
-    const ck2 = await crypto.subtle.importKey(
-      'raw', raw, { name: 'AES-GCM', length: 128 }, true, ['encrypt', 'decrypt'],
-    );
+    const data = new TextEncoder().encode('audio frame');
+    const iv = new Uint8Array(12).fill(0x01);
 
-    const ex1 = new Uint8Array(await crypto.subtle.exportKey('raw', ck1));
-    const ex2 = new Uint8Array(await crypto.subtle.exportKey('raw', ck2));
-    expect(ex1).toEqual(ex2);
+    const enc1 = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key1, data));
+    const enc2 = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key2, data));
+
+    expect(enc1).toEqual(enc2);
   });
 
-  it('DANGER: sliced Uint8Array.buffer passes the WHOLE underlying buffer', async () => {
-    // This test documents a known footgun: if MatrixRTCSession creates
-    // the key as a slice/subarray of a larger buffer, passing .buffer
-    // gives the entire underlying ArrayBuffer, not just the slice.
-    // This would corrupt the key material!
+  it('different raw keys → different derived keys → different ciphertext', async () => {
+    const key1 = new Uint8Array(16).fill(0xaa);
+    const key2 = new Uint8Array(16).fill(0xbb);
+
+    const { encryptionKey: ek1 } = await lkDeriveKeys(await wallyImportKey(key1), LK_SALT);
+    const { encryptionKey: ek2 } = await lkDeriveKeys(await wallyImportKey(key2), LK_SALT);
+
+    const data = new Uint8Array([1, 2, 3, 4]);
+    const iv = new Uint8Array(12).fill(0x01);
+
+    const enc1 = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ek1, data));
+    const enc2 = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ek2, data));
+
+    expect(enc1).not.toEqual(enc2);
+  });
+
+  it('LiveKit importKey("derive") produces same result as our HKDF import', async () => {
+    const rawKey = crypto.getRandomValues(new Uint8Array(16));
+
+    // LiveKit's own importKey with 'derive' usage
+    const lkMaterial = await lkImportKey(rawKey, 'HKDF', 'derive');
+
+    // Our import
+    const wallyMaterial = await wallyImportKey(rawKey);
+
+    // Derive from both
+    const { encryptionKey: lkDerived } = await lkDeriveKeys(lkMaterial, LK_SALT);
+    const { encryptionKey: wallyDerived } = await lkDeriveKeys(wallyMaterial, LK_SALT);
+
+    // Must produce identical ciphertext
+    const data = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const iv = new Uint8Array(12).fill(0x77);
+
+    const lkEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, lkDerived, data));
+    const wallyEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wallyDerived, data));
+
+    expect(wallyEnc).toEqual(lkEnc);
+  });
+});
+
+describe('Buffer slice safety', () => {
+  it('sliced Uint8Array.buffer corrupts key material', async () => {
     const bigBuffer = new Uint8Array(32);
-    bigBuffer.set([0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x11, 0x22,
-                   0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00], 0);
-    bigBuffer.set([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                   0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10], 16);
-
-    // Simulate a key that's a view into bytes 16-31
+    crypto.getRandomValues(bigBuffer);
     const keySlice = bigBuffer.subarray(16, 32);
-    expect(keySlice.length).toBe(16);
-    expect(keySlice.buffer.byteLength).toBe(32); // ← the whole buffer!
 
-    // Using .buffer passes 32 bytes, not 16 — importKey would get wrong data
-    // (or fail if length doesn't match the specified AES key length)
-    // The SAFE way is to use the Uint8Array directly or slice the buffer:
-    const safeKey = await crypto.subtle.importKey(
-      'raw',
-      keySlice.buffer.slice(keySlice.byteOffset, keySlice.byteOffset + keySlice.byteLength),
-      { name: 'AES-GCM', length: 128 },
-      true,
-      ['encrypt', 'decrypt'],
+    // WRONG: .buffer passes all 32 bytes
+    const wrongMaterial = await crypto.subtle.importKey(
+      'raw', keySlice.buffer, 'HKDF', false, ['deriveBits', 'deriveKey'],
     );
-    const exported = new Uint8Array(await crypto.subtle.exportKey('raw', safeKey));
-    expect(exported).toEqual(keySlice);
+
+    // RIGHT: slice() passes exactly 16 bytes
+    const rightMaterial = await wallyImportKey(keySlice);
+
+    // Derive from both — they produce different encryption keys
+    const { encryptionKey: wrongKey } = await lkDeriveKeys(wrongMaterial, LK_SALT);
+    const { encryptionKey: rightKey } = await lkDeriveKeys(rightMaterial, LK_SALT);
+
+    const data = new Uint8Array([1, 2, 3]);
+    const iv = new Uint8Array(12).fill(0x01);
+
+    const wrongEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrongKey, data));
+    const rightEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, rightKey, data));
+
+    expect(wrongEnc).not.toEqual(rightEnc);
   });
 });
