@@ -7,9 +7,6 @@ import {
   Icon,
   Icons,
   Line,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
   Tooltip,
@@ -18,7 +15,6 @@ import {
   color,
   toRem,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
 import { JoinRule, MatrixError, Room } from 'matrix-js-sdk';
 import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
@@ -29,7 +25,9 @@ import { millify } from '../../plugins/millify';
 import { LocalRoomSummaryLoader } from '../../components/RoomSummaryLoader';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
-import { onEnterOrSpace, stopPropagation } from '../../utils/keyboard';
+import { onEnterOrSpace } from '../../utils/keyboard';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import { Membership } from '../../../types/matrix/room';
 import * as css from './RoomItem.css';
 import * as styleCss from './style.css';
@@ -247,24 +245,13 @@ function RoomProfile({
                   >
                     {topic}
                   </Text>
-                  <Overlay open={view} backdrop={<OverlayBackdrop />}>
-                    <OverlayCenter>
-                      <FocusTrap
-                        focusTrapOptions={{
-                          initialFocus: false,
-                          clickOutsideDeactivates: true,
-                          onDeactivate: () => setView(false),
-                          escapeDeactivates: stopPropagation,
-                        }}
-                      >
+                  <NativeDialog open={view} onClose={() => setView(false)} className={dialogCss.NativeDialog}>
                         <RoomTopicViewer
                           name={name}
                           topic={topic}
                           requestClose={() => setView(false)}
                         />
-                      </FocusTrap>
-                    </OverlayCenter>
-                  </Overlay>
+                  </NativeDialog>
                 </>
               )}
             </UseStateProvider>

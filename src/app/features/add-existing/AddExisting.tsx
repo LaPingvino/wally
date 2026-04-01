@@ -1,4 +1,3 @@
-import FocusTrap from 'focus-trap-react';
 import {
   Avatar,
   Box,
@@ -12,9 +11,6 @@ import {
   Menu,
   MenuItem,
   Modal,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Scroll,
   Spinner,
   Text,
@@ -30,7 +26,8 @@ import React, {
 import { useAtomValue } from 'jotai';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Room } from 'matrix-js-sdk';
-import { stopPropagation } from '../../utils/keyboard';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import { useDirects, useRooms, useSpaces } from '../../state/hooks/roomList';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { allRoomsAtom } from '../../state/room-list/roomList';
@@ -178,16 +175,7 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
   };
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            clickOutsideDeactivates: true,
-            onDeactivate: requestClose,
-            escapeDeactivates: stopPropagation,
-          }}
-        >
+    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
           <Modal size="300">
             <Box grow="Yes" direction="Column">
               <Header
@@ -372,8 +360,6 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
               </Box>
             </Box>
           </Modal>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    </NativeDialog>
   );
 }

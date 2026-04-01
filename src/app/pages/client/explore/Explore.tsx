@@ -1,19 +1,14 @@
 import React, { FormEventHandler, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import FocusTrap from 'focus-trap-react';
 import {
   Avatar,
   Box,
   Button,
-  Dialog,
   Header,
   Icon,
   IconButton,
   Icons,
   Input,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Text,
   color,
   config,
@@ -36,7 +31,8 @@ import { getMxIdServer } from '../../../utils/matrix';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
-import { stopPropagation } from '../../../utils/keyboard';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 
 export function AddServer() {
   const mx = useMatrixClient();
@@ -74,17 +70,7 @@ export function AddServer() {
 
   return (
     <>
-      <Overlay open={dialog} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              clickOutsideDeactivates: true,
-              onDeactivate: () => setDialog(false),
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <Dialog variant="Surface">
+      <NativeDialog open={dialog} onClose={() => setDialog(false)} className={dialogCss.NativeDialog}>
               <Header
                 style={{
                   padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -136,10 +122,7 @@ export function AddServer() {
                   </Button>
                 </Box>
               </Box>
-            </Dialog>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      </NativeDialog>
       <Button
         variant="Secondary"
         fill="Soft"

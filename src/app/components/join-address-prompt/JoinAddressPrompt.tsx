@@ -1,10 +1,5 @@
 import React, { FormEventHandler, useState } from 'react';
-import FocusTrap from 'focus-trap-react';
 import {
-  Dialog,
-  Overlay,
-  OverlayCenter,
-  OverlayBackdrop,
   Header,
   config,
   Box,
@@ -16,7 +11,8 @@ import {
   Input,
   color,
 } from 'folds';
-import { stopPropagation } from '../../utils/keyboard';
+import { NativeDialog } from '../NativeDialog';
+import * as dialogCss from '../NativeDialog.css';
 import { isRoomAlias, isRoomId } from '../../utils/matrix';
 import { parseMatrixToRoom, parseMatrixToRoomEvent, testMatrixTo } from '../../plugins/matrix-to';
 import { tryDecodeURIComponent } from '../../utils/dom';
@@ -61,17 +57,7 @@ export function JoinAddressPrompt({ onOpen, onCancel }: JoinAddressProps) {
   };
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            onDeactivate: onCancel,
-            clickOutsideDeactivates: true,
-            escapeDeactivates: stopPropagation,
-          }}
-        >
-          <Dialog variant="Surface">
+    <NativeDialog open onClose={onCancel} className={dialogCss.NativeDialog}>
             <Header
               style={{
                 padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -123,9 +109,6 @@ export function JoinAddressPrompt({ onOpen, onCancel }: JoinAddressProps) {
                 <Text size="B400">Open</Text>
               </Button>
             </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    </NativeDialog>
   );
 }

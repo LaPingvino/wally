@@ -1,7 +1,6 @@
 import React, { ReactNode } from 'react';
-import FocusTrap from 'focus-trap-react';
-import { Modal, Overlay, OverlayBackdrop, OverlayCenter } from 'folds';
-import { stopPropagation } from '../utils/keyboard';
+import { NativeDialog } from './NativeDialog';
+import * as dialogCss from './NativeDialog.css';
 
 type Modal500Props = {
   requestClose: () => void;
@@ -9,21 +8,8 @@ type Modal500Props = {
 };
 export function Modal500({ requestClose, children }: Modal500Props) {
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            clickOutsideDeactivates: true,
-            onDeactivate: requestClose,
-            escapeDeactivates: stopPropagation,
-          }}
-        >
-          <Modal size="500" variant="Background">
-            {children}
-          </Modal>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
+      {children}
+    </NativeDialog>
   );
 }

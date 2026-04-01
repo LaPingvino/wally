@@ -10,18 +10,15 @@ import {
   Box,
   Button,
   config,
-  Dialog,
   Header,
   Icon,
   IconButton,
   Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import { NativeDialog } from './NativeDialog';
+import * as dialogCss from './NativeDialog.css';
 import {
   useVerificationRequestPhase,
   useVerificationRequestReceived,
@@ -247,16 +244,7 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
   }, [request]);
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            clickOutsideDeactivates: false,
-            escapeDeactivates: false,
-          }}
-        >
-          <Dialog variant="Surface">
+    <NativeDialog open onClose={handleCancel} className={dialogCss.NativeDialog}>
             <Header style={DialogHeaderStyles} variant="Surface" size="500">
               <Box grow="Yes">
                 <Text size="H4">Device Verification</Text>
@@ -292,10 +280,7 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
                 <VerificationCanceled onClose={handleCancel} />
               )}
             </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    </NativeDialog>
   );
 }
 

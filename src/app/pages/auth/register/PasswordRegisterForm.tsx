@@ -3,12 +3,10 @@ import {
   Button,
   Checkbox,
   Input,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
   color,
+  config,
 } from 'folds';
 import React, { ChangeEventHandler, useCallback, useMemo, useState } from 'react';
 import {
@@ -42,6 +40,8 @@ import {
 import { useRegisterEmail } from '../../../hooks/useRegisterEmail';
 import { ConfirmPasswordMatch } from '../../../components/ConfirmPasswordMatch';
 import { UIAFlowOverlay } from '../../../components/UIAFlowOverlay';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { RequestEmailTokenCallback, RequestEmailTokenResponse } from '../../../hooks/types';
 
 export const SUPPORTED_REGISTER_STAGES = [
@@ -409,11 +409,11 @@ export function PasswordRegisterForm({
           />
         )}
       {registerState.status === AsyncStatus.Loading && (
-        <Overlay open backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
+        <NativeDialog open onClose={() => {}} className={dialogCss.NativeDialog}>
+          <Box style={{ padding: config.space.S400, display: 'flex', justifyContent: 'center' }}>
             <Spinner variant="Secondary" size="600" />
-          </OverlayCenter>
-        </Overlay>
+          </Box>
+        </NativeDialog>
       )}
     </>
   );

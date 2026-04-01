@@ -8,15 +8,12 @@ import {
   Icon,
   Icons,
   Modal,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
 } from 'folds';
 import { useAtom } from 'jotai';
-import FocusTrap from 'focus-trap-react';
 import { keyboardShortcutsHelpAtom, customShortcutKeysAtom } from '../../state/keyboardShortcutsHelp';
 import { KeyboardShortcut } from '../../hooks/useGlobalKeyboardShortcuts';
-import { stopPropagation } from '../../utils/keyboard';
+import { NativeDialog } from '../NativeDialog';
+import * as dialogCss from '../NativeDialog.css';
 
 interface KeyboardShortcutsHelpProps {
   shortcuts: KeyboardShortcut[];
@@ -68,7 +65,6 @@ const TITLE_ID = 'kb-shortcuts-help-title';
 export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps) {
   const [open, setOpen] = useAtom(keyboardShortcutsHelpAtom);
   const [customKeys, setCustomKeys] = useAtom(customShortcutKeysAtom);
-  const triggerRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // recordingFor: description of the shortcut being rebound, or null
@@ -105,33 +101,13 @@ export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps)
   }, [open, setRecordingFor, setCustomKeys]);
 
   const handleClose = useCallback(() => {
+    // If recording a shortcut, don't close — the capture handler handles Escape
+    if (recordingForRef.current !== null) return;
     setOpen(false);
     setRecordingFor(null);
-    setTimeout(() => {
-      if (triggerRef.current && document.body.contains(triggerRef.current)) {
-        (triggerRef.current as HTMLElement).focus();
-      }
-      triggerRef.current = null;
-    }, 50);
   }, [setOpen, setRecordingFor]);
 
-  // escapeDeactivates: check ref so it's always current even if FocusTrap caches it
-  const escapeDeactivates = useCallback((evt: KeyboardEvent): boolean => {
-    if (recordingForRef.current !== null) {
-      // The recording capture handler above already handled this Escape;
-      // just tell FocusTrap not to close.
-      evt.stopPropagation();
-      return false;
-    }
-    return stopPropagation(evt);
-  }, []);
-
   if (!open) return null;
-
-  // Capture trigger synchronously before FocusTrap moves focus
-  if (!triggerRef.current) {
-    triggerRef.current = document.activeElement as HTMLElement | null;
-  }
 
   const effectiveKey = (s: KeyboardShortcut) => customKeys[s.description] ?? s.defaultKey;
   const resetShortcut = (desc: string) =>
@@ -145,24 +121,14 @@ export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps)
   const allRows = shortcuts;
 
   return (
-    <Overlay open={open} backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            returnFocusOnDeactivate: false,
-            onDeactivate: handleClose,
-            clickOutsideDeactivates: true,
-            allowOutsideClick: true,
-            escapeDeactivates,
-          }}
-        >
-          <Modal
-            size="500"
-            variant="Background"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={TITLE_ID}
-          >
+    <NativeDialog open={open} onClose={handleClose} className={dialogCss.NativeDialog}>
+      <Modal
+        size="500"
+        variant="Background"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={TITLE_ID}
+      >
             <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
 
               {/* Header */}
@@ -248,10 +214,8 @@ export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps)
                 ))}
               </div>
             </Box>
-          </Modal>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+      </Modal>
+    </NativeDialog>
   );
 }
 

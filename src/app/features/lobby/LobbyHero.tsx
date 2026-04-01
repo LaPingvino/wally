@@ -1,6 +1,5 @@
 import React from 'react';
-import { Avatar, Overlay, OverlayBackdrop, OverlayCenter, Text } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import { Avatar, Text } from 'folds';
 import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
 import { useSpace } from '../../hooks/useSpace';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -10,7 +9,9 @@ import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
 import * as css from './LobbyHero.css';
 import { PageHero } from '../../components/page';
-import { onEnterOrSpace, stopPropagation } from '../../utils/keyboard';
+import { onEnterOrSpace } from '../../utils/keyboard';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import { mxcUrlToHttp } from '../../utils/matrix';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 
@@ -42,24 +43,13 @@ export function LobbyHero() {
           <UseStateProvider initial={false}>
             {(viewTopic, setViewTopic) => (
               <>
-                <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
-                  <OverlayCenter>
-                    <FocusTrap
-                      focusTrapOptions={{
-                        initialFocus: false,
-                        clickOutsideDeactivates: true,
-                        onDeactivate: () => setViewTopic(false),
-                        escapeDeactivates: stopPropagation,
-                      }}
-                    >
+                <NativeDialog open={viewTopic} onClose={() => setViewTopic(false)} className={dialogCss.NativeDialog}>
                       <RoomTopicViewer
                         name={name}
                         topic={topic}
                         requestClose={() => setViewTopic(false)}
                       />
-                    </FocusTrap>
-                  </OverlayCenter>
-                </Overlay>
+                </NativeDialog>
                 <Text
                   as="span"
                   onClick={() => setViewTopic(true)}

@@ -1,10 +1,6 @@
 import React, { MouseEventHandler, useCallback, useMemo, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
 import {
-  Dialog,
-  Overlay,
-  OverlayCenter,
-  OverlayBackdrop,
   Header,
   config,
   Box,
@@ -23,6 +19,8 @@ import { Direction, MatrixError } from 'matrix-js-sdk';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { stopPropagation } from '../../../utils/keyboard';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { useAlive } from '../../../hooks/useAlive';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { useRoom } from '../../../hooks/useRoom';
@@ -86,17 +84,7 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
   };
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            onDeactivate: onCancel,
-            clickOutsideDeactivates: true,
-            escapeDeactivates: stopPropagation,
-          }}
-        >
-          <Dialog variant="Surface">
+    <NativeDialog open onClose={onCancel} className={dialogCss.NativeDialog}>
             <Header
               style={{
                 padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -252,9 +240,6 @@ export function JumpToTime({ onCancel, onSubmit }: JumpToTimeProps) {
                 <Text size="B400">Open Timeline</Text>
               </Button>
             </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    </NativeDialog>
   );
 }

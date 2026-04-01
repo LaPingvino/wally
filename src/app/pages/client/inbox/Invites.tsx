@@ -8,9 +8,6 @@ import {
   Icon,
   IconButton,
   Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Scroll,
   Spinner,
   Text,
@@ -19,7 +16,6 @@ import {
 } from 'folds';
 import { useAtomValue } from 'jotai';
 import { RoomTopicEventContent } from 'matrix-js-sdk/lib/types';
-import FocusTrap from 'focus-trap-react';
 import { MatrixClient, MatrixError, Room } from 'matrix-js-sdk';
 import {
   Page,
@@ -53,7 +49,9 @@ import {
 } from '../../../utils/matrix';
 import { Time } from '../../../components/message';
 import { useElementSizeObserver } from '../../../hooks/useElementSizeObserver';
-import { onEnterOrSpace, stopPropagation } from '../../../utils/keyboard';
+import { onEnterOrSpace } from '../../../utils/keyboard';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { RoomTopicViewer } from '../../../components/room-topic-viewer';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
@@ -250,24 +248,13 @@ function InviteCard({
                   {invite.roomTopic}
                 </Text>
               )}
-              <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
-                <OverlayCenter>
-                  <FocusTrap
-                    focusTrapOptions={{
-                      initialFocus: false,
-                      clickOutsideDeactivates: true,
-                      onDeactivate: closeTopic,
-                      escapeDeactivates: stopPropagation,
-                    }}
-                  >
+              <NativeDialog open={viewTopic} onClose={closeTopic} className={dialogCss.NativeDialog}>
                     <RoomTopicViewer
                       name={invite.roomName}
                       topic={invite.roomTopic ?? ''}
                       requestClose={closeTopic}
                     />
-                  </FocusTrap>
-                </OverlayCenter>
-              </Overlay>
+              </NativeDialog>
             </Box>
             {joinState.status === AsyncStatus.Error && (
               <Text size="T200" style={{ color: color.Critical.Main }}>

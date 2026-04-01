@@ -6,15 +6,11 @@ import {
   IconButton,
   Icons,
   Input,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
   color,
   config,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
 
 import { addSecondarySession } from '../../state/sessions';
 import { autoDiscovery } from '../../cs-api';
@@ -22,8 +18,8 @@ import { login, LoginError } from '../auth/login/loginUtil';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { PasswordInput } from '../../components/password-input';
 import { useClientConfig, clientDefaultServer } from '../../hooks/useClientConfig';
-import { stopPropagation } from '../../utils/keyboard';
-import { Modal500 } from '../../components/Modal500';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 
 type AddAccountDialogProps = {
   onClose: () => void;
@@ -114,16 +110,7 @@ export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
     loginState.status === AsyncStatus.Loading || loginState.status === AsyncStatus.Success;
 
   return (
-    <Modal500 requestClose={onClose}>
-      <FocusTrap
-        focusTrapOptions={{
-          initialFocus: false,
-          returnFocusOnDeactivate: false,
-          onDeactivate: onClose,
-          clickOutsideDeactivates: true,
-          escapeDeactivates: stopPropagation,
-        }}
-      >
+    <NativeDialog open onClose={onClose} className={dialogCss.NativeDialog}>
         <Box
           as="form"
           onSubmit={handleSubmit}
@@ -201,13 +188,14 @@ export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
             </Text>
           </Button>
 
-          <Overlay open={loading} backdrop={<OverlayBackdrop />}>
-            <OverlayCenter>
+          {loading && (
+            <Box
+              style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.3)' }}
+            >
               <Spinner variant="Secondary" size="600" />
-            </OverlayCenter>
-          </Overlay>
+            </Box>
+          )}
         </Box>
-      </FocusTrap>
-    </Modal500>
+    </NativeDialog>
   );
 }

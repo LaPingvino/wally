@@ -2,18 +2,13 @@ import React, { FormEventHandler, useCallback, useEffect, useMemo, useState } fr
 import {
   Box,
   Button,
-  Dialog,
   Input,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
   color,
   config,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import FocusTrap from 'focus-trap-react';
 import { AuthDict, AuthType, MatrixError, createClient } from 'matrix-js-sdk';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -25,6 +20,8 @@ import { FieldError } from '../FiledError';
 import { UIAFlowOverlay } from '../../../components/UIAFlowOverlay';
 import { EmailStageDialog } from '../../../components/uia-stages';
 import { ResetPasswordResult, resetPassword } from './resetPasswordUtil';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { getLoginPath, withSearchParam } from '../../pathUtils';
 import { LoginPathSearchParams } from '../../paths';
 import { getUIAError, getUIAErrorCode } from '../../../utils/matrix-uia';
@@ -50,10 +47,7 @@ function ResetPasswordComplete({ email }: { email?: string }) {
   };
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap>
-          <Dialog>
+    <NativeDialog open onClose={handleClick} className={dialogCss.NativeDialog}>
             <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
               <Text>
                 Password has been reset successfully. Please login with your new password.
@@ -64,10 +58,7 @@ function ResetPasswordComplete({ email }: { email?: string }) {
                 </Text>
               </Button>
             </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    </NativeDialog>
   );
 }
 
@@ -258,17 +249,18 @@ export function PasswordResetForm({ defaultEmail }: PasswordResetFormProps) {
         </UIAFlowOverlay>
       )}
 
-      <Overlay
+      <NativeDialog
         open={
           passwordEmailState.status === AsyncStatus.Loading ||
           resetPasswordState.status === AsyncStatus.Loading
         }
-        backdrop={<OverlayBackdrop />}
+        onClose={() => {}}
+        className={dialogCss.NativeDialog}
       >
-        <OverlayCenter>
+        <Box style={{ padding: config.space.S400, display: 'flex', justifyContent: 'center' }}>
           <Spinner variant="Secondary" size="600" />
-        </OverlayCenter>
-      </Overlay>
+        </Box>
+      </NativeDialog>
     </Box>
   );
 }

@@ -4,10 +4,6 @@ import {
   color,
   Spinner,
   Text,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
-  Dialog,
   Header,
   config,
   Box,
@@ -15,7 +11,6 @@ import {
   Icon,
   Icons,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
 import { MatrixError, Method } from 'matrix-js-sdk';
 import { RoomTombstoneEventContent } from 'matrix-js-sdk/lib/types';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -28,7 +23,8 @@ import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useCapabilities } from '../../../hooks/useCapabilities';
-import { stopPropagation } from '../../../utils/keyboard';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import {
   AdditionalCreatorInput,
@@ -83,17 +79,7 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
   };
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            onDeactivate: requestClose,
-            clickOutsideDeactivates: true,
-            escapeDeactivates: stopPropagation,
-          }}
-        >
-          <Dialog variant="Surface">
+    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
             <Header
               style={{
                 padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -151,10 +137,7 @@ function RoomUpgradeDialog({ requestClose }: { requestClose: () => void }) {
                 <Text size="B400">{room.isSpaceRoom() ? 'Upgrade Space' : 'Upgrade Room'}</Text>
               </Button>
             </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    </NativeDialog>
   );
 }
 

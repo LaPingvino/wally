@@ -1,4 +1,3 @@
-import FocusTrap from 'focus-trap-react';
 import {
   Avatar,
   Box,
@@ -9,8 +8,6 @@ import {
   Line,
   MenuItem,
   Modal,
-  Overlay,
-  OverlayCenter,
   Scroll,
   Text,
   toRem,
@@ -61,6 +58,8 @@ import { KeySymbol } from '../../utils/key-symbol';
 import { isMacOS } from '../../utils/user-agent';
 import { useShortcutsList, KeyboardShortcut } from '../../hooks/useGlobalKeyboardShortcuts';
 import { useCallStateSafe } from '../../pages/client/call/CallProvider';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import { useSetSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { useNavigateUnread } from '../../hooks/useNavigateUnread';
@@ -362,21 +361,7 @@ export function Search({ requestClose }: SearchProps) {
   }, [listFocus.index]);
 
   return (
-    <Overlay open>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: () => inputRef.current,
-            returnFocusOnDeactivate: false,
-            allowOutsideClick: true,
-            clickOutsideDeactivates: true,
-            onDeactivate: requestClose,
-            escapeDeactivates: (evt) => {
-              evt.stopPropagation();
-              return true;
-            },
-          }}
-        >
+    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
           <Modal size="400" style={{ maxHeight: toRem(400), borderRadius: config.radii.R500 }}>
             <Box
               shrink="No"
@@ -599,9 +584,7 @@ export function Search({ requestClose }: SearchProps) {
               </Text>
             </Box>
           </Modal>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+    </NativeDialog>
   );
 }
 

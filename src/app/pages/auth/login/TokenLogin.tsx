@@ -2,14 +2,13 @@ import {
   Box,
   Icon,
   Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
   color,
   config,
 } from 'folds';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import React, { useCallback, useEffect } from 'react';
 import { MatrixError } from 'matrix-js-sdk';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
@@ -84,11 +83,11 @@ export function TokenLogin({ token }: TokenLoginProps) {
           )}
         </>
       )}
-      <Overlay open={loginState.status !== AsyncStatus.Error} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
+      <NativeDialog open={loginState.status !== AsyncStatus.Error} onClose={() => {}} className={dialogCss.NativeDialog}>
+        <Box style={{ padding: config.space.S400, display: 'flex', justifyContent: 'center' }}>
           <Spinner size="600" variant="Secondary" />
-        </OverlayCenter>
-      </Overlay>
+        </Box>
+      </NativeDialog>
     </>
   );
 }

@@ -9,9 +9,6 @@ import {
   Icons,
   Spinner,
   Text,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   IconButton,
   RectCords,
   PopOut,
@@ -32,6 +29,8 @@ import {
   DeviceVerificationSetup,
 } from '../../../components/DeviceVerificationSetup';
 import { stopPropagation } from '../../../utils/keyboard';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { useAuthMetadata } from '../../../hooks/useAuthMetadata';
 import { withSearchParam } from '../../../pages/pathUtils';
 import { useAccountManagementActions } from '../../../hooks/useAccountManagement';
@@ -234,21 +233,9 @@ export function EnableVerification({ visible }: EnableVerificationProps) {
           </Text>
         </Button>
       )}
-      {open && (
-        <Overlay open backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                initialFocus: false,
-                clickOutsideDeactivates: false,
-                escapeDeactivates: false,
-              }}
-            >
-              <DeviceVerificationSetup onCancel={handleCancel} />
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
+      <NativeDialog open={open} onClose={handleCancel} className={dialogCss.NativeDialog}>
+        <DeviceVerificationSetup onCancel={handleCancel} />
+      </NativeDialog>
     </>
   );
 }
@@ -332,21 +319,9 @@ export function DeviceVerificationOptions() {
           </FocusTrap>
         }
       />
-      {reset && (
-        <Overlay open backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                initialFocus: false,
-                clickOutsideDeactivates: false,
-                escapeDeactivates: false,
-              }}
-            >
-              <DeviceVerificationReset onCancel={handleCancelReset} />
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
+      <NativeDialog open={reset} onClose={handleCancelReset} className={dialogCss.NativeDialog}>
+        <DeviceVerificationReset onCancel={handleCancelReset} />
+      </NativeDialog>
     </>
   );
 }

@@ -4,20 +4,15 @@ import {
   Button,
   color,
   config,
-  Dialog,
   Header,
   Icon,
   IconButton,
   Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
 } from 'folds';
 import React, { useCallback, useState } from 'react';
 import { MatrixError } from 'matrix-js-sdk';
-import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../../room-settings/styles.css';
 import { SettingTile } from '../../../components/setting-tile';
@@ -26,7 +21,8 @@ import { StateEvent } from '../../../../types/matrix/room';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useRoom } from '../../../hooks/useRoom';
 import { useStateEvent } from '../../../hooks/useStateEvent';
-import { stopPropagation } from '../../../utils/keyboard';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 
 const ROOM_ENC_ALGO = 'm.megolm.v1.aes-sha2';
@@ -101,17 +97,7 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
           </Text>
         )}
         {prompt && (
-          <Overlay open backdrop={<OverlayBackdrop />}>
-            <OverlayCenter>
-              <FocusTrap
-                focusTrapOptions={{
-                  initialFocus: false,
-                  onDeactivate: () => setPrompt(false),
-                  clickOutsideDeactivates: true,
-                  escapeDeactivates: stopPropagation,
-                }}
-              >
-                <Dialog variant="Surface">
+          <NativeDialog open={prompt} onClose={() => setPrompt(false)} className={dialogCss.NativeDialog}>
                   <Header
                     style={{
                       padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
@@ -135,10 +121,7 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
                       <Text size="B400">Enable E2E Encryption</Text>
                     </Button>
                   </Box>
-                </Dialog>
-              </FocusTrap>
-            </OverlayCenter>
-          </Overlay>
+          </NativeDialog>
         )}
       </SettingTile>
     </SequenceCard>
