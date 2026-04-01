@@ -26,6 +26,8 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { LogoutDialog } from '../../../components/LogoutDialog';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -205,21 +207,9 @@ export function DeviceLogoutBtn() {
       <Chip variant="Secondary" fill="Soft" radii="Pill" onClick={() => setPrompt(true)}>
         <Text size="B300">Logout</Text>
       </Chip>
-      {prompt && (
-        <Overlay open backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                onDeactivate: handleClose,
-                clickOutsideDeactivates: true,
-                escapeDeactivates: stopPropagation,
-              }}
-            >
-              <LogoutDialog handleClose={handleClose} />
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
+      <NativeDialog open={!!prompt} onClose={handleClose} className={dialogCss.NativeDialog}>
+        <LogoutDialog handleClose={handleClose} />
+      </NativeDialog>
     </>
   );
 }

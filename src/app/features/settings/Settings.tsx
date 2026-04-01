@@ -34,6 +34,8 @@ import { Performance } from './performance';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 
 export enum SettingsPages {
   GeneralPage,
@@ -198,21 +200,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                       >
                         <Text size="B400">Logout</Text>
                       </Button>
-                      {logout && (
-                        <Overlay open backdrop={<OverlayBackdrop />}>
-                          <OverlayCenter>
-                            <FocusTrap
-                              focusTrapOptions={{
-                                onDeactivate: () => setLogout(false),
-                                clickOutsideDeactivates: true,
-                                escapeDeactivates: stopPropagation,
-                              }}
-                            >
-                              <LogoutDialog handleClose={() => setLogout(false)} />
-                            </FocusTrap>
-                          </OverlayCenter>
-                        </Overlay>
-                      )}
+                      <NativeDialog open={!!logout} onClose={() => setLogout(false)} className={dialogCss.NativeDialog}>
+                        <LogoutDialog handleClose={() => setLogout(false)} />
+                      </NativeDialog>
                     </>
                   )}
                 </UseStateProvider>

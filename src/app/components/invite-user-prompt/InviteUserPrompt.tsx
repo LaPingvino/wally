@@ -8,9 +8,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Box,
   Header,
   config,
@@ -23,7 +20,6 @@ import {
   Spinner,
   color,
   TextArea,
-  Dialog,
   Menu,
   toRem,
   Scroll,
@@ -33,6 +29,8 @@ import { Room } from 'matrix-js-sdk';
 import { isKeyHotkey } from 'is-hotkey';
 import FocusTrap from 'focus-trap-react';
 import { stopPropagation } from '../../utils/keyboard';
+import { NativeDialog } from '../NativeDialog';
+import * as dialogCss from '../NativeDialog.css';
 import { useDirectUsers } from '../../hooks/useDirectUsers';
 import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../utils/matrix';
 import { Membership } from '../../../types/matrix/room';
@@ -151,17 +149,8 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
   };
 
   return (
-    <Overlay open backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: () => inputRef.current,
-            clickOutsideDeactivates: true,
-            onDeactivate: requestClose,
-            escapeDeactivates: stopPropagation,
-          }}
-        >
-          <Dialog>
+    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
+      <div>
             <Box grow="Yes" direction="Column">
               <Header
                 size="500"
@@ -283,9 +272,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
                 </Button>
               </Box>
             </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+      </div>
+    </NativeDialog>
   );
 }
