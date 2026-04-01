@@ -23,8 +23,8 @@ export const NativeDialog = style({
 /** Fixed-size dialog matching folds Modal size="500" (used by Settings, etc.) */
 export const NativeDialog500 = style({
   ...base,
-  width: config.size.X600,
+  width: config.size.ModalWidth500,
   maxWidth: '100vw',
-  height: '80vh',
+  height: config.size.ModalHeight500,
   maxHeight: '100vh',
 });
