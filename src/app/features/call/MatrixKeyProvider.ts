@@ -25,12 +25,14 @@ export class MatrixKeyProvider extends BaseKeyProvider {
   async setEncryptionKey(key: Uint8Array, keyIndex: number, participantIdentity: string): Promise<void> {
     callDebug('e2ee', 'Setting encryption key', { participantIdentity, keyIndex, keyLength: key.byteLength });
     try {
-      // Use slice() to get exactly the key bytes — key.buffer would pass the
-      // entire underlying ArrayBuffer if key is a view/subarray.
-      const keyBytes = key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength);
+      // Import as HKDF key material — LiveKit's E2EE worker calls deriveKeys()
+      // to derive the actual AES-GCM encryption key via HKDF.
+      // Pass the Uint8Array directly (not .buffer) — matches Element Call's
+      // implementation exactly. crypto.subtle.importKey handles Uint8Array
+      // natively and respects byteOffset/byteLength correctly.
       const cryptoKey = await crypto.subtle.importKey(
         'raw',
-        keyBytes,
+        key,
         'HKDF',
         false,
         ['deriveBits', 'deriveKey'],

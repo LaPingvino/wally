@@ -340,7 +340,6 @@ export function Direct() {
                         selected={selectedRoomId === roomId}
                         focused={false}
                         optionId={`room-option-fav-${roomId}`}
-                        tabIndex={0}
                         showAvatar
                         direct
                         linkPath={getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}

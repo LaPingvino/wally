@@ -699,7 +699,6 @@ export function Space() {
                       selected={selectedRoomId === roomId}
                       focused={false}
                       optionId={`room-option-fav-${roomId}`}
-                      tabIndex={0}
                       linkPath={getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId))}
                       notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
                     />

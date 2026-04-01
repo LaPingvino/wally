@@ -5,17 +5,23 @@ interface RoomListboxProps {
   'aria-label': string;
   items: string[];
   focusedIndex: number;
-  // keyboard handling is done by PageNavContent's useNavArrowKeys
   onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
   onFocus?: React.FocusEventHandler<HTMLDivElement>;
   children: ReactNode;
 }
 
+/**
+ * Single tab-stop room list container.
+ * Tab lands here; arrow keys move between rooms via aria-activedescendant.
+ * Individual room items have tabIndex={-1} so they're not separate tab stops.
+ */
 export function RoomListbox({
   id,
   'aria-label': ariaLabel,
   items,
   focusedIndex,
+  onKeyDown,
+  onFocus,
   children,
 }: RoomListboxProps) {
   const activedescendant =
@@ -30,7 +36,9 @@ export function RoomListbox({
       aria-label={ariaLabel}
       aria-activedescendant={activedescendant}
       aria-orientation="vertical"
-      tabIndex={-1}
+      tabIndex={0}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
     >
       {children}
     </div>

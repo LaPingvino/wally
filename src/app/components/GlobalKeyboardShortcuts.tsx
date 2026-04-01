@@ -129,12 +129,8 @@ function findSidebarFocus(): HTMLElement | null {
 // Panels with role="region" + aria-label are auto-discovered by getRegionSections() below.
 const SECTION_FINDERS: Array<() => HTMLElement | null> = [
   findSidebarFocus,
-  () => {
-    const listbox = document.querySelector<HTMLElement>('#cinny-room-listbox');
-    if (!listbox) return null;
-    // Focus the first nav item inside the listbox.
-    return listbox.querySelector<HTMLElement>('[data-nav-item]') ?? listbox;
-  },
+  // Room list: single tab stop — focus the listbox itself (arrow keys navigate within)
+  () => document.querySelector<HTMLElement>('#cinny-room-listbox'),
   // First enabled button in the room header toolbar (skips disabled buttons)
   () => document.querySelector<HTMLElement>('#cinny-room-header-toolbar button:not([disabled])'),
   () => document.querySelector('#cinny-timeline'),

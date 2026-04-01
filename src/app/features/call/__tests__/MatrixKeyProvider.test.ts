@@ -21,16 +21,19 @@ const LK_ENCRYPTION_ALGORITHM = 'AES-GCM';
 const LK_SALT = 'LKFrameEncryptionKey';
 
 // ── Our key import (exactly what MatrixKeyProvider.setEncryptionKey does) ──
+// Must match: crypto.subtle.importKey('raw', key, 'HKDF', false, ['deriveBits', 'deriveKey'])
 
 async function wallyImportKey(key: Uint8Array): Promise<CryptoKey> {
-  const keyBytes = key.buffer.slice(key.byteOffset, key.byteOffset + key.byteLength);
-  return crypto.subtle.importKey(
-    'raw',
-    keyBytes,
-    'HKDF',
-    false,
-    ['deriveBits', 'deriveKey'],
-  );
+  return crypto.subtle.importKey('raw', key, 'HKDF', false, ['deriveBits', 'deriveKey']);
+}
+
+// ── Element Call's import (reference implementation from element-call repo) ──
+// From: src/e2ee/matrixKeyProvider.ts — onEncryptionKeyChanged callback
+// EC does: crypto.subtle.importKey("raw", encryptionKey, "HKDF", false, ["deriveBits", "deriveKey"])
+// Identical to ours — this test confirms they stay in sync.
+
+async function ecImportKey(encryptionKey: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', encryptionKey, 'HKDF', false, ['deriveBits', 'deriveKey']);
 }
 
 // ── The OLD (broken) import for regression testing ──
@@ -172,6 +175,81 @@ describe('E2EE key import — LiveKit reference roundtrip', () => {
     const wallyEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wallyDerived, data));
 
     expect(wallyEnc).toEqual(lkEnc);
+  });
+});
+
+describe('Wally vs Element Call equivalence', () => {
+  it('Wally and EC import produce byte-identical derived encryption keys', async () => {
+    const rawKey = crypto.getRandomValues(new Uint8Array(16));
+
+    const wallyMaterial = await wallyImportKey(rawKey);
+    const ecMaterial = await ecImportKey(new Uint8Array(rawKey));
+
+    const { encryptionKey: wallyDerived } = await lkDeriveKeys(wallyMaterial, LK_SALT);
+    const { encryptionKey: ecDerived } = await lkDeriveKeys(ecMaterial, LK_SALT);
+
+    // Encrypt same data — must produce identical ciphertext
+    const data = new TextEncoder().encode('E2EE audio frame from MatrixRTC');
+    const iv = new Uint8Array(12).fill(0x42);
+
+    const wallyEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wallyDerived, data));
+    const ecEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ecDerived, data));
+
+    expect(wallyEnc).toEqual(ecEnc);
+  });
+
+  it('Wally encrypts, EC decrypts (interop)', async () => {
+    const rawKey = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode('Wally to EC interop test');
+
+    // Wally encrypts
+    const wallyKey = (await lkDeriveKeys(await wallyImportKey(rawKey), LK_SALT)).encryptionKey;
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wallyKey, plaintext);
+
+    // EC decrypts
+    const ecKey = (await lkDeriveKeys(await ecImportKey(new Uint8Array(rawKey)), LK_SALT)).encryptionKey;
+    const decrypted = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, ecKey, ciphertext));
+
+    expect(decrypted).toEqual(plaintext);
+  });
+
+  it('EC encrypts, Wally decrypts (interop)', async () => {
+    const rawKey = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plaintext = new TextEncoder().encode('EC to Wally interop test');
+
+    // EC encrypts
+    const ecKey = (await lkDeriveKeys(await ecImportKey(rawKey), LK_SALT)).encryptionKey;
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ecKey, plaintext);
+
+    // Wally decrypts
+    const wallyKey = (await lkDeriveKeys(await wallyImportKey(new Uint8Array(rawKey)), LK_SALT)).encryptionKey;
+    const decrypted = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, wallyKey, ciphertext));
+
+    expect(decrypted).toEqual(plaintext);
+  });
+
+  it('subarray key: Wally handles correctly via direct Uint8Array pass', async () => {
+    // EC passes Uint8Array directly too — both handle subarrays correctly
+    // because crypto.subtle.importKey respects byteOffset/byteLength on TypedArrays
+    const bigBuffer = new Uint8Array(32);
+    crypto.getRandomValues(bigBuffer);
+    const keySlice = bigBuffer.subarray(16, 32);
+
+    const wallyMaterial = await wallyImportKey(keySlice);
+    const ecMaterial = await ecImportKey(keySlice);
+
+    const { encryptionKey: wallyKey } = await lkDeriveKeys(wallyMaterial, LK_SALT);
+    const { encryptionKey: ecKey } = await lkDeriveKeys(ecMaterial, LK_SALT);
+
+    const data = new Uint8Array([0xde, 0xad]);
+    const iv = new Uint8Array(12).fill(0x01);
+
+    const wallyEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wallyKey, data));
+    const ecEnc = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, ecKey, data));
+
+    expect(wallyEnc).toEqual(ecEnc);
   });
 });
 

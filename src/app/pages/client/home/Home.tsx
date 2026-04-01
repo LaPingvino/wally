@@ -420,7 +420,6 @@ export function Home() {
                         selected={selectedRoomId === roomId}
                         focused={false}
                         optionId={`room-option-fav-${roomId}`}
-                        tabIndex={0}
                         linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
                         notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
                       />

@@ -398,7 +398,7 @@ export function RoomNavItem({
         {...hoverProps}
         {...focusWithinProps}
       >
-        <NavButton onClick={handleNavItemClick} aria-label={ariaLabel} tabIndex={tabIndex}>
+        <NavButton onClick={handleNavItemClick} aria-label={ariaLabel} tabIndex={tabIndex ?? -1}>
           <NavItemContent>
             <Box as="span" grow="Yes" alignItems="Center" gap="200">
               <Avatar size="200" radii="400">
