@@ -7,7 +7,6 @@ import {
   IconButton,
   Icon,
   Icons,
-  Modal,
 } from 'folds';
 import { useAtom } from 'jotai';
 import { keyboardShortcutsHelpAtom, customShortcutKeysAtom } from '../../state/keyboardShortcutsHelp';
@@ -121,10 +120,8 @@ export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps)
   const allRows = shortcuts;
 
   return (
-    <NativeDialog open={open} onClose={handleClose} className={dialogCss.NativeDialog}>
-      <Modal
-        size="500"
-        variant="Background"
+    <NativeDialog open={open} onClose={handleClose} className={dialogCss.NativeDialog500}>
+      <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={TITLE_ID}
@@ -214,7 +211,7 @@ export function KeyboardShortcutsHelp({ shortcuts }: KeyboardShortcutsHelpProps)
                 ))}
               </div>
             </Box>
-      </Modal>
+      </div>
     </NativeDialog>
   );
 }

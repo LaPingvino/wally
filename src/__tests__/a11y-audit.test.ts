@@ -159,6 +159,23 @@ describe('Call accessibility', () => {
   });
 });
 
+describe('NativeDialog must not wrap folds Modal', () => {
+  it('no file imports both NativeDialog and uses <Modal> inside it', () => {
+    const allFiles = getAllTsxFiles(SRC_DIR);
+    for (const file of allFiles) {
+      const src = readFileSync(file, 'utf-8');
+      if (src.includes('NativeDialog') && file.includes('Modal500')) continue; // wrapper is fine
+      if (src.includes('NativeDialog') && file.includes('NativeDialog')) continue; // self
+      if (src.includes('NativeDialog') && src.match(/<Modal[\s>]/)) {
+        const rel = file.replace(SRC_DIR + '/', '');
+        throw new Error(
+          `${rel} wraps <Modal> inside NativeDialog — remove the Modal, NativeDialog provides its own styling`
+        );
+      }
+    }
+  });
+});
+
 describe('NativeDialog CSS variants', () => {
   it('NativeDialog.css.ts exports both default and 500 variants', () => {
     const src = readSrc('components/NativeDialog.css.ts');

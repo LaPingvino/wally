@@ -7,7 +7,6 @@ import {
   Input,
   Line,
   MenuItem,
-  Modal,
   Scroll,
   Text,
   toRem,
@@ -361,8 +360,7 @@ export function Search({ requestClose }: SearchProps) {
   }, [listFocus.index]);
 
   return (
-    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
-          <Modal size="400" style={{ maxHeight: toRem(400), borderRadius: config.radii.R500 }}>
+    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog} style={{ maxHeight: toRem(400), width: toRem(460) }}>
             <Box
               shrink="No"
               style={{ padding: config.space.S400, paddingBottom: 0 }}
@@ -583,7 +581,6 @@ export function Search({ requestClose }: SearchProps) {
                 <b>{isMacOS() ? KeySymbol.Command : 'Ctrl'}+K</b>
               </Text>
             </Box>
-          </Modal>
     </NativeDialog>
   );
 }

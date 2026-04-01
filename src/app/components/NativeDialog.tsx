@@ -5,6 +5,7 @@ interface NativeDialogProps {
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 /**
@@ -18,7 +19,7 @@ interface NativeDialogProps {
  * - Inert background (everything behind is non-interactive)
  * - Return focus on close (browser handles this)
  */
-export function NativeDialog({ open, onClose, children, className }: NativeDialogProps) {
+export function NativeDialog({ open, onClose, children, className, style }: NativeDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export function NativeDialog({ open, onClose, children, className }: NativeDialo
     <dialog
       ref={ref}
       className={className}
+      style={style}
       onCancel={handleCancel}
       onClick={handleBackdropClick}
     >

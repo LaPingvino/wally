@@ -10,7 +10,6 @@ import {
   Input,
   Menu,
   MenuItem,
-  Modal,
   Scroll,
   Spinner,
   Text,
@@ -176,7 +175,6 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
 
   return (
     <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
-          <Modal size="300">
             <Box grow="Yes" direction="Column">
               <Header
                 size="500"
@@ -359,7 +357,6 @@ export function AddExistingModal({ parentId, space, requestClose }: AddExistingM
                 </Scroll>
               </Box>
             </Box>
-          </Modal>
     </NativeDialog>
   );
 }
