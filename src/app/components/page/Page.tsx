@@ -33,15 +33,15 @@ export function PageNav({ size, children }: ClientDrawerLayoutProps & css.PageNa
   const isMobile = screenSize === ScreenSize.Mobile;
 
   return (
-    <Box
-      grow={isMobile ? 'Yes' : undefined}
+    <nav
+      aria-label="Room list"
       className={css.PageNav({ size })}
-      shrink={isMobile ? 'Yes' : 'No'}
+      style={isMobile ? { flexGrow: 1, flexShrink: 1 } : { flexShrink: 0 }}
     >
       <Box grow="Yes" direction="Column">
         {children}
       </Box>
-    </Box>
+    </nav>
   );
 }
 
@@ -83,8 +83,9 @@ export function PageNavContent({
   );
 }
 
-export const Page = as<'div'>(({ className, ...props }, ref) => (
+export const Page = as<'main'>(({ as: AsPage = 'main', className, ...props }, ref) => (
   <Box
+    as={AsPage}
     grow="Yes"
     direction="Column"
     className={classNames(ContainerColor({ variant: 'Surface' }), className)}
