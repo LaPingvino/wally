@@ -483,7 +483,7 @@ export const MessageDeleteItem = as<
                       (optional)
                     </Text>
                   </Text>
-                  <Input name="reasonInput" variant="Background" />
+                  <Input name="reasonInput" variant="Background" aria-label="Reason for removal" />
                   {deleteState.status === AsyncStatus.Error && (
                     <Text style={{ color: color.Critical.Main }} size="T300">
                       Failed to delete message! Please try again.
@@ -609,7 +609,7 @@ export const MessageReportItem = as<
                 </Text>
                 <Box direction="Column" gap="100">
                   <Text size="L400">Reason</Text>
-                  <Input name="reasonInput" variant="Background" required />
+                  <Input name="reasonInput" variant="Background" required aria-label="Reason for report" />
                   {reportState.status === AsyncStatus.Error && (
                     <Text style={{ color: color.Critical.Main }} size="T300">
                       Failed to report message! Please try again.

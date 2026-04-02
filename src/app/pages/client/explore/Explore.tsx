@@ -96,7 +96,7 @@ export function AddServer() {
                 <Text priority="400">Add server name to explore public communities.</Text>
                 <Box direction="Column" gap="100">
                   <Text size="L400">Server Name</Text>
-                  <Input ref={serverInputRef} name="serverInput" variant="Background" required />
+                  <Input ref={serverInputRef} name="serverInput" variant="Background" required aria-label="Server name" />
                   {exploreState.status === AsyncStatus.Error && (
                     <Text style={{ color: color.Critical.Main }} size="T300">
                       Failed to load public rooms. Please try again.

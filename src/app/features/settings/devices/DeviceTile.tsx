@@ -150,6 +150,7 @@ function DeviceRename({ device, onCancel, onRename, refreshDeviceList }: DeviceR
             size="300"
             variant="Secondary"
             radii="300"
+            aria-label="Device name"
             defaultValue={device.display_name}
             autoFocus
             required
