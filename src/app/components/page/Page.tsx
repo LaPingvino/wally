@@ -72,18 +72,21 @@ export function PageNavContent({
   onFocus?: React.FocusEventHandler<HTMLDivElement>;
 }) {
   return (
-    <Box grow="Yes" direction="Column">
+    <Box
+      grow="Yes"
+      direction="Column"
+      id={id}
+      tabIndex={id ? 0 : undefined}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
+    >
       <Scroll
         ref={scrollRef}
-        id={id}
-        tabIndex={id ? 0 : undefined}
         variant="Background"
         direction="Vertical"
         size="300"
         hideTrack
         visibility="Hover"
-        onKeyDown={onKeyDown}
-        onFocus={onFocus}
       >
         <div className={css.PageNavContent}>{children}</div>
       </Scroll>
