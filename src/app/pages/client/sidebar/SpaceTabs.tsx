@@ -522,7 +522,7 @@ function OpenedSpaceFolder({ folder, onClose, children }: OpenedSpaceFolderProps
     >
       <SidebarFolderDropTarget ref={aboveTargetRef} position="Top" />
       <SidebarAvatar size="300">
-        <IconButton data-id={folder.id} size="300" variant="Background" onClick={onClose}>
+        <IconButton data-id={folder.id} size="300" variant="Background" onClick={onClose} aria-label="Collapse folder">
           <Icon size="400" src={Icons.ChevronTop} filled />
         </IconButton>
       </SidebarAvatar>
