@@ -32,7 +32,7 @@ export class MatrixKeyProvider extends BaseKeyProvider {
       // natively and respects byteOffset/byteLength correctly.
       const cryptoKey = await crypto.subtle.importKey(
         'raw',
-        key,
+        key as BufferSource,
         'HKDF',
         false,
         ['deriveBits', 'deriveKey'],

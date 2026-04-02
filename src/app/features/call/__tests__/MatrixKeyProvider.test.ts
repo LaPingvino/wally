@@ -24,7 +24,7 @@ const LK_SALT = 'LKFrameEncryptionKey';
 // Must match: crypto.subtle.importKey('raw', key, 'HKDF', false, ['deriveBits', 'deriveKey'])
 
 async function wallyImportKey(key: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey('raw', key, 'HKDF', false, ['deriveBits', 'deriveKey']);
+  return crypto.subtle.importKey('raw', key as BufferSource, 'HKDF', false, ['deriveBits', 'deriveKey']);
 }
 
 // ── Element Call's import (reference implementation from element-call repo) ──
@@ -33,7 +33,7 @@ async function wallyImportKey(key: Uint8Array): Promise<CryptoKey> {
 // Identical to ours — this test confirms they stay in sync.
 
 async function ecImportKey(encryptionKey: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey('raw', encryptionKey, 'HKDF', false, ['deriveBits', 'deriveKey']);
+  return crypto.subtle.importKey('raw', encryptionKey as BufferSource, 'HKDF', false, ['deriveBits', 'deriveKey']);
 }
 
 // ── The OLD (broken) import for regression testing ──
