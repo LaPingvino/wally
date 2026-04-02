@@ -1,5 +1,4 @@
 import React, { ComponentProps, MutableRefObject, ReactNode } from 'react';
-import { useNavArrowKeys } from '../../hooks/useNavArrowKeys';
 import { Box, Header, Line, Scroll, Text, as } from 'folds';
 import classNames from 'classnames';
 import { ContainerColor } from '../../styles/ContainerColor.css';
@@ -66,8 +65,8 @@ export function PageNavContent({
   children: ReactNode;
   scrollRef?: MutableRefObject<HTMLDivElement | null>;
 }) {
-  const handleArrowKeys = useNavArrowKeys(scrollRef as MutableRefObject<HTMLElement | null>);
-
+  // Arrow key navigation is handled by RoomListbox's useRoomListKeyboard hook
+  // via aria-activedescendant. No parent-level arrow key handler needed.
   return (
     <Box grow="Yes" direction="Column">
       <Scroll
@@ -77,7 +76,6 @@ export function PageNavContent({
         size="300"
         hideTrack
         visibility="Hover"
-        onKeyDown={handleArrowKeys}
       >
         <div className={css.PageNavContent}>{children}</div>
       </Scroll>
