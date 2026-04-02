@@ -486,12 +486,12 @@ export const getReactCustomHtmlParser = (
             return (
               <span className={css.EmoticonBase}>
                 <span className={css.Emoticon()}>
-                  <img {...props} className={css.EmoticonImg} src={htmlSrc} />
+                  <img {...props} className={css.EmoticonImg} src={htmlSrc} alt={props.alt || props.title || 'emoji'} />
                 </span>
               </span>
             );
           }
-          if (htmlSrc) return <img {...props} className={css.Img} src={htmlSrc} />;
+          if (htmlSrc) return <img {...props} className={css.Img} src={htmlSrc} alt={props.alt || 'image'} />;
         }
       }
 
