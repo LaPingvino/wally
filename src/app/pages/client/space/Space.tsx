@@ -616,7 +616,7 @@ export function Space() {
   return (
     <PageNav>
       <SpaceHeader />
-      <PageNavContent scrollRef={scrollRef}>
+      <PageNavContent scrollRef={scrollRef} id="cinny-room-listbox" onKeyDown={keyboardNav.handleKeyDown} onFocus={keyboardNav.handleFocus}>
         <Box direction="Column" gap="300">
           {tombstoneEvent && (
             <SpaceTombstone
@@ -707,12 +707,9 @@ export function Space() {
             </NavCategory>
           )}
           <RoomListbox
-            id="cinny-room-listbox"
             aria-label="Space rooms"
             items={roomsOnly}
             focusedIndex={keyboardNav.focusedIndex}
-            onKeyDown={keyboardNav.handleKeyDown}
-            onFocus={keyboardNav.handleFocus}
           >
             <NavCategory
               style={{

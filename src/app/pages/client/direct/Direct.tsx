@@ -279,7 +279,7 @@ export function Direct() {
       {noRoomToDisplay ? (
         <DirectEmpty />
       ) : (
-        <PageNavContent scrollRef={scrollRef}>
+        <PageNavContent scrollRef={scrollRef} id="cinny-room-listbox" onKeyDown={keyboardNav.handleKeyDown} onFocus={keyboardNav.handleFocus}>
           <Box direction="Column" gap="300">
             <NavCategory>
               <NavItem variant="Background" radii="400" aria-selected={createDirectSelected}>
@@ -360,12 +360,9 @@ export function Direct() {
                 </RoomNavCategoryButton>
               </NavCategoryHeader>
               <RoomListbox
-                id="cinny-room-listbox"
                 aria-label="Direct Messages"
                 items={sortedDirects}
                 focusedIndex={keyboardNav.focusedIndex}
-                onKeyDown={keyboardNav.handleKeyDown}
-                onFocus={keyboardNav.handleFocus}
               >
                 <div
                   style={{

@@ -59,10 +59,17 @@ describe('Landmark roles', () => {
 });
 
 describe('Room list listbox pattern', () => {
-  it('RoomListbox has role="listbox" and tabIndex={0}', () => {
+  it('RoomListbox has role="listbox"', () => {
     const src = readSrc('components/room-listbox/RoomListbox.tsx');
     expect(src).toMatch(/role="listbox"/);
-    expect(src).toMatch(/tabIndex=\{0\}/);
+  });
+
+  it('PageNavContent scroll container is the keyboard focus target', () => {
+    const src = readSrc('components/page/Page.tsx');
+    // The Scroll element receives id, tabIndex, onKeyDown, onFocus
+    expect(src).toMatch(/Scroll[\s\S]*?id=\{id\}/);
+    expect(src).toMatch(/Scroll[\s\S]*?onKeyDown/);
+    expect(src).toMatch(/Scroll[\s\S]*?onFocus/);
   });
 
   it('RoomListbox uses aria-activedescendant', () => {

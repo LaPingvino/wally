@@ -60,22 +60,30 @@ export const PageNavHeader = as<'header', css.PageNavHeaderVariants>(
 
 export function PageNavContent({
   scrollRef,
+  id,
+  onKeyDown,
+  onFocus,
   children,
 }: {
   children: ReactNode;
   scrollRef?: MutableRefObject<HTMLDivElement | null>;
+  id?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
+  onFocus?: React.FocusEventHandler<HTMLDivElement>;
 }) {
-  // Arrow key navigation is handled by RoomListbox's useRoomListKeyboard hook
-  // via aria-activedescendant. No parent-level arrow key handler needed.
   return (
     <Box grow="Yes" direction="Column">
       <Scroll
         ref={scrollRef}
+        id={id}
+        tabIndex={id ? 0 : undefined}
         variant="Background"
         direction="Vertical"
         size="300"
         hideTrack
         visibility="Hover"
+        onKeyDown={onKeyDown}
+        onFocus={onFocus}
       >
         <div className={css.PageNavContent}>{children}</div>
       </Scroll>
