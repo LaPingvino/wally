@@ -21,20 +21,32 @@ export const useRoomListKeyboard = ({
 }: UseRoomListKeyboardOptions) => {
   const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 
+  // Clamp if items list shrinks
   useEffect(() => {
     if (focusedIndex >= items.length) {
       setFocusedIndex(items.length - 1);
     }
   }, [items.length, focusedIndex]);
 
-  // Called when the listbox div receives focus (e.g. via Tab)
-  const handleFocus = useCallback(() => {
-    if (focusedIndex < 0) {
-      const selectedIndex = selectedRoomId ? items.indexOf(selectedRoomId) : 0;
-      const idx = selectedIndex >= 0 ? selectedIndex : 0;
+  // Sync focusedIndex to selectedRoomId — when the user clicks a room,
+  // navigates via URL, or switches rooms any other way, the keyboard
+  // focus position follows so the next arrow press starts from the
+  // correct room.
+  useEffect(() => {
+    if (!selectedRoomId) return;
+    const idx = items.indexOf(selectedRoomId);
+    if (idx >= 0) {
       setFocusedIndex(idx);
-      virtualizer.scrollToIndex(idx, { align: 'auto' });
     }
+  }, [selectedRoomId, items]);
+
+  // Called when the listbox div receives focus (e.g. via Tab or F6).
+  // Always jump to the selected room so keyboard and view are in sync.
+  const handleFocus = useCallback(() => {
+    const selectedIndex = selectedRoomId ? items.indexOf(selectedRoomId) : -1;
+    const idx = selectedIndex >= 0 ? selectedIndex : Math.max(focusedIndex, 0);
+    setFocusedIndex(idx);
+    virtualizer.scrollToIndex(idx, { align: 'auto' });
   }, [focusedIndex, items, selectedRoomId, virtualizer]);
 
   const handleKeyDown = useCallback(
