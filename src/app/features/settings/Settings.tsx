@@ -9,12 +9,8 @@ import {
   Icons,
   IconSrc,
   MenuItem,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Text,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
 import { General } from './general';
 import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -33,7 +29,6 @@ import { KeyboardShortcuts } from './keyboard-shortcuts/KeyboardShortcuts';
 import { Performance } from './performance';
 import { Accessibility } from './accessibility';
 import { UseStateProvider } from '../../components/UseStateProvider';
-import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
 import { NativeDialog } from '../../components/NativeDialog';
 import * as dialogCss from '../../components/NativeDialog.css';

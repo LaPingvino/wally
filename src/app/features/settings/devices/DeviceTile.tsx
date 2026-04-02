@@ -11,12 +11,8 @@ import {
   color,
   Spinner,
   toRem,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
 } from 'folds';
 import { CryptoApi } from 'matrix-js-sdk/lib/crypto-api';
-import FocusTrap from 'focus-trap-react';
 import { IMyDevice, MatrixError } from 'matrix-js-sdk';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -28,7 +24,6 @@ import { SequenceCardStyle } from '../styles.css';
 import { LogoutDialog } from '../../../components/LogoutDialog';
 import { NativeDialog } from '../../../components/NativeDialog';
 import * as dialogCss from '../../../components/NativeDialog.css';
-import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 
