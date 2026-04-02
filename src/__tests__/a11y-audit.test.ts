@@ -41,7 +41,7 @@ describe('Landmark roles', () => {
 
   it('PageNav (room list panel) has navigation landmark', () => {
     const src = readSrc('components/page/Page.tsx');
-    expect(src).toMatch(/<nav[\s>]/);
+    expect(src).toMatch(/<nav[\s>]|as="nav"/);
     expect(src).toMatch(/aria-label.*Room list|aria-label="Room list"/);
   });
 
