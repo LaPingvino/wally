@@ -616,7 +616,7 @@ export function Space() {
   return (
     <PageNav>
       <SpaceHeader />
-      <PageNavContent scrollRef={scrollRef} id="cinny-room-listbox" onKeyDown={keyboardNav.handleKeyDown} onFocus={keyboardNav.handleFocus}>
+      <PageNavContent scrollRef={scrollRef}>
         <Box direction="Column" gap="300">
           {tombstoneEvent && (
             <SpaceTombstone

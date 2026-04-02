@@ -279,7 +279,7 @@ export function Direct() {
       {noRoomToDisplay ? (
         <DirectEmpty />
       ) : (
-        <PageNavContent scrollRef={scrollRef} id="cinny-room-listbox" onKeyDown={keyboardNav.handleKeyDown} onFocus={keyboardNav.handleFocus}>
+        <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
             <NavCategory>
               <NavItem variant="Background" radii="400" aria-selected={createDirectSelected}>

@@ -1,4 +1,5 @@
 import React, { ComponentProps, MutableRefObject, ReactNode } from 'react';
+import { useNavArrowKeys } from '../../hooks/useNavArrowKeys';
 import { Box, Header, Line, Scroll, Text, as } from 'folds';
 import classNames from 'classnames';
 import { ContainerColor } from '../../styles/ContainerColor.css';
@@ -60,33 +61,25 @@ export const PageNavHeader = as<'header', css.PageNavHeaderVariants>(
 
 export function PageNavContent({
   scrollRef,
-  id,
-  onKeyDown,
-  onFocus,
   children,
 }: {
   children: ReactNode;
   scrollRef?: MutableRefObject<HTMLDivElement | null>;
-  id?: string;
-  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
-  onFocus?: React.FocusEventHandler<HTMLDivElement>;
 }) {
+  const handleArrowKeys = useNavArrowKeys(scrollRef as MutableRefObject<HTMLElement | null>);
+
   return (
-    <Box
-      grow="Yes"
-      direction="Column"
-      id={id}
-      tabIndex={id ? 0 : undefined}
-      onKeyDown={onKeyDown}
-      onFocus={onFocus}
-    >
+    <Box grow="Yes" direction="Column">
       <Scroll
         ref={scrollRef}
+        id="cinny-room-listbox"
+        tabIndex={0}
         variant="Background"
         direction="Vertical"
         size="300"
         hideTrack
         visibility="Hover"
+        onKeyDown={handleArrowKeys}
       >
         <div className={css.PageNavContent}>{children}</div>
       </Scroll>

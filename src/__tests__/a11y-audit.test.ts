@@ -64,12 +64,11 @@ describe('Room list listbox pattern', () => {
     expect(src).toMatch(/role="listbox"/);
   });
 
-  it('PageNavContent scroll container is the keyboard focus target', () => {
+  it('PageNavContent has useNavArrowKeys for DOM focus navigation', () => {
     const src = readSrc('components/page/Page.tsx');
-    // The Scroll element receives id, tabIndex, onKeyDown, onFocus
-    expect(src).toMatch(/Scroll[\s\S]*?id=\{id\}/);
-    expect(src).toMatch(/Scroll[\s\S]*?onKeyDown/);
-    expect(src).toMatch(/Scroll[\s\S]*?onFocus/);
+    expect(src).toMatch(/useNavArrowKeys/);
+    expect(src).toMatch(/id="cinny-room-listbox"/);
+    expect(src).toMatch(/tabIndex=\{0\}/);
   });
 
   it('RoomListbox uses aria-activedescendant', () => {
