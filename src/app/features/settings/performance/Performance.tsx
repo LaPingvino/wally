@@ -9,6 +9,15 @@ import { syncBatchStats, resetSyncBatchStats } from '../../../state/syncBatchSch
 import { Membership } from '../../../../types/matrix/room';
 import { getMDirects } from '../../../utils/room';
 import { bytesToSize } from '../../../utils/common';
+import { clearCacheAndReload } from '../../../../client/initMatrix';
+import {
+  clearMemoryReports,
+  collectMemoryReport,
+  loadMemoryReports,
+  logMemoryReport,
+  MemoryReport,
+  saveMemoryReport,
+} from '../../../utils/memoryReport';
 
 type PerformanceProps = {
   requestClose: () => void;
@@ -51,6 +60,28 @@ export function Performance({ requestClose }: PerformanceProps) {
   const handleReset = useCallback(() => {
     resetSyncBatchStats();
     setTick((t) => t + 1);
+  }, []);
+
+  const handleCacheReset = useCallback(() => {
+    // eslint-disable-next-line no-alert
+    const ok = window.confirm(
+      'Clear the local Matrix cache and reload? You will re-sync from the server. Use this if the tab feels sluggish or if you hit a low-memory warning.'
+    );
+    if (!ok) return;
+    try {
+      const report = collectMemoryReport(mx, 'manual');
+      saveMemoryReport(report);
+      logMemoryReport(report);
+    } catch (e) {
+      console.warn('Failed to capture memory report:', e);
+    }
+    clearCacheAndReload(mx).catch(() => window.location.reload());
+  }, [mx]);
+
+  const [reports, setReports] = useState<MemoryReport[]>(() => loadMemoryReports());
+  const handleClearReports = useCallback(() => {
+    clearMemoryReports();
+    setReports([]);
   }, []);
 
   // Compute derived stats
@@ -195,6 +226,69 @@ export function Performance({ requestClose }: PerformanceProps) {
                     <SettingTile
                       title="JS Heap Limit"
                       description={bytesToSize(memory.jsHeapSizeLimit)}
+                    />
+                    <SettingTile
+                      title="Heap Pressure"
+                      description={`${Math.round((memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100)}% of limit (auto-reset at 90%, outside calls)`}
+                    />
+                  </SequenceCard>
+                </Box>
+              )}
+
+              {/* Manual recovery */}
+              <Box direction="Column" gap="100">
+                <Text size="L400">Recovery</Text>
+                <SequenceCard
+                  className={SequenceCardStyle}
+                  variant="SurfaceVariant"
+                  direction="Column"
+                >
+                  <SettingTile
+                    title="Clear cache and reload"
+                    description="Drops the local Matrix store and reloads the tab. Use if the app feels sluggish or you hit a low-memory warning. A diagnostic report is saved first."
+                    after={
+                      <Button size="300" variant="Critical" onClick={handleCacheReset}>
+                        <Text size="B300">Reset now</Text>
+                      </Button>
+                    }
+                  />
+                </SequenceCard>
+              </Box>
+
+              {/* Past memory reports */}
+              {reports.length > 0 && (
+                <Box direction="Column" gap="100">
+                  <Text size="L400">Memory Reports</Text>
+                  <SequenceCard
+                    className={SequenceCardStyle}
+                    variant="SurfaceVariant"
+                    direction="Column"
+                  >
+                    {reports.map((r, i) => {
+                      const top = r.topByTimelineEvents[0];
+                      const when = new Date(r.capturedAt).toLocaleString();
+                      const heapPct = r.heap
+                        ? `${Math.round((r.heap.used / r.heap.limit) * 100)}%`
+                        : 'heap stats unavailable';
+                      const culprit = top
+                        ? `biggest timeline: "${top.name}" (${formatNumber(top.timelineEvents)} events)`
+                        : 'no rooms captured';
+                      return (
+                        <SettingTile
+                          key={`${r.capturedAt}-${i}`}
+                          title={`${when} — ${r.trigger === 'auto' ? 'auto-reset' : 'manual'}`}
+                          description={`${heapPct} heap, ${formatNumber(r.roomCounts.joined)} rooms · ${culprit}`}
+                        />
+                      );
+                    })}
+                    <SettingTile
+                      title="Clear reports"
+                      description={`Stored locally (up to ${reports.length} report${reports.length === 1 ? '' : 's'}).`}
+                      after={
+                        <Button size="300" variant="Secondary" onClick={handleClearReports}>
+                          <Text size="B300">Clear</Text>
+                        </Button>
+                      }
                     />
                   </SequenceCard>
                 </Box>

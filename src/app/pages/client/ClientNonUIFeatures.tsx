@@ -30,6 +30,7 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
 import { repairIDBAndReload, backupSessionToCache, checkpointCryptoStores } from '../../../client/initMatrix';
+import { MemoryWatchdog } from './MemoryWatchdog';
 
 /**
  * Monitors session health after tab suspension (common on Chromebooks).
@@ -448,6 +449,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
     <>
       <SessionHealthMonitor />
       <CryptoCheckpointManager />
+      <MemoryWatchdog />
       <SystemEmojiFeature />
       <PageZoomFeature />
       <FaviconUpdater />
