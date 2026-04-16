@@ -14,7 +14,7 @@ import { EmojiFont, getSettings, settingsAtom } from '../../state/settings';
 import { allInvitesAtom } from '../../state/room-list/inviteList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { getInboxInvitesPath, getInboxNotificationsPath } from '../pathUtils';
+import { getHomeRoomPath, getInboxInvitesPath, getInboxNotificationsPath } from '../pathUtils';
 import {
   getMemberDisplayName,
   getNotificationType,
@@ -271,6 +271,8 @@ function MessageNotifications() {
       roomName,
       roomAvatar,
       username,
+      roomId,
+      eventId,
     }: {
       roomName: string;
       roomAvatar?: string;
@@ -286,7 +288,10 @@ function MessageNotifications() {
       });
 
       noti.onclick = () => {
-        if (!window.closed) navigate(getInboxNotificationsPath());
+        if (!window.closed) {
+          window.focus();
+          navigate(getHomeRoomPath(roomId, eventId));
+        }
         noti.close();
         notifRef.current = undefined;
       };

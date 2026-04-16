@@ -65,6 +65,7 @@ export interface Settings {
   roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
   perMessageProfiles: boolean;
   captionPosition: 'before' | 'after';
+  hideBlockedUserReactions: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -110,6 +111,7 @@ const defaultSettings: Settings = {
   roomSortOrder: 'activity',
   perMessageProfiles: false,
   captionPosition: 'before',
+  hideBlockedUserReactions: false,
 };
 
 export const getSettings = () => {

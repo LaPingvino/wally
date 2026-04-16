@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import classNames from 'classnames';
 import {
   Avatar,
@@ -28,6 +28,9 @@ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useOpenUserRoomProfile } from '../../../state/hooks/userRoomProfile';
 import { useSpaceOptionally } from '../../../hooks/useSpace';
 import { getMouseEventCords } from '../../../utils/dom';
+import { useIgnoredUsers } from '../../../hooks/useIgnoredUsers';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
 
 export type ReactionViewerProps = {
   room: Room;
@@ -39,10 +42,27 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
   ({ className, room, initialKey, relations, requestClose, ...props }, ref) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
-    const reactions = useRelations(
+    const [hideBlockedReactions] = useSetting(settingsAtom, 'hideBlockedUserReactions');
+    const ignoredUsers = useIgnoredUsers();
+    const ignoredUsersSet = useMemo(() => new Set(ignoredUsers), [ignoredUsers]);
+    const rawReactions = useRelations(
       relations,
       useCallback((rel) => [...(rel.getSortedAnnotationsByKey() ?? [])], [])
     );
+    const reactions = useMemo(() => {
+      if (!hideBlockedReactions || ignoredUsersSet.size === 0) return rawReactions;
+      return rawReactions
+        .map(([key, events]) => {
+          const filtered = new Set(
+            Array.from(events).filter((evt) => {
+              const sender = evt.getSender();
+              return !sender || !ignoredUsersSet.has(sender);
+            })
+          );
+          return [key, filtered] as [string, Set<any>];
+        })
+        .filter(([, events]) => events.size > 0);
+    }, [rawReactions, hideBlockedReactions, ignoredUsersSet]);
     const space = useSpaceOptionally();
     const openProfile = useOpenUserRoomProfile();
 
@@ -58,7 +78,12 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
     const getReactionsForKey = (key: string): MatrixEvent[] => {
       const reactSet = reactions.find(([k]) => k === key)?.[1];
       if (!reactSet) return [];
-      return Array.from(reactSet);
+      const all = Array.from(reactSet);
+      if (!hideBlockedReactions || ignoredUsersSet.size === 0) return all;
+      return all.filter((evt) => {
+        const sender = evt.getSender();
+        return !sender || !ignoredUsersSet.has(sender);
+      });
     };
 
     const selectedReactions = getReactionsForKey(selectedKey);
