@@ -48,7 +48,6 @@ import { useHomeRooms } from './useHomeRooms';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
-import { useNavigateUnread } from '../../../hooks/useNavigateUnread';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
@@ -247,7 +246,6 @@ export function Home() {
   const selectedRoomId = useSelectedRoom();
   const createRoomSelected = useHomeCreateSelected();
   const searchSelected = useHomeSearchSelected();
-  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
   const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
@@ -378,25 +376,6 @@ export function Home() {
                   </NavItemContent>
                 </NavLink>
               </NavItem>
-              {unreadCount > 0 && (
-                <NavItem variant="Background" radii="400">
-                  <NavItemContent>
-                    <Box as="span" grow="Yes" alignItems="Center" gap="200">
-                      <IconButton size="300" radii="300" onClick={navigatePrev}
-                        aria-label={`Previous unread room (Alt+Shift+Up), ${unreadCount} unread`}>
-                        <Icon src={Icons.ChevronTop} size="100" />
-                      </IconButton>
-                      <Box as="span" grow="Yes" style={{ textAlign: 'center' }}>
-                        <Text as="span" size="T200" priority="300">{unreadCount} unread</Text>
-                      </Box>
-                      <IconButton size="300" radii="300" onClick={navigateNext}
-                        aria-label="Next unread room (Alt+Shift+Down)">
-                        <Icon src={Icons.ChevronBottom} size="100" />
-                      </IconButton>
-                    </Box>
-                  </NavItemContent>
-                </NavItem>
-              )}
             </NavCategory>
             {favoriteRoomIds.length > 0 && (
               <NavCategory>
