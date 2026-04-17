@@ -331,6 +331,11 @@ export function LiveKitVideoGrid({
     onPinParticipant(pinnedParticipantSid === sid ? null : sid);
   }, [onPinParticipant, pinnedParticipantSid]);
 
+  // Previously-rendered shape for each packer invocation — feeds hysteresis
+  // so splitter drags across an aspect boundary don't cause flicker.
+  const prevGridShape = useRef<{ rows: number; cols: number } | undefined>(undefined);
+  const prevSidebarShape = useRef<{ rows: number; cols: number } | undefined>(undefined);
+
   // Pagination
   const [page, setPage] = useState(0);
 
@@ -348,11 +353,18 @@ export function LiveKitVideoGrid({
         sourceAspect: d && d.height > 0 ? d.width / d.height : 16 / 9,
       };
     });
-    const sidebarPacker = packTiles(sidebarPackerTiles, {
-      width: Math.max(0, sidebarSize.width),
-      height: Math.max(0, sidebarSize.height),
-      gap: 4,
-    });
+    const sidebarPacker = packTiles(
+      sidebarPackerTiles,
+      {
+        width: Math.max(0, sidebarSize.width),
+        height: Math.max(0, sidebarSize.height),
+        gap: 4,
+      },
+      prevSidebarShape.current,
+    );
+    if (sidebarPacker.rows > 0 && sidebarPacker.cols > 0) {
+      prevSidebarShape.current = { rows: sidebarPacker.rows, cols: sidebarPacker.cols };
+    }
     return (
       <div
         role="region"
@@ -453,11 +465,18 @@ export function LiveKitVideoGrid({
     return { sid: tile.participant.sid, sourceAspect };
   });
   // 8px subtracted for the 4px padding on each side of the grid wrapper.
-  const packerResult = packTiles(packerTiles, {
-    width: Math.max(0, containerSize.width - 8),
-    height: Math.max(0, containerSize.height - 8),
-    gap: 4,
-  });
+  const packerResult = packTiles(
+    packerTiles,
+    {
+      width: Math.max(0, containerSize.width - 8),
+      height: Math.max(0, containerSize.height - 8),
+      gap: 4,
+    },
+    prevGridShape.current,
+  );
+  if (packerResult.rows > 0 && packerResult.cols > 0) {
+    prevGridShape.current = { rows: packerResult.rows, cols: packerResult.cols };
+  }
 
   return (
     <div

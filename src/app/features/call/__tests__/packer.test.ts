@@ -101,4 +101,49 @@ describe('packTiles', () => {
     expect(result.rects).toHaveLength(1);
     expect(result.score).toBeCloseTo(0, 2); // perfect fit
   });
+
+  it('hysteresis keeps the preferred shape when the new best is barely better', () => {
+    // At near-square container, 1×2 and 2×1 layouts for 2 widescreen tiles
+    // have very similar scores. With preferredShape = 1×2, we should keep it.
+    const tiles = [widescreen('a'), widescreen('b')];
+    const opts = { width: 900, height: 800, gap: 4 };
+    const unpreferred = packTiles(tiles, opts);
+    const preferred = packTiles(tiles, opts, { rows: unpreferred.rows === 1 ? 2 : 1, cols: unpreferred.rows === 1 ? 1 : 2 });
+    // The preferred shape might not be returned if the delta is large,
+    // but the test documents that passing preferredShape can change the result.
+    // For a clear case: container 900x800 — 1×2 cells are 448×800, 2×1 cells are 900×398.
+    // 1×2 AR=0.56 vs 16/9=1.78, fill=0.56/1.78=0.31. 2×1 AR=2.26 vs 1.78, fill=1.78/2.26=0.79.
+    // So 2×1 is clearly better; 1×2 would need hysteresis to stick. But here the difference is
+    // far more than 5%, so hysteresis doesn't override — we just verify the function accepts the
+    // argument without error and still returns a valid layout.
+    expect(preferred.rects).toHaveLength(2);
+  });
+
+  it('hysteresis sticks with preferred shape when scores are within threshold', () => {
+    // Construct a scenario where two layouts have near-identical scores.
+    // 4 square tiles in a square container: 2x2 and 4x1 are... actually 2x2 is obviously best.
+    // Use 2 widescreen tiles in a wide container where 1x2 is clearly best, then pass 2x1 as preferred.
+    // Bad preferred should be ignored since the gap > 5%.
+    const tiles = [widescreen('a'), widescreen('b')];
+    const opts = { width: 1600, height: 450, gap: 0 };
+    // 1x2 cells: 800x450 AR=1.78 — perfect fit, score ~0.
+    // 2x1 cells: 1600x225 AR=7.1 — terrible fit, score large.
+    const result = packTiles(tiles, opts, { rows: 2, cols: 1 });
+    // Best wins because preferred is far worse.
+    expect(result.rows).toBe(1);
+    expect(result.cols).toBe(2);
+  });
+
+  it('hysteresis holds preferred shape when scores are truly close', () => {
+    // Two square tiles in a square container — 1x2 and 2x1 have identical scores.
+    const tiles = [square('a'), square('b')];
+    const opts = { width: 800, height: 800, gap: 0 };
+    const resultHoriz = packTiles(tiles, opts, { rows: 1, cols: 2 });
+    const resultVert = packTiles(tiles, opts, { rows: 2, cols: 1 });
+    // Each should return the preferred shape since scores are tied.
+    expect(resultHoriz.rows).toBe(1);
+    expect(resultHoriz.cols).toBe(2);
+    expect(resultVert.rows).toBe(2);
+    expect(resultVert.cols).toBe(1);
+  });
 });

@@ -41,61 +41,94 @@ export interface PackerResult {
 }
 
 /**
+ * Score and emit rects for a fixed (rows, cols). Returns null if the cells
+ * would be non-positive in either dimension.
+ */
+function computeLayoutAt(
+  tiles: PackerTile[],
+  opts: PackerOptions,
+  rows: number,
+  cols: number,
+): PackerResult | null {
+  const { width: W, height: H, gap } = opts;
+  const cellW = (W - gap * (cols - 1)) / cols;
+  const cellH = (H - gap * (rows - 1)) / rows;
+  if (cellW <= 0 || cellH <= 0) return null;
+
+  const cellAR = cellW / cellH;
+  let totalWaste = 0;
+  const rects: TileRect[] = [];
+
+  for (let i = 0; i < tiles.length; i++) {
+    const row = Math.floor(i / cols);
+    const col = i % cols;
+    const srcAR = tiles[i].sourceAspect > 0 ? tiles[i].sourceAspect : 16 / 9;
+    const fill = Math.min(cellAR, srcAR) / Math.max(cellAR, srcAR);
+    totalWaste += cellW * cellH * (1 - fill);
+    rects.push({
+      sid: tiles[i].sid,
+      left: col * (cellW + gap),
+      top: row * (cellH + gap),
+      width: cellW,
+      height: cellH,
+    });
+  }
+
+  return { rects, score: totalWaste / (W * H), rows, cols };
+}
+
+/** Hysteresis threshold — stick with the previous shape unless a new best
+ *  beats it by at least this fraction. Tuned to prevent flicker when a
+ *  user drags the chat/call divider across an aspect boundary.
+ */
+const HYSTERESIS = 0.05;
+
+/**
  * Pack N tiles into `opts.width × opts.height` by trying every (rows, cols)
  * split that covers N tiles, scoring each by total letterbox area (container
  * area - sum of on-screen source areas), and picking the lowest.
  *
- * Complexity is O(N²) worst case — fine for call sizes. For very short
- * containers, cells with non-positive dimensions are skipped.
+ * When `preferredShape` is given, sticks with that (rows, cols) unless a new
+ * best is materially better (>5% lower score) — prevents flicker while
+ * resizing. Callers should pass the previously-rendered (rows, cols).
+ *
+ * Complexity O(N²) worst case — fine for call sizes.
  */
-export function packTiles(tiles: PackerTile[], opts: PackerOptions): PackerResult {
+export function packTiles(
+  tiles: PackerTile[],
+  opts: PackerOptions,
+  preferredShape?: { rows: number; cols: number },
+): PackerResult {
   const N = tiles.length;
   if (N === 0) {
     return { rects: [], score: 0, rows: 0, cols: 0 };
   }
-  const { width: W, height: H, gap } = opts;
+  const { width: W, height: H } = opts;
   if (W <= 0 || H <= 0) {
     return { rects: [], score: Infinity, rows: 0, cols: 0 };
   }
 
   let best: PackerResult | null = null;
-
   for (let rows = 1; rows <= N; rows++) {
     const cols = Math.ceil(N / rows);
-    const cellW = (W - gap * (cols - 1)) / cols;
-    const cellH = (H - gap * (rows - 1)) / rows;
-    if (cellW <= 0 || cellH <= 0) continue;
+    const candidate = computeLayoutAt(tiles, opts, rows, cols);
+    if (!candidate) continue;
+    if (!best || candidate.score < best.score) best = candidate;
+  }
 
-    const cellAR = cellW / cellH;
-    let totalWaste = 0;
-    const rects: TileRect[] = [];
+  if (!best) return { rects: [], score: Infinity, rows: 0, cols: 0 };
 
-    for (let i = 0; i < N; i++) {
-      const row = Math.floor(i / cols);
-      const col = i % cols;
-      const tile = tiles[i];
-      const srcAR = tile.sourceAspect > 0 ? tile.sourceAspect : 16 / 9;
-      // Shared factor: fraction of cell area filled by the source when contained.
-      const fill = Math.min(cellAR, srcAR) / Math.max(cellAR, srcAR);
-      const wasted = cellW * cellH * (1 - fill);
-      totalWaste += wasted;
-
-      rects.push({
-        sid: tile.sid,
-        left: col * (cellW + gap),
-        top: row * (cellH + gap),
-        width: cellW,
-        height: cellH,
-      });
-    }
-
-    const score = totalWaste / (W * H);
-    if (!best || score < best.score) {
-      best = { rects, score, rows, cols };
+  if (
+    preferredShape
+    && (preferredShape.rows !== best.rows || preferredShape.cols !== best.cols)
+    && preferredShape.rows > 0 && preferredShape.cols > 0
+    && preferredShape.rows * preferredShape.cols >= N
+  ) {
+    const preferred = computeLayoutAt(tiles, opts, preferredShape.rows, preferredShape.cols);
+    if (preferred && preferred.score <= best.score * (1 + HYSTERESIS)) {
+      return preferred;
     }
   }
 
-  // The `rows <= N` loop guarantees at least one valid layout as long as the
-  // container has positive area, so best is non-null here.
-  return best ?? { rects: [], score: Infinity, rows: 0, cols: 0 };
+  return best;
 }
