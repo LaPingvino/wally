@@ -12,7 +12,7 @@ import {
 import { Room } from 'matrix-js-sdk';
 import { Box, Text } from 'folds';
 import { getMemberDisplayName } from '../../utils/room';
-import { pickLayout, MAX_TILES_PER_PAGE } from './layout';
+import { MAX_TILES_PER_PAGE } from './layout';
 import { useParticipantDimensions } from '../../hooks/useParticipantDimensions';
 import { packTiles, PackerTile } from './packer';
 
@@ -149,6 +149,8 @@ const VideoTile = memo(function VideoTile({
       onClick={onClick}
       style={{
         position: 'relative',
+        width: '100%',
+        height: '100%',
         borderRadius: isPip ? '12px' : '8px',
         overflow: 'hidden',
         background: 'var(--bg-surface-low, #16213e)',
@@ -170,7 +172,7 @@ const VideoTile = memo(function VideoTile({
         style={{
           width: '100%',
           height: '100%',
-          objectFit: isScreenShare ? 'contain' : 'cover',
+          objectFit: 'contain',
           display: hasVideo ? 'block' : 'none',
           transform: isLocal && !isScreenShare ? 'scaleX(-1)' : undefined,
         }}
@@ -286,8 +288,7 @@ export function LiveKitVideoGrid({
     return () => { lkRoom.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers); };
   }, [lkRoom, localParticipant]);
 
-  // Container size — narrow/wide drives pickLayout today; width/height feed
-  // the packer (next commit will consume these for rendering).
+  // Container size drives the packer's cell math.
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   useEffect(() => {
@@ -304,8 +305,6 @@ export function LiveKitVideoGrid({
     obs.observe(containerEl);
     return () => obs.disconnect();
   }, [containerEl]);
-  const isNarrow = containerSize.width > 0 && containerSize.height > 0
-    && containerSize.width / containerSize.height < 0.9;
 
   const spotlightSid = pinnedParticipantSid ?? activeSpeakerSid;
   let spotlightParticipant: RemoteParticipant | LocalParticipant | null = spotlightSid
@@ -401,10 +400,9 @@ export function LiveKitVideoGrid({
     ? allTiles
     : allTiles.slice(safePage * MAX_TILES_PER_PAGE, (safePage + 1) * MAX_TILES_PER_PAGE);
 
-  const layoutDef = pickLayout(pageTiles.length, isNarrow);
-
-  // Packer preview (not yet consumed for rendering) — computed in parallel so
-  // we can verify its picks against pickLayout before switching over.
+  // Packer: picks cell shapes per tile to minimize letterbox, given each
+  // source's real aspect and the current container size. Replaces the old
+  // hardcoded pickLayout lookup table.
   const packerTiles: PackerTile[] = pageTiles.map((tile) => {
     const d = participantDims.get(tile.participant.sid);
     const sourceAspect = d && d.height > 0
@@ -412,8 +410,7 @@ export function LiveKitVideoGrid({
       : tile.trackSource === Track.Source.ScreenShare ? 16 / 10 : 16 / 9;
     return { sid: tile.participant.sid, sourceAspect };
   });
-  // Subtract 8px padding (4px on each side) and 4px gap from the reported
-  // container size, same values used on the grid div below.
+  // 8px subtracted for the 4px padding on each side of the grid wrapper.
   const packerResult = packTiles(packerTiles, {
     width: Math.max(0, containerSize.width - 8),
     height: Math.max(0, containerSize.height - 8),
@@ -428,32 +425,42 @@ export function LiveKitVideoGrid({
       aria-live="polite"
       style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}
     >
-      {/* Grid */}
+      {/* Grid — tiles absolute-positioned from packer rects */}
       <div
         style={{
           flex: 1,
-          display: 'grid',
-          gap: '4px',
+          position: 'relative',
           padding: '4px',
-          gridTemplateColumns: layoutDef.cols,
-          gridTemplateRows: layoutDef.rows,
           overflow: 'hidden',
         }}
       >
-        {pageTiles.map((tile, i) => (
-          <VideoTile
-            key={tile.key}
-            participant={tile.participant}
-            isLocal={tile.isLocal}
-            trackSource={tile.trackSource}
-            matrixRoom={matrixRoom}
-            isLarge={i === 0 && !!layoutDef.largeSpan}
-            gridArea={i === 0 ? layoutDef.largeSpan : undefined}
-            onClick={() => handleTileClick(tile.participant.sid)}
-          />
-        ))}
+        {pageTiles.map((tile, i) => {
+          const rect = packerResult.rects[i];
+          if (!rect) return null;
+          return (
+            <div
+              key={tile.key}
+              style={{
+                position: 'absolute',
+                left: `${rect.left + 4}px`,
+                top: `${rect.top + 4}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+              }}
+            >
+              <VideoTile
+                participant={tile.participant}
+                isLocal={tile.isLocal}
+                trackSource={tile.trackSource}
+                matrixRoom={matrixRoom}
+                isLarge={pageTiles.length === 1}
+                onClick={() => handleTileClick(tile.participant.sid)}
+              />
+            </div>
+          );
+        })}
         {totalTiles === 0 && (
-          <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)' }}>
+          <Box justifyContent="Center" alignItems="Center" style={{ padding: '2rem', color: 'var(--text-muted)', width: '100%', height: '100%' }}>
             <Text size="T300">Waiting for participants...</Text>
           </Box>
         )}
@@ -497,7 +504,7 @@ export function LiveKitVideoGrid({
           pointerEvents: 'none',
         }}
       >
-        [{layoutDef.name}] pk:{packerResult.rows}×{packerResult.cols} {participantDims.size}d
+        [{packerResult.rows}×{packerResult.cols}] {participantDims.size}d
       </div>
       {/* PiP */}
       {pipActive && localParticipant && (
