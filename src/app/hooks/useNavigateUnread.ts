@@ -30,12 +30,6 @@ import { useSelectedRoom } from './router/useSelectedRoom';
 const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
 
 /**
- * The roomId last navigated to via unread nav (keyboard shortcuts or inbox buttons).
- * Used to show the ↑↓ nav bar in the timeline only when in "unread browsing mode".
- */
-export const unreadNavRoomAtom = atom<string | null>(null);
-
-/**
  * Within-room mention navigation state.
  * Set by "Jump to Last Mention" in the room header menu.
  * Prev @/Next @ chips in RoomTimeline read and update this.
@@ -99,7 +93,6 @@ export function useNavigateUnread() {
   const roomSortOrder: string =
     (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
   const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
-  const setUnreadNavRoom = useAtom(unreadNavRoomAtom)[1];
   const selectedRoomId = useSelectedRoom();
 
   // Sorted list of rooms matching a predicate (unread or mention).
@@ -197,10 +190,9 @@ export function useNavigateUnread() {
       const target = ((baseIndex + direction) % entries.length + entries.length) % entries.length;
       const roomId = entries[target][0];
       setLastNavigated({ roomId, index: target });
-      setUnreadNavRoom(roomId);
       navigateToRoom(roomId);
     },
-    [resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]
+    [resolveBaseIndex, setLastNavigated, navigateToRoom]
   );
 
   const navigateNext = useCallback(() => stepTo(unreadEntries, 1), [stepTo, unreadEntries]);
@@ -212,9 +204,8 @@ export function useNavigateUnread() {
     if (unreadEntries.length === 0) return;
     const roomId = unreadEntries[0][0];
     setLastNavigated({ roomId, index: 0 });
-    setUnreadNavRoom(roomId);
     navigateToRoom(roomId);
-  }, [unreadEntries, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
+  }, [unreadEntries, setLastNavigated, navigateToRoom]);
 
   return {
     navigateNext,

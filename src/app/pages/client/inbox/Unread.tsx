@@ -11,7 +11,7 @@ import {
   Text,
   config,
 } from 'folds';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import { JoinRule, MatrixEvent, Room } from 'matrix-js-sdk';
 import {
@@ -43,8 +43,6 @@ import {
   getSpacePath,
   getSpaceRoomPath,
 } from '../../pathUtils';
-import { unreadNavRoomAtom } from '../../../hooks/useNavigateUnread';
-
 const getUnreadMessages = (room: Room, userId: string, limit = 10): MatrixEvent[] => {
   const readUpToId = room.getEventReadUpTo(userId);
   const events = room.getLiveTimeline().getEvents();
@@ -247,12 +245,9 @@ export function Unread() {
     return entries;
   }, [roomToUnread, allRooms, mx]);
 
-  const setUnreadNavRoom = useSetAtom(unreadNavRoomAtom);
-
   const navigateToRoom = (roomId: string, eventId?: string) => {
     const room = mx.getRoom(roomId);
     if (!room) return;
-    setUnreadNavRoom(roomId);
     const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
     if (room.isSpaceRoom()) {
       navigate(getSpacePath(roomIdOrAlias));
