@@ -134,6 +134,23 @@ describe('packTiles', () => {
     expect(result.cols).toBe(2);
   });
 
+  it('maxCols forces a single column even when multi-col scores better', () => {
+    // 4 widescreen tiles in a wide container — normally 2x2 or 1x4 wins.
+    // maxCols=1 forces 4×1 stack.
+    const tiles = [widescreen('a'), widescreen('b'), widescreen('c'), widescreen('d')];
+    const result = packTiles(tiles, { width: 800, height: 1200, gap: 0, maxCols: 1 });
+    expect(result.cols).toBe(1);
+    expect(result.rows).toBe(4);
+  });
+
+  it('maxCols=undefined is equivalent to no limit', () => {
+    const tiles = [widescreen('a'), widescreen('b'), widescreen('c'), widescreen('d')];
+    const unlimited = packTiles(tiles, { width: 1600, height: 900, gap: 0 });
+    const explicit = packTiles(tiles, { width: 1600, height: 900, gap: 0, maxCols: undefined });
+    expect(explicit.rows).toBe(unlimited.rows);
+    expect(explicit.cols).toBe(unlimited.cols);
+  });
+
   it('hysteresis holds preferred shape when scores are truly close', () => {
     // Two square tiles in a square container — 1x2 and 2x1 have identical scores.
     const tiles = [square('a'), square('b')];

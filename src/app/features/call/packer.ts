@@ -30,6 +30,12 @@ export interface PackerOptions {
   height: number;
   /** Gap between cells in px. */
   gap: number;
+  /**
+   * Maximum number of columns. Used on mobile / very small panels to force
+   * a single-column vertical stack even when a multi-column layout would
+   * theoretically score better — tiny tiles are worse than scrolling.
+   */
+  maxCols?: number;
 }
 
 export interface PackerResult {
@@ -108,9 +114,11 @@ export function packTiles(
     return { rects: [], score: Infinity, rows: 0, cols: 0 };
   }
 
+  const maxCols = opts.maxCols && opts.maxCols > 0 ? opts.maxCols : N;
   let best: PackerResult | null = null;
   for (let rows = 1; rows <= N; rows++) {
     const cols = Math.ceil(N / rows);
+    if (cols > maxCols) continue;
     const candidate = computeLayoutAt(tiles, opts, rows, cols);
     if (!candidate) continue;
     if (!best || candidate.score < best.score) best = candidate;

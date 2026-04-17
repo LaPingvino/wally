@@ -465,12 +465,16 @@ export function LiveKitVideoGrid({
     return { sid: tile.participant.sid, sourceAspect };
   });
   // 8px subtracted for the 4px padding on each side of the grid wrapper.
+  // maxCols:1 below 360px effective width — any narrower and multi-column
+  // cells are too tiny to be useful; better to stack and scroll.
+  const gridInnerWidth = Math.max(0, containerSize.width - 8);
   const packerResult = packTiles(
     packerTiles,
     {
-      width: Math.max(0, containerSize.width - 8),
+      width: gridInnerWidth,
       height: Math.max(0, containerSize.height - 8),
       gap: 4,
+      maxCols: gridInnerWidth < 360 ? 1 : undefined,
     },
     prevGridShape.current,
   );
