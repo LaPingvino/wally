@@ -459,7 +459,6 @@ export function CallView({ room }: { room: Room }) {
                     aria-pressed={gridLayout === 'spotlight'}
                     onClick={() => {
                       setGridLayout((l) => l === 'equal' ? 'spotlight' : 'equal');
-                      setPinnedSid(null);
                     }}
                   >
                     <Icon size="400" src={gridLayout === 'equal' ? Icons.Pin : Icons.Explore} />

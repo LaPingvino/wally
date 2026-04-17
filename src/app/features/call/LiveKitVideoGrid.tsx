@@ -29,9 +29,24 @@ interface LayoutDef {
 
 /**
  * Pick the best predefined layout for the given tile count.
- * Each layout is designed to fill the container predictably.
+ * When `isNarrow` is true (container taller than wide-ish), small counts
+ * stack vertically instead of squishing into side-by-side columns.
  */
-function pickLayout(count: number): LayoutDef {
+function pickLayout(count: number, isNarrow = false): LayoutDef {
+  if (isNarrow) {
+    switch (count) {
+      case 0:
+      case 1:
+        return { name: '1', cols: '1fr', rows: '1fr' };
+      case 2:
+        return { name: '2↕', cols: '1fr', rows: '1fr 1fr' };
+      case 3:
+        return { name: '3↕', cols: '1fr', rows: '1fr 1fr 1fr' };
+      case 4:
+        return { name: '2x2', cols: '1fr 1fr', rows: '1fr 1fr' };
+      // 5+: fall through to wide layouts — more tiles need horizontal room anyway
+    }
+  }
   switch (count) {
     case 0:
     case 1:
@@ -337,10 +352,30 @@ export function LiveKitVideoGrid({
     return () => { lkRoom.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers); };
   }, [lkRoom, localParticipant]);
 
+  // Container aspect — triggers vertical stacking when tall/narrow
+  const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
+  const [isNarrow, setIsNarrow] = useState(false);
+  useEffect(() => {
+    if (!containerEl) return;
+    const obs = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      setIsNarrow(rect.width / rect.height < 0.9);
+    });
+    obs.observe(containerEl);
+    return () => obs.disconnect();
+  }, [containerEl]);
+
   const spotlightSid = pinnedParticipantSid ?? activeSpeakerSid;
-  const spotlightParticipant = spotlightSid
+  let spotlightParticipant: RemoteParticipant | LocalParticipant | null = spotlightSid
     ? allParticipants.find((p) => p.sid === spotlightSid) ?? null
     : null;
+  // In spotlight mode, never fall back to the equal grid — default to the
+  // first remote (or local if nobody else) so the layout stays stable when
+  // nobody is actively speaking and nothing is pinned.
+  if (layout === 'spotlight' && !spotlightParticipant) {
+    spotlightParticipant = remoteParticipants[0] ?? localParticipant ?? null;
+  }
 
   const handleTileClick = useCallback((sid: string) => {
     if (!onPinParticipant) return;
@@ -352,11 +387,14 @@ export function LiveKitVideoGrid({
 
   // ── Spotlight layout ──
   if (layout === 'spotlight' && spotlightParticipant) {
+    // Local goes in the sidebar when PiP is off (unless local is the spotlight itself).
     const sideParticipants = allParticipants.filter(
-      (p) => p.sid !== spotlightParticipant.sid && p !== localParticipant
+      (p) => p.sid !== spotlightParticipant.sid
+        && !(showPip && p === localParticipant)
     );
     return (
       <div
+        ref={setContainerEl}
         role="region"
         aria-label="Call — spotlight mode"
         aria-live="polite"
@@ -387,7 +425,7 @@ export function LiveKitVideoGrid({
             ))}
           </div>
         )}
-        {localParticipant && spotlightParticipant !== localParticipant && (
+        {showPip && localParticipant && spotlightParticipant !== localParticipant && (
           <div style={{ position: 'absolute', bottom: '8px', right: sideParticipants.length > 0 ? '176px' : '8px',
             width: '140px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 5 }}>
             <VideoTile participant={localParticipant} isLocal isPip matrixRoom={matrixRoom}
@@ -422,10 +460,11 @@ export function LiveKitVideoGrid({
     ? allTiles
     : allTiles.slice(safePage * MAX_TILES_PER_PAGE, (safePage + 1) * MAX_TILES_PER_PAGE);
 
-  const layoutDef = pickLayout(pageTiles.length);
+  const layoutDef = pickLayout(pageTiles.length, isNarrow);
 
   return (
     <div
+      ref={setContainerEl}
       role="region"
       aria-label={`Call with ${allParticipants.length} participant${allParticipants.length !== 1 ? 's' : ''}`}
       aria-live="polite"
