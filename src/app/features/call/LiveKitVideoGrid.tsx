@@ -14,6 +14,7 @@ import { Box, Text } from 'folds';
 import { getMemberDisplayName } from '../../utils/room';
 import { pickLayout, MAX_TILES_PER_PAGE } from './layout';
 import { useParticipantDimensions } from '../../hooks/useParticipantDimensions';
+import { packTiles, PackerTile } from './packer';
 
 export type GridLayout = 'equal' | 'spotlight';
 
@@ -285,19 +286,26 @@ export function LiveKitVideoGrid({
     return () => { lkRoom.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers); };
   }, [lkRoom, localParticipant]);
 
-  // Container aspect — triggers vertical stacking when tall/narrow
+  // Container size — narrow/wide drives pickLayout today; width/height feed
+  // the packer (next commit will consume these for rendering).
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
-  const [isNarrow, setIsNarrow] = useState(false);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   useEffect(() => {
     if (!containerEl) return;
     const obs = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width <= 0 || rect.height <= 0) return;
-      setIsNarrow(rect.width / rect.height < 0.9);
+      setContainerSize((prev) =>
+        Math.abs(prev.width - rect.width) < 0.5 && Math.abs(prev.height - rect.height) < 0.5
+          ? prev
+          : { width: rect.width, height: rect.height }
+      );
     });
     obs.observe(containerEl);
     return () => obs.disconnect();
   }, [containerEl]);
+  const isNarrow = containerSize.width > 0 && containerSize.height > 0
+    && containerSize.width / containerSize.height < 0.9;
 
   const spotlightSid = pinnedParticipantSid ?? activeSpeakerSid;
   let spotlightParticipant: RemoteParticipant | LocalParticipant | null = spotlightSid
@@ -395,6 +403,23 @@ export function LiveKitVideoGrid({
 
   const layoutDef = pickLayout(pageTiles.length, isNarrow);
 
+  // Packer preview (not yet consumed for rendering) — computed in parallel so
+  // we can verify its picks against pickLayout before switching over.
+  const packerTiles: PackerTile[] = pageTiles.map((tile) => {
+    const d = participantDims.get(tile.participant.sid);
+    const sourceAspect = d && d.height > 0
+      ? d.width / d.height
+      : tile.trackSource === Track.Source.ScreenShare ? 16 / 10 : 16 / 9;
+    return { sid: tile.participant.sid, sourceAspect };
+  });
+  // Subtract 8px padding (4px on each side) and 4px gap from the reported
+  // container size, same values used on the grid div below.
+  const packerResult = packTiles(packerTiles, {
+    width: Math.max(0, containerSize.width - 8),
+    height: Math.max(0, containerSize.height - 8),
+    gap: 4,
+  });
+
   return (
     <div
       ref={setContainerEl}
@@ -472,7 +497,7 @@ export function LiveKitVideoGrid({
           pointerEvents: 'none',
         }}
       >
-        [{layoutDef.name}] {participantDims.size}d
+        [{layoutDef.name}] pk:{packerResult.rows}×{packerResult.cols} {participantDims.size}d
       </div>
       {/* PiP */}
       {pipActive && localParticipant && (
