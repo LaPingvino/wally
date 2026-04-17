@@ -24,6 +24,7 @@ import { WidgetsDrawer } from './WidgetsDrawer';
 import { useAtom } from 'jotai';
 import { useResizablePanel } from '../../hooks/useResizablePanel';
 import { useToolbarConfig } from '../../hooks/useToolbarConfig';
+import { CallNavStatus } from '../room-nav/RoomCallNavStatus';
 
 const PANEL_DIVIDER_STYLE: React.CSSProperties = {
   width: '6px',
@@ -245,6 +246,7 @@ export function Room() {
               </>
             )}
           </Box>
+          {screenSize === ScreenSize.Mobile && <CallNavStatus />}
         </Box>
         {screenSize === ScreenSize.Desktop && isDrawer && (
           <>

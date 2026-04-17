@@ -12,7 +12,7 @@ import {
   color,
 } from 'folds';
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { EventType } from 'matrix-js-sdk';
 import { LiveKitRoomContext } from '../../pages/client/call/PersistentCallContainer';
 import { MatrixRTCSessionManagerEvents } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSessionManager';
@@ -30,7 +30,56 @@ import {
 } from '../../hooks/useRoomsNotificationPreferences';
 import { settingsAtom } from '../../state/settings';
 import { playMentionSound } from '../../utils/sounds';
+import { useNavigateUnread } from '../../hooks/useNavigateUnread';
+import { bottomBarDismissedUntilAtom, BOTTOM_BAR_DISMISS_MS } from '../../state/bottomBarDismiss';
 import * as css from './RoomCallNavStatus.css';
+
+/**
+ * Priority-ordered nav items for the bottom bar.
+ * Rendered in this order; dropped from the end when width is tight.
+ * 1. Next mention (until all mentions are gone)
+ * 2. Next unread
+ * 3. Previous mention
+ * 4. Previous unread
+ */
+type NavItem = {
+  key: string;
+  ariaLabel: string;
+  tooltip: string;
+  /** Left-side icon (the direction or the content label, depending on item). */
+  leftIcon: React.ComponentType<{ size?: string }>;
+  /** Right-side icon. */
+  rightIcon: React.ComponentType<{ size?: string }>;
+  onClick: () => void;
+};
+
+const NAV_ITEM_WIDTH = 44; // px per icon button (2-icon composite) including gap
+const DISMISS_BTN_WIDTH = 40;
+
+function NavIconButton({ item }: { item: NavItem }) {
+  return (
+    <TooltipProvider
+      position="Top"
+      offset={4}
+      tooltip={<Tooltip><Text>{item.tooltip}</Text></Tooltip>}
+    >
+      {(triggerRef) => (
+        <IconButton
+          fill="None"
+          size="300"
+          ref={triggerRef}
+          aria-label={item.ariaLabel}
+          onClick={item.onClick}
+        >
+          <Box alignItems="Center" style={{ gap: 1 }}>
+            <Icon src={item.leftIcon} size="50" />
+            <Icon src={item.rightIcon} size="50" />
+          </Box>
+        </IconButton>
+      )}
+    </TooltipProvider>
+  );
+}
 
 // Module-level: persists across tab switches (Direct/Home/Space each mount their own CallNavStatus).
 // Stores rooms where the ring timed out so we don't re-ring on remount.
@@ -314,7 +363,144 @@ export function CallNavStatus() {
   // Clamp page index when calls list shrinks
   const safeIndex = Math.min(callPage, Math.max(0, incomingCalls.length - 1));
 
-  if (!hasActiveCall && incomingCalls.length === 0) return null;
+  // ── Nav items (prev/next unread/mention) ──
+  const {
+    navigatePrev,
+    navigateNext,
+    navigatePrevMention,
+    navigateNextMention,
+    unreadCount,
+    mentionCount,
+  } = useNavigateUnread();
+
+  const allNavItems: NavItem[] = [];
+  if (mentionCount > 0) {
+    allNavItems.push({
+      key: 'next-mention',
+      ariaLabel: `Next mention (${mentionCount} ${mentionCount === 1 ? 'room' : 'rooms'})`,
+      tooltip: `Next mention (${mentionCount})`,
+      leftIcon: Icons.Mention,
+      rightIcon: Icons.ChevronRight,
+      onClick: navigateNextMention,
+    });
+  }
+  if (unreadCount > 0) {
+    allNavItems.push({
+      key: 'next-unread',
+      ariaLabel: `Next unread room (${unreadCount})`,
+      tooltip: `Next unread (${unreadCount})`,
+      leftIcon: Icons.MessageUnread,
+      rightIcon: Icons.ChevronRight,
+      onClick: navigateNext,
+    });
+  }
+  if (mentionCount > 0) {
+    allNavItems.push({
+      key: 'prev-mention',
+      ariaLabel: `Previous mention (${mentionCount})`,
+      tooltip: `Previous mention (${mentionCount})`,
+      leftIcon: Icons.ChevronLeft,
+      rightIcon: Icons.Mention,
+      onClick: navigatePrevMention,
+    });
+  }
+  if (unreadCount > 0) {
+    allNavItems.push({
+      key: 'prev-unread',
+      ariaLabel: `Previous unread room (${unreadCount})`,
+      tooltip: `Previous unread (${unreadCount})`,
+      leftIcon: Icons.ChevronLeft,
+      rightIcon: Icons.MessageUnread,
+      onClick: navigatePrev,
+    });
+  }
+
+  // ── Bar width for responsive nav truncation ──
+  const [barEl, setBarEl] = useState<HTMLDivElement | null>(null);
+  const [barWidth, setBarWidth] = useState(0);
+  useEffect(() => {
+    if (!barEl) return;
+    const obs = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setBarWidth(w);
+    });
+    obs.observe(barEl);
+    return () => obs.disconnect();
+  }, [barEl]);
+
+  // ── Dismiss suppression ──
+  const [dismissedUntil, setDismissedUntil] = useAtom(bottomBarDismissedUntilAtom);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (dismissedUntil <= nowTick) return;
+    const ms = Math.max(0, dismissedUntil - nowTick);
+    const t = setTimeout(() => setNowTick(Date.now()), ms + 50);
+    return () => clearTimeout(t);
+  }, [dismissedUntil, nowTick]);
+  const isDismissed = dismissedUntil > nowTick;
+  const handleDismissBar = useCallback(() => {
+    setDismissedUntil(Date.now() + BOTTOM_BAR_DISMISS_MS);
+  }, [setDismissedUntil]);
+
+  const hasNav = allNavItems.length > 0;
+  const hasContent = hasActiveCall || incomingCalls.length > 0 || hasNav;
+  if (!hasContent) return null;
+  if (isDismissed) return null;
+
+  // Responsive truncation: reserve space for call chrome + dismiss button,
+  // then fit as many nav items as possible from the priority-ordered list.
+  const reservedForCall = hasActiveCall ? 280 : 0;
+  const remainingForNav = Math.max(0, barWidth - reservedForCall - DISMISS_BTN_WIDTH - 24);
+  const maxVisibleNav = barWidth > 0
+    ? Math.max(1, Math.floor(remainingForNav / NAV_ITEM_WIDTH))
+    : 1;
+  const visibleNav = allNavItems.slice(0, maxVisibleNav);
+  // Dismiss button is shown only when the bar has no active/incoming call —
+  // during a call, hangup / per-call dismiss are the real actions.
+  const showDismiss = !hasActiveCall && incomingCalls.length === 0;
+
+  const dismissButton = (
+    <TooltipProvider
+      position="Top"
+      offset={4}
+      tooltip={<Tooltip><Text>Dismiss for 5 minutes</Text></Tooltip>}
+    >
+      {(triggerRef) => (
+        <IconButton
+          fill="None"
+          size="300"
+          ref={triggerRef}
+          aria-label="Dismiss bar for 5 minutes"
+          onClick={handleDismissBar}
+        >
+          <Icon src={Icons.Cross} />
+        </IconButton>
+      )}
+    </TooltipProvider>
+  );
+
+  // Nav-only bar (no call, but unread/mention rooms exist)
+  if (!hasActiveCall && incomingCalls.length === 0) {
+    return (
+      <Box direction="Column" shrink="No" ref={setBarEl}>
+        <Line variant="Surface" size="300" />
+        <Box
+          className={css.Actions}
+          direction="Row"
+          alignItems="Center"
+          gap="100"
+          role="toolbar"
+          aria-label="Unread and mention navigation"
+        >
+          {visibleNav.map((item) => (
+            <NavIconButton key={item.key} item={item} />
+          ))}
+          <Box grow="Yes" />
+          {showDismiss && dismissButton}
+        </Box>
+      </Box>
+    );
+  }
 
   // Incoming call(s) with pagination
   if (!hasActiveCall) {
@@ -323,7 +509,7 @@ export function CallNavStatus() {
     const total = incomingCalls.length;
 
     return (
-      <Box direction="Column" shrink="No">
+      <Box direction="Column" shrink="No" ref={setBarEl}>
         <Line variant="Surface" size="300" />
         <Box
           className={css.Actions}
@@ -419,7 +605,7 @@ export function CallNavStatus() {
 
   // Active call
   return (
-    <Box direction="Column" shrink="No">
+    <Box direction="Column" shrink="No" ref={setBarEl}>
       <Line variant="Surface" size="300" />
       <Box className={css.Actions} direction="Row" alignItems="Center" gap="100">
         <Box className={css.RoomButtonWrap} grow="Yes">
@@ -519,6 +705,9 @@ export function CallNavStatus() {
             </TooltipProvider>
           </>
         )}
+        {visibleNav.map((item) => (
+          <NavIconButton key={item.key} item={item} />
+        ))}
       </Box>
     </Box>
   );
