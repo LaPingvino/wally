@@ -1973,7 +1973,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 before={<Icon size="50" src={Icons.MessageUnread} />}
                 onClick={handleJumpToUnread}
               >
-                <Text size="L400">Jump to Unread</Text>
+                <Text size="L400">{isMobile ? 'Jump' : 'Jump to Unread'}</Text>
               </Chip>
               <Chip
                 variant="SurfaceVariant"
@@ -1982,7 +1982,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 before={<Icon size="50" src={Icons.CheckTwice} />}
                 onClick={handleMarkAsRead}
               >
-                <Text size="L400">Mark as Read</Text>
+                <Text size="L400">{isMobile ? 'Read' : 'Mark as Read'}</Text>
               </Chip>
             </>
           )}
