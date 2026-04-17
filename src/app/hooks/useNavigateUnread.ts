@@ -102,41 +102,52 @@ export function useNavigateUnread() {
   const setUnreadNavRoom = useAtom(unreadNavRoomAtom)[1];
   const selectedRoomId = useSelectedRoom();
 
-  const unreadEntries = useMemo(() => {
-    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
-    const hasUnread = (id: string) => (roomToUnread.get(id)?.total ?? 0) > 0;
+  // Sorted list of rooms matching a predicate (unread or mention).
+  // Callers use this to step through rooms in sidebar order; sort fallback
+  // mirrors the room list's current activity/az/unread-first setting.
+  const buildSortedRooms = useCallback(
+    (matches: (id: string) => boolean) => {
+      const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
 
-    // Build sidebar position lookup (space ID → index)
-    const sidebarSpaceIds = getSidebarSpaceIds(mx);
-    const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
+      const sidebarSpaceIds = getSidebarSpaceIds(mx);
+      const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
 
-    // All rooms with unread, sorted by:
-    //   1. sidebar position of their nearest ancestor space
-    //   2. within same space: current roomSortOrder
-    const allUnread = Array.from(roomToUnread.keys()).filter(
-      (id) => hasUnread(id) && !mx.getRoom(id)?.isSpaceRoom()
-    );
+      const rooms = Array.from(roomToUnread.keys()).filter(
+        (id) => matches(id) && !mx.getRoom(id)?.isSpaceRoom()
+      );
 
-    const sortFallback =
-      roomSortOrder === 'az'
-        ? factoryRoomIdByAtoZ(mx)
-        : roomSortOrder === 'unread'
-        ? factoryRoomIdByUnreadFirst(
-            (id) => getUnread(id).highlight,
-            (id) => getUnread(id).total,
-            factoryRoomIdByActivity(mx)
-          )
-        : factoryRoomIdByActivity(mx);
+      const sortFallback =
+        roomSortOrder === 'az'
+          ? factoryRoomIdByAtoZ(mx)
+          : roomSortOrder === 'unread'
+          ? factoryRoomIdByUnreadFirst(
+              (id) => getUnread(id).highlight,
+              (id) => getUnread(id).total,
+              factoryRoomIdByActivity(mx)
+            )
+          : factoryRoomIdByActivity(mx);
 
-    allUnread.sort((a, b) => {
-      const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
-      const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
-      if (ai !== bi) return ai - bi;
-      return sortFallback(a, b);
-    });
+      rooms.sort((a, b) => {
+        const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
+        const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
+        if (ai !== bi) return ai - bi;
+        return sortFallback(a, b);
+      });
 
-    return allUnread.map((id) => [id, roomToUnread.get(id)!] as const);
-  }, [mx, roomToUnread, roomToParents, roomSortOrder]);
+      return rooms.map((id) => [id, roomToUnread.get(id)!] as const);
+    },
+    [mx, roomToUnread, roomToParents, roomSortOrder]
+  );
+
+  const unreadEntries = useMemo(
+    () => buildSortedRooms((id) => (roomToUnread.get(id)?.total ?? 0) > 0),
+    [buildSortedRooms, roomToUnread]
+  );
+
+  const mentionEntries = useMemo(
+    () => buildSortedRooms((id) => (roomToUnread.get(id)?.highlight ?? 0) > 0),
+    [buildSortedRooms, roomToUnread]
+  );
 
   const navigateToRoom = useCallback(
     (roomId: string) => {
@@ -158,51 +169,44 @@ export function useNavigateUnread() {
   );
 
   /**
-   * Resolve the base index to navigate relative to.
+   * Resolve the base index to navigate relative to within `entries`.
    * Priority: lastNavigated room ID > selectedRoomId > fallback.
    * fallback = -1 (for next → first room) or length (for prev → last room).
-   *
-   * When the last-navigated room has been read (not in list):
-   *   next: stay at the same position in the shrunk list (clamped - 1 → next = clamped)
-   *   prev: go to the room before the original position (clamped → prev = clamped - 1)
-   *         but avoid wrapping index 0 to end by using max(1, clamped).
    */
   const resolveBaseIndex = useCallback(
-    (fallback: number): number => {
+    (entries: ReadonlyArray<readonly [string, unknown]>, fallback: number): number => {
       if (lastNavigated) {
-        const found = unreadEntries.findIndex(([id]) => id === lastNavigated.roomId);
+        const found = entries.findIndex(([id]) => id === lastNavigated.roomId);
         if (found >= 0) return found;
-        const clamped = Math.min(lastNavigated.index, unreadEntries.length);
+        const clamped = Math.min(lastNavigated.index, entries.length);
         return fallback < 0 ? clamped - 1 : Math.max(1, clamped);
       }
       if (selectedRoomId) {
-        const found = unreadEntries.findIndex(([id]) => id === selectedRoomId);
+        const found = entries.findIndex(([id]) => id === selectedRoomId);
         if (found >= 0) return found;
       }
       return fallback;
     },
-    [unreadEntries, lastNavigated, selectedRoomId]
+    [lastNavigated, selectedRoomId]
   );
 
-  const navigateNext = useCallback(() => {
-    if (unreadEntries.length === 0) return;
-    const baseIndex = resolveBaseIndex(-1);
-    const next = (baseIndex + 1) % unreadEntries.length;
-    const roomId = unreadEntries[next][0];
-    setLastNavigated({ roomId, index: next });
-    setUnreadNavRoom(roomId);
-    navigateToRoom(roomId);
-  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
+  const stepTo = useCallback(
+    (entries: ReadonlyArray<readonly [string, unknown]>, direction: 1 | -1) => {
+      if (entries.length === 0) return;
+      const baseIndex = resolveBaseIndex(entries, direction === 1 ? -1 : entries.length);
+      const target = ((baseIndex + direction) % entries.length + entries.length) % entries.length;
+      const roomId = entries[target][0];
+      setLastNavigated({ roomId, index: target });
+      setUnreadNavRoom(roomId);
+      navigateToRoom(roomId);
+    },
+    [resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]
+  );
 
-  const navigatePrev = useCallback(() => {
-    if (unreadEntries.length === 0) return;
-    const baseIndex = resolveBaseIndex(unreadEntries.length);
-    const prev = (baseIndex - 1 + unreadEntries.length) % unreadEntries.length;
-    const roomId = unreadEntries[prev][0];
-    setLastNavigated({ roomId, index: prev });
-    setUnreadNavRoom(roomId);
-    navigateToRoom(roomId);
-  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
+  const navigateNext = useCallback(() => stepTo(unreadEntries, 1), [stepTo, unreadEntries]);
+  const navigatePrev = useCallback(() => stepTo(unreadEntries, -1), [stepTo, unreadEntries]);
+  const navigateNextMention = useCallback(() => stepTo(mentionEntries, 1), [stepTo, mentionEntries]);
+  const navigatePrevMention = useCallback(() => stepTo(mentionEntries, -1), [stepTo, mentionEntries]);
 
   const navigateFirst = useCallback(() => {
     if (unreadEntries.length === 0) return;
@@ -212,6 +216,14 @@ export function useNavigateUnread() {
     navigateToRoom(roomId);
   }, [unreadEntries, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
 
-  return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
+  return {
+    navigateNext,
+    navigatePrev,
+    navigateNextMention,
+    navigatePrevMention,
+    navigateFirst,
+    unreadCount: unreadEntries.length,
+    mentionCount: mentionEntries.length,
+  };
 }
 

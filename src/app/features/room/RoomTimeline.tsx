@@ -116,7 +116,7 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-import { useNavigateUnread, unreadNavRoomAtom, mentionNavAtom } from '../../hooks/useNavigateUnread';
+import { mentionNavAtom } from '../../hooks/useNavigateUnread';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
@@ -570,10 +570,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   const roomToParents = useAtomValue(roomToParentsAtom);
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const { navigateRoom } = useRoomNavigate();
-  const unreadNavRoom = useAtomValue(unreadNavRoomAtom);
   const [mentionNav, setMentionNav] = useAtom(mentionNavAtom);
-  const { navigatePrev, navigateNext, unreadCount } = useNavigateUnread();
-  const showUnreadNav = !threadId && unreadNavRoom === room.roomId && unreadCount > 0;
   const showMentionNav =
     !threadId && mentionNav?.roomId === room.roomId && (mentionNav?.eventIds.length ?? 0) > 0;
   const screenSize = useScreenSizeContext();
@@ -1933,34 +1930,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
 
   return (
     <Box grow="Yes" style={{ position: 'relative' }}>
-      {(showUnreadNav || showMentionNav || (unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline)) && (
+      {(showMentionNav || (unreadInfo?.readUptoEventId && !unreadInfo?.inLiveTimeline)) && (
         <TimelineFloat position="Top">
-          {showUnreadNav && (
-            <>
-              <Chip
-                variant="SurfaceVariant"
-                radii="Pill"
-                outlined
-                before={<Icon size="50" src={Icons.ChevronTop} />}
-                onClick={navigatePrev}
-                aria-label="Previous unread room (Alt+Shift+Up)"
-                aria-keyshortcuts="Alt+Shift+ArrowUp"
-              >
-                <Text size="L400">{isMobile ? '↑' : 'Prev Unread'}</Text>
-              </Chip>
-              <Chip
-                variant="SurfaceVariant"
-                radii="Pill"
-                outlined
-                before={<Icon size="50" src={Icons.ChevronBottom} />}
-                onClick={navigateNext}
-                aria-label="Next unread room (Alt+Shift+Down)"
-                aria-keyshortcuts="Alt+Shift+ArrowDown"
-              >
-                <Text size="L400">{isMobile ? '↓' : 'Next Unread'}</Text>
-              </Chip>
-            </>
-          )}
           {showMentionNav && mentionNav && (
             <>
               <Chip
@@ -2002,7 +1973,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 before={<Icon size="50" src={Icons.MessageUnread} />}
                 onClick={handleJumpToUnread}
               >
-                <Text size="L400">{isMobile && showUnreadNav ? 'Jump' : 'Jump to Unread'}</Text>
+                <Text size="L400">Jump to Unread</Text>
               </Chip>
               <Chip
                 variant="SurfaceVariant"
@@ -2011,7 +1982,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 before={<Icon size="50" src={Icons.CheckTwice} />}
                 onClick={handleMarkAsRead}
               >
-                <Text size="L400">{isMobile && showUnreadNav ? 'Read' : 'Mark as Read'}</Text>
+                <Text size="L400">Mark as Read</Text>
               </Chip>
             </>
           )}

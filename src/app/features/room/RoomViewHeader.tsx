@@ -81,6 +81,7 @@ import { renderItemIcon } from './PanelIconPicker';
 import { activeWidgetIdAtom } from './WidgetsDrawer';
 import { useAtom, useSetAtom } from 'jotai';
 import { mentionNavAtom } from '../../hooks/useNavigateUnread';
+import { useNavigateUnread } from '../../hooks/useNavigateUnread';
 import { getPrevSessionStart } from '../../state/sessions';
 
 type UnpinnedItem = {
@@ -126,6 +127,14 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   const { navigateRoom } = useRoomNavigate();
   const setMentionNav = useSetAtom(mentionNavAtom);
   const [searchingMentions, setSearchingMentions] = useState(false);
+  const {
+    navigatePrev,
+    navigateNext,
+    navigatePrevMention,
+    navigateNextMention,
+    unreadCount,
+    mentionCount,
+  } = useNavigateUnread();
 
   const [invitePrompt, setInvitePrompt] = useState(false);
 
@@ -322,6 +331,52 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
             </>
           )}
         </UseStateProvider>
+        <MenuItem
+          onClick={() => { navigatePrev(); requestClose(); }}
+          size="300"
+          after={<Icon size="100" src={Icons.ChevronTop} />}
+          radii="300"
+          aria-disabled={unreadCount === 0}
+          aria-keyshortcuts="Alt+Shift+ArrowUp"
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Previous Unread Room{unreadCount > 0 ? ` (${unreadCount})` : ''}
+          </Text>
+        </MenuItem>
+        <MenuItem
+          onClick={() => { navigateNext(); requestClose(); }}
+          size="300"
+          after={<Icon size="100" src={Icons.ChevronBottom} />}
+          radii="300"
+          aria-disabled={unreadCount === 0}
+          aria-keyshortcuts="Alt+Shift+ArrowDown"
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Next Unread Room{unreadCount > 0 ? ` (${unreadCount})` : ''}
+          </Text>
+        </MenuItem>
+        <MenuItem
+          onClick={() => { navigatePrevMention(); requestClose(); }}
+          size="300"
+          after={<Icon size="100" src={Icons.Mention} />}
+          radii="300"
+          aria-disabled={mentionCount === 0}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Previous Mention{mentionCount > 0 ? ` (${mentionCount})` : ''}
+          </Text>
+        </MenuItem>
+        <MenuItem
+          onClick={() => { navigateNextMention(); requestClose(); }}
+          size="300"
+          after={<Icon size="100" src={Icons.Mention} />}
+          radii="300"
+          aria-disabled={mentionCount === 0}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Next Mention{mentionCount > 0 ? ` (${mentionCount})` : ''}
+          </Text>
+        </MenuItem>
         <MenuItem
           onClick={() => {
             if (searchingMentions) return;
