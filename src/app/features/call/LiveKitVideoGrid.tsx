@@ -44,15 +44,6 @@ function resolveDisplayName(
   return { name: identity || 'Unknown', isGuest: false };
 }
 
-function detectAspect(participant: RemoteParticipant | LocalParticipant, source: Track.Source): string {
-  const pub = participant.getTrackPublication(source);
-  const dims = pub?.dimensions;
-  if (dims && dims.width && dims.height) {
-    return dims.height > dims.width ? '3/4' : '16/9';
-  }
-  return '16/9';
-}
-
 // ── VideoTile ──
 
 interface VideoTileProps {
@@ -288,7 +279,8 @@ export function LiveKitVideoGrid({
     return () => { lkRoom.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers); };
   }, [lkRoom, localParticipant]);
 
-  // Container size drives the packer's cell math.
+  // Observe two containers: the main grid area (equal-grid render) and the
+  // spotlight sidebar (when visible). Both feed the packer.
   const [containerEl, setContainerEl] = useState<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   useEffect(() => {
@@ -305,6 +297,23 @@ export function LiveKitVideoGrid({
     obs.observe(containerEl);
     return () => obs.disconnect();
   }, [containerEl]);
+
+  const [sidebarEl, setSidebarEl] = useState<HTMLDivElement | null>(null);
+  const [sidebarSize, setSidebarSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+  useEffect(() => {
+    if (!sidebarEl) return;
+    const obs = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      setSidebarSize((prev) =>
+        Math.abs(prev.width - rect.width) < 0.5 && Math.abs(prev.height - rect.height) < 0.5
+          ? prev
+          : { width: rect.width, height: rect.height }
+      );
+    });
+    obs.observe(sidebarEl);
+    return () => obs.disconnect();
+  }, [sidebarEl]);
 
   const spotlightSid = pinnedParticipantSid ?? activeSpeakerSid;
   let spotlightParticipant: RemoteParticipant | LocalParticipant | null = spotlightSid
@@ -332,9 +341,20 @@ export function LiveKitVideoGrid({
       (p) => p.sid !== spotlightParticipant.sid
         && !(showPip && p === localParticipant)
     );
+    const sidebarPackerTiles: PackerTile[] = sideParticipants.map((p) => {
+      const d = participantDims.get(p.sid);
+      return {
+        sid: p.sid,
+        sourceAspect: d && d.height > 0 ? d.width / d.height : 16 / 9,
+      };
+    });
+    const sidebarPacker = packTiles(sidebarPackerTiles, {
+      width: Math.max(0, sidebarSize.width),
+      height: Math.max(0, sidebarSize.height),
+      gap: 4,
+    });
     return (
       <div
-        ref={setContainerEl}
         role="region"
         aria-label="Call — spotlight mode"
         aria-live="polite"
@@ -342,32 +362,54 @@ export function LiveKitVideoGrid({
       >
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, minHeight: 0 }}>
           {screenSharers.length > 0 && (
-            <div style={{ display: 'flex', gap: '4px', maxHeight: '40%' }}>
+            <div style={{ display: 'flex', gap: '4px', flex: '0 0 auto', height: '35%', minHeight: 0 }}>
               {screenSharers.map((p) => (
-                <VideoTile key={`ss-${p.sid}`} participant={p} isLocal={p === localParticipant}
-                  trackSource={Track.Source.ScreenShare} matrixRoom={matrixRoom} isLarge />
+                <div key={`ss-${p.sid}`} style={{ flex: 1, minWidth: 0 }}>
+                  <VideoTile participant={p} isLocal={p === localParticipant}
+                    trackSource={Track.Source.ScreenShare} matrixRoom={matrixRoom} isLarge />
+                </div>
               ))}
             </div>
           )}
-          <VideoTile
-            key={`spot-${spotlightParticipant.sid}`}
-            participant={spotlightParticipant}
-            isLocal={spotlightParticipant === localParticipant}
-            matrixRoom={matrixRoom} isLarge
-            onClick={() => handleTileClick(spotlightParticipant.sid)}
-          />
+          <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+            <VideoTile
+              key={`spot-${spotlightParticipant.sid}`}
+              participant={spotlightParticipant}
+              isLocal={spotlightParticipant === localParticipant}
+              matrixRoom={matrixRoom} isLarge
+              onClick={() => handleTileClick(spotlightParticipant.sid)}
+            />
+          </div>
         </div>
         {sideParticipants.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '160px', flexShrink: 0, overflowY: 'auto' }}>
-            {sideParticipants.map((p) => (
-              <VideoTile key={p.sid} participant={p} isLocal={p === localParticipant}
-                matrixRoom={matrixRoom} onClick={() => handleTileClick(p.sid)} />
-            ))}
+          <div
+            ref={setSidebarEl}
+            style={{ width: '160px', flexShrink: 0, position: 'relative' }}
+          >
+            {sideParticipants.map((p, i) => {
+              const rect = sidebarPacker.rects[i];
+              if (!rect) return null;
+              return (
+                <div
+                  key={p.sid}
+                  style={{
+                    position: 'absolute',
+                    left: `${rect.left}px`,
+                    top: `${rect.top}px`,
+                    width: `${rect.width}px`,
+                    height: `${rect.height}px`,
+                  }}
+                >
+                  <VideoTile participant={p} isLocal={p === localParticipant}
+                    matrixRoom={matrixRoom} onClick={() => handleTileClick(p.sid)} />
+                </div>
+              );
+            })}
           </div>
         )}
         {showPip && localParticipant && spotlightParticipant !== localParticipant && (
           <div style={{ position: 'absolute', bottom: '8px', right: sideParticipants.length > 0 ? '176px' : '8px',
-            width: '140px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 5 }}>
+            width: '140px', aspectRatio: '4 / 3', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 5 }}>
             <VideoTile participant={localParticipant} isLocal isPip matrixRoom={matrixRoom}
               onClick={() => handleTileClick(localParticipant.sid)} />
           </div>
@@ -509,7 +551,7 @@ export function LiveKitVideoGrid({
       {/* PiP */}
       {pipActive && localParticipant && (
         <div style={{ position: 'absolute', bottom: totalPages > 1 ? '32px' : '8px', right: '8px',
-          width: '140px', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 5 }}>
+          width: '140px', aspectRatio: '4 / 3', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.4)', zIndex: 5 }}>
           <VideoTile participant={localParticipant} isLocal isPip matrixRoom={matrixRoom}
             onClick={() => handleTileClick(localParticipant.sid)} />
         </div>
