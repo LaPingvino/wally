@@ -13,6 +13,7 @@ import { Room } from 'matrix-js-sdk';
 import { Box, Text } from 'folds';
 import { getMemberDisplayName } from '../../utils/room';
 import { pickLayout, MAX_TILES_PER_PAGE } from './layout';
+import { useParticipantDimensions } from '../../hooks/useParticipantDimensions';
 
 export type GridLayout = 'equal' | 'spotlight';
 
@@ -268,6 +269,10 @@ export function LiveKitVideoGrid({
   if (localParticipant) allParticipants.push(localParticipant);
   allParticipants.push(...remoteParticipants);
 
+  // Source dimensions per participant — wired for the packer introduced in the
+  // next commit. Not yet consumed for rendering decisions.
+  const participantDims = useParticipantDimensions(lkRoom ?? null);
+
   // Active speaker tracking
   const [activeSpeakerSid, setActiveSpeakerSid] = useState<string | null>(null);
   useEffect(() => {
@@ -467,7 +472,7 @@ export function LiveKitVideoGrid({
           pointerEvents: 'none',
         }}
       >
-        [{layoutDef.name}]
+        [{layoutDef.name}] {participantDims.size}d
       </div>
       {/* PiP */}
       {pipActive && localParticipant && (
