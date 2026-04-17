@@ -21,6 +21,7 @@ import {
 } from '../utils/sort';
 import { settingsAtom } from '../state/settings';
 import { useSelectedRoom } from './router/useSelectedRoom';
+import { bottomBarDismissedAtom } from '../state/bottomBarDismiss';
 
 /**
  * Track the last navigated room by ID + its position in the list at the time.
@@ -93,6 +94,7 @@ export function useNavigateUnread() {
   const roomSortOrder: string =
     (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
   const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
+  const setBottomBarDismissed = useAtom(bottomBarDismissedAtom)[1];
   const selectedRoomId = useSelectedRoom();
 
   // Sorted list of rooms matching a predicate (unread or mention).
@@ -190,9 +192,10 @@ export function useNavigateUnread() {
       const target = ((baseIndex + direction) % entries.length + entries.length) % entries.length;
       const roomId = entries[target][0];
       setLastNavigated({ roomId, index: target });
+      setBottomBarDismissed(false);
       navigateToRoom(roomId);
     },
-    [resolveBaseIndex, setLastNavigated, navigateToRoom]
+    [resolveBaseIndex, setLastNavigated, setBottomBarDismissed, navigateToRoom]
   );
 
   const navigateNext = useCallback(() => stepTo(unreadEntries, 1), [stepTo, unreadEntries]);
@@ -204,8 +207,9 @@ export function useNavigateUnread() {
     if (unreadEntries.length === 0) return;
     const roomId = unreadEntries[0][0];
     setLastNavigated({ roomId, index: 0 });
+    setBottomBarDismissed(false);
     navigateToRoom(roomId);
-  }, [unreadEntries, setLastNavigated, navigateToRoom]);
+  }, [unreadEntries, setLastNavigated, setBottomBarDismissed, navigateToRoom]);
 
   return {
     navigateNext,

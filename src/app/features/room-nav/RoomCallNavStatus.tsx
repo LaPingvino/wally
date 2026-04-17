@@ -31,7 +31,7 @@ import {
 import { settingsAtom } from '../../state/settings';
 import { playMentionSound } from '../../utils/sounds';
 import { useNavigateUnread } from '../../hooks/useNavigateUnread';
-import { bottomBarDismissedUntilAtom, BOTTOM_BAR_DISMISS_MS } from '../../state/bottomBarDismiss';
+import { bottomBarDismissedAtom } from '../../state/bottomBarDismiss';
 import * as css from './RoomCallNavStatus.css';
 
 /**
@@ -429,23 +429,17 @@ export function CallNavStatus() {
   }, [barEl]);
 
   // ── Dismiss suppression ──
-  const [dismissedUntil, setDismissedUntil] = useAtom(bottomBarDismissedUntilAtom);
-  const [nowTick, setNowTick] = useState(() => Date.now());
-  useEffect(() => {
-    if (dismissedUntil <= nowTick) return;
-    const ms = Math.max(0, dismissedUntil - nowTick);
-    const t = setTimeout(() => setNowTick(Date.now()), ms + 50);
-    return () => clearTimeout(t);
-  }, [dismissedUntil, nowTick]);
-  const isDismissed = dismissedUntil > nowTick;
-  const handleDismissBar = useCallback(() => {
-    setDismissedUntil(Date.now() + BOTTOM_BAR_DISMISS_MS);
-  }, [setDismissedUntil]);
+  // User dismisses via X. Stays dismissed until they use Previous/Next nav
+  // from the menu (or keyboard) — cleared inside useNavigateUnread's step
+  // functions. Active/incoming calls override dismiss (urgent).
+  const [dismissed, setDismissed] = useAtom(bottomBarDismissedAtom);
+  const handleDismissBar = useCallback(() => setDismissed(true), [setDismissed]);
 
   const hasNav = allNavItems.length > 0;
-  const hasContent = hasActiveCall || incomingCalls.length > 0 || hasNav;
+  const hasCall = hasActiveCall || incomingCalls.length > 0;
+  const hasContent = hasCall || hasNav;
   if (!hasContent) return null;
-  if (isDismissed) return null;
+  if (dismissed && !hasCall) return null;
 
   // Responsive truncation: reserve space for call chrome + dismiss button,
   // then fit as many nav items as possible from the priority-ordered list.
@@ -463,14 +457,14 @@ export function CallNavStatus() {
     <TooltipProvider
       position="Top"
       offset={4}
-      tooltip={<Tooltip><Text>Dismiss for 5 minutes</Text></Tooltip>}
+      tooltip={<Tooltip><Text>Dismiss (returns when you use Prev/Next in the menu)</Text></Tooltip>}
     >
       {(triggerRef) => (
         <IconButton
           fill="None"
           size="300"
           ref={triggerRef}
-          aria-label="Dismiss bar for 5 minutes"
+          aria-label="Dismiss bar — returns when you use Previous or Next in the room menu"
           onClick={handleDismissBar}
         >
           <Icon src={Icons.Cross} />
