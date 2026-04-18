@@ -380,15 +380,17 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
         <MenuItem
           onClick={() => {
             if (searchingMentions) return;
-            const myUserId = mx.getSafeUserId();
             const timelineSet = room.getUnfilteredTimelineSet();
 
-            const isMentioned = (e: { getType(): string; getContent(): Record<string, unknown> }) => {
+            // Use push-rule evaluation so we catch everything the server would
+            // have highlighted: explicit m.mentions, display name in body,
+            // user-configured keywords, localpart. Covers the "wrong account
+            // was mentioned but my current name was used" case that the old
+            // hardcoded userId match missed.
+            const isMentioned = (e: import('matrix-js-sdk').MatrixEvent) => {
               if (e.getType() !== 'm.room.message') return false;
-              const c = e.getContent() as Record<string, unknown>;
-              const mentions = c['m.mentions'] as { user_ids?: string[] } | undefined;
-              if (mentions?.user_ids?.includes(myUserId)) return true;
-              return typeof c.body === 'string' && c.body.includes(myUserId);
+              const actions = mx.getPushActionsForEvent(e);
+              return actions?.tweaks?.highlight === true;
             };
 
             const collectMentionIds = () =>
