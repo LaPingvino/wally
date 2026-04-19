@@ -4,12 +4,13 @@ import {
   Box,
   Chip,
   Icon,
+  IconButton,
   Icons,
   Scroll,
   Text,
   config,
 } from 'folds';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { useNavigate } from 'react-router-dom';
 import { JoinRule, MatrixEvent, Room } from 'matrix-js-sdk';
 import {
@@ -31,6 +32,7 @@ import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { getRoomAvatarUrl } from '../../../utils/room';
 import { Time } from '../../../components/message';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
+import { activityDismissedBeforeAtom } from '../../../state/activityDismiss';
 import {
   getDirectRoomPath,
   getHomeRoomPath,
@@ -97,7 +99,13 @@ function describeRoomState(mEvent: MatrixEvent): { kind: ActivityKind; summary: 
 }
 
 function collectActivity(rooms: Room[], since: number): ActivityItem[] {
-  const items: ActivityItem[] = [];
+  // Collect newest-first per room, then collapse repeats that communicate the
+  // same underlying fact. Profile changes by the same user in the same room
+  // merge regardless of how many times they did it; room-state changes of the
+  // same kind in the same room also merge (most recent wins).
+  type Bucket = { item: ActivityItem; count: number };
+  const buckets = new Map<string, Bucket>();
+
   for (const room of rooms) {
     const events = room.getLiveTimeline().getEvents();
     for (let i = events.length - 1; i >= 0; i -= 1) {
@@ -112,15 +120,36 @@ function collectActivity(rooms: Room[], since: number): ActivityItem[] {
         described = describeRoomState(mEvent);
       }
       if (!described) continue;
-      items.push({
-        room,
-        mEvent,
-        ts,
-        kind: described.kind,
-        summary: described.summary,
-      });
+
+      // Collapse key: profile changes are per-sender, room-state changes are per-room.
+      const sender = mEvent.getSender() ?? '';
+      const key = described.kind.startsWith('profile-')
+        ? `${room.roomId}:${sender}:${described.kind}`
+        : `${room.roomId}:${described.kind}`;
+
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.count += 1;
+        // Keep the newest event as the representative (timeline walked newest→oldest,
+        // so if we've seen one already it's newer than this one — just bump the count).
+      } else {
+        buckets.set(key, {
+          count: 1,
+          item: {
+            room,
+            mEvent,
+            ts,
+            kind: described.kind,
+            summary: described.summary,
+          },
+        });
+      }
     }
   }
+
+  const items = Array.from(buckets.values()).map(({ item, count }) =>
+    count > 1 ? { ...item, summary: `${item.summary} (${count}×)` } : item
+  );
   items.sort((a, b) => b.ts - a.ts);
   return items;
 }
@@ -134,13 +163,19 @@ export function Activity() {
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
   const useAuthentication = useMediaAuthentication();
+  const [dismissedBefore, setDismissedBefore] = useAtom(activityDismissedBeforeAtom);
 
   const items = useMemo(() => {
     const rooms = allRooms
       .map((id) => mx.getRoom(id))
       .filter((r): r is Room => !!r && !r.isSpaceRoom() && r.getMyMembership() === 'join');
-    return collectActivity(rooms, Date.now() - ACTIVITY_WINDOW_MS);
-  }, [allRooms, mx]);
+    const since = Math.max(Date.now() - ACTIVITY_WINDOW_MS, dismissedBefore);
+    return collectActivity(rooms, since);
+  }, [allRooms, mx, dismissedBefore]);
+
+  const handleMarkAllAsRead = () => {
+    setDismissedBefore(Date.now());
+  };
 
   const navigateToRoom = (roomId: string, eventId?: string) => {
     const room = mx.getRoom(roomId);
@@ -172,6 +207,16 @@ export function Activity() {
               Activity
             </Text>
           </Box>
+          {items.length > 0 && (
+            <IconButton
+              aria-label="Mark all as read"
+              title="Mark all as read"
+              size="300"
+              onClick={handleMarkAllAsRead}
+            >
+              <Icon src={Icons.CheckTwice} />
+            </IconButton>
+          )}
         </Box>
       </PageHeader>
       <Box grow="Yes">
