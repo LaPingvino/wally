@@ -58,7 +58,9 @@ type ActivityItem = {
   summary: string;
 };
 
-function describeMemberChange(mEvent: MatrixEvent): { kind: ActivityKind; summary: string } | null {
+function describeMemberChange(
+  mEvent: MatrixEvent,
+): { kind: ActivityKind; summary: string; ident: string } | null {
   const content = mEvent.getContent() as { membership?: string; displayname?: string; avatar_url?: string };
   const prev = mEvent.getPrevContent() as { membership?: string; displayname?: string; avatar_url?: string };
   if (content.membership !== 'join' || prev.membership !== 'join') return null;
@@ -69,11 +71,13 @@ function describeMemberChange(mEvent: MatrixEvent): { kind: ActivityKind; summar
   if (nameChanged) {
     const from = prev.displayname ?? mEvent.getStateKey() ?? '?';
     const to = content.displayname ?? mEvent.getStateKey() ?? '?';
-    return { kind: 'profile-name', summary: `${from} is now known as ${to}` };
+    // Prefer the new name as the collapse identity; rename events
+    // all share the same "to" value for a given user.
+    return { kind: 'profile-name', summary: `${from} is now known as ${to}`, ident: to };
   }
   if (avatarChanged) {
     const who = content.displayname ?? mEvent.getStateKey() ?? '?';
-    return { kind: 'profile-avatar', summary: `${who} changed their profile picture` };
+    return { kind: 'profile-avatar', summary: `${who} changed their profile picture`, ident: who };
   }
   return null;
 }
@@ -99,6 +103,28 @@ function describeRoomState(mEvent: MatrixEvent): { kind: ActivityKind; summary: 
   return null;
 }
 
+/**
+ * DMs mirror the other member's profile into the room's own avatar/name.
+ * When a bridge pushes a profile update, we see BOTH a room-avatar/name
+ * state event AND a member event — that's one underlying fact, not two.
+ * Drop the room-state entry when a matching profile entry in the same
+ * room exists within a short window.
+ */
+function dropDmMirroredRoomChanges(items: ActivityItem[], mDirects: Set<string>): ActivityItem[] {
+  const WINDOW_MS = 60_000;
+  return items.filter((item) => {
+    if (item.kind !== 'room-avatar' && item.kind !== 'room-name') return true;
+    if (!mDirects.has(item.room.roomId)) return true;
+    const profileKind: ActivityKind = item.kind === 'room-avatar' ? 'profile-avatar' : 'profile-name';
+    return !items.some(
+      (o) =>
+        o.kind === profileKind &&
+        o.room.roomId === item.room.roomId &&
+        Math.abs(o.ts - item.ts) < WINDOW_MS,
+    );
+  });
+}
+
 function collectActivity(rooms: Room[], since: number): ActivityItem[] {
   // Collapse repeats that communicate the same underlying fact:
   //   - Profile changes (avatar/display name) by the same user: one entry
@@ -116,7 +142,7 @@ function collectActivity(rooms: Room[], since: number): ActivityItem[] {
       const ts = mEvent.getTs();
       if (ts < since) break;
       if (mEvent.isRedacted()) continue;
-      let described = null;
+      let described: { kind: ActivityKind; summary: string; ident?: string } | null = null;
       if (mEvent.getType() === 'm.room.member') {
         described = describeMemberChange(mEvent);
       } else {
@@ -124,11 +150,12 @@ function collectActivity(rooms: Room[], since: number): ActivityItem[] {
       }
       if (!described) continue;
 
-      // Profile keys cross rooms (one profile, many rooms).
-      // Room-state keys are per-room.
-      const sender = mEvent.getSender() ?? '';
+      // Profile keys cross rooms (one profile, many rooms). Use the user-visible
+      // identity (displayname) rather than MXID — bridges like mautrix-whatsapp
+      // can mint per-room ghost MXIDs for the same underlying contact, so
+      // MXID-based collapse misses duplicates. Room-state keys are per-room.
       const key = described.kind.startsWith('profile-')
-        ? `${sender}:${described.kind}`
+        ? `${described.ident ?? mEvent.getSender() ?? ''}:${described.kind}`
         : `${room.roomId}:${described.kind}`;
 
       const existing = buckets.get(key);
@@ -181,11 +208,13 @@ export function Activity() {
       .map((id) => mx.getRoom(id))
       .filter((r): r is Room => !!r && !r.isSpaceRoom() && r.getMyMembership() === 'join');
     const since = Math.max(Date.now() - ACTIVITY_WINDOW_MS, dismissedBefore);
-    return collectActivity(rooms, since).filter((item) => {
+    const collected = collectActivity(rooms, since);
+    const deDmed = dropDmMirroredRoomChanges(collected, mDirects);
+    return deDmed.filter((item) => {
       const dismissedAt = dismissedItems[item.key];
       return dismissedAt === undefined || item.ts > dismissedAt;
     });
-  }, [allRooms, mx, dismissedBefore, dismissedItems]);
+  }, [allRooms, mx, dismissedBefore, dismissedItems, mDirects]);
 
   const handleMarkAllAsRead = () => {
     setDismissedBefore(Date.now());
