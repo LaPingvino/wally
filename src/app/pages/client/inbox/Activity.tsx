@@ -99,11 +99,13 @@ function describeRoomState(mEvent: MatrixEvent): { kind: ActivityKind; summary: 
 }
 
 function collectActivity(rooms: Room[], since: number): ActivityItem[] {
-  // Collect newest-first per room, then collapse repeats that communicate the
-  // same underlying fact. Profile changes by the same user in the same room
-  // merge regardless of how many times they did it; room-state changes of the
-  // same kind in the same room also merge (most recent wins).
-  type Bucket = { item: ActivityItem; count: number };
+  // Collapse repeats that communicate the same underlying fact:
+  //   - Profile changes (avatar/display name) by the same user: one entry
+  //     spanning all rooms. A display-name change propagates to every room
+  //     the user is in; showing one line per room is pure noise.
+  //   - Room-state changes of the same kind in the same room: one entry.
+  // Representative event = newest; suffix counts/rooms when > 1.
+  type Bucket = { item: ActivityItem; count: number; roomIds: Set<string> };
   const buckets = new Map<string, Bucket>();
 
   for (const room of rooms) {
@@ -121,20 +123,21 @@ function collectActivity(rooms: Room[], since: number): ActivityItem[] {
       }
       if (!described) continue;
 
-      // Collapse key: profile changes are per-sender, room-state changes are per-room.
+      // Profile keys cross rooms (one profile, many rooms).
+      // Room-state keys are per-room.
       const sender = mEvent.getSender() ?? '';
       const key = described.kind.startsWith('profile-')
-        ? `${room.roomId}:${sender}:${described.kind}`
+        ? `${sender}:${described.kind}`
         : `${room.roomId}:${described.kind}`;
 
       const existing = buckets.get(key);
       if (existing) {
         existing.count += 1;
-        // Keep the newest event as the representative (timeline walked newest→oldest,
-        // so if we've seen one already it's newer than this one — just bump the count).
+        existing.roomIds.add(room.roomId);
       } else {
         buckets.set(key, {
           count: 1,
+          roomIds: new Set([room.roomId]),
           item: {
             room,
             mEvent,
@@ -147,9 +150,14 @@ function collectActivity(rooms: Room[], since: number): ActivityItem[] {
     }
   }
 
-  const items = Array.from(buckets.values()).map(({ item, count }) =>
-    count > 1 ? { ...item, summary: `${item.summary} (${count}×)` } : item
-  );
+  const items = Array.from(buckets.values()).map(({ item, count, roomIds }) => {
+    const roomCount = roomIds.size;
+    let suffix = '';
+    if (roomCount > 1 && count === roomCount) suffix = ` (in ${roomCount} rooms)`;
+    else if (roomCount > 1) suffix = ` (${count}× in ${roomCount} rooms)`;
+    else if (count > 1) suffix = ` (${count}×)`;
+    return suffix ? { ...item, summary: `${item.summary}${suffix}` } : item;
+  });
   items.sort((a, b) => b.ts - a.ts);
   return items;
 }
