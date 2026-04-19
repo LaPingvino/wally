@@ -1,5 +1,6 @@
 import { useMatch } from 'react-router-dom';
 import {
+  getInboxActivityPath,
   getInboxInvitesPath,
   getInboxNotificationsPath,
   getInboxPath,
@@ -39,6 +40,16 @@ export const useInboxInvitesSelected = (): boolean => {
 export const useInboxUnreadSelected = (): boolean => {
   const match = useMatch({
     path: getInboxUnreadPath(),
+    caseSensitive: true,
+    end: false,
+  });
+
+  return !!match;
+};
+
+export const useInboxActivitySelected = (): boolean => {
+  const match = useMatch({
+    path: getInboxActivityPath(),
     caseSensitive: true,
     end: false,
   });

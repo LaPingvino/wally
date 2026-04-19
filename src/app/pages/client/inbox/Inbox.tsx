@@ -3,8 +3,9 @@ import { Avatar, Box, Icon, Icons, Text } from 'folds';
 import { useAtomValue } from 'jotai';
 import { INotificationsResponse, Method } from 'matrix-js-sdk';
 import { NavCategory, NavItem, NavItemContent, NavLink } from '../../../components/nav';
-import { getInboxInvitesPath, getInboxNotificationsPath, getInboxUnreadPath } from '../../pathUtils';
+import { getInboxActivityPath, getInboxInvitesPath, getInboxNotificationsPath, getInboxUnreadPath } from '../../pathUtils';
 import {
+  useInboxActivitySelected,
   useInboxInvitesSelected,
   useInboxNotificationsSelected,
   useInboxUnreadSelected,
@@ -67,6 +68,7 @@ export function Inbox() {
   useNavToActivePathMapper('inbox');
   const notificationsSelected = useInboxNotificationsSelected();
   const unreadSelected = useInboxUnreadSelected();
+  const activitySelected = useInboxActivitySelected();
   const notificationsSupported = useNotificationsSupported();
   const allRooms = useAtomValue(allRoomsAtom);
   const allUnread = useRoomsUnread(allRooms, roomToUnreadAtom);
@@ -117,6 +119,26 @@ export function Inbox() {
               </NavLink>
             </NavItem>
             <InvitesNavItem />
+            <NavItem
+              variant="Background"
+              radii="400"
+              aria-selected={activitySelected}
+            >
+              <NavLink to={getInboxActivityPath()}>
+                <NavItemContent>
+                  <Box as="span" grow="Yes" alignItems="Center" gap="200">
+                    <Avatar size="200" radii="400">
+                      <Icon src={Icons.User} size="100" filled={activitySelected} />
+                    </Avatar>
+                    <Box as="span" grow="Yes">
+                      <Text as="span" size="Inherit" truncate>
+                        Activity
+                      </Text>
+                    </Box>
+                  </Box>
+                </NavItemContent>
+              </NavLink>
+            </NavItem>
           </NavCategory>
         </Box>
       </PageNavContent>

@@ -32,6 +32,7 @@ import {
   _SEARCH_PATH,
   _SERVER_PATH,
   _UNREAD_PATH,
+  _ACTIVITY_PATH,
   CREATE_PATH,
 } from './paths';
 import {
@@ -49,7 +50,7 @@ import { Direct, DirectCreate, DirectRouteRoomProvider } from './client/direct';
 import { Favorites, FavoritesRouteRoomProvider } from './client/favorites';
 import { RouteSpaceProvider, Space, SpaceRouteRoomProvider, SpaceSearch } from './client/space';
 import { Explore, FeaturedRooms, PublicRooms } from './client/explore';
-import { Notifications, Inbox, Invites, Unread } from './client/inbox';
+import { Notifications, Inbox, Invites, Unread, Activity } from './client/inbox';
 import { setAfterLoginRedirectPath } from './afterLoginRedirectPath';
 import { Room } from '../features/room';
 import { Lobby } from '../features/lobby';
@@ -355,6 +356,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize,
           <Route path={_UNREAD_PATH} element={<Unread />} />
           <Route path={_NOTIFICATIONS_PATH} element={<Notifications />} />
           <Route path={_INVITES_PATH} element={<Invites />} />
+          <Route path={_ACTIVITY_PATH} element={<Activity />} />
         </Route>
       </Route>
       <Route path="/*" element={<p>Page not found</p>} />
