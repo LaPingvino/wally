@@ -32,7 +32,7 @@ import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
 import { getRoomAvatarUrl } from '../../../utils/room';
 import { Time } from '../../../components/message';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
-import { activityDismissedBeforeAtom } from '../../../state/activityDismiss';
+import { activityDismissedBeforeAtom, activityDismissedItemsAtom } from '../../../state/activityDismiss';
 import {
   getDirectRoomPath,
   getHomeRoomPath,
@@ -50,6 +50,7 @@ type ActivityKind =
   | 'room-topic';
 
 type ActivityItem = {
+  key: string;
   room: Room;
   mEvent: MatrixEvent;
   ts: number;
@@ -139,6 +140,7 @@ function collectActivity(rooms: Room[], since: number): ActivityItem[] {
           count: 1,
           roomIds: new Set([room.roomId]),
           item: {
+            key,
             room,
             mEvent,
             ts,
@@ -172,17 +174,27 @@ export function Activity() {
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
   const useAuthentication = useMediaAuthentication();
   const [dismissedBefore, setDismissedBefore] = useAtom(activityDismissedBeforeAtom);
+  const [dismissedItems, setDismissedItems] = useAtom(activityDismissedItemsAtom);
 
   const items = useMemo(() => {
     const rooms = allRooms
       .map((id) => mx.getRoom(id))
       .filter((r): r is Room => !!r && !r.isSpaceRoom() && r.getMyMembership() === 'join');
     const since = Math.max(Date.now() - ACTIVITY_WINDOW_MS, dismissedBefore);
-    return collectActivity(rooms, since);
-  }, [allRooms, mx, dismissedBefore]);
+    return collectActivity(rooms, since).filter((item) => {
+      const dismissedAt = dismissedItems[item.key];
+      return dismissedAt === undefined || item.ts > dismissedAt;
+    });
+  }, [allRooms, mx, dismissedBefore, dismissedItems]);
 
   const handleMarkAllAsRead = () => {
     setDismissedBefore(Date.now());
+    // Drop per-item dismissals older than the new cutoff — they're redundant now.
+    setDismissedItems({});
+  };
+
+  const handleDismissItem = (key: string) => {
+    setDismissedItems({ ...dismissedItems, [key]: Date.now() });
   };
 
   const navigateToRoom = (roomId: string, eventId?: string) => {
@@ -274,7 +286,7 @@ export function Activity() {
                             </Text>
                           </Box>
                           <Time ts={ts} compact hour24Clock={hour24Clock} dateFormatString={dateFormatString} />
-                          <Box shrink="No">
+                          <Box shrink="No" alignItems="Center" gap="100">
                             <Chip
                               onClick={() => navigateToRoom(room.roomId, mEvent.getId())}
                               variant="Secondary"
@@ -282,6 +294,15 @@ export function Activity() {
                             >
                               <Text size="T200">Open</Text>
                             </Chip>
+                            <IconButton
+                              size="300"
+                              radii="400"
+                              aria-label="Dismiss this entry"
+                              title="Dismiss"
+                              onClick={() => handleDismissItem(item.key)}
+                            >
+                              <Icon size="100" src={Icons.Cross} />
+                            </IconButton>
                           </Box>
                         </Box>
                       </SequenceCard>
