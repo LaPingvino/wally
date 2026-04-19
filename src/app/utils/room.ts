@@ -233,14 +233,35 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
   return true;
 };
 
-export const getUnreadInfo = (room: Room): UnreadInfo => {
-  const total = room.getUnreadNotificationCount(NotificationCountType.Total);
-  const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
-  return {
-    roomId: room.roomId,
-    highlight,
-    total: highlight > total ? highlight : total,
-  };
+/**
+ * Count unread events in a room from the user's read marker, ignoring
+ * membership and other state events so profile-picture / display-name /
+ * room-metadata changes don't mark the room dirty.
+ *
+ * Walks the live timeline backwards from newest until the read marker.
+ * The server's getUnreadNotificationCount is bypassed because it includes
+ * member events that bump the count without being real conversation.
+ */
+export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
+  const userId = mx.getUserId();
+  if (!userId) return { roomId: room.roomId, total: 0, highlight: 0 };
+
+  const readUpToId = room.getEventReadUpTo(userId);
+  const events = room.getLiveTimeline().getEvents();
+
+  let total = 0;
+  let highlight = 0;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const e = events[i];
+    if (e.getId() === readUpToId) break;
+    if (!isNotificationEvent(e)) continue;
+    if (e.getSender() === userId) continue;
+    total += 1;
+    const actions = mx.getPushActionsForEvent(e);
+    if (actions?.tweaks?.highlight === true) highlight += 1;
+  }
+
+  return { roomId: room.roomId, total, highlight };
 };
 
 export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
@@ -249,8 +270,9 @@ export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
     if (room.getMyMembership() !== 'join') return unread;
     if (getNotificationType(mx, room.roomId) === NotificationType.Mute) return unread;
 
-    if (roomHaveNotification(room) || roomHaveUnread(mx, room)) {
-      unread.push(getUnreadInfo(room));
+    const info = getUnreadInfo(room, mx);
+    if (info.total > 0 || info.highlight > 0) {
+      unread.push(info);
     }
 
     return unread;

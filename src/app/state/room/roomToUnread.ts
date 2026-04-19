@@ -231,7 +231,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       const infos: UnreadInfo[] = [];
       dirtyRooms.forEach((roomId) => {
         const room = mx.getRoom(roomId);
-        if (room) infos.push(getUnreadInfo(room));
+        if (room) infos.push(getUnreadInfo(room, mx));
       });
       dirtyRooms.clear();
       if (infos.length > 0) {
