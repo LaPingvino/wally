@@ -67,6 +67,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { EmojiBoard } from '../../../components/emoji-board';
 import { ReactionViewer } from '../reaction-viewer';
 import { MessageEditor } from './MessageEditor';
+import { MessageForwardItem } from './ForwardDialog';
 import { UserAvatar } from '../../../components/user-avatar';
 import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
@@ -1124,6 +1125,13 @@ export const Message = as<'div', MessageProps>(
                               </Text>
                             </MenuItem>
                           )}
+                          {!mEvent.isRedacted() && (
+                            <MessageForwardItem
+                              room={room}
+                              mEvent={mEvent}
+                              onClose={closeMenu}
+                            />
+                          )}
                           {!hideReadReceipts && (
                             <MessageReadReceiptItem
                               room={room}
@@ -1311,6 +1319,13 @@ export const Event = as<'div', EventProps>(
                             />
                           )}
                           <MessageCopyLinkItem room={room} mEvent={mEvent} onClose={closeMenu} />
+                          {!stateEvent && !mEvent.isRedacted() && (
+                            <MessageForwardItem
+                              room={room}
+                              mEvent={mEvent}
+                              onClose={closeMenu}
+                            />
+                          )}
                         </Box>
                         {((!mEvent.isRedacted() && canDelete && !stateEvent) ||
                           (mEvent.getSender() !== mx.getUserId() && !stateEvent)) && (
