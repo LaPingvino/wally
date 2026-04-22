@@ -44,8 +44,6 @@ import {
   trimReplyFromFormattedBody,
 } from '../../../utils/room';
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
-import { getMatrixToRoomEvent } from '../../../plugins/matrix-to';
-import { getViaServers } from '../../../plugins/via-servers';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { NativeDialog } from '../../../components/NativeDialog';
 import * as dialogCss from '../../../components/NativeDialog.css';
@@ -53,15 +51,6 @@ import * as css from './styles.css';
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-const pad2 = (n: number): string => n.toString().padStart(2, '0');
-
-const formatForwardTimestamp = (tsMs: number): string => {
-  const d = new Date(tsMs);
-  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(
-    d.getUTCDate()
-  )} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())} UTC`;
-};
 
 export const buildForwardContent = (
   srcRoom: Room,
@@ -91,17 +80,6 @@ export const buildForwardContent = (
   delete out['m.per_message_profile'];
   delete out['m.mentions'];
 
-  const viaServers = getViaServers(srcRoom);
-  const matrixToLink = getMatrixToRoomEvent(srcRoom.roomId, eventId, viaServers);
-  const roomName =
-    srcRoom.name || srcRoom.getCanonicalAlias() || srcRoom.roomId;
-  const tsStr = formatForwardTimestamp(mEvent.getTs());
-
-  const attrHtml = `<p><a href="${escapeHtml(matrixToLink)}">${escapeHtml(
-    roomName
-  )} • ${tsStr}</a></p>`;
-  const attrText = `${roomName} • ${tsStr} (${matrixToLink})`;
-
   const rawBody = typeof original.body === 'string' ? original.body : '';
   const hasHtml =
     original.format === 'org.matrix.custom.html' &&
@@ -117,12 +95,11 @@ export const buildForwardContent = (
     .split('\n')
     .map((l) => `> ${l}`)
     .join('\n');
-  const plainBody = `> ↷ Forwarded\n${quoted}\n>\n> — ${attrText}`;
+  const plainBody = `> ↷ Forwarded\n${quoted}`;
   const htmlBody =
     `<blockquote data-mx-forwarded-notice>\n` +
     `<p><em>↷ Forwarded</em></p>\n` +
     `${origHtml}\n` +
-    `${attrHtml}\n` +
     `</blockquote>`;
 
   if (
@@ -144,7 +121,7 @@ export const buildForwardContent = (
     msgtype === MsgType.File
   ) {
     // MSC4095-style caption: `filename` is the actual filename,
-    // `body`/`formatted_body` become the caption carrying the attribution.
+    // `body`/`formatted_body` become the caption carrying the forward notice.
     const filename =
       typeof original.filename === 'string' ? original.filename : rawBody;
     out.filename = filename;
@@ -154,9 +131,7 @@ export const buildForwardContent = (
     return out;
   }
 
-  // Unhandled msgtype (location, custom, etc.): carry content as-is,
-  // append attribution to body.
-  out.body = `${rawBody}\n\n— forwarded from ${attrText}`.trim();
+  // Unhandled msgtype (location, custom, etc.): carry content as-is.
   return out;
 };
 
