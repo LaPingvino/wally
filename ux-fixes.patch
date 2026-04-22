@@ -720,10 +720,10 @@ index 2e9726a868..99a850a4c9 100644
        )}
        <Scroll ref={scrollRef} visibility="Hover">
 diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
-index 3a79aada7a..ff035d4425 100644
+index 5991b9b99c..fb3a357b2e 100644
 --- a/src/app/features/room-nav/RoomNavItem.tsx
 +++ b/src/app/features/room-nav/RoomNavItem.tsx
-@@ -103,6 +103,16 @@
+@@ -104,6 +104,16 @@
        requestClose();
      };
  
@@ -740,7 +740,7 @@ index 3a79aada7a..ff035d4425 100644
      return (
        <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
          {invitePrompt && room && (
-@@ -147,6 +157,16 @@
+@@ -148,6 +158,16 @@
                </MenuItem>
              )}
            </RoomNotificationModeSwitcher>
@@ -3403,10 +3403,10 @@ index 3893e5e30c..a7b0671c63 100644
 +// Set this to a non-empty string before setting searchModalAtom=true to pre-populate the search input.
 +export const searchModalInitialCharAtom = atom<string>('');
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 8eb03b7b9e..58167172b0 100644
+index df3ec9b855..19e58c433e 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -56,6 +56,7 @@
+@@ -62,6 +62,7 @@
    developerTools: boolean;
    issueTracker: boolean;
    multiAccount: boolean;
@@ -3414,7 +3414,7 @@ index 8eb03b7b9e..58167172b0 100644
  }
  
  const defaultSettings: Settings = {
-@@ -98,6 +99,7 @@
+@@ -104,6 +105,7 @@
    developerTools: false,
    issueTracker: false,
    multiAccount: false,

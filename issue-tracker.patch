@@ -2228,10 +2228,10 @@ index 1378c0c929..33f0c36399 100644
                      <SequenceCard
                        className={SequenceCardStyle}
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index fd5b726f44..5c87e91d72 100644
+index e68c20bf4c..307c283da9 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -54,6 +54,7 @@
+@@ -60,6 +60,7 @@
    dateFormatString: string;
  
    developerTools: boolean;
@@ -2239,7 +2239,7 @@ index fd5b726f44..5c87e91d72 100644
  }
  
  const defaultSettings: Settings = {
-@@ -94,6 +95,7 @@
+@@ -100,6 +101,7 @@
    dateFormatString: 'D MMM YYYY',
  
    developerTools: false,

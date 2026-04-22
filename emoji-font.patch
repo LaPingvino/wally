@@ -166,10 +166,10 @@ index b96c5e92cd..65fe21586f 100644
  
    return null;
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 31ee6ccb97..b31490f92f 100644
+index 9fbad4ff0f..dccb6ed8b9 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -8,6 +8,11 @@
+@@ -14,6 +14,11 @@
    Compact = 1,
    Bubble = 2,
  }
@@ -181,7 +181,7 @@ index 31ee6ccb97..b31490f92f 100644
  
  export interface Settings {
    themeId?: string;
-@@ -17,7 +22,8 @@
+@@ -23,7 +28,8 @@
    monochromeMode?: boolean;
    isMarkdown: boolean;
    editorToolbar: boolean;
@@ -191,7 +191,7 @@ index 31ee6ccb97..b31490f92f 100644
    pageZoom: number;
    hideActivity: boolean;
  
-@@ -51,7 +57,7 @@
+@@ -57,7 +63,7 @@
    monochromeMode: false,
    isMarkdown: true,
    editorToolbar: false,
@@ -200,7 +200,7 @@ index 31ee6ccb97..b31490f92f 100644
    pageZoom: 100,
    hideActivity: false,
  
-@@ -80,9 +86,17 @@
+@@ -86,9 +92,17 @@
  export const getSettings = () => {
    const settings = localStorage.getItem(STORAGE_KEY);
    if (settings === null) return defaultSettings;

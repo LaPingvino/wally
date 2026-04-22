@@ -930,10 +930,10 @@ index a9c34ce916..956b00bd7c 100644
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 5c87e91d72..8eb03b7b9e 100644
+index 307c283da9..df3ec9b855 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -55,6 +55,7 @@
+@@ -61,6 +61,7 @@
  
    developerTools: boolean;
    issueTracker: boolean;
@@ -941,7 +941,7 @@ index 5c87e91d72..8eb03b7b9e 100644
  }
  
  const defaultSettings: Settings = {
-@@ -96,6 +97,7 @@
+@@ -102,6 +103,7 @@
  
    developerTools: false,
    issueTracker: false,

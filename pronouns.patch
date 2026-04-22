@@ -1,5 +1,5 @@
 diff --git a/package-lock.json b/package-lock.json
-index 399f03a928..c2ca9ad638 100644
+index b7281a0d8a..094c67ca45 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -63,7 +63,8 @@
@@ -12,7 +12,7 @@ index 399f03a928..c2ca9ad638 100644
        },
        "devDependencies": {
          "@element-hq/element-call-embedded": "0.16.3",
-@@ -12105,6 +12106,15 @@
+@@ -19151,6 +19152,15 @@
        "funding": {
          "url": "https://github.com/sponsors/sindresorhus"
        }
@@ -29,10 +29,10 @@ index 399f03a928..c2ca9ad638 100644
    }
  }
 diff --git a/package.json b/package.json
-index ba2cd751ea..aca805c199 100644
+index 8e7b37b438..4c8f899c26 100644
 --- a/package.json
 +++ b/package.json
-@@ -75,7 +75,8 @@
+@@ -116,7 +116,8 @@
      "slate-dom": "0.123.0",
      "slate-history": "0.113.1",
      "slate-react": "0.123.0",

@@ -908,10 +908,10 @@ index 0000000000..874eaff73c
 +  }
 +);
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 58167172b0..84c26d7006 100644
+index 19e58c433e..74b9153c6a 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -57,6 +57,7 @@
+@@ -63,6 +63,7 @@
    issueTracker: boolean;
    multiAccount: boolean;
    roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
@@ -919,7 +919,7 @@ index 58167172b0..84c26d7006 100644
  }
  
  const defaultSettings: Settings = {
-@@ -100,6 +101,7 @@
+@@ -106,6 +107,7 @@
    issueTracker: false,
    multiAccount: false,
    roomSortOrder: 'activity',
