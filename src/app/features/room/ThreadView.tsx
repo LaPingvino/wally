@@ -2,8 +2,9 @@
  * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
  * infrastructure as the main room view.
  *
- * Thread events are gathered by scanning the main room timeline directly
- * (no SDK Thread objects used — they're unreliable when hasServerSideSupport=0).
+ * Thread events come from the SDK Thread when one exists for this thread root.
+ * RoomTimeline falls back to a main-timeline scan when the SDK Thread is
+ * missing or empty; that fallback is kept while we work upstream SDK fixes.
  *
  * Layout:
  *   ┌─ root event header ─────────────────────────────┐
@@ -108,7 +109,7 @@ function RootEventHeader({ room, rootEvent }: RootEventHeaderProps) {
       {/* Content */}
       <Box direction="Column" grow="Yes" style={{ minWidth: 0 }}>
         <Box gap="200" alignItems="Baseline">
-          <Text size="T300" weight="Medium" truncate>
+          <Text size="T300" style={{ fontWeight: 600 }} truncate>
             {displayName}
           </Text>
           {timeStr && (
@@ -137,8 +138,8 @@ export function ThreadView({ room, threadRootId }: ThreadViewProps) {
   const viewRef = useRef<HTMLDivElement>(null);
   const editor = useEditor();
 
-  // Thread events are gathered by RoomTimeline scanning the main room timeline directly.
-  // No SDK Thread objects needed here.
+  // RoomTimeline pulls events from the SDK Thread when present, with a
+  // main-timeline-scan fallback for the cases the SDK still mishandles.
   const rootEvent = room.findEventById(threadRootId) ?? null;
 
   return (

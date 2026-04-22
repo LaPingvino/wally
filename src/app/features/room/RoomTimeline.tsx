@@ -448,9 +448,26 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
 
 const getInitialTimeline = (room: Room, threadId?: string) => {
   if (threadId) {
-    // Thread mode: scan main room timeline directly for thread events.
-    // Does NOT use SDK Thread objects — they're unreliable when hasServerSideSupport=0
-    // (canContain rejects stable 'm.thread' rel_type, resetLiveTimeline can wipe data).
+    // Prefer SDK Thread — it tracks server-fetched history (via
+    // createThreadsTimelineSets / fetchRoomThreads) and ongoing replies.
+    const sdkThread = room.getThread(threadId);
+    if (sdkThread) {
+      const liveTimeline = sdkThread.liveTimeline;
+      const events = liveTimeline.getEvents();
+      if (events.length > 0) {
+        return {
+          linkedTimelines: getThreadTimelines(liveTimeline),
+          range: { start: 0, end: events.length },
+        };
+      }
+    }
+
+    // Fallback: synthesize from a main-timeline scan. Kept while we work
+    // upstream SDK fixes that make the SDK path reliable for every case:
+    //   - Thread.canContain rejects stable 'm.thread' rel_type when the
+    //     server lacks MSC3856 (fix lives in our matrix-js-sdk fork).
+    //   - resetLiveTimeline can wipe SDK Thread state.
+    // When this branch stops triggering in production we can delete it.
     const mainTimeline = room.getUnfilteredTimelineSet().getLiveTimeline();
     const threadEvents = mainTimeline.getEvents().filter((e) => {
       if (e.isRedacted()) return false;
@@ -462,8 +479,11 @@ const getInitialTimeline = (room: Room, threadId?: string) => {
     });
     if (threadEvents.length === 0) return getEmptyTimeline();
 
-    // Create a synthetic EventTimelineSet (no filter → canContain returns true for all events,
-    // room arg sets correct roomId on events without registering in room.timelineSets).
+    console.warn(
+      `[threads] Falling back to synthetic timeline for ${threadId} ` +
+        `(SDK Thread missing or empty; ${threadEvents.length} event(s) recovered from main timeline)`
+    );
+
     const syntheticSet = new EventTimelineSet(room, {});
     const syntheticTimeline = syntheticSet.getLiveTimeline();
     for (const e of threadEvents) {

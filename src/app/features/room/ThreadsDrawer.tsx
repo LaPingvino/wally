@@ -134,17 +134,20 @@ export function ThreadsDrawer({ room, onClose, width = 320, isFullWidth, onToggl
   const [openThreadId, setOpenThreadId] = useAtom(openThreadIdAtom);
   const mx = useMatrixClient();
 
-  // Build thread list from BOTH SDK thread objects (populated after fetchRoomThreads or
-  // fresh sync with threadSupport:true) AND a main-timeline scan (works with old session
-  // data that predates threadSupport being enabled, or when server lacks MSC3856).
-  //
-  // We always merge both sources so that opening a thread (which calls room.createThread()
-  // to register one SDK Thread object) does not cause the rest of the list to disappear.
-  // SDK entries take precedence over fallback entries for the same thread ID.
+  // SDK threads (via createThreadsTimelineSets / fetchRoomThreads) are the
+  // source of truth. The main-timeline scan exists only as a fallback for
+  // cases the SDK currently mishandles — when it stops adding entries in
+  // production we can drop it. See the warn below.
   const getThreads = useCallback((): ThreadEntry[] => {
     const entries = new Map<string, ThreadEntry>();
 
-    // 1. Fallback: scan main timeline for m.thread relations.
+    for (const t of room.getThreads()) {
+      if (!t.rootEvent) continue;
+      entries.set(t.id, { id: t.id, rootEvent: t.rootEvent, replyCount: t.length });
+    }
+
+    // Fallback: scan main timeline for m.thread relations the SDK didn't surface.
+    let fallbackAdded = 0;
     const timeline = room.getUnfilteredTimelineSet().getLiveTimeline().getEvents();
     const replyMap = new Map<string, number>();
     for (const evt of timeline) {
@@ -157,16 +160,16 @@ export function ThreadsDrawer({ room, onClose, width = 320, isFullWidth, onToggl
       }
     }
     for (const [rootId, count] of replyMap.entries()) {
+      if (entries.has(rootId)) continue;
       const rootEvent = room.findEventById(rootId);
       if (!rootEvent || rootEvent.isRedacted()) continue;
       entries.set(rootId, { id: rootId, rootEvent, replyCount: count });
+      fallbackAdded += 1;
     }
-
-    // 2. SDK threads override fallback entries (more accurate reply count, includes
-    //    fetched history). Skip any that lack a rootEvent — they aren't ready yet.
-    for (const t of room.getThreads()) {
-      if (!t.rootEvent) continue;
-      entries.set(t.id, { id: t.id, rootEvent: t.rootEvent, replyCount: t.length });
+    if (fallbackAdded > 0) {
+      console.warn(
+        `[threads] Fallback added ${fallbackAdded} thread(s) the SDK didn't surface for ${room.roomId}`
+      );
     }
 
     return [...entries.values()].sort((a, b) => b.rootEvent.getTs() - a.rootEvent.getTs());
