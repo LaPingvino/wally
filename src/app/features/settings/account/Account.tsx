@@ -4,7 +4,6 @@ import { Page, PageContent, PageHeader } from '../../../components/page';
 import { MatrixId } from './MatrixId';
 import { Profile } from './Profile';
 import { ContactInformation } from './ContactInfo';
-import { IgnoredUserList } from './IgnoredUserList';
 
 type AccountProps = {
   requestClose: () => void;
@@ -33,7 +32,6 @@ export function Account({ requestClose }: AccountProps) {
               <Profile />
               <MatrixId />
               <ContactInformation />
-              <IgnoredUserList />
             </Box>
           </PageContent>
         </Scroll>

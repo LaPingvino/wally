@@ -2,6 +2,7 @@ export enum AccountDataEvent {
   PushRules = 'm.push_rules',
   Direct = 'm.direct',
   IgnoredUserList = 'm.ignored_user_list',
+  InvitePermissionConfig = 'org.matrix.msc4155.invite_permission_config',
 
   CinnySpaces = 'in.cinny.spaces',
 

@@ -28,6 +28,7 @@ import { About } from './about';
 import { KeyboardShortcuts } from './keyboard-shortcuts/KeyboardShortcuts';
 import { Performance } from './performance';
 import { Accessibility } from './accessibility';
+import { Moderation } from './moderation';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LogoutDialog } from '../../components/LogoutDialog';
 import { NativeDialog } from '../../components/NativeDialog';
@@ -44,6 +45,7 @@ export enum SettingsPages {
   KeyboardShortcutsPage,
   PerformancePage,
   AccessibilityPage,
+  ModerationPage,
 }
 
 type SettingsMenuItem = {
@@ -64,6 +66,11 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         page: SettingsPages.AccountPage,
         name: 'Account',
         icon: Icons.User,
+      },
+      {
+        page: SettingsPages.ModerationPage,
+        name: 'Moderation & Safety',
+        icon: Icons.Shield,
       },
       {
         page: SettingsPages.NotificationPage,
@@ -241,6 +248,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
       )}
       {activePage === SettingsPages.AccessibilityPage && (
         <Accessibility requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SettingsPages.ModerationPage && (
+        <Moderation requestClose={handlePageRequestClose} />
       )}
     </PageRoot>
   );
