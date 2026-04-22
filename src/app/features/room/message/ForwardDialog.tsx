@@ -1,23 +1,22 @@
 import React, {
   ChangeEventHandler,
+  KeyboardEventHandler,
   useCallback,
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
   Avatar,
   Box,
   Chip,
-  Dialog,
   Header,
   Icon,
   IconButton,
   Icons,
   Input,
   MenuItem,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Scroll,
   Spinner,
   Text,
@@ -26,7 +25,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import FocusTrap from 'focus-trap-react';
+import { isKeyHotkey } from 'is-hotkey';
 import { IContent, JoinRule, MatrixEvent, MsgType, Room } from 'matrix-js-sdk';
 import { useAtomValue } from 'jotai';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
@@ -34,6 +33,7 @@ import { mDirectAtom } from '../../../state/mDirectList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useAsyncSearch, UseAsyncSearchOptions } from '../../../hooks/useAsyncSearch';
+import { useListFocusIndex } from '../../../hooks/useListFocusIndex';
 import { factoryRoomIdByActivity } from '../../../utils/sort';
 import {
   getDirectRoomAvatarUrl,
@@ -46,8 +46,9 @@ import {
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
 import { getMatrixToRoomEvent } from '../../../plugins/matrix-to';
 import { getViaServers } from '../../../plugins/via-servers';
-import { stopPropagation } from '../../../utils/keyboard';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+import { NativeDialog } from '../../../components/NativeDialog';
+import * as dialogCss from '../../../components/NativeDialog.css';
 import * as css from './styles.css';
 
 const escapeHtml = (s: string): string =>
@@ -165,11 +166,19 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
 
 type ForwardRoomItemProps = {
   roomId: string;
+  focused: boolean;
+  focusIndex: number;
   onPick: (roomId: string) => void;
   disabled?: boolean;
 };
 
-function ForwardRoomItem({ roomId, onPick, disabled }: ForwardRoomItemProps) {
+function ForwardRoomItem({
+  roomId,
+  focused,
+  focusIndex,
+  onPick,
+  disabled,
+}: ForwardRoomItemProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
   const mDirects = useAtomValue(mDirectAtom);
@@ -179,10 +188,17 @@ function ForwardRoomItem({ roomId, onPick, disabled }: ForwardRoomItemProps) {
   const avatarUrl = dm
     ? getDirectRoomAvatarUrl(mx, room, 32, useAuthentication)
     : getRoomAvatarUrl(mx, room, 32, useAuthentication);
+  const alias = room.getCanonicalAlias() ?? '';
+  const label = alias ? `${room.name || roomId} (${alias})` : room.name || roomId;
 
   return (
     <MenuItem
       as="button"
+      role="option"
+      aria-selected={focused}
+      aria-label={label}
+      data-focus-index={focusIndex}
+      variant={focused ? 'Primary' : 'Surface'}
       radii="300"
       onClick={() => onPick(roomId)}
       aria-disabled={disabled}
@@ -191,7 +207,7 @@ function ForwardRoomItem({ roomId, onPick, disabled }: ForwardRoomItemProps) {
           <RoomAvatar
             roomId={roomId}
             src={avatarUrl}
-            alt={room.name}
+            alt=""
             renderFallback={() => (
               <RoomIcon
                 size="50"
@@ -205,7 +221,7 @@ function ForwardRoomItem({ roomId, onPick, disabled }: ForwardRoomItemProps) {
       }
       after={
         <Text size="T200" priority="300" truncate>
-          {room.getCanonicalAlias() ?? ''}
+          {alias}
         </Text>
       }
     >
@@ -218,21 +234,24 @@ function ForwardRoomItem({ roomId, onPick, disabled }: ForwardRoomItemProps) {
 
 type ForwardDialogProps = {
   srcRoom: Room;
-  mEvent: MatrixEvent;
+  mEvents: MatrixEvent[];
   overrideContent?: IContent;
   open: boolean;
   onClose: () => void;
+  onSent?: () => void;
 };
 
 export function ForwardDialog({
   srcRoom,
-  mEvent,
+  mEvents,
   overrideContent,
   open,
   onClose,
+  onSent,
 }: ForwardDialogProps) {
   const mx = useMatrixClient();
   const allRoomIds = useAtomValue(allRoomsAtom);
+  const isMulti = mEvents.length > 1;
 
   const targetRoomIds = useMemo(
     () =>
@@ -264,41 +283,101 @@ export function ForwardDialog({
   const visibleRoomIds = result ? result.items.slice(0, 100) : targetRoomIds.slice(0, 100);
 
   const [query, setQuery] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listFocus = useListFocusIndex(visibleRoomIds.length, 0);
+
   const handleSearchChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
     const v = evt.target.value;
     setQuery(v);
+    listFocus.reset();
     if (v) search(v);
     else resetSearch();
   };
 
   const [sentRoomId, setSentRoomId] = useState<string>();
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
 
   const [sendState, sendForward] = useAsyncCallback(
     useCallback(
       async (targetRoomId: string) => {
-        const content = buildForwardContent(srcRoom, mEvent, overrideContent);
-        if (!content) throw new Error('Message cannot be forwarded');
-        await mx.sendMessage(targetRoomId, content as any);
+        const ordered = [...mEvents].sort((a, b) => a.getTs() - b.getTs());
+        setProgress({ done: 0, total: ordered.length });
+        for (let i = 0; i < ordered.length; i += 1) {
+          const evt = ordered[i];
+          const content = buildForwardContent(
+            srcRoom,
+            evt,
+            ordered.length === 1 ? overrideContent : undefined
+          );
+          if (!content) throw new Error('Message cannot be forwarded');
+          // eslint-disable-next-line no-await-in-loop
+          await mx.sendMessage(targetRoomId, content as any);
+          setProgress({ done: i + 1, total: ordered.length });
+        }
         return targetRoomId;
       },
-      [mx, srcRoom, mEvent, overrideContent]
+      [mx, srcRoom, mEvents, overrideContent]
     )
   );
 
   const handlePick = (targetRoomId: string) => {
     if (sendState.status === AsyncStatus.Loading) return;
     setSentRoomId(targetRoomId);
-    sendForward(targetRoomId).catch(() => {
-      /* error surfaced via sendState */
-    });
+    sendForward(targetRoomId)
+      .then(() => {
+        onSent?.();
+      })
+      .catch(() => {
+        /* error surfaced via sendState */
+      });
   };
 
   const handleClose = () => {
     setQuery('');
     resetSearch();
     setSentRoomId(undefined);
+    setProgress({ done: 0, total: 0 });
+    listFocus.reset();
     onClose();
   };
+
+  const handleInputKeyDown: KeyboardEventHandler<HTMLInputElement> = (evt) => {
+    if (isKeyHotkey('enter', evt)) {
+      evt.preventDefault();
+      const rId = visibleRoomIds[listFocus.index];
+      if (rId) handlePick(rId);
+      return;
+    }
+    if (isKeyHotkey('arrowdown', evt)) {
+      evt.preventDefault();
+      listFocus.next();
+      return;
+    }
+    if (isKeyHotkey('arrowup', evt)) {
+      evt.preventDefault();
+      listFocus.previous();
+    }
+  };
+
+  useEffect(() => {
+    const scrollView = scrollRef.current;
+    const focusedItem = scrollView?.querySelector(
+      `[data-focus-index="${listFocus.index}"]`
+    );
+    if (focusedItem) {
+      focusedItem.scrollIntoView({ block: 'nearest' });
+    }
+  }, [listFocus.index]);
+
+  useEffect(() => {
+    if (open) {
+      // Focus input after native <dialog> has opened
+      const t = window.setTimeout(() => inputRef.current?.focus(), 0);
+      return () => window.clearTimeout(t);
+    }
+    return undefined;
+  }, [open]);
 
   const isBusy = sendState.status === AsyncStatus.Loading;
   const isDone = sendState.status === AsyncStatus.Success;
@@ -306,103 +385,127 @@ export function ForwardDialog({
     sendState.status === AsyncStatus.Error ? 'Failed to forward. Try again.' : undefined;
 
   return (
-    <Overlay open={open} backdrop={<OverlayBackdrop />}>
-      <OverlayCenter>
-        <FocusTrap
-          focusTrapOptions={{
-            initialFocus: false,
-            onDeactivate: handleClose,
-            clickOutsideDeactivates: true,
-            escapeDeactivates: stopPropagation,
+    <NativeDialog
+      open={open}
+      onClose={handleClose}
+      className={dialogCss.NativeDialog}
+      style={{ width: toRem(460), maxHeight: toRem(560) }}
+    >
+      <Box direction="Column" style={{ height: '100%' }} role="dialog" aria-label="Forward message">
+        <Header
+          style={{
+            padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
+            borderBottomWidth: config.borderWidth.B300,
+            flexShrink: 0,
           }}
+          variant="Surface"
+          size="500"
         >
-          <Dialog variant="Surface">
-            <Header
-              style={{
-                padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
-                borderBottomWidth: config.borderWidth.B300,
-              }}
-              variant="Surface"
-              size="500"
+          <Box grow="Yes">
+            <Text size="H4">
+              {isMulti ? `Forward ${mEvents.length} messages` : 'Forward Message'}
+            </Text>
+          </Box>
+          <IconButton size="300" onClick={handleClose} radii="300" aria-label="Close">
+            <Icon src={Icons.Cross} />
+          </IconButton>
+        </Header>
+        <Box
+          shrink="No"
+          style={{ padding: config.space.S400, paddingBottom: config.space.S200 }}
+          direction="Column"
+          gap="200"
+        >
+          <Input
+            ref={inputRef}
+            variant="Background"
+            placeholder="Search rooms and DMs…"
+            value={query}
+            onChange={handleSearchChange}
+            onKeyDown={handleInputKeyDown}
+            role="combobox"
+            aria-label="Search rooms to forward to"
+            aria-autocomplete="list"
+            aria-expanded
+            aria-controls="forward-room-list"
+            aria-activedescendant={
+              visibleRoomIds[listFocus.index]
+                ? `forward-room-${visibleRoomIds[listFocus.index]}`
+                : undefined
+            }
+            before={<Icon size="200" src={Icons.Search} />}
+          />
+          {errorMsg && (
+            <Text style={{ color: color.Critical.Main }} size="T300" role="alert">
+              {errorMsg}
+            </Text>
+          )}
+        </Box>
+        <Box grow="Yes" style={{ minHeight: 0 }}>
+          <Scroll ref={scrollRef} size="300" hideTrack>
+            <div
+              id="forward-room-list"
+              role="listbox"
+              aria-label="Forward destinations"
+              style={{ padding: `0 ${config.space.S400} ${config.space.S400}` }}
             >
-              <Box grow="Yes">
-                <Text size="H4">Forward Message</Text>
-              </Box>
-              <IconButton size="300" onClick={handleClose} radii="300">
-                <Icon src={Icons.Cross} />
-              </IconButton>
-            </Header>
-            <Box
-              style={{ padding: config.space.S400, width: toRem(420), maxWidth: '90vw' }}
-              direction="Column"
-              gap="300"
-            >
-              <Input
-                variant="Background"
-                placeholder="Search rooms and DMs…"
-                value={query}
-                onChange={handleSearchChange}
-                aria-label="Search rooms to forward to"
-                autoFocus
-              />
-              {errorMsg && (
-                <Text style={{ color: color.Critical.Main }} size="T300">
-                  {errorMsg}
+              {visibleRoomIds.length === 0 && (
+                <Text size="T200" priority="300" style={{ padding: config.space.S200 }}>
+                  No matching rooms.
                 </Text>
               )}
-              {isDone && (
-                <Text style={{ color: color.Success.Main }} size="T300">
-                  Forwarded.
-                </Text>
-              )}
-              <Box
-                direction="Column"
-                gap="100"
-                style={{ maxHeight: toRem(360), overflow: 'hidden' }}
+              {visibleRoomIds.map((rId, index) => (
+                <div key={rId} id={`forward-room-${rId}`}>
+                  <ForwardRoomItem
+                    roomId={rId}
+                    focused={listFocus.index === index}
+                    focusIndex={index}
+                    onPick={handlePick}
+                    disabled={isBusy}
+                  />
+                </div>
+              ))}
+            </div>
+          </Scroll>
+        </Box>
+        {(isBusy || isDone) && sentRoomId && (
+          <Box
+            shrink="No"
+            alignItems="Center"
+            gap="200"
+            style={{
+              padding: config.space.S300,
+              borderTopWidth: config.borderWidth.B300,
+            }}
+            aria-live="polite"
+          >
+            {isBusy && <Spinner size="200" variant="Secondary" />}
+            <Text size="T200" priority="300" style={{ flexGrow: 1 }}>
+              {(() => {
+                if (!isBusy) {
+                  return `Sent to ${mx.getRoom(sentRoomId)?.name ?? sentRoomId}`;
+                }
+                if (isMulti) {
+                  return `Sending ${progress.done}/${progress.total}…`;
+                }
+                return 'Sending…';
+              })()}
+            </Text>
+            {isDone && (
+              <Chip
+                as="button"
+                size="400"
+                radii="Pill"
+                variant="Surface"
+                onClick={handleClose}
               >
-                <Scroll size="300" hideTrack visibility="Hover">
-                  <Box direction="Column" gap="100" className={css.MessageMenuGroup}>
-                    {visibleRoomIds.length === 0 && (
-                      <Text size="T200" priority="300" style={{ padding: config.space.S200 }}>
-                        No matching rooms.
-                      </Text>
-                    )}
-                    {visibleRoomIds.map((rId) => (
-                      <ForwardRoomItem
-                        key={rId}
-                        roomId={rId}
-                        onPick={handlePick}
-                        disabled={isBusy}
-                      />
-                    ))}
-                  </Box>
-                </Scroll>
-              </Box>
-              {(isBusy || isDone) && sentRoomId && (
-                <Box alignItems="Center" gap="200">
-                  {isBusy && <Spinner size="200" variant="Secondary" />}
-                  <Text size="T200" priority="300">
-                    {isBusy ? 'Sending…' : 'Sent to '}
-                    {!isBusy && (mx.getRoom(sentRoomId)?.name ?? sentRoomId)}
-                  </Text>
-                  {isDone && (
-                    <Chip
-                      as="button"
-                      size="400"
-                      radii="Pill"
-                      variant="Surface"
-                      onClick={handleClose}
-                    >
-                      <Text size="T200">Done</Text>
-                    </Chip>
-                  )}
-                </Box>
-              )}
-            </Box>
-          </Dialog>
-        </FocusTrap>
-      </OverlayCenter>
-    </Overlay>
+                <Text size="T200">Done</Text>
+              </Chip>
+            )}
+          </Box>
+        )}
+      </Box>
+    </NativeDialog>
   );
 }
 
@@ -416,6 +519,7 @@ export type MessageForwardItemProps = {
 export const MessageForwardItem = as<'button', MessageForwardItemProps>(
   ({ room, mEvent, overrideContent, onClose, ...props }, ref) => {
     const [open, setOpen] = useState(false);
+    const events = useMemo(() => [mEvent], [mEvent]);
 
     const handleClose = () => {
       setOpen(false);
@@ -426,7 +530,7 @@ export const MessageForwardItem = as<'button', MessageForwardItemProps>(
       <>
         <ForwardDialog
           srcRoom={room}
-          mEvent={mEvent}
+          mEvents={events}
           overrideContent={overrideContent}
           open={open}
           onClose={handleClose}

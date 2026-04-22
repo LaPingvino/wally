@@ -68,6 +68,8 @@ import { EmojiBoard } from '../../../components/emoji-board';
 import { ReactionViewer } from '../reaction-viewer';
 import { MessageEditor } from './MessageEditor';
 import { MessageForwardItem } from './ForwardDialog';
+import { forwardSelectionAtom } from '../../../state/forwardSelection';
+import { useAtom } from 'jotai';
 import { UserAvatar } from '../../../components/user-avatar';
 import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
@@ -739,6 +741,33 @@ export const Message = as<'div', MessageProps>(
     const [menuAnchor, setMenuAnchor] = useState<RectCords>();
     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
 
+    const [forwardSelection, setForwardSelection] = useAtom(forwardSelectionAtom);
+    const selectionActive =
+      !!forwardSelection && forwardSelection.roomId === room.roomId;
+    const eventId = mEvent.getId();
+    const isForwardSelected =
+      selectionActive && !!eventId && forwardSelection!.eventIds.includes(eventId);
+
+    const toggleForwardSelection = useCallback(() => {
+      if (!eventId) return;
+      setForwardSelection((prev) => {
+        if (!prev || prev.roomId !== room.roomId) {
+          return { roomId: room.roomId, eventIds: [eventId] };
+        }
+        const has = prev.eventIds.includes(eventId);
+        const nextIds = has
+          ? prev.eventIds.filter((id) => id !== eventId)
+          : [...prev.eventIds, eventId];
+        if (nextIds.length === 0) return null;
+        return { ...prev, eventIds: nextIds };
+      });
+    }, [eventId, room.roomId, setForwardSelection]);
+
+    const startForwardSelection = useCallback(() => {
+      if (!eventId) return;
+      setForwardSelection({ roomId: room.roomId, eventIds: [eventId] });
+    }, [eventId, room.roomId, setForwardSelection]);
+
     // Single-key shortcuts when a message is focused:
     //   r = reply, e = edit, t = open thread
     const handleMsgKeyDown = useCallback(
@@ -933,17 +962,33 @@ export const Message = as<'div', MessageProps>(
         space={messageSpacing}
         collapse={collapse}
         highlight={highlight}
-        selected={!!menuAnchor || !!emojiBoardAnchor}
+        selected={!!menuAnchor || !!emojiBoardAnchor || isForwardSelected}
         onKeyDown={handleMsgKeyDown}
         {...props}
         {...hoverProps}
         {...focusWithinProps}
         ref={ref}
       >
-        {!edit && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
+        {!edit &&
+          (hover || !!menuAnchor || !!emojiBoardAnchor || (selectionActive && isForwardSelected)) && (
           <div className={css.MessageOptionsBase}>
             <Menu className={css.MessageOptionsBar} variant="SurfaceVariant">
               <Box gap="100">
+                {selectionActive && (
+                  <IconButton
+                    onClick={toggleForwardSelection}
+                    aria-label={isForwardSelected ? 'Deselect message' : 'Select for forward'}
+                    aria-pressed={isForwardSelected}
+                    variant="SurfaceVariant"
+                    size="300"
+                    radii="300"
+                  >
+                    <Icon
+                      src={isForwardSelected ? Icons.CheckTwice : Icons.Plus}
+                      size="100"
+                    />
+                  </IconButton>
+                )}
                 {canSendReaction && (
                   <PopOut
                     position="Bottom"
@@ -1131,6 +1176,26 @@ export const Message = as<'div', MessageProps>(
                               mEvent={mEvent}
                               onClose={closeMenu}
                             />
+                          )}
+                          {!mEvent.isRedacted() && (
+                            <MenuItem
+                              size="300"
+                              after={<Icon size="100" src={Icons.CheckTwice} />}
+                              radii="300"
+                              onClick={() => {
+                                startForwardSelection();
+                                closeMenu();
+                              }}
+                            >
+                              <Text
+                                className={css.MessageMenuItemText}
+                                as="span"
+                                size="T300"
+                                truncate
+                              >
+                                Select for Forward
+                              </Text>
+                            </MenuItem>
                           )}
                           {!hideReadReceipts && (
                             <MessageReadReceiptItem

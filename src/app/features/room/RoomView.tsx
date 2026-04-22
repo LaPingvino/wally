@@ -15,6 +15,7 @@ import { RoomTimeline } from './RoomTimeline';
 import { RoomViewTyping } from './RoomViewTyping';
 import { RoomTombstone } from './RoomTombstone';
 import { RoomInput } from './RoomInput';
+import { ForwardSelectionBar } from './message/ForwardSelectionBar';
 import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
 import * as followingCss from './RoomViewFollowing.css';
 import { Page } from '../../components/page';
@@ -244,6 +245,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
           <RoomViewTyping room={room} />
         </Box>
         <Box shrink="No" direction="Column">
+          <ForwardSelectionBar room={room} />
           <div style={{ padding: `0 ${config.space.S400}` }}>
             {tombstoneEvent ? (
               <RoomTombstone
