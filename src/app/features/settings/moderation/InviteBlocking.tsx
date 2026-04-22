@@ -39,11 +39,6 @@ export function InviteBlocking() {
         // Drop the field entirely if empty so we don't litter account data
         // with `{"blocked_servers":[]}` after the user toggles off.
         if (blocked_servers.length === 0) delete updated.blocked_servers;
-        // matrix-js-sdk's setAccountData generic only accepts known event types;
-        // MSC4155 isn't in its type table yet, so we suppress the check here.
-        // Once the SDK ships types for `org.matrix.msc4155.invite_permission_config`,
-        // ts-expect-error will start failing and we can drop this comment.
-        // @ts-expect-error MSC4155 not yet in matrix-js-sdk AccountDataEvents
         await mx.setAccountData(AccountDataEvent.InvitePermissionConfig, updated);
       },
       [mx, content]
