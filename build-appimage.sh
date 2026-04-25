@@ -10,7 +10,7 @@
 #
 # If run from the PKGBUILD directory after makepkg, uses the local
 # src/cinny-web tree (already fully patched) to avoid re-cloning.
-# Otherwise clones the element-call branch from Codeberg.
+# Otherwise clones the main branch from Codeberg (full linear patch stack).
 #
 # Build-time dependencies: git, node, npm
 
@@ -31,8 +31,8 @@ if [[ -d "$SCRIPT_DIR/src/cinny-web/.git" ]]; then
   CINNY_SRC="$SCRIPT_DIR/src/cinny-web"
   NEED_NPM_INSTALL=false
 else
-  echo "==> Cloning lapingvino/cinny (element-call branch)..."
-  git clone --depth=1 -b element-call \
+  echo "==> Cloning lapingvino/cinny (main branch)..."
+  git clone --depth=1 -b main \
     https://codeberg.org/lapingvino/cinny.git "$WORK_DIR/cinny"
   CINNY_SRC="$WORK_DIR/cinny"
   NEED_NPM_INSTALL=true
@@ -43,7 +43,7 @@ fi
 # ---------------------------------------------------------------------------
 echo "==> Patching device name..."
 grep -rl "'Cinny Web'" "$CINNY_SRC/src/" | \
-  xargs sed -i "s/'Cinny Web'/'Cinny Electron (lapingvino fork)'/g"
+  xargs sed -i "s/'Cinny Web'/'Wally Desktop'/g"
 
 # ---------------------------------------------------------------------------
 # 3. Build web app
@@ -77,9 +77,9 @@ VERSION="$(node -p "require('$CINNY_SRC/package.json').version")"
 
 cat > "$WORK_DIR/electron/package.json" << EOF
 {
-  "name": "cinny-lapingvino",
+  "name": "wally",
   "version": "$VERSION",
-  "description": "Yet another matrix client (lapingvino fork)",
+  "description": "Wally — a Cinny fork",
   "main": "main.js",
   "author": "Joop Kiefte <ikojba@gmail.com>",
   "license": "AGPL-3.0-only",
@@ -88,8 +88,8 @@ cat > "$WORK_DIR/electron/package.json" << EOF
     "electron-builder": "^25.0.0"
   },
   "build": {
-    "appId": "org.lapingvino.cinny",
-    "productName": "Cinny",
+    "appId": "org.lapingvino.wally",
+    "productName": "Wally",
     "files": [
       "main.js",
       "www/**/*",
@@ -101,8 +101,8 @@ cat > "$WORK_DIR/electron/package.json" << EOF
       "icon": "icon.png",
       "mimeTypes": ["x-scheme-handler/matrix"],
       "desktop": {
-        "Name": "Cinny",
-        "Comment": "Yet another Matrix client",
+        "Name": "Wally",
+        "Comment": "Wally — a Cinny fork",
         "StartupWMClass": "cinny-lapingvino"
       }
     },
@@ -111,7 +111,7 @@ cat > "$WORK_DIR/electron/package.json" << EOF
       "icon": "icon.png"
     },
     "portable": {
-      "artifactName": "Cinny-\${version}-portable.exe"
+      "artifactName": "Wally-\${version}-portable.exe"
     }
   }
 }

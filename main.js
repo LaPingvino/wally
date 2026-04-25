@@ -57,7 +57,7 @@ app.on('second-instance', () => {
 function createTray() {
   // Tray requires a PNG on Linux; SVG is not reliably supported
   tray = new Tray(nativeImage.createFromPath(ICON_PNG));
-  tray.setToolTip('Cinny');
+  tray.setToolTip('Wally');
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Show', click: () => { mainWindow.show(); mainWindow.focus(); } },
     { type: 'separator' },
@@ -87,8 +87,8 @@ function createWindow(ses) {
     },
   });
 
-  // Load via the custom scheme so WASM and service workers function correctly
-  mainWindow.loadURL('app://localhost/index.html');
+  // Load root so React Router sees '/' and picks the correct initial route
+  mainWindow.loadURL('app://localhost/');
 
   mainWindow.on('close', (e) => {
     if (!app.isQuitting) {
@@ -109,11 +109,12 @@ app.whenReady().then(() => {
   const ses = session.fromPartition(PARTITION);
 
   // Serve the web app through the privileged 'app://' scheme.
-  // Paths without a file extension are SPA routes — serve index.html so that
-  // hash-router redirects (e.g. after login/logout) resolve correctly.
+  // Paths with a known static-asset extension are served directly; everything
+  // else (SPA routes like /home/!roomId or bare /) falls back to index.html.
   ses.protocol.handle('app', (request) => {
     const { pathname } = new URL(request.url);
-    const filePath = path.extname(pathname)
+    const ASSET_EXT = /\.(js|css|html|json|png|svg|ico|woff2?|ttf|map|wasm|txt)$/i;
+    const filePath = ASSET_EXT.test(pathname)
       ? path.join(APP_DIR, pathname)
       : path.join(APP_DIR, 'index.html');
     return net.fetch(pathToFileURL(filePath).href);
@@ -134,5 +135,12 @@ app.on('web-contents-created', (_e, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
     if (/^https?:|^mailto:/.test(url)) setImmediate(() => shell.openExternal(url));
     return { action: 'deny' };
+  });
+  // Also catch direct navigations (window.location.assign, <a target="_self">, etc.)
+  contents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('app://localhost')) {
+      event.preventDefault();
+      if (/^https?:|^mailto:/.test(url)) shell.openExternal(url);
+    }
   });
 });
