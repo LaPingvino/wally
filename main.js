@@ -1,27 +1,35 @@
 'use strict';
 
+// Electron entry point for AppImage / Windows portable builds.
+//
+// This file is templated by build-appimage.sh: the __PLACEHOLDER__ strings
+// below are replaced at build time with the upstream-specific values
+// (short name, tray tooltip). Running this file directly without those
+// substitutions will leave literal "__…__" strings and obviously-broken
+// userData paths — that's intentional, so misuse fails loud rather than
+// silently sharing data with another build.
+
 const { app, BrowserWindow, Tray, Menu, nativeImage, shell, protocol, net, session } = require('electron');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
-// When installed via PKGBUILD (system install), app.isPackaged is false and we
-// use the fixed system paths.  When bundled with electron-builder (AppImage or
-// portable release), app.isPackaged is true and we resolve everything relative
-// to __dirname (which points at the resources/app/ directory inside the bundle).
-const APP_DIR = app.isPackaged
-  ? path.join(__dirname, 'www')
-  : '/usr/lib/cinny-lapingvino';
-const ICON_PNG = app.isPackaged
-  ? path.join(__dirname, 'icon.png')
-  : '/usr/share/pixmaps/cinny.png';
+// --- Build-time-substituted constants ---------------------------------------
+const APP_SHORT_NAME = '__SHORT_NAME__'; // setName, partition, userData dir
+const APP_TOOLTIP    = '__APP_TOOLTIP__'; // tray tooltip / human-facing name
+// ---------------------------------------------------------------------------
+
+// Built web app and icon are bundled next to this file inside the AppImage
+// (see electron-builder `files` config in build-appimage.sh).
+const APP_DIR = path.join(__dirname, 'www');
+const ICON_PNG = path.join(__dirname, 'icon.png');
 
 // Named persistent partition — keeps localStorage/IndexedDB in a stable,
 // named subdirectory of userData so login data survives restarts.
-const PARTITION = 'persist:cinny-lapingvino';
+const PARTITION = `persist:${APP_SHORT_NAME}`;
 
-// Set app name before ready so WM_CLASS (X11) / app-id (Wayland) are correct,
-// allowing the compositor to match the running window to the .desktop file.
-app.setName('cinny-lapingvino');
+// Set app name before ready so WM_CLASS (X11) / app-id (Wayland) and the
+// userData directory layout are stable per-upstream.
+app.setName(APP_SHORT_NAME);
 
 // Register a privileged custom scheme BEFORE app is ready.
 // Plain file:// origins block WASM loading and service worker registration;
@@ -57,7 +65,7 @@ app.on('second-instance', () => {
 function createTray() {
   // Tray requires a PNG on Linux; SVG is not reliably supported
   tray = new Tray(nativeImage.createFromPath(ICON_PNG));
-  tray.setToolTip('Wally');
+  tray.setToolTip(APP_TOOLTIP);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Show', click: () => { mainWindow.show(); mainWindow.focus(); } },
     { type: 'separator' },
@@ -99,13 +107,10 @@ function createWindow(ses) {
 }
 
 app.whenReady().then(() => {
-  // Link to the installed .desktop file for Wayland icon resolution
-  app.setDesktopName('cinny-lapingvino-git.desktop');
-
   // Get (or create) the named persistent session.
   // Registering the protocol handler on this session — rather than the global
   // protocol object — ensures that storage (localStorage, IndexedDB, cookies)
-  // is written to userData/Partitions/cinny-lapingvino and persists across restarts.
+  // is written to userData/Partitions/<short-name> and persists across restarts.
   const ses = session.fromPartition(PARTITION);
 
   // Serve the web app through the privileged 'app://' scheme.
