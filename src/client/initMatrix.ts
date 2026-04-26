@@ -112,9 +112,13 @@ function installMatrixRTCLogFilter(): void {
 }
 
 export const startClient = async (mx: MatrixClient) => {
+  // Prioritise a fast initial sync over a fully-populated cache. The flag
+  // implies `lazyLoadMembers: true` and `initialSyncLimit: 1`, plus the
+  // SDK's lazy-tolerant code paths so things like thread bootstrap, on-demand
+  // thread-root fetching, and aggregations behave correctly while history
+  // populates incrementally through pagination.
   await mx.startClient({
-    lazyLoadMembers: true,
-    initialSyncLimit: 1,
+    fullLazyLoading: true,
   });
 };
 
