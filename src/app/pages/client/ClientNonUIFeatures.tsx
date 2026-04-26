@@ -26,6 +26,7 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 import { playCurrentRoomSound, playReactionSound, playTypingSound } from '../../utils/sounds';
 import { announce } from '../../utils/announce';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
@@ -444,6 +445,11 @@ type ClientNonUIFeaturesProps = {
   children: ReactNode;
 };
 
+function BackgroundBackfillFeature() {
+  useBackgroundBackfill();
+  return null;
+}
+
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
     <>
@@ -455,6 +461,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <FaviconUpdater />
       <InviteNotifications />
       <MessageNotifications />
+      <BackgroundBackfillFeature />
       {children}
     </>
   );
