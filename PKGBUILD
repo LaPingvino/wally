@@ -8,7 +8,7 @@ pkgdesc="Yet another matrix client — web version (with Element Call, accessibi
 arch=('any')
 url="https://codeberg.org/lapingvino/cinny"
 license=('AGPL3')
-makedepends=('git' 'npm')
+makedepends=('git' 'npm' 'yarn')
 source=("${_pkgname}::git+https://codeberg.org/lapingvino/cinny#branch=main"
         "noto-emoji-bahai::https://github.com/LaPingvino/noto-emoji-bahai/releases/download/v0.0.1-bahai/NotoColorEmoji.ttf"
         )
