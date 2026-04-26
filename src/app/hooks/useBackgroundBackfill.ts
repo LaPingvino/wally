@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { atom, useAtomValue } from 'jotai';
 import {
   ClientEvent,
   type MatrixClient,
@@ -9,11 +10,19 @@ import {
 import { useMatrixClient } from './useMatrixClient';
 import { useSelectedRoom } from './router/useSelectedRoom';
 
-// Target depth measured against `room.getLiveTimeline().getEvents().length`.
-// 50 is enough that the timeline "feels populated" for the user — relations
-// aggregate, room ordering by recency works, and the first scroll back doesn't
-// need a network round trip.
-const TARGET_DEPTH = 50;
+// Per-room target depth measured against `room.getLiveTimeline().getEvents().length`.
+// Background rooms aim for a small "feels populated" cushion. The currently
+// selected room gets a much deeper prefetch so opening it lands on a usable
+// scrollback. With the threads drawer open, we go deeper still — the user is
+// looking for thread roots that may sit far back, and thread aggregation only
+// works once the root events are in the timeline.
+const TARGET_BACKGROUND = 50;
+const TARGET_SELECTED = 200;
+const TARGET_THREADS_OPEN = 500;
+
+// roomId of the room whose threads drawer is currently open (or null).
+// Room.tsx writes this; the scheduler reads it to deepen that room's target.
+export const threadsDrawerRoomIdAtom = atom<string | null>(null);
 
 // How many rooms can be backfilling at once. Concurrent fetches are bounded so
 // we don't blast the homeserver, and so the scheduler can react quickly when
@@ -25,14 +34,29 @@ const MAX_CONCURRENT = 3;
 // then becoming hot again should resume backfill within this window.
 const TICK_INTERVAL_MS = 30_000;
 
-type Score = { room: Room; score: number };
+type SchedulerContext = {
+  currentRoomId: string | undefined;
+  threadsRoomId: string | null;
+};
 
-function scoreRoom(room: Room, currentRoomId: string | undefined): number {
+type Score = { room: Room; score: number; target: number };
+
+function targetFor(room: Room, ctx: SchedulerContext): number {
+  if (room.roomId === ctx.threadsRoomId) return TARGET_THREADS_OPEN;
+  if (room.roomId === ctx.currentRoomId) return TARGET_SELECTED;
+  return TARGET_BACKGROUND;
+}
+
+function scoreRoom(room: Room, ctx: SchedulerContext, target: number): number {
   const eventCount = room.getLiveTimeline().getEvents().length;
-  if (eventCount >= TARGET_DEPTH) return -1;
+  if (eventCount >= target) return -1;
 
   let score = 0;
-  if (room.roomId === currentRoomId) score += 100;
+  if (room.roomId === ctx.currentRoomId) score += 100;
+  // Threads drawer open implies the user is actively hunting thread roots
+  // in this room — push it past everything else, including a different
+  // currently-selected room (shouldn't happen, but safe).
+  if (room.roomId === ctx.threadsRoomId) score += 200;
 
   const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
   const total = room.getUnreadNotificationCount(NotificationCountType.Total);
@@ -55,10 +79,13 @@ class BackfillScheduler {
 
   constructor(private mx: MatrixClient) {}
 
-  tick(currentRoomId: string | undefined): void {
+  tick(ctx: SchedulerContext): void {
     const scored: Score[] = this.mx
       .getRooms()
-      .map((room) => ({ room, score: scoreRoom(room, currentRoomId) }))
+      .map((room) => {
+        const target = targetFor(room, ctx);
+        return { room, target, score: scoreRoom(room, ctx, target) };
+      })
       .filter((s) => s.score > 0);
 
     scored.sort((a, b) => b.score - a.score);
@@ -74,7 +101,7 @@ class BackfillScheduler {
       }
     }
 
-    for (const { room } of winners) {
+    for (const { room, target } of winners) {
       if (this.inFlight.has(room.roomId)) continue;
       const controller = new AbortController();
       this.inFlight.set(room.roomId, controller);
@@ -86,7 +113,7 @@ class BackfillScheduler {
         }) => Promise<void>;
       };
       const promise = sdkRoom.backgroundBackfill?.({
-        targetDepth: TARGET_DEPTH,
+        targetDepth: target,
         abortSignal: controller.signal,
         chunkSize: 8,
       });
@@ -121,7 +148,7 @@ class BackfillScheduler {
 /**
  * Drive a {@link BackfillScheduler} that incrementally hydrates each room's
  * timeline in the background, prioritised by user-facing signals (current
- * room, unread/highlight counts, recent activity).
+ * room, threads drawer state, unread/highlight counts, recent activity).
  *
  * Runs once at the top of the client UI. The scheduler picks a few rooms per
  * tick, calls `room.backgroundBackfill` on them, and aborts any that drop
@@ -132,16 +159,20 @@ class BackfillScheduler {
 export const useBackgroundBackfill = (): void => {
   const mx = useMatrixClient();
   const selectedRoomId = useSelectedRoom();
+  const threadsRoomId = useAtomValue(threadsDrawerRoomIdAtom);
 
   const schedulerRef = useRef<BackfillScheduler | undefined>(undefined);
-  const selectedRoomIdRef = useRef<string | undefined>(selectedRoomId);
-  selectedRoomIdRef.current = selectedRoomId;
+  const ctxRef = useRef<SchedulerContext>({
+    currentRoomId: selectedRoomId,
+    threadsRoomId,
+  });
+  ctxRef.current = { currentRoomId: selectedRoomId, threadsRoomId };
 
   useEffect(() => {
     const scheduler = new BackfillScheduler(mx);
     schedulerRef.current = scheduler;
 
-    const tick = () => scheduler.tick(selectedRoomIdRef.current);
+    const tick = () => scheduler.tick(ctxRef.current);
 
     tick();
     const onSync = () => tick();
@@ -159,9 +190,9 @@ export const useBackgroundBackfill = (): void => {
     };
   }, [mx]);
 
-  // Selected-room changes don't need to tear down the scheduler — just nudge
-  // it so the new "currently viewed" room gets max priority immediately.
+  // Selection or threads-drawer changes don't need to tear down the scheduler
+  // — just nudge it so the new priorities are applied immediately.
   useEffect(() => {
-    schedulerRef.current?.tick(selectedRoomId);
-  }, [selectedRoomId]);
+    schedulerRef.current?.tick(ctxRef.current);
+  }, [selectedRoomId, threadsRoomId]);
 };

@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box } from 'folds';
 import { useParams } from 'react-router-dom';
 import { isKeyHotkey } from 'is-hotkey';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { threadsDrawerRoomIdAtom } from '../../hooks/useBackgroundBackfill';
 import { RoomView } from './RoomView';
 import { MembersDrawer } from './MembersDrawer';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -72,6 +73,14 @@ export function Room() {
     setIsWidgetsDrawer(false);
     setRightPanelFullWidth(false);
   }, [room.roomId]);
+
+  // Publish "threads drawer is open for room X" so the background backfill
+  // scheduler can deepen its target depth for that specific room.
+  const setThreadsDrawerRoomId = useSetAtom(threadsDrawerRoomIdAtom);
+  useEffect(() => {
+    setThreadsDrawerRoomId(isThreadsDrawer ? room.roomId : null);
+    return () => setThreadsDrawerRoomId(null);
+  }, [isThreadsDrawer, room.roomId, setThreadsDrawerRoomId]);
 
   // When something (e.g. a timeline thread indicator) requests a thread to be opened,
   // ensure the threads drawer is visible. ThreadsDrawer itself handles resetting the atom.
