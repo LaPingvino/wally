@@ -176,8 +176,24 @@ sed \
   "$SCRIPT_DIR/main.js" > "$WORK_DIR/electron/main.js"
 
 # App icon (512 px PNG — electron-builder scales it for each target).
-cp "$CINNY_SRC/public/res/android/android-chrome-512x512.png" \
-   "$WORK_DIR/electron/icon.png"
+# Path differs between forks: Cinny/Wally ship the android chrome icon,
+# Sable keeps a logo PNG under public/res/logo/.
+ICON_CANDIDATES=(
+  "public/res/android/android-chrome-512x512.png"
+  "public/res/logo/cinny-logo-512x512.png"
+)
+ICON_SRC=
+for cand in "${ICON_CANDIDATES[@]}"; do
+  if [[ -f "$CINNY_SRC/$cand" ]]; then
+    ICON_SRC="$CINNY_SRC/$cand"
+    break
+  fi
+done
+if [[ -z "$ICON_SRC" ]]; then
+  echo "ERROR: no 512px icon found in $CINNY_SRC; tried: ${ICON_CANDIDATES[*]}" >&2
+  exit 1
+fi
+cp "$ICON_SRC" "$WORK_DIR/electron/icon.png"
 
 VERSION="$(node -p "require('$CINNY_SRC/package.json').version")"
 
