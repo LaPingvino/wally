@@ -99,7 +99,7 @@
     "linkify-react": "4.3.2",
     "linkifyjs": "4.3.2",
     "livekit-client": "2.18.0",
-    "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#09a0778ac8e009edbd093d6dea9035647eacb40b",
+    "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#ebfa975eba8886733ff06af4ac8e57ff7788a983",
     "matrix-widget-api": "1.13.0",
     "millify": "6.1.0",
     "pdfjs-dist": "4.2.67",
