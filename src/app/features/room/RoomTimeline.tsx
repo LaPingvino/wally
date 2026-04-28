@@ -653,6 +653,34 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   const [timeline, setTimeline] = useState<Timeline>(() =>
     eventId ? getEmptyTimeline() : getInitialTimeline(room, threadId)
   );
+
+  // Silent-backfill anchor: useBackgroundBackfill paginates the live timeline
+  // backwards with `quiet: true`, so events get prepended to the leftmost
+  // timeline without firing RoomEvent.Timeline. Without compensation, the
+  // numeric `range` we hand the virtual paginator now points at older events
+  // — so the next unrelated re-render scrolls the view backwards by the
+  // delta. Track the head timeline's event count and shift `range` by any
+  // observed growth before this render uses it.
+  const headTimeline = timeline.linkedTimelines[0];
+  const headTimelineEventsCount = headTimeline ? headTimeline.getEvents().length : 0;
+  const headAnchorRef = useRef({ tm: headTimeline, count: headTimelineEventsCount });
+  if (headAnchorRef.current.tm === headTimeline && headTimelineEventsCount > headAnchorRef.current.count) {
+    const delta = headTimelineEventsCount - headAnchorRef.current.count;
+    headAnchorRef.current = { tm: headTimeline, count: headTimelineEventsCount };
+    setTimeline((ct) => ({
+      ...ct,
+      range: {
+        start: ct.range.start + delta,
+        end: ct.range.end + delta,
+      },
+    }));
+  } else if (
+    headAnchorRef.current.tm !== headTimeline ||
+    headAnchorRef.current.count !== headTimelineEventsCount
+  ) {
+    headAnchorRef.current = { tm: headTimeline, count: headTimelineEventsCount };
+  }
+
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
   // Thread mode: the "live" end is always the last timeline in our synthetic linked list.
   // This keeps liveTimelineLinked=true without depending on SDK Thread objects.
