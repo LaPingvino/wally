@@ -4,6 +4,7 @@ import { cryptoCallbacks } from './secretStorageKeys';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import { removeSecondarySession } from '../app/state/sessions';
+import { logFailureEvent } from './diagnostics';
 
 type Session = {
   baseUrl: string;
@@ -236,6 +237,7 @@ export const restoreSessionFromCache = async (): Promise<boolean> => {
     if (data[SECONDARY_SESSIONS_KEY]) {
       localStorage.setItem(SECONDARY_SESSIONS_KEY, data[SECONDARY_SESSIONS_KEY]);
     }
+    logFailureEvent('creds_restored_from_cache');
     return true;
   } catch {
     return false;
@@ -260,8 +262,11 @@ export const clearSessionBackup = async (): Promise<void> => {
  * to restore credentials from the Cache API backup first.
  */
 export const repairIDBAndReload = async () => {
+  const hadCreds = !!localStorage.getItem('cinny_access_token');
+  await logFailureEvent('idb_repair_started', { hadCreds });
+
   // If localStorage creds are gone, try restoring from Cache API backup.
-  if (!localStorage.getItem('cinny_access_token')) {
+  if (!hadCreds) {
     await restoreSessionFromCache();
   }
 
@@ -273,6 +278,7 @@ export const repairIDBAndReload = async () => {
   }
 
   // No checkpoint available — full wipe.
+  await logFailureEvent('idb_wiped');
   const dbs = await window.indexedDB.databases();
   dbs.forEach(({ name }) => {
     if (name) window.indexedDB.deleteDatabase(name);
@@ -281,13 +287,21 @@ export const repairIDBAndReload = async () => {
 };
 
 // ---------------------------------------------------------------------------
-// IndexedDB checkpoint system — periodic snapshots of crypto stores.
+// Crypto-store checkpoint system — Cache-API-backed snapshots.
 //
-// After a successful startup + sync, we clone the crypto databases to
-// checkpoint copies. On corruption, we restore from the checkpoint instead
-// of wiping everything (which forces recovery password re-entry).
+// Earlier this lived as IDB-to-IDB clones (sibling DBs with a `_checkpoint`
+// suffix). That had a structural problem: source and checkpoint live on
+// the same volume, so the same dirty-shutdown that corrupts the live
+// crypto DB can corrupt the checkpoint too. We now serialise the crypto
+// databases into the Cache API instead, which is a separate storage tier
+// and is far less likely to fail with the live IDB.
+//
+// The checkpoint trigger and the recovery flow (`repairIDBAndReload`)
+// are unchanged in shape — only the storage medium and the
+// serialise/deserialise primitives moved.
 // ---------------------------------------------------------------------------
-const CHECKPOINT_SUFFIX = '_checkpoint';
+
+const CHECKPOINT_CACHE = 'cinny-crypto-checkpoint';
 const CHECKPOINT_TS_KEY = 'cinny_checkpoint_ts';
 
 /** Names of databases that hold crypto material worth checkpointing. */
@@ -300,152 +314,325 @@ function getCryptoDbNames(): string[] {
   ];
 }
 
-/**
- * Clone an IndexedDB database to a new name.
- * Opens source read-only, recreates all object stores + indexes in dest,
- * and copies every record.
- */
-async function cloneIDB(srcName: string, destName: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const openSrc = indexedDB.open(srcName);
-    openSrc.onerror = () => resolve(false);
-    openSrc.onsuccess = () => {
-      const srcDb = openSrc.result;
-      const version = srcDb.version;
-      const storeNames = Array.from(srcDb.objectStoreNames);
+// JSON doesn't carry binary or non-plain types. The crypto stores hold
+// Uint8Array values everywhere; the rust store also stashes whole
+// ArrayBuffers. Tag them on the way out and reverse on the way in. Maps
+// and Sets get the same treatment so we don't lose state if the SDK
+// adopts them later.
+type Tagged =
+  | { __t: 'u8'; v: string }
+  | { __t: 'ab'; v: string }
+  | { __t: 'date'; v: number }
+  | { __t: 'map'; v: [unknown, unknown][] }
+  | { __t: 'set'; v: unknown[] };
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 1) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i += 1) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+function pack(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (value instanceof Uint8Array) {
+    return { __t: 'u8', v: bytesToBase64(value) } satisfies Tagged;
+  }
+  if (value instanceof ArrayBuffer) {
+    return { __t: 'ab', v: bytesToBase64(new Uint8Array(value)) } satisfies Tagged;
+  }
+  if (value instanceof Date) {
+    return { __t: 'date', v: value.getTime() } satisfies Tagged;
+  }
+  if (value instanceof Map) {
+    return {
+      __t: 'map',
+      v: Array.from(value.entries()).map(([k, v]) => [pack(k), pack(v)]),
+    } satisfies Tagged;
+  }
+  if (value instanceof Set) {
+    return { __t: 'set', v: Array.from(value).map(pack) } satisfies Tagged;
+  }
+  if (Array.isArray(value)) return value.map(pack);
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(value)) out[k] = pack((value as Record<string, unknown>)[k]);
+    return out;
+  }
+  return value;
+}
+
+function unpack(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map(unpack);
+  if (typeof value === 'object') {
+    const tagged = value as Partial<Tagged>;
+    if (tagged.__t === 'u8' && typeof tagged.v === 'string') return base64ToBytes(tagged.v);
+    if (tagged.__t === 'ab' && typeof tagged.v === 'string') return base64ToBytes(tagged.v).buffer;
+    if (tagged.__t === 'date' && typeof tagged.v === 'number') return new Date(tagged.v);
+    if (tagged.__t === 'map' && Array.isArray(tagged.v)) {
+      return new Map((tagged.v as [unknown, unknown][]).map(([k, v]) => [unpack(k), unpack(v)]));
+    }
+    if (tagged.__t === 'set' && Array.isArray(tagged.v)) {
+      return new Set((tagged.v as unknown[]).map(unpack));
+    }
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(value)) out[k] = unpack((value as Record<string, unknown>)[k]);
+    return out;
+  }
+  return value;
+}
+
+interface IndexMeta {
+  name: string;
+  keyPath: string | string[];
+  unique: boolean;
+  multiEntry: boolean;
+}
+interface StoreMeta {
+  name: string;
+  keyPath: string | string[] | null;
+  autoIncrement: boolean;
+  indexes: IndexMeta[];
+}
+interface DbDump {
+  name: string;
+  version: number;
+  stores: StoreMeta[];
+  // Records are keyed per store. For stores with a keyPath, the primary
+  // key lives inside the value, so `key` is omitted; for keyless stores,
+  // we carry it explicitly.
+  records: Record<string, { key?: unknown; value: unknown }[]>;
+}
+
+async function dumpIDB(dbName: string): Promise<DbDump | null> {
+  return new Promise((resolve) => {
+    const open = indexedDB.open(dbName);
+    open.onerror = () => resolve(null);
+    open.onsuccess = () => {
+      const db = open.result;
+      const storeNames = Array.from(db.objectStoreNames);
       if (storeNames.length === 0) {
-        srcDb.close();
-        resolve(false);
+        db.close();
+        resolve(null);
         return;
       }
 
-      // Delete existing checkpoint first.
-      const delReq = indexedDB.deleteDatabase(destName);
-      delReq.onsuccess = () => createAndCopy();
-      delReq.onerror = () => createAndCopy();
+      const dump: DbDump = {
+        name: dbName,
+        version: db.version,
+        stores: [],
+        records: {},
+      };
 
-      function createAndCopy() {
-        const openDest = indexedDB.open(destName, version);
-        openDest.onupgradeneeded = () => {
-          const destDb = openDest.result;
-          for (const storeName of storeNames) {
-            const srcStore = srcDb.transaction(storeName, 'readonly').objectStore(storeName);
-            const destStore = destDb.createObjectStore(storeName, {
-              keyPath: srcStore.keyPath as string | string[] | null,
-              autoIncrement: srcStore.autoIncrement,
-            });
-            for (const idxName of Array.from(srcStore.indexNames)) {
-              const idx = srcStore.index(idxName);
-              destStore.createIndex(idxName, idx.keyPath, {
-                unique: idx.unique,
-                multiEntry: idx.multiEntry,
-              });
+      // Single read transaction over all stores so we get a consistent
+      // snapshot — earlier we opened a fresh transaction per store, which
+      // the SDK could have written to in between.
+      const tx = db.transaction(storeNames, 'readonly');
+      let pending = storeNames.length;
+
+      for (const storeName of storeNames) {
+        const store = tx.objectStore(storeName);
+        const meta: StoreMeta = {
+          name: storeName,
+          keyPath: store.keyPath as string | string[] | null,
+          autoIncrement: store.autoIncrement,
+          indexes: [],
+        };
+        for (const idxName of Array.from(store.indexNames)) {
+          const idx = store.index(idxName);
+          meta.indexes.push({
+            name: idxName,
+            keyPath: idx.keyPath as string | string[],
+            unique: idx.unique,
+            multiEntry: idx.multiEntry,
+          });
+        }
+        dump.stores.push(meta);
+        dump.records[storeName] = [];
+
+        const cursorReq = store.openCursor();
+        cursorReq.onsuccess = () => {
+          const cursor = cursorReq.result;
+          if (cursor) {
+            dump.records[storeName].push(
+              meta.keyPath
+                ? { value: pack(cursor.value) }
+                : { key: pack(cursor.primaryKey), value: pack(cursor.value) }
+            );
+            cursor.continue();
+          } else {
+            pending -= 1;
+            if (pending === 0) {
+              db.close();
+              resolve(dump);
             }
           }
         };
-        openDest.onsuccess = () => {
-          const destDb = openDest.result;
-          // Copy data store by store.
-          let pending = storeNames.length;
+        cursorReq.onerror = () => {
+          pending -= 1;
           if (pending === 0) {
-            srcDb.close();
-            destDb.close();
-            resolve(true);
-            return;
+            db.close();
+            resolve(dump);
           }
-
-          for (const storeName of storeNames) {
-            const srcTx = srcDb.transaction(storeName, 'readonly');
-            const destTx = destDb.transaction(storeName, 'readwrite');
-            const srcStore = srcTx.objectStore(storeName);
-            const destStore = destTx.objectStore(storeName);
-
-            const cursorReq = srcStore.openCursor();
-            cursorReq.onsuccess = () => {
-              const cursor = cursorReq.result;
-              if (cursor) {
-                destStore.put(cursor.value);
-                cursor.continue();
-              }
-            };
-
-            destTx.oncomplete = () => {
-              pending--;
-              if (pending === 0) {
-                srcDb.close();
-                destDb.close();
-                resolve(true);
-              }
-            };
-            destTx.onerror = () => {
-              pending--;
-              if (pending === 0) {
-                srcDb.close();
-                destDb.close();
-                resolve(false);
-              }
-            };
-          }
-        };
-        openDest.onerror = () => {
-          srcDb.close();
-          resolve(false);
         };
       }
+
+      tx.onerror = () => {
+        // Best-effort: return whatever stores already finished.
+        db.close();
+        resolve(dump);
+      };
     };
   });
 }
 
+async function restoreIDB(dump: DbDump): Promise<boolean> {
+  // Wipe the live DB first. We're called from the recovery path where
+  // the live DB is already presumed broken or being replaced.
+  await new Promise<void>((r) => {
+    const req = indexedDB.deleteDatabase(dump.name);
+    req.onsuccess = () => r();
+    req.onerror = () => r();
+  });
+
+  return new Promise((resolve) => {
+    const open = indexedDB.open(dump.name, dump.version);
+    open.onupgradeneeded = () => {
+      const db = open.result;
+      for (const meta of dump.stores) {
+        const store = db.createObjectStore(meta.name, {
+          keyPath: meta.keyPath ?? undefined,
+          autoIncrement: meta.autoIncrement,
+        });
+        for (const idx of meta.indexes) {
+          store.createIndex(idx.name, idx.keyPath, {
+            unique: idx.unique,
+            multiEntry: idx.multiEntry,
+          });
+        }
+      }
+    };
+    open.onsuccess = () => {
+      const db = open.result;
+      const storeNames = dump.stores.map((s) => s.name);
+      if (storeNames.length === 0) {
+        db.close();
+        resolve(true);
+        return;
+      }
+      const tx = db.transaction(storeNames, 'readwrite');
+      for (const meta of dump.stores) {
+        const store = tx.objectStore(meta.name);
+        const recs = dump.records[meta.name] ?? [];
+        for (const rec of recs) {
+          const value = unpack(rec.value);
+          if (meta.keyPath) {
+            store.put(value);
+          } else {
+            store.put(value, unpack(rec.key) as IDBValidKey);
+          }
+        }
+      }
+      tx.oncomplete = () => {
+        db.close();
+        resolve(true);
+      };
+      tx.onerror = () => {
+        db.close();
+        resolve(false);
+      };
+    };
+    open.onerror = () => resolve(false);
+  });
+}
+
+async function writeCheckpointBlob(name: string, dump: DbDump): Promise<boolean> {
+  try {
+    const cache = await caches.open(CHECKPOINT_CACHE);
+    await cache.put(
+      `/${name}`,
+      new Response(JSON.stringify(dump), {
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readCheckpointBlob(name: string): Promise<DbDump | null> {
+  try {
+    const cache = await caches.open(CHECKPOINT_CACHE);
+    const resp = await cache.match(`/${name}`);
+    if (!resp) return null;
+    return (await resp.json()) as DbDump;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Create a checkpoint of all crypto databases.
- * Call after a successful startup + initial sync.
+ * Snapshot all crypto databases to the Cache API. Called after initial
+ * sync settles and on a periodic timer.
  */
 export const checkpointCryptoStores = async (): Promise<void> => {
   const dbNames = getCryptoDbNames();
+  if (dbNames.length === 0) return;
+
   let ok = true;
   for (const name of dbNames) {
-    const success = await cloneIDB(name, name + CHECKPOINT_SUFFIX);
-    if (!success) ok = false;
+    const dump = await dumpIDB(name);
+    if (!dump) {
+      ok = false;
+      logFailureEvent('checkpoint_failed', { db: name, reason: 'dump_returned_null' });
+      continue;
+    }
+    const written = await writeCheckpointBlob(name, dump);
+    if (!written) {
+      ok = false;
+      logFailureEvent('checkpoint_failed', { db: name, reason: 'cache_put_failed' });
+    }
   }
-  if (ok && dbNames.length > 0) {
+  if (ok) {
     localStorage.setItem(CHECKPOINT_TS_KEY, String(Date.now()));
+    logFailureEvent('checkpoint_written', { dbs: dbNames });
   }
 };
 
 /**
- * Restore crypto databases from their checkpoint copies.
- * Returns true if at least one checkpoint was restored.
+ * Restore crypto databases from their Cache-API checkpoints.
+ * Returns true if at least one DB was restored.
  */
 async function restoreFromCheckpoint(): Promise<boolean> {
-  const ts = localStorage.getItem(CHECKPOINT_TS_KEY);
-  if (!ts) return false;
-
   const dbNames = getCryptoDbNames();
-  if (dbNames.length === 0) return false;
+  if (dbNames.length === 0) {
+    logFailureEvent('checkpoint_missing', { reason: 'no_user_id' });
+    return false;
+  }
 
-  // Verify checkpoints exist before deleting originals.
-  const allDbs = await indexedDB.databases();
-  const allDbNames = new Set(allDbs.map((d) => d.name));
-  const checkpointNames = dbNames.map((n) => n + CHECKPOINT_SUFFIX);
-  const hasCheckpoints = checkpointNames.some((n) => allDbNames.has(n));
-  if (!hasCheckpoints) return false;
+  const dumps: { name: string; dump: DbDump }[] = [];
+  for (const name of dbNames) {
+    const dump = await readCheckpointBlob(name);
+    if (dump) dumps.push({ name, dump });
+  }
+  if (dumps.length === 0) {
+    logFailureEvent('checkpoint_missing', { reason: 'no_blobs', dbs: dbNames });
+    return false;
+  }
 
   let restored = false;
-  for (const name of dbNames) {
-    const cpName = name + CHECKPOINT_SUFFIX;
-    if (!allDbNames.has(cpName)) continue;
-
-    // Delete corrupted original.
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.deleteDatabase(name);
-      req.onsuccess = () => resolve();
-      req.onerror = () => resolve();
-    });
-
-    // Clone checkpoint back to original.
-    const ok = await cloneIDB(cpName, name);
+  for (const { name, dump } of dumps) {
+    const ok = await restoreIDB(dump);
     if (ok) restored = true;
+    else logFailureEvent('checkpoint_failed', { db: name, reason: 'restore_failed' });
   }
 
   // Also delete the sync store — it'll rebuild from server.
@@ -455,5 +642,8 @@ async function restoreFromCheckpoint(): Promise<boolean> {
     indexedDB.deleteDatabase('web-sync-store');
   }
 
+  if (restored) {
+    logFailureEvent('checkpoint_restored', { dbs: dumps.map((d) => d.name) });
+  }
   return restored;
 }

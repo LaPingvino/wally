@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, ReactNode, useCallback, useState } from 'react';
+import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Text,
@@ -20,6 +20,7 @@ import { SecretStorageRecoveryKey, SecretStorageRecoveryPassphrase } from './Sec
 import { useMatrixClient } from '../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
 import { storePrivateKey } from '../../client/secretStorageKeys';
+import { logFailureEvent } from '../../client/diagnostics';
 
 export enum ManualVerificationMethod {
   RecoveryPassphrase = 'passphrase',
@@ -121,6 +122,15 @@ export function ManualVerificationTile({
   options,
 }: ManualVerificationTileProps) {
   const mx = useMatrixClient();
+
+  // Diagnostics: surface that the recovery-key UI was shown, so the
+  // failure log can attribute later events to a specific prompt.
+  useEffect(() => {
+    logFailureEvent('recovery_key_prompt_shown', {
+      keyId: secretStorageKeyId,
+      hasPassphrase: !!secretStorageKeyContent.passphrase,
+    });
+  }, [secretStorageKeyId, secretStorageKeyContent.passphrase]);
 
   const hasPassphrase = !!secretStorageKeyContent.passphrase;
   const [method, setMethod] = useState(

@@ -31,6 +31,7 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
 import { repairIDBAndReload, backupSessionToCache, checkpointCryptoStores } from '../../../client/initMatrix';
+import { logFailureEvent, dumpFailureLog } from '../../../client/diagnostics';
 import { MemoryWatchdog } from './MemoryWatchdog';
 
 /**
@@ -83,10 +84,12 @@ function SessionHealthMonitor() {
         req.onerror = () => {
           // IDB is broken — auto-repair.
           indexedDB.deleteDatabase(probeDb);
+          logFailureEvent('idb_probe_failed', { trigger: 'open_onerror' });
           repairIDBAndReload();
         };
-      } catch {
+      } catch (err) {
         // indexedDB.open() threw — critically broken.
+        logFailureEvent('idb_probe_failed', { trigger: 'open_threw', message: String(err) });
         repairIDBAndReload();
       }
     };
@@ -111,6 +114,12 @@ function CryptoCheckpointManager() {
 
   useEffect(() => {
     const CHECKPOINT_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
+    // Surface the failure log on startup so anyone investigating a
+    // recovery-key prompt can see the trail of events that led there
+    // without having to know about the Cache API entry.
+    logFailureEvent('startup');
+    dumpFailureLog();
 
     const doCheckpoint = () => {
       checkpointCryptoStores().catch((e) => {
