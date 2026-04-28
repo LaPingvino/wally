@@ -654,34 +654,65 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
     eventId ? getEmptyTimeline() : getInitialTimeline(room, threadId)
   );
 
-  // Silent-backfill anchor: useBackgroundBackfill paginates the live timeline
-  // backwards with `quiet: true`, so events get prepended to the leftmost
-  // timeline without firing RoomEvent.Timeline. Without compensation, the
-  // numeric `range` we hand the virtual paginator now points at older events
-  // — so the next unrelated re-render scrolls the view backwards by the
-  // delta. Track the head timeline's event count and shift `range` by any
-  // observed growth before this render uses it.
-  const headTimeline = timeline.linkedTimelines[0];
-  const headTimelineEventsCount = headTimeline ? headTimeline.getEvents().length : 0;
-  const headAnchorRef = useRef({ tm: headTimeline, count: headTimelineEventsCount });
-  if (headAnchorRef.current.tm === headTimeline && headTimelineEventsCount > headAnchorRef.current.count) {
-    const delta = headTimelineEventsCount - headAnchorRef.current.count;
-    headAnchorRef.current = { tm: headTimeline, count: headTimelineEventsCount };
-    setTimeline((ct) => ({
-      ...ct,
-      range: {
-        start: ct.range.start + delta,
-        end: ct.range.end + delta,
-      },
-    }));
-  } else if (
-    headAnchorRef.current.tm !== headTimeline ||
-    headAnchorRef.current.count !== headTimelineEventsCount
-  ) {
-    headAnchorRef.current = { tm: headTimeline, count: headTimelineEventsCount };
-  }
-
   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
+
+  // Silent-backfill anchor (replaces the head-timeline heuristic from
+  // patch-33). useBackgroundBackfill paginates the live timeline backwards
+  // with `quiet: true`, so events get prepended without firing
+  // RoomEvent.Timeline. Once we have multiple linked timelines (user did
+  // backwards pagination), the prepend can land in any of them — anchoring
+  // on `linkedTimelines[0]` misses growth in the live timeline at the tail
+  // of the chain. Anchor instead on the *event id* at the start of the
+  // visible range and reproject indices when its absolute position shifts.
+  const anchorRef = useRef<{ eventId: string; absIndex: number } | null>(null);
+  // Locate `anchorRef.current.eventId` in the current linked timelines and
+  // return its absolute index, or undefined if it's no longer there. Cheap
+  // linear scan: linkedTimelines is small (≤ a handful) and each timeline
+  // typically holds a few hundred events.
+  const findAbsIndex = (eventId: string): number | undefined => {
+    let base = 0;
+    for (const tm of timeline.linkedTimelines) {
+      const evts = tm.getEvents();
+      const idx = evts.findIndex((e) => e.getId() === eventId);
+      if (idx !== -1) return base + idx;
+      base += evts.length;
+    }
+    return undefined;
+  };
+  if (anchorRef.current) {
+    const currentIdx = findAbsIndex(anchorRef.current.eventId);
+    if (typeof currentIdx === 'number' && currentIdx !== anchorRef.current.absIndex) {
+      const delta = currentIdx - anchorRef.current.absIndex;
+      anchorRef.current = { eventId: anchorRef.current.eventId, absIndex: currentIdx };
+      setTimeline((ct) => ({
+        ...ct,
+        range: {
+          start: ct.range.start + delta,
+          end: ct.range.end + delta,
+        },
+      }));
+    }
+  }
+  // Capture the anchor for the next render, *after* any shift above. We
+  // pick the event at the start of the visible range (or just inside it
+  // when range.start is at the very front and there's nothing before).
+  {
+    const anchorIdx = Math.min(timeline.range.start, Math.max(0, eventsLength - 1));
+    const [tm, base] = getTimelineAndBaseIndex(timeline.linkedTimelines, anchorIdx);
+    const ev = tm ? getTimelineEvent(tm, anchorIdx - base) : undefined;
+    const id = ev?.getId();
+    if (id) {
+      if (
+        !anchorRef.current ||
+        anchorRef.current.eventId !== id ||
+        anchorRef.current.absIndex !== anchorIdx
+      ) {
+        anchorRef.current = { eventId: id, absIndex: anchorIdx };
+      }
+    } else {
+      anchorRef.current = null;
+    }
+  }
   // Thread mode: the "live" end is always the last timeline in our synthetic linked list.
   // This keeps liveTimelineLinked=true without depending on SDK Thread objects.
   const currentLiveTimeline = threadId
