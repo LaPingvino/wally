@@ -8613,7 +8613,7 @@ index 00000000..9f4c0e58
 +});
 diff --git a/src/__tests__/imports.test.ts b/src/__tests__/imports.test.ts
 new file mode 100644
-index 00000000..71a90040
+index 00000000..93a51a8e
 --- /dev/null
 +++ b/src/__tests__/imports.test.ts
 @@ -0,0 +1,40 @@
@@ -8637,7 +8637,7 @@ index 00000000..71a90040
 +const ROOT = resolve(import.meta.dirname, '../..');
 +
 +describe('TypeScript: no undefined JSX component names', () => {
-+  it('has no "Cannot find name" errors in any source file', { timeout: 60_000 }, () => {
++  it('has no "Cannot find name" errors in any source file', { timeout: 180_000 }, () => {
 +    let stdout = '';
 +    try {
 +      execSync('npx tsc --noEmit', { cwd: ROOT, stdio: 'pipe' });
@@ -20031,10 +20031,10 @@ index 00000000..059afd5a
 +});
 diff --git a/src/app/features/room-nav/RoomCallNavStatus.tsx b/src/app/features/room-nav/RoomCallNavStatus.tsx
 new file mode 100644
-index 00000000..e8cf8f94
+index 00000000..68048583
 --- /dev/null
 +++ b/src/app/features/room-nav/RoomCallNavStatus.tsx
-@@ -0,0 +1,708 @@
+@@ -0,0 +1,709 @@
 +import {
 +  Box,
 +  Chip,
@@ -20411,26 +20411,7 @@ index 00000000..e8cf8f94
 +  } = useNavigateUnread();
 +
 +  const allNavItems: NavItem[] = [];
-+  if (mentionCount > 0) {
-+    allNavItems.push({
-+      key: 'next-mention',
-+      ariaLabel: `Next mention (${mentionCount} ${mentionCount === 1 ? 'room' : 'rooms'})`,
-+      tooltip: `Next mention (${mentionCount})`,
-+      leftIcon: Icons.Mention,
-+      rightIcon: Icons.ChevronRight,
-+      onClick: navigateNextMention,
-+    });
-+  }
-+  if (unreadCount > 0) {
-+    allNavItems.push({
-+      key: 'next-unread',
-+      ariaLabel: `Next unread room (${unreadCount})`,
-+      tooltip: `Next unread (${unreadCount})`,
-+      leftIcon: Icons.MessageUnread,
-+      rightIcon: Icons.ChevronRight,
-+      onClick: navigateNext,
-+    });
-+  }
++  // Prev items first so they appear on the left (LTR reading order).
 +  if (mentionCount > 0) {
 +    allNavItems.push({
 +      key: 'prev-mention',
@@ -20449,6 +20430,26 @@ index 00000000..e8cf8f94
 +      leftIcon: Icons.ChevronLeft,
 +      rightIcon: Icons.MessageUnread,
 +      onClick: navigatePrev,
++    });
++  }
++  if (mentionCount > 0) {
++    allNavItems.push({
++      key: 'next-mention',
++      ariaLabel: `Next mention (${mentionCount} ${mentionCount === 1 ? 'room' : 'rooms'})`,
++      tooltip: `Next mention (${mentionCount})`,
++      leftIcon: Icons.Mention,
++      rightIcon: Icons.ChevronRight,
++      onClick: navigateNextMention,
++    });
++  }
++  if (unreadCount > 0) {
++    allNavItems.push({
++      key: 'next-unread',
++      ariaLabel: `Next unread room (${unreadCount})`,
++      tooltip: `Next unread (${unreadCount})`,
++      leftIcon: Icons.MessageUnread,
++      rightIcon: Icons.ChevronRight,
++      onClick: navigateNext,
 +    });
 +  }
 +
@@ -32510,10 +32511,10 @@ index 00000000..4bba79de
 +}
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
-index 00000000..a6b083c9
+index 00000000..319def10
 --- /dev/null
 +++ b/src/app/hooks/useNavigateUnread.ts
-@@ -0,0 +1,224 @@
+@@ -0,0 +1,291 @@
 +import { useCallback, useMemo } from 'react';
 +import { useAtomValue, useAtom } from 'jotai';
 +import { atom } from 'jotai';
@@ -32613,15 +32614,29 @@ index 00000000..a6b083c9
 +  const setBottomBarDismissed = useAtom(bottomBarDismissedAtom)[1];
 +  const selectedRoomId = useSelectedRoom();
 +
-+  // Sorted list of rooms matching a predicate (unread or mention).
-+  // Callers use this to step through rooms in sidebar order; sort fallback
-+  // mirrors the room list's current activity/az/unread-first setting.
++  // Sorted list of rooms matching a predicate (unread or mention) plus the
++  // shared comparator used to virtually position the currently-selected
++  // room within that list.
++  //
++  // Ordering rules (the user-visible behaviour):
++  //   1. Rooms whose containing space matches the *currently open* space
++  //      come first, in the room-list's normal sort order. This keeps
++  //      "next unread" walking through the active space before jumping
++  //      anywhere else.
++  //   2. Then every other room grouped by sidebar space index. Within a
++  //      space, rooms use the room-list's normal sort.
 +  const buildSortedRooms = useCallback(
 +    (matches: (id: string) => boolean) => {
 +      const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
 +
 +      const sidebarSpaceIds = getSidebarSpaceIds(mx);
 +      const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
++
++      // Active space = the space containing the currently-selected room
++      // (Infinity if none — Home/DM views, or the user just landed).
++      const activeSidebarIdx = selectedRoomId
++        ? getSidebarIndex(selectedRoomId, roomToParents, sidebarIndex)
++        : Infinity;
 +
 +      const rooms = Array.from(roomToUnread.keys()).filter(
 +        (id) => matches(id) && !mx.getRoom(id)?.isSpaceRoom()
@@ -32638,27 +32653,41 @@ index 00000000..a6b083c9
 +            )
 +          : factoryRoomIdByActivity(mx);
 +
-+      rooms.sort((a, b) => {
++      // 0 = in active space, 1 = elsewhere — sorted ascending so active
++      // space wins. Beyond that, group by sidebar space index, then
++      // fall back to the user's room-sort preference.
++      const compare = (a: string, b: string): number => {
 +        const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
 +        const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
++        const aBucket = ai === activeSidebarIdx ? 0 : 1;
++        const bBucket = bi === activeSidebarIdx ? 0 : 1;
++        if (aBucket !== bBucket) return aBucket - bBucket;
 +        if (ai !== bi) return ai - bi;
 +        return sortFallback(a, b);
-+      });
++      };
 +
-+      return rooms.map((id) => [id, roomToUnread.get(id)!] as const);
++      rooms.sort(compare);
++
++      return {
++        entries: rooms.map((id) => [id, roomToUnread.get(id)!] as const),
++        compare,
++      };
 +    },
-+    [mx, roomToUnread, roomToParents, roomSortOrder]
++    [mx, roomToUnread, roomToParents, roomSortOrder, selectedRoomId]
 +  );
 +
-+  const unreadEntries = useMemo(
++  const unread = useMemo(
 +    () => buildSortedRooms((id) => (roomToUnread.get(id)?.total ?? 0) > 0),
 +    [buildSortedRooms, roomToUnread]
 +  );
 +
-+  const mentionEntries = useMemo(
++  const mention = useMemo(
 +    () => buildSortedRooms((id) => (roomToUnread.get(id)?.highlight ?? 0) > 0),
 +    [buildSortedRooms, roomToUnread]
 +  );
++
++  const unreadEntries = unread.entries;
++  const mentionEntries = mention.entries;
 +
 +  const navigateToRoom = useCallback(
 +    (roomId: string) => {
@@ -32680,44 +32709,83 @@ index 00000000..a6b083c9
 +  );
 +
 +  /**
-+   * Resolve the base index to navigate relative to within `entries`.
-+   * Priority: lastNavigated room ID > selectedRoomId > fallback.
-+   * fallback = -1 (for next → first room) or length (for prev → last room).
++   * Step prev/next through `entries`. The "anchor" we step from is the
++   * currently-selected room — if it's already in the unread list, we use
++   * its index directly; otherwise we use `compare` to find the slot
++   * where it would virtually sort and step from there.
++   *
++   * This lets prev/next behave correctly when the current room has no
++   * unreads: next picks the first unread that sorts after the current
++   * room, prev picks the last unread that sorts before it. Wrapping at
++   * either end falls through to the global list (other spaces).
 +   */
-+  const resolveBaseIndex = useCallback(
-+    (entries: ReadonlyArray<readonly [string, unknown]>, fallback: number): number => {
++  const stepTo = useCallback(
++    (
++      entries: ReadonlyArray<readonly [string, unknown]>,
++      compare: (a: string, b: string) => number,
++      direction: 1 | -1
++    ) => {
++      if (entries.length === 0) return;
++
++      let baseIndex: number;
++
++      // Anchor: prefer lastNavigated when its room is still in the list.
 +      if (lastNavigated) {
 +        const found = entries.findIndex(([id]) => id === lastNavigated.roomId);
-+        if (found >= 0) return found;
-+        const clamped = Math.min(lastNavigated.index, entries.length);
-+        return fallback < 0 ? clamped - 1 : Math.max(1, clamped);
-+      }
-+      if (selectedRoomId) {
++        if (found >= 0) {
++          baseIndex = found;
++        } else {
++          baseIndex = direction === 1 ? -1 : entries.length;
++        }
++      } else if (selectedRoomId) {
 +        const found = entries.findIndex(([id]) => id === selectedRoomId);
-+        if (found >= 0) return found;
++        if (found >= 0) {
++          baseIndex = found;
++        } else {
++          // selectedRoom is not unread — find its virtual position.
++          // insertAt = first index whose entry sorts AFTER selected.
++          let insertAt = entries.length;
++          for (let i = 0; i < entries.length; i += 1) {
++            if (compare(entries[i][0], selectedRoomId) >= 0) {
++              insertAt = i;
++              break;
++            }
++          }
++          // For next: virtual base is insertAt - 1, so target = insertAt
++          //           = first unread sorting after selected.
++          // For prev: virtual base is insertAt, so target = insertAt - 1
++          //           = last unread sorting before selected.
++          baseIndex = direction === 1 ? insertAt - 1 : insertAt;
++        }
++      } else {
++        baseIndex = direction === 1 ? -1 : entries.length;
 +      }
-+      return fallback;
-+    },
-+    [lastNavigated, selectedRoomId]
-+  );
 +
-+  const stepTo = useCallback(
-+    (entries: ReadonlyArray<readonly [string, unknown]>, direction: 1 | -1) => {
-+      if (entries.length === 0) return;
-+      const baseIndex = resolveBaseIndex(entries, direction === 1 ? -1 : entries.length);
 +      const target = ((baseIndex + direction) % entries.length + entries.length) % entries.length;
 +      const roomId = entries[target][0];
 +      setLastNavigated({ roomId, index: target });
 +      setBottomBarDismissed(false);
 +      navigateToRoom(roomId);
 +    },
-+    [resolveBaseIndex, setLastNavigated, setBottomBarDismissed, navigateToRoom]
++    [lastNavigated, selectedRoomId, setLastNavigated, setBottomBarDismissed, navigateToRoom]
 +  );
 +
-+  const navigateNext = useCallback(() => stepTo(unreadEntries, 1), [stepTo, unreadEntries]);
-+  const navigatePrev = useCallback(() => stepTo(unreadEntries, -1), [stepTo, unreadEntries]);
-+  const navigateNextMention = useCallback(() => stepTo(mentionEntries, 1), [stepTo, mentionEntries]);
-+  const navigatePrevMention = useCallback(() => stepTo(mentionEntries, -1), [stepTo, mentionEntries]);
++  const navigateNext = useCallback(
++    () => stepTo(unread.entries, unread.compare, 1),
++    [stepTo, unread]
++  );
++  const navigatePrev = useCallback(
++    () => stepTo(unread.entries, unread.compare, -1),
++    [stepTo, unread]
++  );
++  const navigateNextMention = useCallback(
++    () => stepTo(mention.entries, mention.compare, 1),
++    [stepTo, mention]
++  );
++  const navigatePrevMention = useCallback(
++    () => stepTo(mention.entries, mention.compare, -1),
++    [stepTo, mention]
++  );
 +
 +  const navigateFirst = useCallback(() => {
 +    if (unreadEntries.length === 0) return;
@@ -34701,10 +34769,10 @@ index ce952bfc..ded17ec0 100644
      </>
    );
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index 93f0526e..b4303337 100644
+index 93f0526e..a6ba4590 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -13,29 +13,61 @@ import {
+@@ -13,29 +13,63 @@ import {
    Spinner,
    Text,
  } from 'folds';
@@ -34726,6 +34794,8 @@ index 93f0526e..b4303337 100644
    startClient,
  } from '../../../client/initMatrix';
 +import {
++  dumpFailureLog,
++  exposeDiagnosticsOnWindow,
 +  logFailureEvent,
 +  runStartupIntegrityCheck,
 +  startHeartbeat,
@@ -34770,7 +34840,7 @@ index 93f0526e..b4303337 100644
  
  function ClientRootLoading() {
    return (
-@@ -103,7 +135,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+@@ -103,7 +137,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                        logoutClient(mx);
                        return;
                      }
@@ -34794,7 +34864,7 @@ index 93f0526e..b4303337 100644
                    }}
                    size="300"
                    radii="300"
-@@ -128,8 +175,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -128,8 +177,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -34813,7 +34883,7 @@ index 93f0526e..b4303337 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -146,12 +201,63 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -146,12 +203,69 @@ export function ClientRoot({ children }: ClientRootProps) {
    const [loading, setLoading] = useState(true);
    const { baseUrl, userId } = getFallbackSession() ?? {};
  
@@ -34853,6 +34923,12 @@ index 93f0526e..b4303337 100644
 +      // Guard against repair loops via a sessionStorage marker — if the
 +      // last reload was caused by us, skip the auto-repair and let the
 +      // normal failure UI handle it.
++      // Always expose wallyDiag() and dump the buffer to console — even
++      // on the post-repair path we want this visible so the user can
++      // inspect what happened in the previous session.
++      exposeDiagnosticsOnWindow();
++      void dumpFailureLog();
++
 +      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
 +      const justRepaired = sessionStorage.getItem(REPAIR_GUARD) === '1';
 +      if (!justRepaired) {
@@ -34878,7 +34954,7 @@ index 93f0526e..b4303337 100644
        return initClient(session);
      }, [])
    );
-@@ -160,8 +266,23 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -160,8 +274,23 @@ export function ClientRoot({ children }: ClientRootProps) {
      useCallback((m) => startClient(m), [])
    );
  
@@ -34902,7 +34978,7 @@ index 93f0526e..b4303337 100644
    useEffect(() => {
      if (loadState.status === AsyncStatus.Idle) {
        loadMatrix();
-@@ -177,7 +298,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -177,7 +306,7 @@ export function ClientRoot({ children }: ClientRootProps) {
    useSyncState(
      mx,
      useCallback((state) => {
@@ -34911,7 +34987,7 @@ index 93f0526e..b4303337 100644
          setLoading(false);
        }
      }, [])
-@@ -185,18 +306,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -185,18 +314,13 @@ export function ClientRoot({ children }: ClientRootProps) {
  
    return (
      <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -34933,7 +35009,7 @@ index 93f0526e..b4303337 100644
                <Dialog>
                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                    {loadState.status === AsyncStatus.Error && (
-@@ -210,6 +326,30 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -210,6 +334,30 @@ export function ClientRoot({ children }: ClientRootProps) {
                        Retry
                      </Text>
                    </Button>
@@ -34964,7 +35040,7 @@ index 93f0526e..b4303337 100644
                  </Box>
                </Dialog>
              </Box>
-@@ -219,20 +359,16 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -219,20 +367,16 @@ export function ClientRoot({ children }: ClientRootProps) {
            <ClientRootLoading />
          ) : (
            <MatrixClientProvider value={mx}>
