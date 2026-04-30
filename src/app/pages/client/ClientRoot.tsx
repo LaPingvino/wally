@@ -32,6 +32,7 @@ import {
 import {
   dumpFailureLog,
   exposeDiagnosticsOnWindow,
+  installCryptoIdbErrorListener,
   logFailureEvent,
   runStartupIntegrityCheck,
   startHeartbeat,
@@ -289,6 +290,24 @@ export function ClientRoot({ children }: ClientRootProps) {
   // on the next page load. Idempotent — safe to call repeatedly.
   useEffect(() => {
     startHeartbeat();
+  }, []);
+
+  // Catch IDB query failures fired from background promises (matrix-sdk-crypto's
+  // internal queries are fire-and-forget so they don't reach loadMatrix's
+  // try/catch). When one fires we log it and trigger the same auto-repair
+  // path the pre-flight probe uses. Guard so we only fire once per session
+  // and respect the same anti-loop sessionStorage marker.
+  useEffect(() => {
+    return installCryptoIdbErrorListener(({ message }) => {
+      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
+      if (sessionStorage.getItem(REPAIR_GUARD) === '1') return;
+      sessionStorage.setItem(REPAIR_GUARD, '1');
+      void logFailureEvent('startup_auto_repair', {
+        source: 'unhandledrejection',
+        message: message.slice(0, 200),
+      });
+      void repairIDBAndReload();
+    });
   }, []);
 
   useEffect(() => {
