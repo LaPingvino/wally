@@ -31,7 +31,7 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
 import { repairIDBAndReload, backupSessionToCache, checkpointCryptoStores } from '../../../client/initMatrix';
-import { logFailureEvent, dumpFailureLog } from '../../../client/diagnostics';
+import { logFailureEvent, dumpFailureLog, setHeartbeatContext } from '../../../client/diagnostics';
 import { MemoryWatchdog } from './MemoryWatchdog';
 
 /**
@@ -139,9 +139,20 @@ function CryptoCheckpointManager() {
         // Small delay to let crypto settle after first sync.
         setTimeout(doCheckpoint, 5_000);
       }
+      // Update heartbeat context so a post-crash log can show what
+      // sync state we were in. Forensics for OS-level kills.
+      setHeartbeatContext({
+        syncState: state,
+        userId: mx.getUserId(),
+      });
     };
 
     mx.on('sync' as any, onSync);
+    // Initial fix-up so we always have at least minimal context.
+    setHeartbeatContext({
+      syncState: mx.getSyncState(),
+      userId: mx.getUserId(),
+    });
 
     // Periodic checkpoint.
     const interval = setInterval(doCheckpoint, CHECKPOINT_INTERVAL);

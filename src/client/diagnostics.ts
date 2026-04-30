@@ -128,20 +128,49 @@ export async function clearFailureLog(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 const HEARTBEAT_KEY = 'cinny_heartbeat_ms';
+const HEARTBEAT_CONTEXT_KEY = 'cinny_heartbeat_context';
 const HEARTBEAT_INTERVAL_MS = 5_000;
 // Gap larger than this means the previous session ended without firing
 // pagehide — almost certainly an OS/browser crash or a forced tab discard.
 const CRASH_GAP_MS = 60_000;
 
+// Active context the app reports for forensics. Updated via setHeartbeatContext.
+const heartbeatContext: Record<string, unknown> = {};
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 const writeHeartbeat = (): void => {
   try {
     localStorage.setItem(HEARTBEAT_KEY, String(Date.now()));
+    if (Object.keys(heartbeatContext).length > 0) {
+      localStorage.setItem(HEARTBEAT_CONTEXT_KEY, JSON.stringify(heartbeatContext));
+    }
   } catch {
     // private browsing / quota exceeded — give up silently
   }
 };
+
+/**
+ * Update the per-tick context that gets written alongside the heartbeat.
+ * Use this to record what the app was doing when (if) the OS kills us:
+ *   setHeartbeatContext({ syncing: true, lastEventTs: Date.now() })
+ * Keys merge; pass undefined to clear a key.
+ */
+export function setHeartbeatContext(patch: Record<string, unknown>): void {
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete heartbeatContext[k];
+    else heartbeatContext[k] = v;
+  }
+}
+
+function readHeartbeatContext(): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(HEARTBEAT_CONTEXT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 /** Begin writing a heartbeat to localStorage every 5s. Idempotent. */
 export function startHeartbeat(): void {
@@ -392,9 +421,13 @@ export async function runStartupIntegrityCheck(): Promise<StartupIntegrityResult
   }
 
   if (uncleanShutdown) {
+    const lastContext = readHeartbeatContext();
     await logFailureEvent('unclean_shutdown_detected', {
       gapMs: heartbeatGapMs,
       visibilityState: document.visibilityState,
+      // What the app was doing at the last heartbeat — blank means no
+      // consumer set context yet (e.g., crash before initial sync).
+      lastContext: lastContext ?? null,
     });
   }
 
