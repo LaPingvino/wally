@@ -374,26 +374,7 @@ export function CallNavStatus() {
   } = useNavigateUnread();
 
   const allNavItems: NavItem[] = [];
-  if (mentionCount > 0) {
-    allNavItems.push({
-      key: 'next-mention',
-      ariaLabel: `Next mention (${mentionCount} ${mentionCount === 1 ? 'room' : 'rooms'})`,
-      tooltip: `Next mention (${mentionCount})`,
-      leftIcon: Icons.Mention,
-      rightIcon: Icons.ChevronRight,
-      onClick: navigateNextMention,
-    });
-  }
-  if (unreadCount > 0) {
-    allNavItems.push({
-      key: 'next-unread',
-      ariaLabel: `Next unread room (${unreadCount})`,
-      tooltip: `Next unread (${unreadCount})`,
-      leftIcon: Icons.MessageUnread,
-      rightIcon: Icons.ChevronRight,
-      onClick: navigateNext,
-    });
-  }
+  // Prev items first so they appear on the left (LTR reading order).
   if (mentionCount > 0) {
     allNavItems.push({
       key: 'prev-mention',
@@ -412,6 +393,26 @@ export function CallNavStatus() {
       leftIcon: Icons.ChevronLeft,
       rightIcon: Icons.MessageUnread,
       onClick: navigatePrev,
+    });
+  }
+  if (mentionCount > 0) {
+    allNavItems.push({
+      key: 'next-mention',
+      ariaLabel: `Next mention (${mentionCount} ${mentionCount === 1 ? 'room' : 'rooms'})`,
+      tooltip: `Next mention (${mentionCount})`,
+      leftIcon: Icons.Mention,
+      rightIcon: Icons.ChevronRight,
+      onClick: navigateNextMention,
+    });
+  }
+  if (unreadCount > 0) {
+    allNavItems.push({
+      key: 'next-unread',
+      ariaLabel: `Next unread room (${unreadCount})`,
+      tooltip: `Next unread (${unreadCount})`,
+      leftIcon: Icons.MessageUnread,
+      rightIcon: Icons.ChevronRight,
+      onClick: navigateNext,
     });
   }
 
