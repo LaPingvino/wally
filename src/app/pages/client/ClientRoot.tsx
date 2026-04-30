@@ -30,6 +30,8 @@ import {
   startClient,
 } from '../../../client/initMatrix';
 import {
+  dumpFailureLog,
+  exposeDiagnosticsOnWindow,
   logFailureEvent,
   runStartupIntegrityCheck,
   startHeartbeat,
@@ -236,6 +238,12 @@ export function ClientRoot({ children }: ClientRootProps) {
       // Guard against repair loops via a sessionStorage marker — if the
       // last reload was caused by us, skip the auto-repair and let the
       // normal failure UI handle it.
+      // Always expose wallyDiag() and dump the buffer to console — even
+      // on the post-repair path we want this visible so the user can
+      // inspect what happened in the previous session.
+      exposeDiagnosticsOnWindow();
+      void dumpFailureLog();
+
       const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
       const justRepaired = sessionStorage.getItem(REPAIR_GUARD) === '1';
       if (!justRepaired) {
