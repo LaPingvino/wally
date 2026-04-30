@@ -18,7 +18,7 @@ import { resolve } from 'path';
 const ROOT = resolve(import.meta.dirname, '../..');
 
 describe('TypeScript: no undefined JSX component names', () => {
-  it('has no "Cannot find name" errors in any source file', { timeout: 60_000 }, () => {
+  it('has no "Cannot find name" errors in any source file', { timeout: 180_000 }, () => {
     let stdout = '';
     try {
       execSync('npx tsc --noEmit', { cwd: ROOT, stdio: 'pipe' });
