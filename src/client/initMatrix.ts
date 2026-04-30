@@ -310,75 +310,47 @@ const RUST_SDK_STORE_PREFIX = 'matrix-js-sdk';
 /**
  * Names of databases that hold crypto material worth checkpointing.
  *
- * The two rust-crypto stores are the load-bearing ones: lose those and the
- * device shows up unverified after recovery. The legacy JS crypto store is
- * kept for users who haven't yet migrated. Prefer dynamic enumeration
- * (databases()) over hardcoded names so we never miss a store.
+ * Discovers existing DBs via `indexedDB.databases()` and filters to ones
+ * that look crypto-related. Crucially we DO NOT call `indexedDB.open()`
+ * to verify existence — that creates a new DB if the name doesn't exist,
+ * and deleting the stub would race with anything the SDK is doing in
+ * parallel (we previously deleted matrix-sdk-crypto-meta this way during
+ * its brief no-stores window, breaking decryption of the main store).
+ *
+ * Both `<prefix>::matrix-sdk-crypto` and `<prefix>::matrix-sdk-crypto-meta`
+ * are required: the meta store holds the encryption key for the main one.
  */
 async function getCryptoDbNames(): Promise<string[]> {
-  const userId = localStorage.getItem('cinny_user_id');
-
-  // Static candidates — guaranteed names regardless of what databases()
-  // returns (it can be stale or unsupported in some browsers).
-  const candidates = new Set<string>([
-    `${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto`,
-    `${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto-meta`,
-  ]);
-  if (userId) {
-    candidates.add(`crypto${userId}`);
-    candidates.add(`matrix-js-sdk${userId}`);
-  }
-
-  // Augment with anything the browser actually has matching crypto
-  // patterns. This catches secondary accounts (different prefix) and
-  // any future renames in matrix-js-sdk.
+  const result = new Set<string>();
   try {
     const dbs = await indexedDB.databases();
     for (const info of dbs) {
       const n = info.name;
       if (!n) continue;
-      if (n.includes('matrix-sdk-crypto') || n.startsWith('crypto@') || n.startsWith('matrix-js-sdk@')) {
-        candidates.add(n);
+      // matrix-js-sdk's own healthcheck DBs — transient, never useful.
+      if (n.startsWith('checkIndexedDBSupport-')) continue;
+      // Our own probe DBs.
+      if (n.startsWith('cinny-startup-probe-')) continue;
+      if (n.startsWith('idb-health-')) continue;
+      if (
+        n.includes('matrix-sdk-crypto') ||
+        n.startsWith('crypto@') ||
+        n.startsWith('matrix-js-sdk@')
+      ) {
+        result.add(n);
       }
     }
   } catch {
-    // databases() unsupported — stick with the static list
+    // databases() unsupported — fall back to known names only.
+    const userId = localStorage.getItem('cinny_user_id');
+    result.add(`${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto`);
+    result.add(`${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto-meta`);
+    if (userId) {
+      result.add(`crypto${userId}`);
+      result.add(`matrix-js-sdk${userId}`);
+    }
   }
-
-  // Filter to ones that actually exist (avoid creating empty stub DBs
-  // via dumpIDB's open call).
-  const result: string[] = [];
-  for (const name of candidates) {
-    // eslint-disable-next-line no-await-in-loop
-    const exists = await new Promise<boolean>((resolve) => {
-      let created = false;
-      const req = indexedDB.open(name);
-      req.onupgradeneeded = () => {
-        // The DB didn't exist — onupgradeneeded fires before onsuccess.
-        // Mark and tear down.
-        created = true;
-      };
-      req.onsuccess = () => {
-        const db = req.result;
-        const hasStores = db.objectStoreNames.length > 0;
-        db.close();
-        if (created || !hasStores) {
-          // Either it was just created by this open, or it has no stores
-          // — either way we don't want to checkpoint it. Delete the empty
-          // stub so we don't leak DBs across reloads.
-          indexedDB.deleteDatabase(name);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      };
-      req.onerror = () => resolve(false);
-      // Cap so a wedged DB doesn't hang the entire enumeration.
-      setTimeout(() => resolve(false), 3_000);
-    });
-    if (exists) result.push(name);
-  }
-  return result;
+  return Array.from(result);
 }
 
 // JSON doesn't carry binary or non-plain types. The crypto stores hold

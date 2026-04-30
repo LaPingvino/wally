@@ -260,9 +260,14 @@ async function probeCryptoIdbs(): Promise<{ db: string; reason: string } | null>
   }
   for (const info of dbs) {
     if (!info.name) continue;
-    // Skip our own throwaway probe DBs.
+    // Skip transient/throwaway DBs:
+    //   - our own probe DBs from this and the legacy session-health probe
+    //   - matrix-js-sdk's healthcheck DBs (created+deleted in a tight
+    //     loop during init; opening one as it's being deleted times out
+    //     and triggers a false-positive auto-repair).
     if (info.name.startsWith('cinny-startup-probe-')) continue;
     if (info.name.startsWith('idb-health-')) continue;
+    if (info.name.startsWith('checkIndexedDBSupport-')) continue;
     // eslint-disable-next-line no-await-in-loop
     const r = await probeExistingIdb(info.name);
     if (!r.ok) return { db: info.name, reason: r.reason ?? 'unknown' };
