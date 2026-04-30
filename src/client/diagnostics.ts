@@ -171,13 +171,110 @@ function readHeartbeatGapMs(): number | null {
 }
 
 /**
- * Quick IDB integrity probe — open a throwaway DB and verify a basic
- * read/write cycle. Mirrors the SessionHealthMonitor probe but suitable
- * for synchronous use at startup.
+ * Open a single existing IDB by name and run a no-op read transaction
+ * across all of its object stores. Returns true if the DB opens AND a
+ * trivial cursor read on every store completes; false on any error.
  *
- * Returns true if IDB looks healthy, false if the probe failed.
+ * This is what we actually need to detect the Chromebook-crash scenario:
+ * a fresh-throwaway-DB probe will pass even when the real crypto DB has
+ * a corrupted index, because the OS only fails operations on the bad
+ * file. Probing the real DBs by name catches that case.
  */
-async function probeIdbHealth(): Promise<boolean> {
+function probeExistingIdb(name: string): Promise<{ ok: boolean; reason?: string }> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (ok: boolean, reason?: string) => {
+      if (settled) return;
+      settled = true;
+      resolve(reason ? { ok, reason } : { ok });
+    };
+    try {
+      // Don't pass a version — we want to open whatever's there.
+      const req = indexedDB.open(name);
+      req.onerror = () => settle(false, `open onerror: ${String(req.error)}`);
+      req.onblocked = () => settle(false, 'open onblocked');
+      req.onupgradeneeded = () => {
+        // The DB doesn't exist (would be created here). Treat as ok —
+        // the absence of a DB isn't the failure mode we're looking for.
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        try {
+          const stores = Array.from(db.objectStoreNames);
+          if (stores.length === 0) {
+            db.close();
+            settle(true);
+            return;
+          }
+          const tx = db.transaction(stores, 'readonly');
+          tx.onerror = () => {
+            db.close();
+            settle(false, `tx onerror: ${String(tx.error)}`);
+          };
+          tx.onabort = () => {
+            db.close();
+            settle(false, `tx onabort: ${String(tx.error)}`);
+          };
+          tx.oncomplete = () => {
+            db.close();
+            settle(true);
+          };
+          // Touch every store with a count() so the underlying btree pages
+          // get exercised. count() is cheap but enough to surface index
+          // corruption.
+          for (const s of stores) {
+            const cReq = tx.objectStore(s).count();
+            cReq.onerror = () => {
+              try {
+                tx.abort();
+              } catch {
+                // ignore
+              }
+            };
+          }
+        } catch (e) {
+          db.close();
+          settle(false, `tx threw: ${String(e)}`);
+        }
+      };
+      // Hard cap.
+      setTimeout(() => settle(false, 'timeout'), 5_000);
+    } catch (e) {
+      settle(false, `open threw: ${String(e)}`);
+    }
+  });
+}
+
+/**
+ * Probe every existing IDB the browser knows about. Catches the
+ * Chromebook-crash scenario where any one of the SDK's databases
+ * (matrix-js-sdk crypto store, sync store, secret storage etc.) has
+ * a corrupted index. Returns null on success, or first failure detail.
+ */
+async function probeCryptoIdbs(): Promise<{ db: string; reason: string } | null> {
+  let dbs: { name?: string; version?: number }[];
+  try {
+    dbs = await indexedDB.databases();
+  } catch (e) {
+    return { db: '<list>', reason: `databases() threw: ${String(e)}` };
+  }
+  for (const info of dbs) {
+    if (!info.name) continue;
+    // Skip our own throwaway probe DBs.
+    if (info.name.startsWith('cinny-startup-probe-')) continue;
+    if (info.name.startsWith('idb-health-')) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const r = await probeExistingIdb(info.name);
+    if (!r.ok) return { db: info.name, reason: r.reason ?? 'unknown' };
+  }
+  return null;
+}
+
+/**
+ * Light fallback probe — a fresh throwaway DB read/write.
+ * Catches the case where IDB itself is completely wedged (rare).
+ */
+async function probeFreshIdb(): Promise<boolean> {
   const dbName = `cinny-startup-probe-${Date.now()}`;
   return new Promise<boolean>((resolve) => {
     let settled = false;
@@ -197,7 +294,7 @@ async function probeIdbHealth(): Promise<boolean> {
         try {
           req.result.createObjectStore('s');
         } catch {
-          // ignore — open will surface the error
+          // ignore
         }
       };
       req.onsuccess = () => {
@@ -223,7 +320,6 @@ async function probeIdbHealth(): Promise<boolean> {
       };
       req.onerror = () => settle(false);
       req.onblocked = () => settle(false);
-      // Hard cap: if no event fires within 5s the DB is wedged.
       setTimeout(() => settle(false), 5_000);
     } catch {
       settle(false);
@@ -243,11 +339,39 @@ export interface StartupIntegrityResult {
 }
 
 /**
+ * Expose the failure log on `window.wallyDiag` so you can call
+ * `wallyDiag()` (or `await wallyDiag.json()`) from devtools at any time
+ * to inspect what's been logged — even when the app failed to load.
+ */
+export function exposeDiagnosticsOnWindow(): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  if (w.wallyDiag) return;
+  const fn = () => {
+    void dumpFailureLog();
+  };
+  fn.json = () => getFailureLog();
+  fn.clear = () => clearFailureLog();
+  w.wallyDiag = fn;
+}
+
+/**
  * Run the startup integrity check: capture context, detect crash gaps, and
  * probe IDB health. Logs results to the diagnostics buffer. The caller decides
  * what to do with the result (typically: trigger auto-repair if !idbHealthy).
+ *
+ * Always dumps the existing failure log to console first so anyone opening
+ * devtools after a recovery sees the trail without depending on later
+ * components mounting.
  */
 export async function runStartupIntegrityCheck(): Promise<StartupIntegrityResult> {
+  // Dump prior log first thing — we want it visible even if startup
+  // bails partway through. logFailureEvent('startup') is fire-and-forget
+  // so it doesn't block the integrity check.
+  void logFailureEvent('startup');
+  await dumpFailureLog();
+  exposeDiagnosticsOnWindow();
+
   const heartbeatGapMs = readHeartbeatGapMs();
   const uncleanShutdown =
     heartbeatGapMs !== null && heartbeatGapMs > CRASH_GAP_MS;
@@ -273,14 +397,67 @@ export async function runStartupIntegrityCheck(): Promise<StartupIntegrityResult
     await logFailureEvent('startup_storage_estimate', storage);
   }
 
-  const idbHealthy = await probeIdbHealth();
+  // Probe the actual crypto DBs by name first — that's where the
+  // Chromebook crash damage actually lives. A fresh-DB probe is only a
+  // last-ditch sanity check.
+  const cryptoFault = await probeCryptoIdbs();
+  let idbHealthy = cryptoFault === null;
+  let probeReason: { db?: string; reason?: string } | undefined;
+  if (cryptoFault) {
+    probeReason = cryptoFault;
+  } else {
+    const freshOk = await probeFreshIdb();
+    if (!freshOk) {
+      idbHealthy = false;
+      probeReason = { reason: 'fresh_db_probe_failed' };
+    }
+  }
   if (!idbHealthy) {
     await logFailureEvent('startup_idb_probe_failed', {
       uncleanShutdown,
       heartbeatGapMs,
       storage,
+      ...probeReason,
     });
   }
 
   return { uncleanShutdown, idbHealthy, storage, heartbeatGapMs };
+}
+
+/**
+ * Hook a global unhandledrejection listener that catches IDB UnknownErrors
+ * fired from background promises (e.g. matrix-sdk-crypto's internal
+ * queries). Even when these don't crash the app, they signal that crypto
+ * is degraded and the user is heading toward the "unverified" state.
+ *
+ * Calls `onCryptoIdbError` once per page lifetime (rate-limited) so the
+ * caller can decide whether to prompt for repair.
+ */
+export function installCryptoIdbErrorListener(
+  onCryptoIdbError: (info: { message: string; stack?: string }) => void
+): () => void {
+  let fired = false;
+  const handler = (ev: PromiseRejectionEvent) => {
+    if (fired) return;
+    const reason = ev.reason;
+    const message =
+      reason instanceof Error ? reason.message : String(reason ?? '');
+    const stack = reason instanceof Error ? reason.stack : undefined;
+    if (!/Query failed|UnknownError|IDBDatabase|IDBTransaction/i.test(message)) {
+      return;
+    }
+    fired = true;
+    void logFailureEvent('startup_idb_probe_failed', {
+      source: 'unhandledrejection',
+      message,
+      stack: stack?.split('\n').slice(0, 5).join('\n'),
+    });
+    try {
+      onCryptoIdbError({ message, stack });
+    } catch {
+      // never break startup
+    }
+  };
+  window.addEventListener('unhandledrejection', handler);
+  return () => window.removeEventListener('unhandledrejection', handler);
 }
