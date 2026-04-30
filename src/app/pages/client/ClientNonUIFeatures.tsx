@@ -113,7 +113,12 @@ function CryptoCheckpointManager() {
   const checkpointedRef = useRef(false);
 
   useEffect(() => {
-    const CHECKPOINT_INTERVAL = 30 * 60 * 1000; // 30 minutes
+    // Tightened from 30 → 5 minutes: a Chromebook OS crash mid-session
+    // restores from this checkpoint, and a 30-minute window meant new
+    // device keys received in that window were lost (device showed
+    // "unverified" after recovery). 5 minutes still survives crash
+    // bursts and keeps the verification window narrow.
+    const CHECKPOINT_INTERVAL = 5 * 60 * 1000;
 
     // Surface the failure log on startup so anyone investigating a
     // recovery-key prompt can see the trail of events that led there
@@ -138,12 +143,21 @@ function CryptoCheckpointManager() {
 
     mx.on('sync' as any, onSync);
 
-    // Also checkpoint periodically.
+    // Periodic checkpoint.
     const interval = setInterval(doCheckpoint, CHECKPOINT_INTERVAL);
+
+    // Best-effort checkpoint right before the tab is hidden / discarded —
+    // catches the case where the OS is about to kill us. pagehide is
+    // sync-only, so we kick off the async work and let the browser keep
+    // the tab alive long enough; if it doesn't, we lost at most a few
+    // minutes vs. nothing. Idempotent against the periodic interval.
+    const onPageHide = () => doCheckpoint();
+    window.addEventListener('pagehide', onPageHide);
 
     return () => {
       mx.off('sync' as any, onSync);
       clearInterval(interval);
+      window.removeEventListener('pagehide', onPageHide);
     };
   }, [mx]);
 

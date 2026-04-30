@@ -29,6 +29,11 @@ import {
   logoutClient,
   startClient,
 } from '../../../client/initMatrix';
+import {
+  logFailureEvent,
+  runStartupIntegrityCheck,
+  startHeartbeat,
+} from '../../../client/diagnostics';
 import { recordSessionStart } from '../../state/sessions';
 import { SplashScreen } from '../../components/splash-screen';
 import { CapabilitiesProvider } from '../../hooks/useCapabilities';
@@ -216,10 +221,42 @@ export function ClientRoot({ children }: ClientRootProps) {
   }, [baseUrl]);
 
   const [loadState, loadMatrix] = useAsyncCallback<MatrixClient, Error, []>(
-    useCallback(() => {
+    useCallback(async () => {
       const session = getFallbackSession();
       if (!session) {
         throw new Error('No session Found!');
+      }
+      // Pre-flight: detect Chromebook-style unclean shutdown (heartbeat gap)
+      // and probe IDB. If IDB is wedged we trigger the existing repair flow
+      // BEFORE matrix-js-sdk gets near it — the user never sees the
+      // "Query failed: UnknownError" prompt in this case. The repair flow
+      // tries the Cache-API checkpoint first, so crypto identity is
+      // preserved when a checkpoint exists.
+      //
+      // Guard against repair loops via a sessionStorage marker — if the
+      // last reload was caused by us, skip the auto-repair and let the
+      // normal failure UI handle it.
+      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
+      const justRepaired = sessionStorage.getItem(REPAIR_GUARD) === '1';
+      if (!justRepaired) {
+        try {
+          const result = await runStartupIntegrityCheck();
+          if (!result.idbHealthy) {
+            await logFailureEvent('startup_auto_repair', {
+              uncleanShutdown: result.uncleanShutdown,
+              heartbeatGapMs: result.heartbeatGapMs,
+              storage: result.storage,
+            });
+            sessionStorage.setItem(REPAIR_GUARD, '1');
+            // Repair will reload the page; this never returns.
+            await repairIDBAndReload();
+            // Defensive — if reload didn't happen, fall through.
+          }
+        } catch {
+          // Diagnostics must never break startup.
+        }
+      } else {
+        sessionStorage.removeItem(REPAIR_GUARD);
       }
       return initClient(session);
     }, [])
@@ -239,6 +276,12 @@ export function ClientRoot({ children }: ClientRootProps) {
   }, [mx]);
 
   useLogoutListener(mx);
+
+  // Heartbeat lets us detect unclean shutdowns (Chromebook crashes etc.)
+  // on the next page load. Idempotent — safe to call repeatedly.
+  useEffect(() => {
+    startHeartbeat();
+  }, []);
 
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {
