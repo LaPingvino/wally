@@ -98,14 +98,30 @@ export function useNavigateUnread() {
   const selectedRoomId = useSelectedRoom();
 
   // Sorted list of rooms matching a predicate (unread or mention).
-  // Callers use this to step through rooms in sidebar order; sort fallback
-  // mirrors the room list's current activity/az/unread-first setting.
+  //
+  // Ordering rules (the user-visible behaviour):
+  //   1. Rooms whose containing space matches the *currently open* space
+  //      come first, in the room-list's normal sort order. This keeps
+  //      "next unread" walking through the active space before jumping
+  //      anywhere else.
+  //   2. Then every other room grouped by sidebar space index. Within a
+  //      space, rooms use the room-list's normal sort.
+  //
+  // Earlier the sort was sidebar-space-index first for everything, so a
+  // user reading rooms in space N would jump to space 0 the moment their
+  // current room had no unreads (resolveBaseIndex fell back to entries[0]).
   const buildSortedRooms = useCallback(
     (matches: (id: string) => boolean) => {
       const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
 
       const sidebarSpaceIds = getSidebarSpaceIds(mx);
       const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
+
+      // Active space = the space containing the currently-selected room
+      // (Infinity if none — Home/DM views, or the user just landed).
+      const activeSidebarIdx = selectedRoomId
+        ? getSidebarIndex(selectedRoomId, roomToParents, sidebarIndex)
+        : Infinity;
 
       const rooms = Array.from(roomToUnread.keys()).filter(
         (id) => matches(id) && !mx.getRoom(id)?.isSpaceRoom()
@@ -122,16 +138,22 @@ export function useNavigateUnread() {
             )
           : factoryRoomIdByActivity(mx);
 
+      // 0 = in active space, 1 = elsewhere — sorted ascending so active
+      // space wins. Beyond that, group by sidebar space index, then
+      // fall back to the user's room-sort preference.
       rooms.sort((a, b) => {
         const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
         const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
+        const aBucket = ai === activeSidebarIdx ? 0 : 1;
+        const bBucket = bi === activeSidebarIdx ? 0 : 1;
+        if (aBucket !== bBucket) return aBucket - bBucket;
         if (ai !== bi) return ai - bi;
         return sortFallback(a, b);
       });
 
       return rooms.map((id) => [id, roomToUnread.get(id)!] as const);
     },
-    [mx, roomToUnread, roomToParents, roomSortOrder]
+    [mx, roomToUnread, roomToParents, roomSortOrder, selectedRoomId]
   );
 
   const unreadEntries = useMemo(
