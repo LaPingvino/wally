@@ -301,7 +301,7 @@ index 2eefeee2..1839958e 100644
      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
  
 diff --git a/package-lock.json b/package-lock.json
-index b7281a0d..dbc042af 100644
+index b7281a0d..a8b074b1 100644
 --- a/package-lock.json
 +++ b/package-lock.json
 @@ -9,24 +9,24 @@
@@ -339,7 +339,7 @@ index b7281a0d..dbc042af 100644
          "domhandler": "5.0.3",
          "emojibase": "15.3.1",
          "emojibase-data": "15.3.2",
-@@ -36,34 +36,36 @@
+@@ -36,34 +36,37 @@
          "html-dom-parser": "4.0.0",
          "html-react-parser": "4.2.0",
          "i18next": "23.12.2",
@@ -354,7 +354,8 @@ index b7281a0d..dbc042af 100644
          "linkifyjs": "4.3.2",
 -        "matrix-js-sdk": "38.2.0",
 +        "livekit-client": "2.18.0",
-+        "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#db168ac23d95786f23206ef4455baacc25d01b2d",
++        "markdown-it": "14.1.1",
++        "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#ebfa975eba8886733ff06af4ac8e57ff7788a983",
          "matrix-widget-api": "1.13.0",
          "millify": "6.1.0",
          "pdfjs-dist": "4.2.67",
@@ -383,7 +384,7 @@ index b7281a0d..dbc042af 100644
        },
        "devDependencies": {
          "@element-hq/element-call-embedded": "0.16.3",
-@@ -72,37 +74,39 @@
+@@ -72,37 +75,40 @@
          "@rollup/plugin-wasm": "6.1.1",
          "@semantic-release/exec": "7.1.0",
          "@semantic-release/git": "10.0.1",
@@ -395,6 +396,7 @@ index b7281a0d..dbc042af 100644
 -        "@types/prismjs": "1.26.0",
 -        "@types/react": "18.2.39",
 -        "@types/react-dom": "18.2.17",
++        "@types/markdown-it": "14.1.2",
 +        "@types/node": "18.19.130",
 +        "@types/prismjs": "1.26.6",
 +        "@types/react": "18.3.28",
@@ -441,7 +443,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">=16.0.0"
-@@ -157,18 +161,6 @@
+@@ -157,18 +163,6 @@
        "dev": true,
        "license": "MIT"
      },
@@ -460,7 +462,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@apideck/better-ajv-errors": {
        "version": "0.3.6",
        "resolved": "https://registry.npmjs.org/@apideck/better-ajv-errors/-/better-ajv-errors-0.3.6.tgz",
-@@ -187,9 +179,10 @@
+@@ -187,9 +181,10 @@
        }
      },
      "node_modules/@atlaskit/pragmatic-drag-and-drop": {
@@ -474,7 +476,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "@babel/runtime": "^7.0.0",
          "bind-event-listener": "^3.0.0",
-@@ -206,50 +199,54 @@
+@@ -206,50 +201,54 @@
        }
      },
      "node_modules/@atlaskit/pragmatic-drag-and-drop-hitbox": {
@@ -555,7 +557,7 @@ index b7281a0d..dbc042af 100644
          "convert-source-map": "^2.0.0",
          "debug": "^4.1.0",
          "gensync": "^1.0.0-beta.2",
-@@ -273,14 +270,15 @@
+@@ -273,14 +272,15 @@
        }
      },
      "node_modules/@babel/generator": {
@@ -578,7 +580,7 @@ index b7281a0d..dbc042af 100644
          "jsesc": "^3.0.2"
        },
        "engines": {
-@@ -300,12 +298,13 @@
+@@ -300,12 +300,13 @@
        }
      },
      "node_modules/@babel/helper-compilation-targets": {
@@ -597,7 +599,7 @@ index b7281a0d..dbc042af 100644
          "browserslist": "^4.24.0",
          "lru-cache": "^5.1.1",
          "semver": "^6.3.1"
-@@ -394,6 +393,15 @@
+@@ -394,6 +395,15 @@
          "@babel/core": "^7.4.0 || ^8.0.0-0 <8.0.0"
        }
      },
@@ -613,7 +615,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@babel/helper-member-expression-to-functions": {
        "version": "7.25.9",
        "resolved": "https://registry.npmjs.org/@babel/helper-member-expression-to-functions/-/helper-member-expression-to-functions-7.25.9.tgz",
-@@ -408,25 +416,27 @@
+@@ -408,25 +418,27 @@
        }
      },
      "node_modules/@babel/helper-module-imports": {
@@ -652,7 +654,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">=6.9.0"
-@@ -448,9 +458,10 @@
+@@ -448,9 +460,10 @@
        }
      },
      "node_modules/@babel/helper-plugin-utils": {
@@ -666,7 +668,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=6.9.0"
        }
-@@ -503,25 +514,28 @@
+@@ -503,25 +516,28 @@
        }
      },
      "node_modules/@babel/helper-string-parser": {
@@ -704,7 +706,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=6.9.0"
        }
-@@ -541,23 +555,25 @@
+@@ -541,23 +557,25 @@
        }
      },
      "node_modules/@babel/helpers": {
@@ -739,7 +741,7 @@ index b7281a0d..dbc042af 100644
        },
        "bin": {
          "parser": "bin/babel-parser.js"
-@@ -1319,12 +1335,13 @@
+@@ -1319,12 +1337,13 @@
        }
      },
      "node_modules/@babel/plugin-transform-react-jsx-self": {
@@ -757,7 +759,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">=6.9.0"
-@@ -1334,12 +1351,13 @@
+@@ -1334,12 +1353,13 @@
        }
      },
      "node_modules/@babel/plugin-transform-react-jsx-source": {
@@ -775,7 +777,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">=6.9.0"
-@@ -1665,47 +1683,56 @@
+@@ -1665,47 +1685,56 @@
        }
      },
      "node_modules/@babel/template": {
@@ -853,7 +855,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@colors/colors": {
        "version": "1.5.0",
        "resolved": "https://registry.npmjs.org/@colors/colors/-/colors-1.5.0.tgz",
-@@ -2111,6 +2138,23 @@
+@@ -2111,6 +2140,23 @@
          "node": ">=12"
        }
      },
@@ -877,7 +879,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@esbuild/netbsd-x64": {
        "version": "0.19.12",
        "resolved": "https://registry.npmjs.org/@esbuild/netbsd-x64/-/netbsd-x64-0.19.12.tgz",
-@@ -2126,6 +2170,23 @@
+@@ -2126,6 +2172,23 @@
          "node": ">=12"
        }
      },
@@ -901,7 +903,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@esbuild/openbsd-x64": {
        "version": "0.19.12",
        "resolved": "https://registry.npmjs.org/@esbuild/openbsd-x64/-/openbsd-x64-0.19.12.tgz",
-@@ -2141,6 +2202,23 @@
+@@ -2141,6 +2204,23 @@
          "node": ">=12"
        }
      },
@@ -925,7 +927,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@esbuild/sunos-x64": {
        "version": "0.19.12",
        "resolved": "https://registry.npmjs.org/@esbuild/sunos-x64/-/sunos-x64-0.19.12.tgz",
-@@ -2201,15 +2279,45 @@
+@@ -2201,15 +2281,45 @@
          "node": ">=12"
        }
      },
@@ -975,7 +977,7 @@ index b7281a0d..dbc042af 100644
          "globals": "^13.19.0",
          "ignore": "^5.2.0",
          "import-fresh": "^3.2.1",
-@@ -2229,6 +2337,7 @@
+@@ -2229,6 +2339,7 @@
        "resolved": "https://registry.npmjs.org/globals/-/globals-13.24.0.tgz",
        "integrity": "sha512-AhO5QUcj8llrbG09iWhPU2B204J1xnPeL8kQmVorSsy+Sjj1sk8gIyh6cUocGmH4L0UuhAJy+hJMRA4mgA4mFQ==",
        "dev": true,
@@ -983,7 +985,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "type-fest": "^0.20.2"
        },
-@@ -2244,6 +2353,7 @@
+@@ -2244,6 +2355,7 @@
        "resolved": "https://registry.npmjs.org/type-fest/-/type-fest-0.20.2.tgz",
        "integrity": "sha512-Ne+eE4r0/iWnpAxD852z3A+N0Bt5RN//NjJwRd2VFHEmrywxf5vsZlh4R6lixl6B+wz/8d+maTSAkN1FIkI3LQ==",
        "dev": true,
@@ -991,7 +993,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=10"
        },
-@@ -2251,65 +2361,81 @@
+@@ -2251,65 +2363,81 @@
          "url": "https://github.com/sponsors/sindresorhus"
        }
      },
@@ -1103,7 +1105,7 @@ index b7281a0d..dbc042af 100644
          "debug": "^4.3.1",
          "minimatch": "^3.0.5"
        },
-@@ -2335,52 +2461,64 @@
+@@ -2335,52 +2463,64 @@
        "resolved": "https://registry.npmjs.org/@humanwhocodes/object-schema/-/object-schema-2.0.3.tgz",
        "integrity": "sha512-93zYdMES/c1D69yZiKDBj0V24vqNzB/koF26KPaagAfd3P/4gUlh3Dys5ogAK+Exi9QyzlD8x/08Zt7wIKcDcA==",
        "deprecated": "Use @eslint/object-schema instead",
@@ -1189,7 +1191,7 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/@jridgewell/resolve-uri": {
-@@ -2391,14 +2529,6 @@
+@@ -2391,14 +2531,6 @@
          "node": ">=6.0.0"
        }
      },
@@ -1204,7 +1206,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@jridgewell/source-map": {
        "version": "0.3.6",
        "resolved": "https://registry.npmjs.org/@jridgewell/source-map/-/source-map-0.3.6.tgz",
-@@ -2410,14 +2540,16 @@
+@@ -2410,14 +2542,16 @@
        }
      },
      "node_modules/@jridgewell/sourcemap-codec": {
@@ -1227,7 +1229,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "@jridgewell/resolve-uri": "^3.1.0",
          "@jridgewell/sourcemap-codec": "^1.4.14"
-@@ -2428,6 +2560,21 @@
+@@ -2428,6 +2562,21 @@
        "resolved": "https://registry.npmjs.org/@juggle/resize-observer/-/resize-observer-3.4.0.tgz",
        "integrity": "sha512-dfLbk+PwWvFzSxwk3n5ySL0hfBog779o8h68wK/7/APo/7cgyWp5jcXockbxdk5kFRkbeXWm4Fbi9FrdN381sA=="
      },
@@ -1249,7 +1251,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@mapbox/node-pre-gyp": {
        "version": "1.0.11",
        "resolved": "https://registry.npmjs.org/@mapbox/node-pre-gyp/-/node-pre-gyp-1.0.11.tgz",
-@@ -2695,1400 +2842,1425 @@
+@@ -2695,1400 +2844,1425 @@
        }
      },
      "node_modules/@react-aria/breadcrumbs": {
@@ -3620,7 +3622,7 @@ index b7281a0d..dbc042af 100644
        "peerDependencies": {
          "react": "^16.8.0 || ^17.0.0-rc.1 || ^18.0.0 || ^19.0.0-rc.1"
        }
-@@ -4102,6 +4274,13 @@
+@@ -4102,6 +4276,13 @@
          "node": ">=14.0.0"
        }
      },
@@ -3634,7 +3636,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@rollup/plugin-babel": {
        "version": "5.3.1",
        "resolved": "https://registry.npmjs.org/@rollup/plugin-babel/-/plugin-babel-5.3.1.tgz",
-@@ -4354,228 +4533,364 @@
+@@ -4354,228 +4535,364 @@
        }
      },
      "node_modules/@rollup/rollup-android-arm-eabi": {
@@ -4067,7 +4069,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "win32"
-@@ -5225,6 +5540,13 @@
+@@ -5225,6 +5542,13 @@
          "url": "https://github.com/sponsors/sindresorhus"
        }
      },
@@ -4081,7 +4083,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@surma/rollup-plugin-off-main-thread": {
        "version": "2.2.3",
        "resolved": "https://registry.npmjs.org/@surma/rollup-plugin-off-main-thread/-/rollup-plugin-off-main-thread-2.2.3.tgz",
-@@ -5247,14 +5569,15 @@
+@@ -5247,14 +5571,15 @@
        }
      },
      "node_modules/@swc/core": {
@@ -4101,7 +4103,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">=10"
-@@ -5264,19 +5587,21 @@
+@@ -5264,19 +5589,21 @@
          "url": "https://opencollective.com/swc"
        },
        "optionalDependencies": {
@@ -4134,7 +4136,7 @@ index b7281a0d..dbc042af 100644
        },
        "peerDependenciesMeta": {
          "@swc/helpers": {
-@@ -5285,13 +5610,14 @@
+@@ -5285,13 +5612,14 @@
        }
      },
      "node_modules/@swc/core-darwin-arm64": {
@@ -4152,7 +4154,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "darwin"
-@@ -5301,13 +5627,14 @@
+@@ -5301,13 +5629,14 @@
        }
      },
      "node_modules/@swc/core-darwin-x64": {
@@ -4170,7 +4172,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "darwin"
-@@ -5317,13 +5644,14 @@
+@@ -5317,13 +5646,14 @@
        }
      },
      "node_modules/@swc/core-linux-arm-gnueabihf": {
@@ -4188,7 +4190,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "linux"
-@@ -5333,13 +5661,17 @@
+@@ -5333,13 +5663,17 @@
        }
      },
      "node_modules/@swc/core-linux-arm64-gnu": {
@@ -4209,7 +4211,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "linux"
-@@ -5349,13 +5681,57 @@
+@@ -5349,13 +5683,57 @@
        }
      },
      "node_modules/@swc/core-linux-arm64-musl": {
@@ -4270,7 +4272,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "linux"
-@@ -5365,13 +5741,17 @@
+@@ -5365,13 +5743,17 @@
        }
      },
      "node_modules/@swc/core-linux-x64-gnu": {
@@ -4291,7 +4293,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "linux"
-@@ -5381,13 +5761,17 @@
+@@ -5381,13 +5763,17 @@
        }
      },
      "node_modules/@swc/core-linux-x64-musl": {
@@ -4312,7 +4314,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "linux"
-@@ -5397,13 +5781,14 @@
+@@ -5397,13 +5783,14 @@
        }
      },
      "node_modules/@swc/core-win32-arm64-msvc": {
@@ -4330,7 +4332,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "win32"
-@@ -5413,13 +5798,14 @@
+@@ -5413,13 +5800,14 @@
        }
      },
      "node_modules/@swc/core-win32-ia32-msvc": {
@@ -4348,7 +4350,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "win32"
-@@ -5429,13 +5815,14 @@
+@@ -5429,13 +5817,14 @@
        }
      },
      "node_modules/@swc/core-win32-x64-msvc": {
@@ -4366,7 +4368,7 @@ index b7281a0d..dbc042af 100644
        "optional": true,
        "os": [
          "win32"
-@@ -5448,94 +5835,110 @@
+@@ -5448,94 +5837,110 @@
        "version": "0.1.3",
        "resolved": "https://registry.npmjs.org/@swc/counter/-/counter-0.1.3.tgz",
        "integrity": "sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==",
@@ -4510,7 +4512,7 @@ index b7281a0d..dbc042af 100644
        "funding": {
          "type": "github",
          "url": "https://github.com/sponsors/tannerlinsley"
-@@ -5582,17 +5985,36 @@
+@@ -5582,17 +5987,36 @@
          "@babel/types": "^7.20.7"
        }
      },
@@ -4553,7 +4555,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/@types/events": {
        "version": "3.0.3",
-@@ -5617,7 +6039,8 @@
+@@ -5617,7 +6041,8 @@
        "version": "7.0.15",
        "resolved": "https://registry.npmjs.org/@types/json-schema/-/json-schema-7.0.15.tgz",
        "integrity": "sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==",
@@ -4563,9 +4565,35 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/@types/json5": {
        "version": "0.0.29",
-@@ -5626,9 +6049,13 @@
+@@ -5625,10 +6050,39 @@
+       "integrity": "sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==",
        "dev": true
      },
++    "node_modules/@types/linkify-it": {
++      "version": "5.0.0",
++      "resolved": "https://registry.npmjs.org/@types/linkify-it/-/linkify-it-5.0.0.tgz",
++      "integrity": "sha512-sVDA58zAw4eWAffKOaQH5/5j3XeayukzDk+ewSsnv3p4yJEZHCCzMDiZM8e0OUrRvmpGZ85jf4yDHkHsgBNr9Q==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/@types/markdown-it": {
++      "version": "14.1.2",
++      "resolved": "https://registry.npmjs.org/@types/markdown-it/-/markdown-it-14.1.2.tgz",
++      "integrity": "sha512-promo4eFwuiW+TfGxhi+0x3czqTYJkG8qB17ZUJiVF10Xm7NLVRSLUsfRTU/6h1e24VvRnXCx+hG7li58lkzog==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "@types/linkify-it": "^5",
++        "@types/mdurl": "^2"
++      }
++    },
++    "node_modules/@types/mdurl": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/@types/mdurl/-/mdurl-2.0.0.tgz",
++      "integrity": "sha512-RGdgjQUZba5p6QEFAVx2OGb8rQDL/cPRG7GiedRzMcJ1tYnUANBncjbSB1NRGwbvjcPeikRABz2nshyPk1bhWg==",
++      "dev": true,
++      "license": "MIT"
++    },
      "node_modules/@types/node": {
 -      "version": "18.11.18",
 -      "resolved": "https://registry.npmjs.org/@types/node/-/node-18.11.18.tgz",
@@ -4580,7 +4608,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/@types/normalize-package-data": {
        "version": "2.4.4",
-@@ -5638,10 +6065,11 @@
+@@ -5638,10 +6092,11 @@
        "license": "MIT"
      },
      "node_modules/@types/prismjs": {
@@ -4596,7 +4624,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/@types/prop-types": {
        "version": "15.7.14",
-@@ -5650,23 +6078,24 @@
+@@ -5650,23 +6105,24 @@
        "dev": true
      },
      "node_modules/@types/react": {
@@ -4631,7 +4659,7 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/@types/react-google-recaptcha": {
-@@ -5691,25 +6120,21 @@
+@@ -5691,25 +6147,21 @@
        "license": "MIT"
      },
      "node_modules/@types/sanitize-html": {
@@ -4666,7 +4694,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/@types/trusted-types": {
        "version": "2.0.7",
-@@ -5718,24 +6143,44 @@
+@@ -5718,24 +6170,44 @@
        "dev": true
      },
      "node_modules/@types/ua-parser-js": {
@@ -4722,7 +4750,7 @@ index b7281a0d..dbc042af 100644
          "semver": "^7.3.7",
          "tsutils": "^3.21.0"
        },
-@@ -5757,14 +6202,15 @@
+@@ -5757,14 +6229,15 @@
        }
      },
      "node_modules/@typescript-eslint/parser": {
@@ -4744,7 +4772,7 @@ index b7281a0d..dbc042af 100644
          "debug": "^4.3.4"
        },
        "engines": {
-@@ -5784,13 +6230,14 @@
+@@ -5784,13 +6257,14 @@
        }
      },
      "node_modules/@typescript-eslint/scope-manager": {
@@ -4764,7 +4792,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": "^12.22.0 || ^14.17.0 || >=16.0.0"
-@@ -5801,13 +6248,14 @@
+@@ -5801,13 +6275,14 @@
        }
      },
      "node_modules/@typescript-eslint/type-utils": {
@@ -4784,7 +4812,7 @@ index b7281a0d..dbc042af 100644
          "debug": "^4.3.4",
          "tsutils": "^3.21.0"
        },
-@@ -5828,10 +6276,11 @@
+@@ -5828,10 +6303,11 @@
        }
      },
      "node_modules/@typescript-eslint/types": {
@@ -4799,7 +4827,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": "^12.22.0 || ^14.17.0 || >=16.0.0"
        },
-@@ -5841,13 +6290,14 @@
+@@ -5841,13 +6317,14 @@
        }
      },
      "node_modules/@typescript-eslint/typescript-estree": {
@@ -4819,7 +4847,7 @@ index b7281a0d..dbc042af 100644
          "debug": "^4.3.4",
          "globby": "^11.1.0",
          "is-glob": "^4.0.3",
-@@ -5868,18 +6318,19 @@
+@@ -5868,18 +6345,19 @@
        }
      },
      "node_modules/@typescript-eslint/utils": {
@@ -4846,7 +4874,7 @@ index b7281a0d..dbc042af 100644
          "semver": "^7.3.7"
        },
        "engines": {
-@@ -5894,12 +6345,13 @@
+@@ -5894,12 +6372,13 @@
        }
      },
      "node_modules/@typescript-eslint/visitor-keys": {
@@ -4864,7 +4892,7 @@ index b7281a0d..dbc042af 100644
          "eslint-visitor-keys": "^3.3.0"
        },
        "engines": {
-@@ -5910,6 +6362,13 @@
+@@ -5910,6 +6389,13 @@
          "url": "https://opencollective.com/typescript-eslint"
        }
      },
@@ -4878,7 +4906,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@vanilla-extract/babel-plugin-debug-ids": {
        "version": "1.2.0",
        "resolved": "https://registry.npmjs.org/@vanilla-extract/babel-plugin-debug-ids/-/babel-plugin-debug-ids-1.2.0.tgz",
-@@ -5919,23 +6378,31 @@
+@@ -5919,23 +6405,31 @@
        }
      },
      "node_modules/@vanilla-extract/css": {
@@ -4920,7 +4948,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/@vanilla-extract/integration": {
        "version": "6.5.0",
        "resolved": "https://registry.npmjs.org/@vanilla-extract/integration/-/integration-6.5.0.tgz",
-@@ -5956,45 +6423,11 @@
+@@ -5956,45 +6450,11 @@
          "vite-node": "^1.2.0"
        }
      },
@@ -4970,7 +4998,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/@vanilla-extract/recipes": {
        "version": "0.3.0",
-@@ -6019,57 +6452,201 @@
+@@ -6019,46 +6479,190 @@
        }
      },
      "node_modules/@vitejs/plugin-react": {
@@ -5037,25 +5065,13 @@ index b7281a0d..dbc042af 100644
      },
 -    "node_modules/acorn-jsx": {
 -      "version": "5.3.2",
--      "resolved": "https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz",
--      "integrity": "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==",
 +    "node_modules/@vitest/mocker": {
 +      "version": "4.0.18",
 +      "resolved": "https://registry.npmjs.org/@vitest/mocker/-/mocker-4.0.18.tgz",
 +      "integrity": "sha512-HhVd0MDnzzsgevnOWCBj5Otnzobjy5wLBe4EdeeFGv8luMsGcYqDuFRMcttKWZA5vVO8RFjexVovXvAM4JoJDQ==",
-       "dev": true,
--      "peerDependencies": {
--        "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0"
--      }
--    },
--    "node_modules/agent-base": {
--      "version": "6.0.2",
--      "resolved": "https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz",
--      "integrity": "sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==",
--      "optional": true,
++      "dev": true,
 +      "license": "MIT",
-       "dependencies": {
--        "debug": "4"
++      "dependencies": {
 +        "@vitest/spy": "4.0.18",
 +        "estree-walker": "^3.0.3",
 +        "magic-string": "^0.30.21"
@@ -5191,25 +5207,14 @@ index b7281a0d..dbc042af 100644
 +    },
 +    "node_modules/acorn-jsx": {
 +      "version": "5.3.2",
-+      "resolved": "https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz",
-+      "integrity": "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==",
-+      "dev": true,
+       "resolved": "https://registry.npmjs.org/acorn-jsx/-/acorn-jsx-5.3.2.tgz",
+       "integrity": "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==",
+       "dev": true,
 +      "license": "MIT",
-+      "peerDependencies": {
-+        "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0"
-+      }
-+    },
-+    "node_modules/agent-base": {
-+      "version": "6.0.2",
-+      "resolved": "https://registry.npmjs.org/agent-base/-/agent-base-6.0.2.tgz",
-+      "integrity": "sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==",
-+      "optional": true,
-+      "dependencies": {
-+        "debug": "4"
-       },
-       "engines": {
-         "node": ">= 6.0.0"
-@@ -6089,16 +6666,12 @@
+       "peerDependencies": {
+         "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0"
+       }
+@@ -6089,16 +6693,12 @@
          "node": ">=8"
        }
      },
@@ -5230,7 +5235,17 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "fast-deep-equal": "^3.1.1",
          "fast-json-stable-stringify": "^2.0.0",
-@@ -6232,6 +6805,18 @@
+@@ -6222,8 +6822,7 @@
+     "node_modules/argparse": {
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/argparse/-/argparse-2.0.1.tgz",
+-      "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q==",
+-      "dev": true
++      "integrity": "sha512-8+9WqebbFzpX9OR+Wa6O29asIogeRMzcGtAINdpMHHyAg10f05aSFVBbcEqGf/PXw1EjAZ+q2/bEBg3DvurK3Q=="
+     },
+     "node_modules/argv-formatter": {
+       "version": "1.0.0",
+@@ -6232,6 +6831,18 @@
        "dev": true,
        "license": "MIT"
      },
@@ -5249,7 +5264,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/aria-query": {
        "version": "4.2.2",
        "resolved": "https://registry.npmjs.org/aria-query/-/aria-query-4.2.2.tgz",
-@@ -6293,10 +6878,32 @@
+@@ -6293,10 +6904,32 @@
        "resolved": "https://registry.npmjs.org/array-union/-/array-union-2.1.0.tgz",
        "integrity": "sha512-HGyxoOTYUyCM6stUe6EJgnd4EoewAI7zMdfqO+kGjnlZmBDz/cR5pf8r/cR4Wq60sL/p0IkcjUEEPwS3GFrIyw==",
        "dev": true,
@@ -5282,7 +5297,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/array.prototype.findlastindex": {
        "version": "1.2.5",
        "resolved": "https://registry.npmjs.org/array.prototype.findlastindex/-/array.prototype.findlastindex-1.2.5.tgz",
-@@ -6390,6 +6997,16 @@
+@@ -6390,6 +7023,16 @@
          "url": "https://github.com/sponsors/ljharb"
        }
      },
@@ -5299,7 +5314,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/ast-types-flow": {
        "version": "0.0.7",
        "resolved": "https://registry.npmjs.org/ast-types-flow/-/ast-types-flow-0.0.7.tgz",
-@@ -6597,9 +7214,10 @@
+@@ -6597,9 +7240,10 @@
        }
      },
      "node_modules/blurhash": {
@@ -5313,7 +5328,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/bottleneck": {
        "version": "2.19.5",
-@@ -6724,14 +7342,15 @@
+@@ -6724,14 +7368,15 @@
        }
      },
      "node_modules/call-bind": {
@@ -5335,7 +5350,7 @@ index b7281a0d..dbc042af 100644
          "set-function-length": "^1.2.2"
        },
        "engines": {
-@@ -6742,10 +7361,11 @@
+@@ -6742,10 +7387,11 @@
        }
      },
      "node_modules/call-bind-apply-helpers": {
@@ -5350,7 +5365,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "es-errors": "^1.3.0",
          "function-bind": "^1.1.2"
-@@ -6755,13 +7375,14 @@
+@@ -6755,13 +7401,14 @@
        }
      },
      "node_modules/call-bound": {
@@ -5370,7 +5385,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">= 0.4"
-@@ -6813,10 +7434,21 @@
+@@ -6813,10 +7460,21 @@
          "node": ">=6"
        }
      },
@@ -5392,7 +5407,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "ansi-styles": "^4.1.0",
          "supports-color": "^7.1.0"
-@@ -6885,21 +7517,22 @@
+@@ -6885,21 +7543,22 @@
        "version": "2.0.0",
        "resolved": "https://registry.npmjs.org/chownr/-/chownr-2.0.0.tgz",
        "integrity": "sha512-bIomtDF5KGpdogkLd9VspvFzk9KfpyyGlS8YFVZl7TGPBHL5snIOnxeshwVgPteQ9b4Eydl+pVbIyE1DcvCWgQ==",
@@ -5422,7 +5437,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/clean-stack": {
        "version": "2.2.0",
-@@ -7116,6 +7749,7 @@
+@@ -7116,6 +7775,7 @@
        "version": "2.1.1",
        "resolved": "https://registry.npmjs.org/clsx/-/clsx-2.1.1.tgz",
        "integrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
@@ -5430,7 +5445,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=6"
        }
-@@ -7513,9 +8147,10 @@
+@@ -7513,9 +8173,10 @@
        }
      },
      "node_modules/css-what": {
@@ -5444,7 +5459,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">= 6"
        },
-@@ -7535,9 +8170,10 @@
+@@ -7535,9 +8196,10 @@
        }
      },
      "node_modules/csstype": {
@@ -5458,7 +5473,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/cz-conventional-changelog": {
        "version": "3.3.0",
-@@ -7704,9 +8340,10 @@
+@@ -7704,9 +8366,10 @@
        }
      },
      "node_modules/dayjs": {
@@ -5472,7 +5487,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/debug": {
        "version": "4.4.0",
-@@ -7725,9 +8362,10 @@
+@@ -7725,9 +8388,10 @@
        }
      },
      "node_modules/decimal.js": {
@@ -5486,7 +5501,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/decompress-response": {
        "version": "4.2.1",
-@@ -8296,27 +8934,28 @@
+@@ -8296,27 +8960,28 @@
        }
      },
      "node_modules/es-abstract": {
@@ -5522,7 +5537,7 @@ index b7281a0d..dbc042af 100644
          "get-symbol-description": "^1.1.0",
          "globalthis": "^1.0.4",
          "gopd": "^1.2.0",
-@@ -8328,21 +8967,24 @@
+@@ -8328,21 +8993,24 @@
          "is-array-buffer": "^3.0.5",
          "is-callable": "^1.2.7",
          "is-data-view": "^1.0.2",
@@ -5550,7 +5565,7 @@ index b7281a0d..dbc042af 100644
          "string.prototype.trim": "^1.2.10",
          "string.prototype.trimend": "^1.0.9",
          "string.prototype.trimstart": "^1.0.8",
-@@ -8351,7 +8993,7 @@
+@@ -8351,7 +9019,7 @@
          "typed-array-byte-offset": "^1.0.4",
          "typed-array-length": "^1.0.7",
          "unbox-primitive": "^1.1.0",
@@ -5559,7 +5574,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">= 0.4"
-@@ -8378,6 +9020,41 @@
+@@ -8378,6 +9046,41 @@
          "node": ">= 0.4"
        }
      },
@@ -5601,7 +5616,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/es-object-atoms": {
        "version": "1.1.1",
        "resolved": "https://registry.npmjs.org/es-object-atoms/-/es-object-atoms-1.1.1.tgz",
-@@ -8488,50 +9165,50 @@
+@@ -8488,50 +9191,50 @@
        }
      },
      "node_modules/eslint": {
@@ -5670,7 +5685,7 @@ index b7281a0d..dbc042af 100644
          "text-table": "^0.2.0"
        },
        "bin": {
-@@ -8594,10 +9271,11 @@
+@@ -8594,10 +9297,11 @@
        }
      },
      "node_modules/eslint-config-prettier": {
@@ -5685,7 +5700,7 @@ index b7281a0d..dbc042af 100644
        "bin": {
          "eslint-config-prettier": "bin/cli.js"
        },
-@@ -8749,32 +9427,36 @@
+@@ -8749,32 +9453,36 @@
        }
      },
      "node_modules/eslint-plugin-react": {
@@ -5736,7 +5751,7 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/eslint-plugin-react-hooks": {
-@@ -8832,6 +9514,7 @@
+@@ -8832,6 +9540,7 @@
        "resolved": "https://registry.npmjs.org/eslint-scope/-/eslint-scope-5.1.1.tgz",
        "integrity": "sha512-2NxwbF/hZ0KpepYN0cNbo+FN6XoK7GaHlQhgx/hIZl6Va0bF45RQOOwhLIy8lQDbuCiadSLCBnH2CFYquit5bw==",
        "dev": true,
@@ -5744,7 +5759,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "esrecurse": "^4.3.0",
          "estraverse": "^4.1.1"
-@@ -8845,42 +9528,17 @@
+@@ -8845,42 +9554,17 @@
        "resolved": "https://registry.npmjs.org/estraverse/-/estraverse-4.3.0.tgz",
        "integrity": "sha512-39nnKffWz8xN1BU/2c79n9nB9HDzo0niYUqx6xyqUnyoAnQyyWpOTdZEeiCch8BBu515t4wp9ZmgVfVhn9EBpw==",
        "dev": true,
@@ -5789,7 +5804,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": "^12.22.0 || ^14.17.0 || >=16.0.0"
        },
-@@ -8936,6 +9594,7 @@
+@@ -8936,6 +9620,7 @@
        "resolved": "https://registry.npmjs.org/espree/-/espree-9.6.1.tgz",
        "integrity": "sha512-oruZaFkjorTpF32kDSI5/75ViwGeZginGGy2NoOSg3Q9bnwlnmDm4HLnkl0RE3n+njDXR037aY1+x58Z/zFdwQ==",
        "dev": true,
@@ -5797,7 +5812,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "acorn": "^8.9.0",
          "acorn-jsx": "^5.3.2",
-@@ -9090,6 +9749,16 @@
+@@ -9090,6 +9775,16 @@
          "node": ">=0.10.0"
        }
      },
@@ -5814,7 +5829,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/external-editor": {
        "version": "3.1.0",
        "resolved": "https://registry.npmjs.org/external-editor/-/external-editor-3.1.0.tgz",
-@@ -9421,12 +10090,19 @@
+@@ -9421,12 +10116,19 @@
        }
      },
      "node_modules/for-each": {
@@ -5838,7 +5853,7 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/from2": {
-@@ -9498,7 +10174,7 @@
+@@ -9498,7 +10200,7 @@
        "version": "2.1.0",
        "resolved": "https://registry.npmjs.org/fs-minipass/-/fs-minipass-2.1.0.tgz",
        "integrity": "sha512-V/JgOLFCS+R6Vcq0slCuaeWEdNC3ouDlJMNIsacH2VtALiu9mV4LPrHc5cDl8k5aw6J8jwgWWpiTo5RYhmIzvg==",
@@ -5847,7 +5862,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "minipass": "^3.0.0"
        },
-@@ -9510,7 +10186,7 @@
+@@ -9510,7 +10212,7 @@
        "version": "3.3.6",
        "resolved": "https://registry.npmjs.org/minipass/-/minipass-3.3.6.tgz",
        "integrity": "sha512-DxiNidxSEK+tHG6zOIklvNOwm3hvCrbUrdtzY74U6HKTJxvIDfOUL5W5P2Ghd3DTkhhKPYGqeNUIh5qcM4YBfw==",
@@ -5856,7 +5871,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "yallist": "^4.0.0"
        },
-@@ -9522,7 +10198,7 @@
+@@ -9522,7 +10224,7 @@
        "version": "4.0.0",
        "resolved": "https://registry.npmjs.org/yallist/-/yallist-4.0.0.tgz",
        "integrity": "sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==",
@@ -5865,7 +5880,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/fs.realpath": {
        "version": "1.0.0",
-@@ -9645,17 +10321,18 @@
+@@ -9645,17 +10347,18 @@
        }
      },
      "node_modules/get-intrinsic": {
@@ -5890,7 +5905,7 @@ index b7281a0d..dbc042af 100644
          "gopd": "^1.2.0",
          "has-symbols": "^1.1.0",
          "hasown": "^2.0.2",
-@@ -9855,6 +10532,7 @@
+@@ -9855,6 +10558,7 @@
        "version": "11.12.0",
        "resolved": "https://registry.npmjs.org/globals/-/globals-11.12.0.tgz",
        "integrity": "sha512-WOBp/EEGUiIsJSp7wcv/y6MO+lV9UoncWqxuFfm8eBwzWNgyfBd6Gz+IeKQ9jCmyhoH99g15M3T+QaVHFjizVA==",
@@ -5898,7 +5913,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=4"
        }
-@@ -9880,6 +10558,7 @@
+@@ -9880,6 +10584,7 @@
        "resolved": "https://registry.npmjs.org/globby/-/globby-11.1.0.tgz",
        "integrity": "sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g==",
        "dev": true,
@@ -5906,7 +5921,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "array-union": "^2.1.0",
          "dir-glob": "^3.0.1",
-@@ -9913,11 +10592,12 @@
+@@ -9913,11 +10618,12 @@
        "integrity": "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==",
        "dev": true
      },
@@ -5924,7 +5939,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/handlebars": {
        "version": "4.7.8",
-@@ -9951,6 +10631,54 @@
+@@ -9951,6 +10657,54 @@
          "node": ">=0.10.0"
        }
      },
@@ -5979,7 +5994,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/has": {
        "version": "1.0.4",
        "resolved": "https://registry.npmjs.org/has/-/has-1.0.4.tgz",
-@@ -9976,6 +10704,7 @@
+@@ -9976,6 +10730,7 @@
        "version": "4.0.0",
        "resolved": "https://registry.npmjs.org/has-flag/-/has-flag-4.0.0.tgz",
        "integrity": "sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==",
@@ -5987,7 +6002,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=8"
        }
-@@ -10272,9 +11001,10 @@
+@@ -10272,9 +11027,10 @@
        }
      },
      "node_modules/i18next-browser-languagedetector": {
@@ -6001,7 +6016,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "@babel/runtime": "^7.23.2"
        }
-@@ -10448,6 +11178,7 @@
+@@ -10448,6 +11204,7 @@
        "integrity": "sha512-QQnnxNyfvmHFIsj7gkPcYymR8Jdw/o7mp5ZFihxn6h8Ci6fh3Dx4E1gPjpQEpIuPo9XVNY/ZUwh4BPMjGyL01g==",
        "dev": true,
        "license": "ISC",
@@ -6009,7 +6024,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": "^14.17.0 || ^16.13.0 || >=18.0.0"
        }
-@@ -10525,14 +11256,15 @@
+@@ -10525,14 +11282,15 @@
        }
      },
      "node_modules/intl-messageformat": {
@@ -6032,7 +6047,7 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/into-stream": {
-@@ -10793,6 +11525,19 @@
+@@ -10793,6 +11551,19 @@
        "integrity": "sha512-51ypPSPCoTEIN9dy5Oy+h4pShgJmPCygKfyRCISBI+JoWT/2oJvK8QPxmwv7b/p239jXrm9M1mlQbyKJ5A152g==",
        "dev": true
      },
@@ -6052,7 +6067,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/is-number": {
        "version": "7.0.0",
        "resolved": "https://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz",
-@@ -11004,12 +11749,13 @@
+@@ -11004,12 +11775,13 @@
        }
      },
      "node_modules/is-weakref": {
@@ -6070,7 +6085,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">= 0.4"
-@@ -11073,6 +11819,24 @@
+@@ -11073,6 +11845,24 @@
          "node": "^18.17 || >=20.6.1"
        }
      },
@@ -6095,7 +6110,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/jake": {
        "version": "10.9.2",
        "resolved": "https://registry.npmjs.org/jake/-/jake-10.9.2.tgz",
-@@ -11117,18 +11881,36 @@
+@@ -11117,18 +11907,36 @@
          "jiti": "lib/jiti-cli.mjs"
        }
      },
@@ -6135,7 +6150,7 @@ index b7281a0d..dbc042af 100644
          "@types/react": {
            "optional": true
          },
-@@ -11137,16 +11919,6 @@
+@@ -11137,16 +11945,6 @@
          }
        }
      },
@@ -6152,7 +6167,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/js-tokens": {
        "version": "4.0.0",
        "resolved": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
-@@ -11205,7 +11977,8 @@
+@@ -11205,7 +12003,8 @@
        "version": "0.4.1",
        "resolved": "https://registry.npmjs.org/json-schema-traverse/-/json-schema-traverse-0.4.1.tgz",
        "integrity": "sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg==",
@@ -6162,7 +6177,23 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/json-stable-stringify-without-jsonify": {
        "version": "1.0.1",
-@@ -11509,6 +12282,26 @@
+@@ -11340,6 +12139,15 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/linkify-it": {
++      "version": "5.0.0",
++      "resolved": "https://registry.npmjs.org/linkify-it/-/linkify-it-5.0.0.tgz",
++      "integrity": "sha512-5aHCbzQRADcdP+ATqnDuhhJ/MRIqDkZX5pyjFHRRysS8vZ5AbqGEoFIb6pYHPZ+L/OC2Lc+xT8uHVVR5CAK/wQ==",
++      "license": "MIT",
++      "dependencies": {
++        "uc.micro": "^2.0.0"
++      }
++    },
+     "node_modules/linkify-react": {
+       "version": "4.3.2",
+       "resolved": "https://registry.npmjs.org/linkify-react/-/linkify-react-4.3.2.tgz",
+@@ -11509,6 +12317,26 @@
          "url": "https://github.com/chalk/wrap-ansi?sponsor=1"
        }
      },
@@ -6189,18 +6220,55 @@ index b7281a0d..dbc042af 100644
      "node_modules/load-json-file": {
        "version": "4.0.0",
        "resolved": "https://registry.npmjs.org/load-json-file/-/load-json-file-4.0.0.tgz",
-@@ -12082,8 +12875,8 @@
+@@ -11988,6 +12816,23 @@
+         "semver": "bin/semver.js"
+       }
+     },
++    "node_modules/markdown-it": {
++      "version": "14.1.1",
++      "resolved": "https://registry.npmjs.org/markdown-it/-/markdown-it-14.1.1.tgz",
++      "integrity": "sha512-BuU2qnTti9YKgK5N+IeMubp14ZUKUUw7yeJbkjtosvHiP0AZ5c8IAgEMk79D0eC8F23r4Ac/q8cAIFdm2FtyoA==",
++      "license": "MIT",
++      "dependencies": {
++        "argparse": "^2.0.1",
++        "entities": "^4.4.0",
++        "linkify-it": "^5.0.0",
++        "mdurl": "^2.0.0",
++        "punycode.js": "^2.3.1",
++        "uc.micro": "^2.1.0"
++      },
++      "bin": {
++        "markdown-it": "bin/markdown-it.mjs"
++      }
++    },
+     "node_modules/marked": {
+       "version": "15.0.12",
+       "resolved": "https://registry.npmjs.org/marked/-/marked-15.0.12.tgz",
+@@ -12082,8 +12927,8 @@
      },
      "node_modules/matrix-js-sdk": {
        "version": "38.2.0",
 -      "resolved": "https://registry.npmjs.org/matrix-js-sdk/-/matrix-js-sdk-38.2.0.tgz",
 -      "integrity": "sha512-R3jzK8rDGi/3OXOax8jFFyxblCG9KTT5yuXAbvnZCGcpTm8lZ4mHQAn5UydVD8qiyUMNMpaaMd6/k7N+5I/yaQ==",
-+      "resolved": "git+ssh://git@github.com/LaPingvino/matrix-js-sdk.git#db168ac23d95786f23206ef4455baacc25d01b2d",
-+      "integrity": "sha512-C/XYiUm7nP0m1ebx8mkSK888KkN65pUBtVG2wpLXulzWWrlv6rZ89suDuPvZku09pLxbGxu2KgKEVQ2JPl6hRg==",
++      "resolved": "git+ssh://git@github.com/LaPingvino/matrix-js-sdk.git#ebfa975eba8886733ff06af4ac8e57ff7788a983",
++      "integrity": "sha512-TpHjEAGFI0tGkAIuxIYgh4m3u+jIQ9pjxuM6tYEHp6SR5WMZl9Bf3kG19WVuR1Y7lWxRyYZl6VorQlp53JlCyg==",
        "license": "Apache-2.0",
        "dependencies": {
          "@babel/runtime": "^7.12.5",
-@@ -12284,7 +13077,7 @@
+@@ -12128,6 +12973,12 @@
+         "events": "^3.2.0"
+       }
+     },
++    "node_modules/mdurl": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/mdurl/-/mdurl-2.0.0.tgz",
++      "integrity": "sha512-Lf+9+2r+Tdp5wXDXC4PcIBjTDtq4UKjCPMQhKIuzpJNW0b96kVqSwW0bT7FhRSfmAiFYgP+SCRvdrDozfh0U5w==",
++      "license": "MIT"
++    },
+     "node_modules/media-query-parser": {
+       "version": "2.0.2",
+       "resolved": "https://registry.npmjs.org/media-query-parser/-/media-query-parser-2.0.2.tgz",
+@@ -12284,7 +13135,7 @@
        "version": "5.0.0",
        "resolved": "https://registry.npmjs.org/minipass/-/minipass-5.0.0.tgz",
        "integrity": "sha512-3FnjYuehv9k6ovOEbyOswadCDPX1piCfhV8ncmYtHOjuPwylVWsghTLo7rabjC3Rx5xD4HDx8Wm1xnMF7S5qFQ==",
@@ -6209,7 +6277,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=8"
        }
-@@ -12293,7 +13086,7 @@
+@@ -12293,7 +13144,7 @@
        "version": "2.1.2",
        "resolved": "https://registry.npmjs.org/minizlib/-/minizlib-2.1.2.tgz",
        "integrity": "sha512-bAxsR8BVfj60DWXHE3u30oHzfl4G7khkSuPW+qvpd7jFRHm7dLxOjUk1EHACJ/hxLY8phGJ0YhYHZo7jil7Qdg==",
@@ -6218,7 +6286,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "minipass": "^3.0.0",
          "yallist": "^4.0.0"
-@@ -12306,7 +13099,7 @@
+@@ -12306,7 +13157,7 @@
        "version": "3.3.6",
        "resolved": "https://registry.npmjs.org/minipass/-/minipass-3.3.6.tgz",
        "integrity": "sha512-DxiNidxSEK+tHG6zOIklvNOwm3hvCrbUrdtzY74U6HKTJxvIDfOUL5W5P2Ghd3DTkhhKPYGqeNUIh5qcM4YBfw==",
@@ -6227,7 +6295,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "yallist": "^4.0.0"
        },
-@@ -12318,13 +13111,13 @@
+@@ -12318,13 +13169,13 @@
        "version": "4.0.0",
        "resolved": "https://registry.npmjs.org/yallist/-/yallist-4.0.0.tgz",
        "integrity": "sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==",
@@ -6243,7 +6311,7 @@ index b7281a0d..dbc042af 100644
        "bin": {
          "mkdirp": "bin/cmd.js"
        },
-@@ -12379,15 +13172,16 @@
+@@ -12379,15 +13230,16 @@
        "optional": true
      },
      "node_modules/nanoid": {
@@ -6263,7 +6331,7 @@ index b7281a0d..dbc042af 100644
        "bin": {
          "nanoid": "bin/nanoid.cjs"
        },
-@@ -12465,7 +13259,7 @@
+@@ -12465,7 +13317,7 @@
        "version": "5.0.0",
        "resolved": "https://registry.npmjs.org/nopt/-/nopt-5.0.0.tgz",
        "integrity": "sha512-Tbj67rffqceeLpcRXrT7vKAN8CwfPeIBgM7E6iBkmKLV7bEMwpGgYLGv0jACUsECaa/vuxP0IjEont6umdMgtQ==",
@@ -6272,7 +6340,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "abbrev": "1"
        },
-@@ -14554,10 +15348,11 @@
+@@ -14554,10 +15406,11 @@
        }
      },
      "node_modules/object-inspect": {
@@ -6287,7 +6355,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">= 0.4"
        },
-@@ -14595,14 +15390,16 @@
+@@ -14595,14 +15448,16 @@
        }
      },
      "node_modules/object.entries": {
@@ -6309,7 +6377,7 @@ index b7281a0d..dbc042af 100644
        },
        "engines": {
          "node": ">= 0.4"
-@@ -14640,23 +15437,6 @@
+@@ -14640,23 +15495,6 @@
          "node": ">= 0.4"
        }
      },
@@ -6333,7 +6401,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/object.values": {
        "version": "1.2.1",
        "resolved": "https://registry.npmjs.org/object.values/-/object.values-1.2.1.tgz",
-@@ -14675,6 +15455,17 @@
+@@ -14675,6 +15513,17 @@
          "url": "https://github.com/sponsors/ljharb"
        }
      },
@@ -6351,7 +6419,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/oidc-client-ts": {
        "version": "3.2.1",
        "resolved": "https://registry.npmjs.org/oidc-client-ts/-/oidc-client-ts-3.2.1.tgz",
-@@ -15086,9 +15877,10 @@
+@@ -15086,9 +15935,10 @@
        }
      },
      "node_modules/pathe": {
@@ -6365,7 +6433,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/pdfjs-dist": {
        "version": "4.2.67",
-@@ -15227,9 +16019,9 @@
+@@ -15227,9 +16077,9 @@
        }
      },
      "node_modules/postcss": {
@@ -6378,7 +6446,7 @@ index b7281a0d..dbc042af 100644
        "funding": [
          {
            "type": "opencollective",
-@@ -15244,8 +16036,9 @@
+@@ -15244,8 +16094,9 @@
            "url": "https://github.com/sponsors/ai"
          }
        ],
@@ -6389,7 +6457,7 @@ index b7281a0d..dbc042af 100644
          "picocolors": "^1.1.1",
          "source-map-js": "^1.2.1"
        },
-@@ -15291,10 +16084,11 @@
+@@ -15291,10 +16142,11 @@
        }
      },
      "node_modules/prettier": {
@@ -6404,7 +6472,23 @@ index b7281a0d..dbc042af 100644
        "bin": {
          "prettier": "bin-prettier.js"
        },
-@@ -15454,50 +16248,57 @@
+@@ -15375,6 +16227,15 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/punycode.js": {
++      "version": "2.3.1",
++      "resolved": "https://registry.npmjs.org/punycode.js/-/punycode.js-2.3.1.tgz",
++      "integrity": "sha512-uxFIHU0YlHYhDQtV4R9J6a52SLx28BCjT+4ieh7IGbgwVJWO+km431c4yRlREUAsAmt/uMjQUyQHNEPf0M39CA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=6"
++      }
++    },
+     "node_modules/queue-microtask": {
+       "version": "1.2.3",
+       "resolved": "https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz",
+@@ -15454,50 +16315,57 @@
        }
      },
      "node_modules/react-aria": {
@@ -6504,7 +6588,7 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/react-async-script": {
-@@ -15598,19 +16399,21 @@
+@@ -15598,19 +16466,21 @@
        "integrity": "sha512-kzmNjIgU32mO4mmH5+iUyrqlpFQhF8K2k7eZ4fdLSOPFrD1XgEuSBv9LDEgxRXTMBqMd8ppT0x6TIzqE5pdGdw=="
      },
      "node_modules/react-range": {
@@ -6534,7 +6618,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=0.10.0"
        }
-@@ -15647,6 +16450,23 @@
+@@ -15647,6 +16517,23 @@
          "react-dom": ">=16.8"
        }
      },
@@ -6558,7 +6642,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/read-package-up": {
        "version": "12.0.0",
        "resolved": "https://registry.npmjs.org/read-package-up/-/read-package-up-12.0.0.tgz",
-@@ -15842,18 +16662,6 @@
+@@ -15842,18 +16729,6 @@
          "url": "https://github.com/sponsors/ljharb"
        }
      },
@@ -6577,7 +6661,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/regexpu-core": {
        "version": "6.2.0",
        "resolved": "https://registry.npmjs.org/regexpu-core/-/regexpu-core-6.2.0.tgz",
-@@ -16039,11 +16847,12 @@
+@@ -16039,11 +16914,12 @@
        }
      },
      "node_modules/rollup": {
@@ -6594,7 +6678,7 @@ index b7281a0d..dbc042af 100644
        },
        "bin": {
          "rollup": "dist/bin/rollup"
-@@ -16053,25 +16862,31 @@
+@@ -16053,25 +16929,31 @@
          "npm": ">=8.0.0"
        },
        "optionalDependencies": {
@@ -6645,7 +6729,7 @@ index b7281a0d..dbc042af 100644
          "fsevents": "~2.3.2"
        }
      },
-@@ -16112,7 +16927,7 @@
+@@ -16112,7 +16994,7 @@
        "version": "7.8.2",
        "resolved": "https://registry.npmjs.org/rxjs/-/rxjs-7.8.2.tgz",
        "integrity": "sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==",
@@ -6654,7 +6738,7 @@ index b7281a0d..dbc042af 100644
        "license": "Apache-2.0",
        "dependencies": {
          "tslib": "^2.1.0"
-@@ -16198,9 +17013,10 @@
+@@ -16198,9 +17080,10 @@
        "license": "MIT"
      },
      "node_modules/sanitize-html": {
@@ -6668,7 +6752,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "deepmerge": "^4.2.2",
          "escape-string-regexp": "^4.0.0",
-@@ -16227,6 +17043,12 @@
+@@ -16227,6 +17110,12 @@
          "compute-scroll-into-view": "^3.0.2"
        }
      },
@@ -6681,7 +6765,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/sdp-transform": {
        "version": "2.15.0",
        "resolved": "https://registry.npmjs.org/sdp-transform/-/sdp-transform-2.15.0.tgz",
-@@ -16681,6 +17503,13 @@
+@@ -16681,6 +17570,13 @@
          "url": "https://github.com/sponsors/ljharb"
        }
      },
@@ -6695,7 +6779,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/signal-exit": {
        "version": "3.0.7",
        "resolved": "https://registry.npmjs.org/signal-exit/-/signal-exit-3.0.7.tgz",
-@@ -16842,6 +17671,7 @@
+@@ -16842,6 +17738,7 @@
        "resolved": "https://registry.npmjs.org/slash/-/slash-3.0.0.tgz",
        "integrity": "sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==",
        "dev": true,
@@ -6703,7 +6787,7 @@ index b7281a0d..dbc042af 100644
        "engines": {
          "node": ">=8"
        }
-@@ -17079,6 +17909,34 @@
+@@ -17079,6 +17976,34 @@
          "through2": "~2.0.0"
        }
      },
@@ -6738,7 +6822,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/stream-combiner2": {
        "version": "1.1.1",
        "resolved": "https://registry.npmjs.org/stream-combiner2/-/stream-combiner2-1.1.1.tgz",
-@@ -17194,6 +18052,17 @@
+@@ -17194,6 +18119,17 @@
          "url": "https://github.com/sponsors/ljharb"
        }
      },
@@ -6756,7 +6840,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/string.prototype.trim": {
        "version": "1.2.10",
        "resolved": "https://registry.npmjs.org/string.prototype.trim/-/string.prototype.trim-1.2.10.tgz",
-@@ -17356,6 +18225,7 @@
+@@ -17356,6 +18292,7 @@
        "version": "7.2.0",
        "resolved": "https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz",
        "integrity": "sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==",
@@ -6764,7 +6848,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "has-flag": "^4.0.0"
        },
-@@ -17414,7 +18284,7 @@
+@@ -17414,7 +18351,7 @@
        "version": "6.2.1",
        "resolved": "https://registry.npmjs.org/tar/-/tar-6.2.1.tgz",
        "integrity": "sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==",
@@ -6773,7 +6857,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "chownr": "^2.0.0",
          "fs-minipass": "^2.0.0",
-@@ -17431,7 +18301,7 @@
+@@ -17431,7 +18368,7 @@
        "version": "4.0.0",
        "resolved": "https://registry.npmjs.org/yallist/-/yallist-4.0.0.tgz",
        "integrity": "sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A==",
@@ -6782,7 +6866,7 @@ index b7281a0d..dbc042af 100644
      },
      "node_modules/temp-dir": {
        "version": "2.0.0",
-@@ -17587,6 +18457,13 @@
+@@ -17587,6 +18524,13 @@
        "integrity": "sha512-AD5ih2NlSssTCwsMznbvwMZpJ1cbhkGd2uueNxzv2jDlEeZdU04JQfRnggJQ8DrcVBGjAsCKwFBbDlVNtEMlzw==",
        "license": "MIT"
      },
@@ -6796,7 +6880,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/tinyexec": {
        "version": "1.0.4",
        "resolved": "https://registry.npmjs.org/tinyexec/-/tinyexec-1.0.4.tgz",
-@@ -17614,6 +18491,16 @@
+@@ -17614,6 +18558,16 @@
          "url": "https://github.com/sponsors/SuperchupuDev"
        }
      },
@@ -6813,7 +6897,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/tmp": {
        "version": "0.0.33",
        "resolved": "https://registry.npmjs.org/tmp/-/tmp-0.0.33.tgz",
-@@ -17815,10 +18702,19 @@
+@@ -17815,10 +18769,19 @@
          "url": "https://github.com/sponsors/ljharb"
        }
      },
@@ -6836,7 +6920,7 @@ index b7281a0d..dbc042af 100644
        "dev": true,
        "license": "Apache-2.0",
        "bin": {
-@@ -17826,7 +18722,7 @@
+@@ -17826,7 +18789,7 @@
          "tsserver": "bin/tsserver"
        },
        "engines": {
@@ -6845,7 +6929,20 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/ua-parser-js": {
-@@ -17894,6 +18790,12 @@
+@@ -17847,6 +18810,12 @@
+         "node": "*"
+       }
+     },
++    "node_modules/uc.micro": {
++      "version": "2.1.0",
++      "resolved": "https://registry.npmjs.org/uc.micro/-/uc.micro-2.1.0.tgz",
++      "integrity": "sha512-ARDJmphmdvUk6Glw7y9DQ2bFkKBHwQHLi2lsaH6PPmz/Ka9sFOBsBluozhDltWmnv9u/cF6Rt87znRTPV+yp/A==",
++      "license": "MIT"
++    },
+     "node_modules/ufo": {
+       "version": "1.5.4",
+       "resolved": "https://registry.npmjs.org/ufo/-/ufo-1.5.4.tgz",
+@@ -17894,6 +18863,12 @@
          "node": ">=20.18.1"
        }
      },
@@ -6858,7 +6955,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/unhomoglyph": {
        "version": "1.0.6",
        "resolved": "https://registry.npmjs.org/unhomoglyph/-/unhomoglyph-1.0.6.tgz",
-@@ -18035,6 +18937,7 @@
+@@ -18035,6 +19010,7 @@
        "resolved": "https://registry.npmjs.org/uri-js/-/uri-js-4.4.1.tgz",
        "integrity": "sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==",
        "dev": true,
@@ -6866,7 +6963,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "punycode": "^2.1.0"
        }
-@@ -18049,6 +18952,15 @@
+@@ -18049,6 +19025,15 @@
          "node": "^12.20.0 || ^14.13.1 || >=16.0.0"
        }
      },
@@ -6882,7 +6979,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/util-deprecate": {
        "version": "1.0.2",
        "resolved": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz",
-@@ -18080,9 +18992,9 @@
+@@ -18080,9 +19065,9 @@
        }
      },
      "node_modules/vite": {
@@ -6895,7 +6992,7 @@ index b7281a0d..dbc042af 100644
        "license": "MIT",
        "dependencies": {
          "esbuild": "^0.21.3",
-@@ -18195,10 +19107,11 @@
+@@ -18195,10 +19180,11 @@
        }
      },
      "node_modules/vite-plugin-static-copy": {
@@ -6910,7 +7007,7 @@ index b7281a0d..dbc042af 100644
        "dependencies": {
          "chokidar": "^3.5.3",
          "fast-glob": "^3.2.11",
-@@ -18213,14 +19126,16 @@
+@@ -18213,14 +19199,16 @@
        }
      },
      "node_modules/vite-plugin-top-level-await": {
@@ -6932,7 +7029,7 @@ index b7281a0d..dbc042af 100644
        },
        "peerDependencies": {
          "vite": ">=2.8"
-@@ -18303,333 +19218,929 @@
+@@ -18303,333 +19291,929 @@
          "darwin"
        ],
        "engines": {
@@ -7981,7 +8078,7 @@ index b7281a0d..dbc042af 100644
        }
      },
      "node_modules/void-elements": {
-@@ -18662,6 +20173,29 @@
+@@ -18662,6 +20246,29 @@
        "resolved": "https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-3.0.1.tgz",
        "integrity": "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="
      },
@@ -8011,7 +8108,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/whatwg-url": {
        "version": "5.0.0",
        "resolved": "https://registry.npmjs.org/whatwg-url/-/whatwg-url-5.0.0.tgz",
-@@ -18751,15 +20285,17 @@
+@@ -18751,15 +20358,17 @@
        }
      },
      "node_modules/which-typed-array": {
@@ -8034,7 +8131,7 @@ index b7281a0d..dbc042af 100644
          "gopd": "^1.2.0",
          "has-tostringtag": "^1.0.2"
        },
-@@ -18770,6 +20306,23 @@
+@@ -18770,6 +20379,23 @@
          "url": "https://github.com/sponsors/ljharb"
        }
      },
@@ -8058,7 +8155,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/wide-align": {
        "version": "1.1.5",
        "resolved": "https://registry.npmjs.org/wide-align/-/wide-align-1.1.5.tgz",
-@@ -19072,6 +20625,28 @@
+@@ -19072,6 +20698,28 @@
        "integrity": "sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==",
        "devOptional": true
      },
@@ -8087,7 +8184,7 @@ index b7281a0d..dbc042af 100644
      "node_modules/xtend": {
        "version": "4.0.2",
        "resolved": "https://registry.npmjs.org/xtend/-/xtend-4.0.2.tgz",
-@@ -19151,6 +20726,15 @@
+@@ -19151,6 +20799,15 @@
        "funding": {
          "url": "https://github.com/sponsors/sindresorhus"
        }
@@ -8104,7 +8201,7 @@ index b7281a0d..dbc042af 100644
    }
  }
 diff --git a/package.json b/package.json
-index 8e7b37b4..7c7dfa5c 100644
+index 8e7b37b4..69f6f4dd 100644
 --- a/package.json
 +++ b/package.json
 @@ -16,6 +16,8 @@
@@ -8151,7 +8248,7 @@ index 8e7b37b4..7c7dfa5c 100644
      "domhandler": "5.0.3",
      "emojibase": "15.3.1",
      "emojibase-data": "15.3.2",
-@@ -89,34 +91,36 @@
+@@ -89,34 +91,37 @@
      "html-dom-parser": "4.0.0",
      "html-react-parser": "4.2.0",
      "i18next": "23.12.2",
@@ -8166,7 +8263,8 @@ index 8e7b37b4..7c7dfa5c 100644
      "linkifyjs": "4.3.2",
 -    "matrix-js-sdk": "38.2.0",
 +    "livekit-client": "2.18.0",
-+    "matrix-js-sdk": "git+https://github.com/LaPingvino/matrix-js-sdk.git#db168ac23d95786f23206ef4455baacc25d01b2d",
++    "markdown-it": "14.1.1",
++    "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#ebfa975eba8886733ff06af4ac8e57ff7788a983",
      "matrix-widget-api": "1.13.0",
      "millify": "6.1.0",
      "pdfjs-dist": "4.2.67",
@@ -8195,7 +8293,7 @@ index 8e7b37b4..7c7dfa5c 100644
    },
    "devDependencies": {
      "@element-hq/element-call-embedded": "0.16.3",
-@@ -125,36 +129,38 @@
+@@ -125,36 +130,39 @@
      "@rollup/plugin-wasm": "6.1.1",
      "@semantic-release/exec": "7.1.0",
      "@semantic-release/git": "10.0.1",
@@ -8207,6 +8305,7 @@ index 8e7b37b4..7c7dfa5c 100644
 -    "@types/prismjs": "1.26.0",
 -    "@types/react": "18.2.39",
 -    "@types/react-dom": "18.2.17",
++    "@types/markdown-it": "14.1.2",
 +    "@types/node": "18.19.130",
 +    "@types/prismjs": "1.26.6",
 +    "@types/react": "18.3.28",
@@ -9150,6 +9249,40 @@ index 00000000..d107351a
 +
 +  return null;
 +}
+diff --git a/src/app/components/ManualVerification.tsx b/src/app/components/ManualVerification.tsx
+index f7cde92b..33e490e9 100644
+--- a/src/app/components/ManualVerification.tsx
++++ b/src/app/components/ManualVerification.tsx
+@@ -1,4 +1,4 @@
+-import React, { MouseEventHandler, ReactNode, useCallback, useState } from 'react';
++import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState } from 'react';
+ import {
+   Box,
+   Text,
+@@ -20,6 +20,7 @@ import { SecretStorageRecoveryKey, SecretStorageRecoveryPassphrase } from './Sec
+ import { useMatrixClient } from '../hooks/useMatrixClient';
+ import { AsyncStatus, useAsyncCallback } from '../hooks/useAsyncCallback';
+ import { storePrivateKey } from '../../client/secretStorageKeys';
++import { logFailureEvent } from '../../client/diagnostics';
+ 
+ export enum ManualVerificationMethod {
+   RecoveryPassphrase = 'passphrase',
+@@ -122,6 +123,15 @@ export function ManualVerificationTile({
+ }: ManualVerificationTileProps) {
+   const mx = useMatrixClient();
+ 
++  // Diagnostics: surface that the recovery-key UI was shown, so the
++  // failure log can attribute later events to a specific prompt.
++  useEffect(() => {
++    logFailureEvent('recovery_key_prompt_shown', {
++      keyId: secretStorageKeyId,
++      hasPassphrase: !!secretStorageKeyContent.passphrase,
++    });
++  }, [secretStorageKeyId, secretStorageKeyContent.passphrase]);
++
+   const hasPassphrase = !!secretStorageKeyContent.passphrase;
+   const [method, setMethod] = useState(
+     hasPassphrase
 diff --git a/src/app/components/Modal500.tsx b/src/app/components/Modal500.tsx
 index d421b625..d8a3436f 100644
 --- a/src/app/components/Modal500.tsx
@@ -22196,18 +22329,22 @@ index 00000000..02b57ea5
 +  );
 +}
 diff --git a/src/app/features/room/Room.tsx b/src/app/features/room/Room.tsx
-index 5e5d7d78..eca19b30 100644
+index 5e5d7d78..5cfc8b27 100644
 --- a/src/app/features/room/Room.tsx
 +++ b/src/app/features/room/Room.tsx
-@@ -1,5 +1,5 @@
+@@ -1,35 +1,188 @@
 -import React, { useCallback } from 'react';
 -import { Box, Line } from 'folds';
 +import React, { useCallback, useEffect, useRef, useState } from 'react';
 +import { Box } from 'folds';
  import { useParams } from 'react-router-dom';
  import { isKeyHotkey } from 'is-hotkey';
- import { useAtomValue } from 'jotai';
-@@ -9,27 +9,171 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
+-import { useAtomValue } from 'jotai';
++import { useAtomValue, useSetAtom } from 'jotai';
++import { threadsDrawerRoomIdAtom } from '../../hooks/useBackgroundBackfill';
+ import { RoomView } from './RoomView';
+ import { MembersDrawer } from './MembersDrawer';
+ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
  import { useSetting } from '../../state/hooks/settings';
  import { settingsAtom } from '../../state/settings';
  import { PowerLevelsContextProvider, usePowerLevels } from '../../hooks/usePowerLevels';
@@ -22280,6 +22417,14 @@ index 5e5d7d78..eca19b30 100644
 +    setIsWidgetsDrawer(false);
 +    setRightPanelFullWidth(false);
 +  }, [room.roomId]);
++
++  // Publish "threads drawer is open for room X" so the background backfill
++  // scheduler can deepen its target depth for that specific room.
++  const setThreadsDrawerRoomId = useSetAtom(threadsDrawerRoomIdAtom);
++  useEffect(() => {
++    setThreadsDrawerRoomId(isThreadsDrawer ? room.roomId : null);
++    return () => setThreadsDrawerRoomId(null);
++  }, [isThreadsDrawer, room.roomId, setThreadsDrawerRoomId]);
 +
 +  // When something (e.g. a timeline thread indicator) requests a thread to be opened,
 +  // ensure the threads drawer is visible. ThreadsDrawer itself handles resetting the atom.
@@ -22385,7 +22530,7 @@ index 5e5d7d78..eca19b30 100644
  
    useKeyDown(
      window,
-@@ -43,40 +187,134 @@ export function Room() {
+@@ -43,40 +196,134 @@ export function Room() {
      )
    );
  
@@ -22979,7 +23124,7 @@ index f88ccf93..997f677d 100644
                </IconButton>
              </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 39d7e50a..363a755b 100644
+index 39d7e50a..de709f0e 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -29,7 +29,7 @@ import { ReactEditor } from 'slate-react';
@@ -23245,14 +23390,73 @@ index 39d7e50a..363a755b 100644
    const readUptoEventIdRef = useRef<string>();
    if (unreadInfo) {
      readUptoEventIdRef.current = unreadInfo.readUptoEventId;
-@@ -536,11 +651,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -536,11 +651,76 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    const parseMemberEvent = useMemberEventParser();
  
    const [timeline, setTimeline] = useState<Timeline>(() =>
 -    eventId ? getEmptyTimeline() : getInitialTimeline(room)
 +    eventId ? getEmptyTimeline() : getInitialTimeline(room, threadId)
    );
++
    const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
++
++  // Silent-backfill anchor (replaces the head-timeline heuristic from
++  // patch-33). useBackgroundBackfill paginates the live timeline backwards
++  // with `quiet: true`, so events get prepended without firing
++  // RoomEvent.Timeline. Once we have multiple linked timelines (user did
++  // backwards pagination), the prepend can land in any of them — anchoring
++  // on `linkedTimelines[0]` misses growth in the live timeline at the tail
++  // of the chain. Anchor instead on the *event id* at the start of the
++  // visible range and reproject indices when its absolute position shifts.
++  const anchorRef = useRef<{ eventId: string; absIndex: number } | null>(null);
++  // Locate `anchorRef.current.eventId` in the current linked timelines and
++  // return its absolute index, or undefined if it's no longer there. Cheap
++  // linear scan: linkedTimelines is small (≤ a handful) and each timeline
++  // typically holds a few hundred events.
++  const findAbsIndex = (eventId: string): number | undefined => {
++    let base = 0;
++    for (const tm of timeline.linkedTimelines) {
++      const evts = tm.getEvents();
++      const idx = evts.findIndex((e) => e.getId() === eventId);
++      if (idx !== -1) return base + idx;
++      base += evts.length;
++    }
++    return undefined;
++  };
++  if (anchorRef.current) {
++    const currentIdx = findAbsIndex(anchorRef.current.eventId);
++    if (typeof currentIdx === 'number' && currentIdx !== anchorRef.current.absIndex) {
++      const delta = currentIdx - anchorRef.current.absIndex;
++      anchorRef.current = { eventId: anchorRef.current.eventId, absIndex: currentIdx };
++      setTimeline((ct) => ({
++        ...ct,
++        range: {
++          start: ct.range.start + delta,
++          end: ct.range.end + delta,
++        },
++      }));
++    }
++  }
++  // Capture the anchor for the next render, *after* any shift above. We
++  // pick the event at the start of the visible range (or just inside it
++  // when range.start is at the very front and there's nothing before).
++  {
++    const anchorIdx = Math.min(timeline.range.start, Math.max(0, eventsLength - 1));
++    const [tm, base] = getTimelineAndBaseIndex(timeline.linkedTimelines, anchorIdx);
++    const ev = tm ? getTimelineEvent(tm, anchorIdx - base) : undefined;
++    const id = ev?.getId();
++    if (id) {
++      if (
++        !anchorRef.current ||
++        anchorRef.current.eventId !== id ||
++        anchorRef.current.absIndex !== anchorIdx
++      ) {
++        anchorRef.current = { eventId: id, absIndex: anchorIdx };
++      }
++    } else {
++      anchorRef.current = null;
++    }
++  }
 +  // Thread mode: the "live" end is always the last timeline in our synthetic linked list.
 +  // This keeps liveTimelineLinked=true without depending on SDK Thread objects.
 +  const currentLiveTimeline = threadId
@@ -23265,7 +23469,7 @@ index 39d7e50a..363a755b 100644
    const canPaginateBack =
      typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
    const rangeAtStart = timeline.range.start === 0;
-@@ -552,7 +673,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -552,7 +732,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      mx,
      timeline,
      setTimeline,
@@ -23275,7 +23479,7 @@ index 39d7e50a..363a755b 100644
    );
  
    const getScrollElement = useCallback(() => scrollRef.current, []);
-@@ -598,10 +720,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -598,10 +779,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      ),
      useCallback(() => {
        if (!alive()) return;
@@ -23288,7 +23492,7 @@ index 39d7e50a..363a755b 100644
    );
  
    useLiveEventArrive(
-@@ -612,11 +734,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -612,11 +793,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
          // keep paginating timeline and conditionally mark as read
          // otherwise we update timeline without paginating
          // so timeline can be updated with evt like: edits, reactions etc
@@ -23310,7 +23514,7 @@ index 39d7e50a..363a755b 100644
              requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
            }
  
-@@ -641,8 +770,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -641,8 +829,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            setUnreadInfo(getRoomUnreadInfo(room));
          }
        },
@@ -23322,7 +23526,7 @@ index 39d7e50a..363a755b 100644
    );
  
    const handleOpenEvent = useCallback(
-@@ -678,12 +808,33 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -678,12 +867,33 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
    useLiveTimelineRefresh(
      room,
      useCallback(() => {
@@ -23360,7 +23564,7 @@ index 39d7e50a..363a755b 100644
    // Stay at bottom when room editor resize
    useResizeObserver(
      useMemo(() => {
-@@ -707,6 +858,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -707,6 +917,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      useCallback(() => roomInputRef.current, [roomInputRef])
    );
  
@@ -23383,7 +23587,7 @@ index 39d7e50a..363a755b 100644
    const tryAutoMarkAsRead = useCallback(() => {
      const readUptoEventId = readUptoEventIdRef.current;
      if (!readUptoEventId) {
-@@ -887,7 +1054,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -887,7 +1113,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
      if (eventId) {
        navigateRoom(room.roomId, undefined, { replace: true });
      }
@@ -23392,7 +23596,7 @@ index 39d7e50a..363a755b 100644
      scrollToBottomRef.current.count += 1;
      scrollToBottomRef.current.smooth = false;
    };
-@@ -1521,13 +1688,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -1521,13 +1747,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            </Event>
          );
        },
@@ -23410,7 +23614,7 @@ index 39d7e50a..363a755b 100644
        const timeJSX = (
          <Time
            ts={mEvent.getTs()}
-@@ -1536,7 +1703,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -1536,7 +1762,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            dateFormatString={dateFormatString}
          />
        );
@@ -23418,7 +23622,7 @@ index 39d7e50a..363a755b 100644
        return (
          <Event
            key={mEvent.getId()}
-@@ -1546,28 +1712,86 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -1546,28 +1771,86 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
            mEvent={mEvent}
            highlight={highlighted}
            messageSpacing={messageSpacing}
@@ -23511,7 +23715,7 @@ index 39d7e50a..363a755b 100644
      (mEventId, mEvent, item) => {
        if (!showHiddenEvents) return null;
        if (Object.keys(mEvent.getContent()).length === 0) return null;
-@@ -1648,12 +1872,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -1648,12 +1931,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
        dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
      }
  
@@ -23533,7 +23737,7 @@ index 39d7e50a..363a755b 100644
        prevEvent.getType() === mEvent.getType() &&
        minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
  
-@@ -1717,30 +1950,65 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+@@ -1717,30 +2009,65 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
  
    return (
      <Box grow="Yes" style={{ position: 'relative' }}>
@@ -31249,6 +31453,210 @@ index 3852d3b9..026c847f 100644
      terminateSearch();
      setResult(undefined);
    }, [terminateSearch]);
+diff --git a/src/app/hooks/useBackgroundBackfill.ts b/src/app/hooks/useBackgroundBackfill.ts
+new file mode 100644
+index 00000000..a754c674
+--- /dev/null
++++ b/src/app/hooks/useBackgroundBackfill.ts
+@@ -0,0 +1,198 @@
++import { useEffect, useRef } from 'react';
++import { atom, useAtomValue } from 'jotai';
++import {
++  ClientEvent,
++  type MatrixClient,
++  NotificationCountType,
++  Room,
++  RoomEvent,
++} from 'matrix-js-sdk';
++import { useMatrixClient } from './useMatrixClient';
++import { useSelectedRoom } from './router/useSelectedRoom';
++
++// Per-room target depth measured against `room.getLiveTimeline().getEvents().length`.
++// Background rooms aim for a small "feels populated" cushion. The currently
++// selected room gets a much deeper prefetch so opening it lands on a usable
++// scrollback. With the threads drawer open, we go deeper still — the user is
++// looking for thread roots that may sit far back, and thread aggregation only
++// works once the root events are in the timeline.
++const TARGET_BACKGROUND = 50;
++const TARGET_SELECTED = 200;
++const TARGET_THREADS_OPEN = 500;
++
++// roomId of the room whose threads drawer is currently open (or null).
++// Room.tsx writes this; the scheduler reads it to deepen that room's target.
++export const threadsDrawerRoomIdAtom = atom<string | null>(null);
++
++// How many rooms can be backfilling at once. Concurrent fetches are bounded so
++// we don't blast the homeserver, and so the scheduler can react quickly when
++// priority changes (currently-running rooms get aborted to free a slot).
++const MAX_CONCURRENT = 3;
++
++// How often to recompute priorities even if no event triggered a tick. Defends
++// against missed signals — a room becoming "stale" (not currently viewed) and
++// then becoming hot again should resume backfill within this window.
++const TICK_INTERVAL_MS = 30_000;
++
++type SchedulerContext = {
++  currentRoomId: string | undefined;
++  threadsRoomId: string | null;
++};
++
++type Score = { room: Room; score: number; target: number };
++
++function targetFor(room: Room, ctx: SchedulerContext): number {
++  if (room.roomId === ctx.threadsRoomId) return TARGET_THREADS_OPEN;
++  if (room.roomId === ctx.currentRoomId) return TARGET_SELECTED;
++  return TARGET_BACKGROUND;
++}
++
++function scoreRoom(room: Room, ctx: SchedulerContext, target: number): number {
++  const eventCount = room.getLiveTimeline().getEvents().length;
++  if (eventCount >= target) return -1;
++
++  let score = 0;
++  if (room.roomId === ctx.currentRoomId) score += 100;
++  // Threads drawer open implies the user is actively hunting thread roots
++  // in this room — push it past everything else, including a different
++  // currently-selected room (shouldn't happen, but safe).
++  if (room.roomId === ctx.threadsRoomId) score += 200;
++
++  const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
++  const total = room.getUnreadNotificationCount(NotificationCountType.Total);
++  if (highlight > 0) score += 30;
++  else if (total > 0) score += 20;
++
++  // Recent activity → user more likely to navigate here.
++  const lastActivity = room.getLastActiveTimestamp();
++  if (lastActivity) {
++    const hoursSince = (Date.now() - lastActivity) / 3_600_000;
++    if (hoursSince < 1) score += 10;
++    else if (hoursSince < 24) score += 5;
++  }
++
++  return score;
++}
++
++class BackfillScheduler {
++  private inFlight = new Map<string, AbortController>();
++
++  constructor(private mx: MatrixClient) {}
++
++  tick(ctx: SchedulerContext): void {
++    const scored: Score[] = this.mx
++      .getRooms()
++      .map((room) => {
++        const target = targetFor(room, ctx);
++        return { room, target, score: scoreRoom(room, ctx, target) };
++      })
++      .filter((s) => s.score > 0);
++
++    scored.sort((a, b) => b.score - a.score);
++    const winners = scored.slice(0, MAX_CONCURRENT);
++    const winnerIds = new Set(winners.map((s) => s.room.roomId));
++
++    // Abort any in-flight backfill that fell out of the top-N. This lets the
++    // newly hot rooms grab the slot immediately rather than queueing.
++    for (const [roomId, controller] of this.inFlight) {
++      if (!winnerIds.has(roomId)) {
++        controller.abort();
++        this.inFlight.delete(roomId);
++      }
++    }
++
++    for (const { room, target } of winners) {
++      if (this.inFlight.has(room.roomId)) continue;
++      const controller = new AbortController();
++      this.inFlight.set(room.roomId, controller);
++      const sdkRoom = room as unknown as {
++        backgroundBackfill?: (opts: {
++          targetDepth: number;
++          abortSignal?: AbortSignal;
++          chunkSize?: number;
++        }) => Promise<void>;
++      };
++      const promise = sdkRoom.backgroundBackfill?.({
++        targetDepth: target,
++        abortSignal: controller.signal,
++        chunkSize: 8,
++      });
++      if (!promise) {
++        // SDK predates the primitive (e.g. running against upstream
++        // matrix-js-sdk without our fork). Backfill simply doesn't happen,
++        // which is the same behaviour we had before — no regression.
++        this.inFlight.delete(room.roomId);
++        continue;
++      }
++      promise
++        .catch((err) => {
++          // Aborts are expected; anything else is worth logging.
++          if (controller.signal.aborted) return;
++          // eslint-disable-next-line no-console
++          console.warn(`[backfill] ${room.roomId} backfill failed:`, err);
++        })
++        .finally(() => {
++          if (this.inFlight.get(room.roomId) === controller) {
++            this.inFlight.delete(room.roomId);
++          }
++        });
++    }
++  }
++
++  stop(): void {
++    for (const controller of this.inFlight.values()) controller.abort();
++    this.inFlight.clear();
++  }
++}
++
++/**
++ * Drive a {@link BackfillScheduler} that incrementally hydrates each room's
++ * timeline in the background, prioritised by user-facing signals (current
++ * room, threads drawer state, unread/highlight counts, recent activity).
++ *
++ * Runs once at the top of the client UI. The scheduler picks a few rooms per
++ * tick, calls `room.backgroundBackfill` on them, and aborts any that drop
++ * out of priority. Aim is that by the time the user navigates somewhere, the
++ * SDK is already returning a populated timeline, so consumers like
++ * RoomTimeline and ThreadsDrawer don't have to compensate for an empty cache.
++ */
++export const useBackgroundBackfill = (): void => {
++  const mx = useMatrixClient();
++  const selectedRoomId = useSelectedRoom();
++  const threadsRoomId = useAtomValue(threadsDrawerRoomIdAtom);
++
++  const schedulerRef = useRef<BackfillScheduler | undefined>(undefined);
++  const ctxRef = useRef<SchedulerContext>({
++    currentRoomId: selectedRoomId,
++    threadsRoomId,
++  });
++  ctxRef.current = { currentRoomId: selectedRoomId, threadsRoomId };
++
++  useEffect(() => {
++    const scheduler = new BackfillScheduler(mx);
++    schedulerRef.current = scheduler;
++
++    const tick = () => scheduler.tick(ctxRef.current);
++
++    tick();
++    const onSync = () => tick();
++    const onTimeline = () => tick();
++    mx.on(ClientEvent.Sync, onSync);
++    mx.on(RoomEvent.Timeline, onTimeline);
++    const intervalId = window.setInterval(tick, TICK_INTERVAL_MS);
++
++    return () => {
++      mx.off(ClientEvent.Sync, onSync);
++      mx.off(RoomEvent.Timeline, onTimeline);
++      window.clearInterval(intervalId);
++      scheduler.stop();
++      schedulerRef.current = undefined;
++    };
++  }, [mx]);
++
++  // Selection or threads-drawer changes don't need to tear down the scheduler
++  // — just nudge it so the new priorities are applied immediately.
++  useEffect(() => {
++    schedulerRef.current?.tick(ctxRef.current);
++  }, [selectedRoomId, threadsRoomId]);
++};
 diff --git a/src/app/hooks/useCallMemberships.ts b/src/app/hooks/useCallMemberships.ts
 new file mode 100644
 index 00000000..0eab2a83
@@ -33941,7 +34349,7 @@ index 00000000..364c9493
 +  );
 +}
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc..ba87e506 100644
+index ce952bfc..dfe2f903 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -33967,17 +34375,19 @@ index ce952bfc..ba87e506 100644
  import {
    getMemberDisplayName,
    getNotificationType,
-@@ -23,18 +23,140 @@ import {
+@@ -23,18 +23,150 @@ import {
  } from '../../utils/room';
  import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
  import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
 +import { playCurrentRoomSound, playReactionSound, playTypingSound } from '../../utils/sounds';
 +import { announce } from '../../utils/announce';
  import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
++import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 +import { SyncState } from 'matrix-js-sdk';
 +import { repairIDBAndReload, backupSessionToCache, checkpointCryptoStores } from '../../../client/initMatrix';
++import { logFailureEvent, dumpFailureLog } from '../../../client/diagnostics';
 +import { MemoryWatchdog } from './MemoryWatchdog';
 +
 +/**
@@ -34030,10 +34440,12 @@ index ce952bfc..ba87e506 100644
 +        req.onerror = () => {
 +          // IDB is broken — auto-repair.
 +          indexedDB.deleteDatabase(probeDb);
++          logFailureEvent('idb_probe_failed', { trigger: 'open_onerror' });
 +          repairIDBAndReload();
 +        };
-+      } catch {
++      } catch (err) {
 +        // indexedDB.open() threw — critically broken.
++        logFailureEvent('idb_probe_failed', { trigger: 'open_threw', message: String(err) });
 +        repairIDBAndReload();
 +      }
 +    };
@@ -34058,6 +34470,12 @@ index ce952bfc..ba87e506 100644
 +
 +  useEffect(() => {
 +    const CHECKPOINT_INTERVAL = 30 * 60 * 1000; // 30 minutes
++
++    // Surface the failure log on startup so anyone investigating a
++    // recovery-key prompt can see the trail of events that led there
++    // without having to know about the Cache API entry.
++    logFailureEvent('startup');
++    dumpFailureLog();
 +
 +    const doCheckpoint = () => {
 +      checkpointCryptoStores().catch((e) => {
@@ -34114,7 +34532,7 @@ index ce952bfc..ba87e506 100644
  
    return null;
  }
-@@ -42,11 +164,13 @@ function SystemEmojiFeature() {
+@@ -42,11 +174,13 @@ function SystemEmojiFeature() {
  function PageZoomFeature() {
    const [pageZoom] = useSetting(settingsAtom, 'pageZoom');
  
@@ -34133,7 +34551,7 @@ index ce952bfc..ba87e506 100644
  
    return null;
  }
-@@ -136,6 +260,8 @@ function MessageNotifications() {
+@@ -136,6 +270,8 @@ function MessageNotifications() {
    const useAuthentication = useMediaAuthentication();
    const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
    const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
@@ -34142,7 +34560,7 @@ index ce952bfc..ba87e506 100644
  
    const navigate = useNavigate();
    const notificationSelected = useInboxNotificationsSelected();
-@@ -146,6 +272,8 @@ function MessageNotifications() {
+@@ -146,6 +282,8 @@ function MessageNotifications() {
        roomName,
        roomAvatar,
        username,
@@ -34151,7 +34569,7 @@ index ce952bfc..ba87e506 100644
      }: {
        roomName: string;
        roomAvatar?: string;
-@@ -161,7 +289,10 @@ function MessageNotifications() {
+@@ -161,7 +299,10 @@ function MessageNotifications() {
        });
  
        noti.onclick = () => {
@@ -34163,7 +34581,7 @@ index ce952bfc..ba87e506 100644
          noti.close();
          notifRef.current = undefined;
        };
-@@ -200,7 +331,7 @@ function MessageNotifications() {
+@@ -200,7 +341,7 @@ function MessageNotifications() {
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
        if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
@@ -34172,7 +34590,7 @@ index ce952bfc..ba87e506 100644
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
  
-@@ -231,8 +362,63 @@ function MessageNotifications() {
+@@ -231,8 +372,63 @@ function MessageNotifications() {
        }
      };
      mx.on(RoomEvent.Timeline, handleTimelineEvent);
@@ -34236,7 +34654,7 @@ index ce952bfc..ba87e506 100644
      };
    }, [
      mx,
-@@ -243,6 +429,7 @@ function MessageNotifications() {
+@@ -243,6 +439,7 @@ function MessageNotifications() {
      notify,
      selectedRoomId,
      useAuthentication,
@@ -34244,7 +34662,15 @@ index ce952bfc..ba87e506 100644
    ]);
  
    return (
-@@ -260,6 +447,9 @@ type ClientNonUIFeaturesProps = {
+@@ -257,14 +454,23 @@ type ClientNonUIFeaturesProps = {
+   children: ReactNode;
+ };
+ 
++function BackgroundBackfillFeature() {
++  useBackgroundBackfill();
++  return null;
++}
++
  export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
    return (
      <>
@@ -34254,6 +34680,12 @@ index ce952bfc..ba87e506 100644
        <SystemEmojiFeature />
        <PageZoomFeature />
        <FaviconUpdater />
+       <InviteNotifications />
+       <MessageNotifications />
++      <BackgroundBackfillFeature />
+       {children}
+     </>
+   );
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
 index 93f0526e..28f20453 100644
 --- a/src/app/pages/client/ClientRoot.tsx
@@ -39295,6 +39727,106 @@ index 9cf4bfb9..4acb6425 100644
 +  endpoint?: string;
 +};
 +export const GUEST_JOIN_PATH = '/call/guest/:roomId/';
+diff --git a/src/app/plugins/markdown/block/parser.ts b/src/app/plugins/markdown/block/parser.ts
+index ed16a327..f6dc177f 100644
+--- a/src/app/plugins/markdown/block/parser.ts
++++ b/src/app/plugins/markdown/block/parser.ts
+@@ -1,47 +1,68 @@
++import type Token from 'markdown-it/lib/token.mjs';
++import { markdownIt } from '../markdownit';
+ import { replaceMatch } from '../internal';
+-import {
+-  BlockQuoteRule,
+-  CodeBlockRule,
+-  ESC_BLOCK_SEQ,
+-  HeadingRule,
+-  OrderedListRule,
+-  UnorderedListRule,
+-} from './rules';
+-import { runBlockRule } from './runner';
++import { ESC_BLOCK_SEQ } from './rules';
+ import { BlockMDParser } from './type';
+ 
+-/**
+- * Parses block-level markdown text into HTML using defined block rules.
+- *
+- * @param text - The markdown text to be parsed.
+- * @param parseInline - Optional function to parse inline elements.
+- * @returns The parsed HTML or the original text if no block-level markdown was found.
+- */
++const PASSTHROUGH_TOKEN_TYPES = new Set([
++  'paragraph_open',
++  'paragraph_close',
++  'inline',
++  'text',
++  'softbreak',
++  'hardbreak',
++]);
++
++const hasBlockStructure = (tokens: Token[]): boolean => {
++  for (const t of tokens) {
++    if (!PASSTHROUGH_TOKEN_TYPES.has(t.type)) return true;
++  }
++  return false;
++};
++
++const renderWithInlineCallback = (
++  tokens: Token[],
++  env: Record<string, unknown>,
++  parseInline?: (text: string) => string
++): string => {
++  const renderer = markdownIt.renderer;
++  const options = markdownIt.options;
++  let result = '';
++  for (let i = 0; i < tokens.length; i += 1) {
++    const t = tokens[i];
++    if (t.type === 'inline') {
++      result += parseInline
++        ? parseInline(t.content)
++        : renderer.renderInline(t.children || [], options, env);
++    } else if (renderer.rules[t.type]) {
++      const rule = renderer.rules[t.type];
++      if (rule) result += rule(tokens, i, options, env, renderer);
++    } else {
++      result += renderer.renderToken(tokens, i, options);
++    }
++  }
++  return result;
++};
++
+ export const parseBlockMD: BlockMDParser = (text, parseInline) => {
+   if (text === '') return text;
+-  let result: string | undefined;
+ 
+-  if (!result) result = runBlockRule(text, CodeBlockRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, BlockQuoteRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, OrderedListRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, UnorderedListRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, HeadingRule, parseBlockMD, parseInline);
++  const env = {};
++  const tokens = markdownIt.parse(text, env);
+ 
+-  // replace \n with <br/> because want to preserve empty lines
+-  if (!result) {
+-    result = text
++  if (!hasBlockStructure(tokens)) {
++    return text
+       .split('\n')
+       .map((lineText) => {
+         const match = lineText.match(ESC_BLOCK_SEQ);
+         if (!match) {
+           return parseInline?.(lineText) ?? lineText;
+         }
+-
+         const [, g1] = match;
+         return replaceMatch(lineText, match, g1, (t) => [parseInline?.(t) ?? t]).join('');
+       })
+       .join('<br/>');
+   }
+ 
+-  return result ?? text;
++  return renderWithInlineCallback(tokens, env, parseInline).replace(/\n+$/, '');
+ };
 diff --git a/src/app/plugins/markdown/block/rules.ts b/src/app/plugins/markdown/block/rules.ts
 index ad1af37e..3fed0127 100644
 --- a/src/app/plugins/markdown/block/rules.ts
@@ -39333,6 +39865,53 @@ index ad1af37e..3fed0127 100644
 -export const ESC_BLOCK_SEQ = /^\\(\\*(#{1,6} +|```|>|(-|[\da-zA-Z]\.) +|\* +))/;
 +export const UN_ESC_BLOCK_SEQ = /^\\*(#{1,6} +|`{3,}|>|(-|[\da-zA-Z]\.) +|\* +)/;
 +export const ESC_BLOCK_SEQ = /^\\(\\*(#{1,6} +|`{3,}|>|(-|[\da-zA-Z]\.) +|\* +))/;
+diff --git a/src/app/plugins/markdown/inline/parser.ts b/src/app/plugins/markdown/inline/parser.ts
+index 37c71a66..9baa4f74 100644
+--- a/src/app/plugins/markdown/inline/parser.ts
++++ b/src/app/plugins/markdown/inline/parser.ts
+@@ -1,40 +1,7 @@
+-import {
+-  BoldRule,
+-  CodeRule,
+-  EscapeRule,
+-  ItalicRule1,
+-  ItalicRule2,
+-  LinkRule,
+-  SpoilerRule,
+-  StrikeRule,
+-  UnderlineRule,
+-} from './rules';
+-import { runInlineRule, runInlineRules } from './runner';
++import { markdownIt } from '../markdownit';
+ import { InlineMDParser } from './type';
+ 
+-const LeveledRules = [
+-  BoldRule,
+-  ItalicRule1,
+-  UnderlineRule,
+-  ItalicRule2,
+-  StrikeRule,
+-  SpoilerRule,
+-  LinkRule,
+-  EscapeRule,
+-];
+-
+-/**
+- * Parses inline markdown text into HTML using defined rules.
+- *
+- * @param text - The markdown text to be parsed.
+- * @returns The parsed HTML or the original text if no markdown was found.
+- */
+ export const parseInlineMD: InlineMDParser = (text) => {
+   if (text === '') return text;
+-  let result: string | undefined;
+-  if (!result) result = runInlineRule(text, CodeRule, parseInlineMD);
+-
+-  if (!result) result = runInlineRules(text, LeveledRules, parseInlineMD);
+-
+-  return result ?? text;
++  return markdownIt.renderInline(text);
+ };
 diff --git a/src/app/plugins/markdown/inline/rules.ts b/src/app/plugins/markdown/inline/rules.ts
 index 77bcbd57..1b0b7d9f 100644
 --- a/src/app/plugins/markdown/inline/rules.ts
@@ -39366,6 +39945,400 @@ index 77bcbd57..1b0b7d9f 100644
    },
  };
  
+diff --git a/src/app/plugins/markdown/markdownit.test.ts b/src/app/plugins/markdown/markdownit.test.ts
+new file mode 100644
+index 00000000..63d7ec54
+--- /dev/null
++++ b/src/app/plugins/markdown/markdownit.test.ts
+@@ -0,0 +1,157 @@
++import { describe, expect, it } from 'vitest';
++import { parseBlockMD } from './block/parser';
++import { parseInlineMD } from './inline/parser';
++
++describe('parseInlineMD', () => {
++  it('renders plain text unchanged', () => {
++    expect(parseInlineMD('hello world')).toBe('hello world');
++  });
++
++  it('renders bold with data-md', () => {
++    expect(parseInlineMD('**hi**')).toBe('<strong data-md="**">hi</strong>');
++  });
++
++  it('renders italic with star', () => {
++    expect(parseInlineMD('*hi*')).toBe('<em data-md="*">hi</em>');
++  });
++
++  it('renders italic with underscore', () => {
++    expect(parseInlineMD('_hi_')).toBe('<em data-md="_">hi</em>');
++  });
++
++  it('renders __ as underline (Matrix flavor)', () => {
++    expect(parseInlineMD('__hi__')).toBe('<u data-md="__">hi</u>');
++  });
++
++  it('renders strikethrough', () => {
++    expect(parseInlineMD('~~hi~~')).toBe('<s data-md="~~">hi</s>');
++  });
++
++  it('renders inline code', () => {
++    expect(parseInlineMD('`hi`')).toBe('<code data-md="`">hi</code>');
++  });
++
++  it('renders spoiler', () => {
++    expect(parseInlineMD('||secret||')).toBe(
++      '<span data-md="||" data-mx-spoiler="">secret</span>'
++    );
++  });
++
++  it('does NOT make k. into an ordered list (block-level only anyway)', () => {
++    // inline parser shouldn't touch block syntax
++    expect(parseInlineMD('k. word')).toBe('k. word');
++  });
++});
++
++describe('parseBlockMD', () => {
++  it('preserves plain text without block markdown', () => {
++    expect(parseBlockMD('hello\nworld\n')).toBe('hello<br/>world<br/>');
++  });
++
++  it('does NOT treat "k. foo" as an ordered list', () => {
++    const result = parseBlockMD('k. foo\n');
++    expect(result).not.toContain('<ol');
++    expect(result).toContain('k. foo');
++  });
++
++  it('renders ATX heading', () => {
++    expect(parseBlockMD('# title\n')).toContain('<h1 data-md="#">');
++  });
++
++  it('renders ordered list with digits', () => {
++    const result = parseBlockMD('1. one\n2. two\n');
++    expect(result).toContain('<ol');
++    expect(result).toContain('<li><p>one</p></li>');
++  });
++
++  it('renders unordered list with asterisk', () => {
++    const result = parseBlockMD('* one\n* two\n');
++    expect(result).toContain('<ul data-md="*">');
++  });
++
++  it('renders fenced code block', () => {
++    const result = parseBlockMD('```js\nfoo\n```\n');
++    expect(result).toContain('<pre data-md="```">');
++    expect(result).toContain('class="language-js"');
++  });
++
++  it('renders blockquote', () => {
++    const result = parseBlockMD('> quote\n');
++    expect(result).toContain('<blockquote');
++  });
++
++  it('passes inline content through parseInline callback', () => {
++    const result = parseBlockMD('# title\n', (text) => `[${text}]`);
++    expect(result).toBe('<h1 data-md="#">[title]</h1>');
++  });
++
++  it('preserves embedded HTML through callback when no block markdown', () => {
++    const html = '<a href="x">**not bold**</a>';
++    const passthrough = (t: string) => t;
++    expect(parseBlockMD(html, passthrough)).toBe(html);
++  });
++});
++
++describe('regression: URL with underscores', () => {
++  it('does not italicize text inside a URL', () => {
++    // GFM linkify auto-detects, no _emph_ inside URL
++    const result = parseInlineMD('see https://my_weird_link.example.com/foo');
++    expect(result).not.toContain('<em');
++    expect(result).toContain('my_weird_link.example.com');
++  });
++});
++
++describe('regression: variable-length backtick fences', () => {
++  it('inline code with embedded backtick via double fence', () => {
++    expect(parseInlineMD('`` ` ``')).toContain('<code data-md="``">');
++  });
++
++  it('block code fence longer than 3', () => {
++    const result = parseBlockMD('````\nlet x = `hi`;\n````\n');
++    expect(result).toContain('<pre data-md="````">');
++    expect(result).toContain('let x = `hi`;');
++  });
++});
++
++describe('regression: escape sequences', () => {
++  it('escaped asterisk does not bold', () => {
++    expect(parseInlineMD('\\*not bold\\*')).toBe('*not bold*');
++  });
++
++  it('escaped pipe does not start spoiler', () => {
++    const result = parseInlineMD('\\|\\|literal\\|\\|');
++    expect(result).not.toContain('data-mx-spoiler');
++  });
++});
++
++describe('GFM-style additions', () => {
++  it('renders a table', () => {
++    const src = '| a | b |\n|---|---|\n| 1 | 2 |\n';
++    const result = parseBlockMD(src);
++    expect(result).toContain('<table>');
++    expect(result).toContain('<th>a</th>');
++    expect(result).toContain('<td>1</td>');
++  });
++
++  it('renders horizontal rule', () => {
++    expect(parseBlockMD('---\n')).toContain('<hr>');
++  });
++
++  it('autolinks bare URL', () => {
++    const result = parseInlineMD('see https://example.com here');
++    expect(result).toContain('<a href="https://example.com"');
++  });
++});
++
++describe('regression: ordered list edge cases', () => {
++  it('does not match alphabetic ordered list (k.)', () => {
++    const result = parseBlockMD('k. word\n');
++    expect(result).not.toContain('<ol');
++  });
++
++  it('matches multi-digit ordered list', () => {
++    const result = parseBlockMD('10. ten\n11. eleven\n');
++    expect(result).toContain('<ol');
++    expect(result).toContain('start="10"');
++  });
++});
+diff --git a/src/app/plugins/markdown/markdownit.ts b/src/app/plugins/markdown/markdownit.ts
+new file mode 100644
+index 00000000..0361c6bb
+--- /dev/null
++++ b/src/app/plugins/markdown/markdownit.ts
+@@ -0,0 +1,225 @@
++import MarkdownIt from 'markdown-it';
++import type Token from 'markdown-it/lib/token.mjs';
++
++const SPOILER_MARKER = 0x7c; /* | */
++
++// Adapted from markdown-it-mark (MIT). Pairs `||` delimiters and converts
++// them into spoiler tokens after the inline tokenizer runs.
++const spoilerPlugin = (md: MarkdownIt): void => {
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const tokenize = (state: any, silent: boolean): boolean => {
++    const start = state.pos;
++    if (state.src.charCodeAt(start) !== SPOILER_MARKER) return false;
++    if (silent) return false;
++
++    const scanned = state.scanDelims(state.pos, true);
++    let len: number = scanned.length;
++    if (len < 2) return false;
++
++    if (len % 2) {
++      const tok = state.push('text', '', 0);
++      tok.content = '|';
++      len -= 1;
++    }
++
++    for (let i = 0; i < len; i += 2) {
++      const token = state.push('text', '', 0);
++      token.content = '||';
++      if (!scanned.can_open && !scanned.can_close) continue;
++      state.delimiters.push({
++        marker: SPOILER_MARKER,
++        length: 0,
++        token: state.tokens.length - 1,
++        end: -1,
++        open: scanned.can_open,
++        close: scanned.can_close,
++      });
++    }
++
++    state.pos += scanned.length;
++    return true;
++  };
++
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const postProcess = (state: any, delimiters: any[]): void => {
++    const loneMarkers: number[] = [];
++    const max = delimiters.length;
++
++    for (let i = 0; i < max; i += 1) {
++      const startDelim = delimiters[i];
++      if (startDelim.marker !== SPOILER_MARKER) continue;
++      if (startDelim.end === -1) continue;
++
++      const endDelim = delimiters[startDelim.end];
++
++      let token: Token = state.tokens[startDelim.token];
++      token.type = 'spoiler_open';
++      token.tag = 'span';
++      token.nesting = 1;
++      token.markup = '||';
++      token.content = '';
++
++      token = state.tokens[endDelim.token];
++      token.type = 'spoiler_close';
++      token.tag = 'span';
++      token.nesting = -1;
++      token.markup = '||';
++      token.content = '';
++
++      if (
++        state.tokens[endDelim.token - 1].type === 'text' &&
++        state.tokens[endDelim.token - 1].content === '|'
++      ) {
++        loneMarkers.push(endDelim.token - 1);
++      }
++    }
++
++    while (loneMarkers.length) {
++      const i = loneMarkers.pop() as number;
++      let j = i + 1;
++      while (j < state.tokens.length && state.tokens[j].type === 'spoiler_close') {
++        j += 1;
++      }
++      j -= 1;
++      if (i !== j) {
++        const swap = state.tokens[j];
++        state.tokens[j] = state.tokens[i];
++        state.tokens[i] = swap;
++      }
++    }
++  };
++
++  md.inline.ruler.before('text', 'spoiler', tokenize);
++
++  // markdown-it's built-in `text` rule does not treat `|` as a terminator,
++  // so it greedily consumes spoiler closers. Replace `text` with a version
++  // that also stops at `|`.
++  const TERMINATORS = new Set([
++    0x0a, 0x21, 0x23, 0x24, 0x25, 0x26, 0x2a, 0x2b, 0x2d, 0x3a, 0x3c, 0x3d,
++    0x3e, 0x40, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x7b, 0x7c, 0x7d, 0x7e,
++  ]);
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  md.inline.ruler.at('text', (state: any, silent: boolean): boolean => {
++    let pos = state.pos;
++    while (pos < state.posMax && !TERMINATORS.has(state.src.charCodeAt(pos))) {
++      pos += 1;
++    }
++    if (pos === state.pos) return false;
++    if (!silent) state.pending += state.src.slice(state.pos, pos);
++    state.pos = pos;
++    return true;
++  });
++
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  md.inline.ruler2.before('emphasis', 'spoiler', (state: any) => {
++    const tokensMeta = state.tokens_meta;
++    postProcess(state, state.delimiters);
++    for (let curr = 0; curr < tokensMeta.length; curr += 1) {
++      if (tokensMeta[curr] && tokensMeta[curr].delimiters) {
++        postProcess(state, tokensMeta[curr].delimiters);
++      }
++    }
++    return true;
++  });
++
++  md.renderer.rules.spoiler_open = () => '<span data-md="||" data-mx-spoiler="">';
++  md.renderer.rules.spoiler_close = () => '</span>';
++};
++
++const buildMarkdownIt = (): MarkdownIt => {
++  const md = new MarkdownIt({
++    html: true,
++    linkify: true,
++    breaks: false,
++    typographer: false,
++  });
++
++  md.disable(['code']);
++  md.use(spoilerPlugin);
++
++  const origStrongOpen =
++    md.renderer.rules.strong_open ?? ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts));
++  const origStrongClose =
++    md.renderer.rules.strong_close ?? ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts));
++
++  md.renderer.rules.strong_open = (tokens, idx, opts, env, self) => {
++    const t = tokens[idx];
++    if (t.markup === '__') return '<u data-md="__">';
++    return `<strong data-md="**">`;
++  };
++  md.renderer.rules.strong_close = (tokens, idx, opts, env, self) => {
++    const t = tokens[idx];
++    if (t.markup === '__') return '</u>';
++    return '</strong>';
++  };
++
++  md.renderer.rules.em_open = (tokens, idx) => {
++    const t = tokens[idx];
++    return `<em data-md="${t.markup}">`;
++  };
++  md.renderer.rules.em_close = () => '</em>';
++
++  md.renderer.rules.s_open = () => '<s data-md="~~">';
++  md.renderer.rules.s_close = () => '</s>';
++
++  const escapeHtml = md.utils.escapeHtml;
++
++  md.renderer.rules.code_inline = (tokens, idx) => {
++    const t = tokens[idx];
++    const fence = t.markup || '`';
++    return `<code data-md="${fence}">${escapeHtml(t.content)}</code>`;
++  };
++
++  md.renderer.rules.fence = (tokens, idx) => {
++    const t = tokens[idx];
++    const info = t.info ? t.info.trim() : '';
++    const fence = t.markup || '```';
++    const lang = info ? info.substring(info.lastIndexOf('.') + 1) : '';
++    const filename = info && info !== lang ? info : '';
++    const classAttr = lang ? ` class="language-${escapeHtml(lang)}"` : '';
++    const labelAttr = filename ? ` data-label="${escapeHtml(filename)}"` : '';
++    const escaped = escapeHtml(t.content);
++    return `<pre data-md="${fence}"><code${classAttr}${labelAttr}>${escaped}</code></pre>\n`;
++  };
++
++  md.renderer.rules.heading_open = (tokens, idx) => {
++    const t = tokens[idx];
++    const level = Number(t.tag.slice(1));
++    const hashes = '#'.repeat(level);
++    return `<${t.tag} data-md="${hashes}">`;
++  };
++
++  md.renderer.rules.bullet_list_open = (tokens, idx) => {
++    const t = tokens[idx];
++    const marker = t.markup || '*';
++    return `<ul data-md="${marker}">`;
++  };
++
++  md.renderer.rules.ordered_list_open = (tokens, idx) => {
++    const t = tokens[idx];
++    const start = t.attrGet('start');
++    const startAttr = start ? ` start="${start}"` : '';
++    const dataMd = start ? `${start}.` : '1.';
++    return `<ol data-md="${dataMd}"${startAttr}>`;
++  };
++
++  md.renderer.rules.list_item_open = () => '<li><p>';
++  md.renderer.rules.list_item_close = () => '</p></li>';
++
++  md.renderer.rules.blockquote_open = () => '<blockquote data-md="&gt;">';
++
++  const origLinkOpen =
++    md.renderer.rules.link_open ?? ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts));
++  md.renderer.rules.link_open = (tokens, idx, opts, env, self) => {
++    const t = tokens[idx];
++    if (t.markup === 'linkify' || t.markup === 'autolink') {
++      return origLinkOpen(tokens, idx, opts, env, self);
++    }
++    t.attrJoin('data-md', '');
++    return origLinkOpen(tokens, idx, opts, env, self);
++  };
++
++  return md;
++};
++
++export const markdownIt = buildMarkdownIt();
 diff --git a/src/app/plugins/millify.ts b/src/app/plugins/millify.ts
 index d8608dee..cc5539ae 100644
 --- a/src/app/plugins/millify.ts
@@ -42938,15 +43911,132 @@ index 00000000..e9fc3802
 +    </div>
 +  );
 +}
+diff --git a/src/client/diagnostics.ts b/src/client/diagnostics.ts
+new file mode 100644
+index 00000000..d5020f2d
+--- /dev/null
++++ b/src/client/diagnostics.ts
+@@ -0,0 +1,110 @@
++// Failure-mode event log.
++//
++// We have several layers of crash/corruption recovery. Until now, when a
++// user reports "Wally needed the recovery key again," we have no record
++// of which path fired or why — IDB probe failed? credentials wiped? a
++// checkpoint restore that succeeded but the SDK still re-prompted? The
++// recovery-key prompt itself? — so we have no basis to choose between
++// fixing layer N vs. layer M.
++//
++// This module appends timestamped events to a Cache API entry (independent
++// of localStorage and IDB, so it survives the failures we're trying to
++// understand). On startup we dump the buffer to the console; the user can
++// open devtools after a recovery event and read the trail.
++//
++// Cap at MAX_EVENTS so the buffer can't grow unbounded.
++
++const DIAG_CACHE = 'cinny-diagnostics';
++const DIAG_KEY = '/events';
++const MAX_EVENTS = 200;
++
++export type FailureEventKind =
++  | 'idb_probe_failed'
++  | 'creds_restored_from_cache'
++  | 'idb_repair_started'
++  | 'checkpoint_restored'
++  | 'checkpoint_missing'
++  | 'idb_wiped'
++  | 'checkpoint_written'
++  | 'checkpoint_failed'
++  | 'recovery_key_prompt_shown'
++  | 'startup';
++
++export interface FailureEvent {
++  ts: number;
++  kind: FailureEventKind;
++  details?: Record<string, unknown>;
++}
++
++async function readEvents(): Promise<FailureEvent[]> {
++  try {
++    const cache = await caches.open(DIAG_CACHE);
++    const resp = await cache.match(DIAG_KEY);
++    if (!resp) return [];
++    return (await resp.json()) as FailureEvent[];
++  } catch {
++    return [];
++  }
++}
++
++async function writeEvents(events: FailureEvent[]): Promise<void> {
++  try {
++    const cache = await caches.open(DIAG_CACHE);
++    await cache.put(
++      DIAG_KEY,
++      new Response(JSON.stringify(events), {
++        headers: { 'Content-Type': 'application/json' },
++      })
++    );
++  } catch {
++    // ignore
++  }
++}
++
++/**
++ * Append a single failure event. Best-effort: any storage failure is
++ * swallowed because diagnostics must never themselves break the app.
++ */
++export async function logFailureEvent(
++  kind: FailureEventKind,
++  details?: Record<string, unknown>
++): Promise<void> {
++  const event: FailureEvent = { ts: Date.now(), kind };
++  if (details) event.details = details;
++  const events = await readEvents();
++  events.push(event);
++  if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
++  await writeEvents(events);
++}
++
++/** Fetch the full buffer. */
++export async function getFailureLog(): Promise<FailureEvent[]> {
++  return readEvents();
++}
++
++/**
++ * Print the buffer to console. Call once at startup so anyone opening
++ * devtools after a recovery event sees the trail without having to know
++ * about the Cache API entry.
++ */
++export async function dumpFailureLog(): Promise<void> {
++  const events = await readEvents();
++  if (events.length === 0) return;
++  // eslint-disable-next-line no-console
++  console.groupCollapsed(`[Wally] failure log (${events.length} events)`);
++  for (const ev of events) {
++    // eslint-disable-next-line no-console
++    console.log(new Date(ev.ts).toISOString(), ev.kind, ev.details ?? '');
++  }
++  // eslint-disable-next-line no-console
++  console.groupEnd();
++}
++
++/** Clear the diagnostics buffer (e.g. on explicit logout). */
++export async function clearFailureLog(): Promise<void> {
++  try {
++    await caches.delete(DIAG_CACHE);
++  } catch {
++    // ignore
++  }
++}
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..088f4c55 100644
+index 498d4f75..12bd1bc9 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
-@@ -3,22 +3,37 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
+@@ -3,22 +3,38 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
  import { cryptoCallbacks } from './secretStorageKeys';
  import { clearNavToActivePathStore } from '../app/state/navToActivePath';
  import { pushSessionToSW } from '../sw-session';
 +import { removeSecondarySession } from '../app/state/sessions';
++import { logFailureEvent } from './diagnostics';
  
  type Session = {
    baseUrl: string;
@@ -42982,7 +44072,7 @@ index 498d4f75..088f4c55 100644
  
    const mx = createClient({
      baseUrl: session.baseUrl,
-@@ -28,21 +43,78 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
+@@ -28,21 +44,82 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
      cryptoStore: legacyCryptoStore,
      deviceId: session.deviceId,
      timelineSupport: true,
@@ -43057,13 +44147,18 @@ index 498d4f75..088f4c55 100644
 +}
 +
  export const startClient = async (mx: MatrixClient) => {
++  // Prioritise a fast initial sync over a fully-populated cache. The flag
++  // implies `lazyLoadMembers: true` and `initialSyncLimit: 1`, plus the
++  // SDK's lazy-tolerant code paths so things like thread bootstrap, on-demand
++  // thread-root fetching, and aggregations behave correctly while history
++  // populates incrementally through pagination.
    await mx.startClient({
-     lazyLoadMembers: true,
-+    initialSyncLimit: 1,
+-    lazyLoadMembers: true,
++    fullLazyLoading: true,
    });
  };
  
-@@ -54,6 +126,12 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
+@@ -54,6 +131,12 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
  };
  
  export const logoutClient = async (mx: MatrixClient) => {
@@ -43076,7 +44171,7 @@ index 498d4f75..088f4c55 100644
    pushSessionToSW();
    mx.stopClient();
    try {
-@@ -62,11 +140,24 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -62,11 +145,24 @@ export const logoutClient = async (mx: MatrixClient) => {
      // ignore if failed to logout
    }
    await mx.clearStores();
@@ -43103,7 +44198,7 @@ index 498d4f75..088f4c55 100644
    const dbs = await window.indexedDB.databases();
  
    dbs.forEach((idbInfo) => {
-@@ -79,3 +170,286 @@ export const clearLoginData = async () => {
+@@ -79,3 +175,475 @@ export const clearLoginData = async () => {
    window.localStorage.clear();
    window.location.reload();
  };
@@ -43169,6 +44264,7 @@ index 498d4f75..088f4c55 100644
 +    if (data[SECONDARY_SESSIONS_KEY]) {
 +      localStorage.setItem(SECONDARY_SESSIONS_KEY, data[SECONDARY_SESSIONS_KEY]);
 +    }
++    logFailureEvent('creds_restored_from_cache');
 +    return true;
 +  } catch {
 +    return false;
@@ -43193,8 +44289,11 @@ index 498d4f75..088f4c55 100644
 + * to restore credentials from the Cache API backup first.
 + */
 +export const repairIDBAndReload = async () => {
++  const hadCreds = !!localStorage.getItem('cinny_access_token');
++  await logFailureEvent('idb_repair_started', { hadCreds });
++
 +  // If localStorage creds are gone, try restoring from Cache API backup.
-+  if (!localStorage.getItem('cinny_access_token')) {
++  if (!hadCreds) {
 +    await restoreSessionFromCache();
 +  }
 +
@@ -43206,6 +44305,7 @@ index 498d4f75..088f4c55 100644
 +  }
 +
 +  // No checkpoint available — full wipe.
++  await logFailureEvent('idb_wiped');
 +  const dbs = await window.indexedDB.databases();
 +  dbs.forEach(({ name }) => {
 +    if (name) window.indexedDB.deleteDatabase(name);
@@ -43214,13 +44314,21 @@ index 498d4f75..088f4c55 100644
 +};
 +
 +// ---------------------------------------------------------------------------
-+// IndexedDB checkpoint system — periodic snapshots of crypto stores.
++// Crypto-store checkpoint system — Cache-API-backed snapshots.
 +//
-+// After a successful startup + sync, we clone the crypto databases to
-+// checkpoint copies. On corruption, we restore from the checkpoint instead
-+// of wiping everything (which forces recovery password re-entry).
++// Earlier this lived as IDB-to-IDB clones (sibling DBs with a `_checkpoint`
++// suffix). That had a structural problem: source and checkpoint live on
++// the same volume, so the same dirty-shutdown that corrupts the live
++// crypto DB can corrupt the checkpoint too. We now serialise the crypto
++// databases into the Cache API instead, which is a separate storage tier
++// and is far less likely to fail with the live IDB.
++//
++// The checkpoint trigger and the recovery flow (`repairIDBAndReload`)
++// are unchanged in shape — only the storage medium and the
++// serialise/deserialise primitives moved.
 +// ---------------------------------------------------------------------------
-+const CHECKPOINT_SUFFIX = '_checkpoint';
++
++const CHECKPOINT_CACHE = 'cinny-crypto-checkpoint';
 +const CHECKPOINT_TS_KEY = 'cinny_checkpoint_ts';
 +
 +/** Names of databases that hold crypto material worth checkpointing. */
@@ -43233,152 +44341,325 @@ index 498d4f75..088f4c55 100644
 +  ];
 +}
 +
-+/**
-+ * Clone an IndexedDB database to a new name.
-+ * Opens source read-only, recreates all object stores + indexes in dest,
-+ * and copies every record.
-+ */
-+async function cloneIDB(srcName: string, destName: string): Promise<boolean> {
-+  return new Promise((resolve) => {
-+    const openSrc = indexedDB.open(srcName);
-+    openSrc.onerror = () => resolve(false);
-+    openSrc.onsuccess = () => {
-+      const srcDb = openSrc.result;
-+      const version = srcDb.version;
-+      const storeNames = Array.from(srcDb.objectStoreNames);
++// JSON doesn't carry binary or non-plain types. The crypto stores hold
++// Uint8Array values everywhere; the rust store also stashes whole
++// ArrayBuffers. Tag them on the way out and reverse on the way in. Maps
++// and Sets get the same treatment so we don't lose state if the SDK
++// adopts them later.
++type Tagged =
++  | { __t: 'u8'; v: string }
++  | { __t: 'ab'; v: string }
++  | { __t: 'date'; v: number }
++  | { __t: 'map'; v: [unknown, unknown][] }
++  | { __t: 'set'; v: unknown[] };
 +
++function bytesToBase64(bytes: Uint8Array): string {
++  let s = '';
++  for (let i = 0; i < bytes.length; i += 1) s += String.fromCharCode(bytes[i]);
++  return btoa(s);
++}
++
++function base64ToBytes(b64: string): Uint8Array {
++  const s = atob(b64);
++  const out = new Uint8Array(s.length);
++  for (let i = 0; i < s.length; i += 1) out[i] = s.charCodeAt(i);
++  return out;
++}
++
++function pack(value: unknown): unknown {
++  if (value === null || value === undefined) return value;
++  if (value instanceof Uint8Array) {
++    return { __t: 'u8', v: bytesToBase64(value) } satisfies Tagged;
++  }
++  if (value instanceof ArrayBuffer) {
++    return { __t: 'ab', v: bytesToBase64(new Uint8Array(value)) } satisfies Tagged;
++  }
++  if (value instanceof Date) {
++    return { __t: 'date', v: value.getTime() } satisfies Tagged;
++  }
++  if (value instanceof Map) {
++    return {
++      __t: 'map',
++      v: Array.from(value.entries()).map(([k, v]) => [pack(k), pack(v)]),
++    } satisfies Tagged;
++  }
++  if (value instanceof Set) {
++    return { __t: 'set', v: Array.from(value).map(pack) } satisfies Tagged;
++  }
++  if (Array.isArray(value)) return value.map(pack);
++  if (typeof value === 'object') {
++    const out: Record<string, unknown> = {};
++    for (const k of Object.keys(value)) out[k] = pack((value as Record<string, unknown>)[k]);
++    return out;
++  }
++  return value;
++}
++
++function unpack(value: unknown): unknown {
++  if (value === null || value === undefined) return value;
++  if (Array.isArray(value)) return value.map(unpack);
++  if (typeof value === 'object') {
++    const tagged = value as Partial<Tagged>;
++    if (tagged.__t === 'u8' && typeof tagged.v === 'string') return base64ToBytes(tagged.v);
++    if (tagged.__t === 'ab' && typeof tagged.v === 'string') return base64ToBytes(tagged.v).buffer;
++    if (tagged.__t === 'date' && typeof tagged.v === 'number') return new Date(tagged.v);
++    if (tagged.__t === 'map' && Array.isArray(tagged.v)) {
++      return new Map((tagged.v as [unknown, unknown][]).map(([k, v]) => [unpack(k), unpack(v)]));
++    }
++    if (tagged.__t === 'set' && Array.isArray(tagged.v)) {
++      return new Set((tagged.v as unknown[]).map(unpack));
++    }
++    const out: Record<string, unknown> = {};
++    for (const k of Object.keys(value)) out[k] = unpack((value as Record<string, unknown>)[k]);
++    return out;
++  }
++  return value;
++}
++
++interface IndexMeta {
++  name: string;
++  keyPath: string | string[];
++  unique: boolean;
++  multiEntry: boolean;
++}
++interface StoreMeta {
++  name: string;
++  keyPath: string | string[] | null;
++  autoIncrement: boolean;
++  indexes: IndexMeta[];
++}
++interface DbDump {
++  name: string;
++  version: number;
++  stores: StoreMeta[];
++  // Records are keyed per store. For stores with a keyPath, the primary
++  // key lives inside the value, so `key` is omitted; for keyless stores,
++  // we carry it explicitly.
++  records: Record<string, { key?: unknown; value: unknown }[]>;
++}
++
++async function dumpIDB(dbName: string): Promise<DbDump | null> {
++  return new Promise((resolve) => {
++    const open = indexedDB.open(dbName);
++    open.onerror = () => resolve(null);
++    open.onsuccess = () => {
++      const db = open.result;
++      const storeNames = Array.from(db.objectStoreNames);
 +      if (storeNames.length === 0) {
-+        srcDb.close();
-+        resolve(false);
++        db.close();
++        resolve(null);
 +        return;
 +      }
 +
-+      // Delete existing checkpoint first.
-+      const delReq = indexedDB.deleteDatabase(destName);
-+      delReq.onsuccess = () => createAndCopy();
-+      delReq.onerror = () => createAndCopy();
++      const dump: DbDump = {
++        name: dbName,
++        version: db.version,
++        stores: [],
++        records: {},
++      };
 +
-+      function createAndCopy() {
-+        const openDest = indexedDB.open(destName, version);
-+        openDest.onupgradeneeded = () => {
-+          const destDb = openDest.result;
-+          for (const storeName of storeNames) {
-+            const srcStore = srcDb.transaction(storeName, 'readonly').objectStore(storeName);
-+            const destStore = destDb.createObjectStore(storeName, {
-+              keyPath: srcStore.keyPath as string | string[] | null,
-+              autoIncrement: srcStore.autoIncrement,
-+            });
-+            for (const idxName of Array.from(srcStore.indexNames)) {
-+              const idx = srcStore.index(idxName);
-+              destStore.createIndex(idxName, idx.keyPath, {
-+                unique: idx.unique,
-+                multiEntry: idx.multiEntry,
-+              });
++      // Single read transaction over all stores so we get a consistent
++      // snapshot — earlier we opened a fresh transaction per store, which
++      // the SDK could have written to in between.
++      const tx = db.transaction(storeNames, 'readonly');
++      let pending = storeNames.length;
++
++      for (const storeName of storeNames) {
++        const store = tx.objectStore(storeName);
++        const meta: StoreMeta = {
++          name: storeName,
++          keyPath: store.keyPath as string | string[] | null,
++          autoIncrement: store.autoIncrement,
++          indexes: [],
++        };
++        for (const idxName of Array.from(store.indexNames)) {
++          const idx = store.index(idxName);
++          meta.indexes.push({
++            name: idxName,
++            keyPath: idx.keyPath as string | string[],
++            unique: idx.unique,
++            multiEntry: idx.multiEntry,
++          });
++        }
++        dump.stores.push(meta);
++        dump.records[storeName] = [];
++
++        const cursorReq = store.openCursor();
++        cursorReq.onsuccess = () => {
++          const cursor = cursorReq.result;
++          if (cursor) {
++            dump.records[storeName].push(
++              meta.keyPath
++                ? { value: pack(cursor.value) }
++                : { key: pack(cursor.primaryKey), value: pack(cursor.value) }
++            );
++            cursor.continue();
++          } else {
++            pending -= 1;
++            if (pending === 0) {
++              db.close();
++              resolve(dump);
 +            }
 +          }
 +        };
-+        openDest.onsuccess = () => {
-+          const destDb = openDest.result;
-+          // Copy data store by store.
-+          let pending = storeNames.length;
++        cursorReq.onerror = () => {
++          pending -= 1;
 +          if (pending === 0) {
-+            srcDb.close();
-+            destDb.close();
-+            resolve(true);
-+            return;
++            db.close();
++            resolve(dump);
 +          }
-+
-+          for (const storeName of storeNames) {
-+            const srcTx = srcDb.transaction(storeName, 'readonly');
-+            const destTx = destDb.transaction(storeName, 'readwrite');
-+            const srcStore = srcTx.objectStore(storeName);
-+            const destStore = destTx.objectStore(storeName);
-+
-+            const cursorReq = srcStore.openCursor();
-+            cursorReq.onsuccess = () => {
-+              const cursor = cursorReq.result;
-+              if (cursor) {
-+                destStore.put(cursor.value);
-+                cursor.continue();
-+              }
-+            };
-+
-+            destTx.oncomplete = () => {
-+              pending--;
-+              if (pending === 0) {
-+                srcDb.close();
-+                destDb.close();
-+                resolve(true);
-+              }
-+            };
-+            destTx.onerror = () => {
-+              pending--;
-+              if (pending === 0) {
-+                srcDb.close();
-+                destDb.close();
-+                resolve(false);
-+              }
-+            };
-+          }
-+        };
-+        openDest.onerror = () => {
-+          srcDb.close();
-+          resolve(false);
 +        };
 +      }
++
++      tx.onerror = () => {
++        // Best-effort: return whatever stores already finished.
++        db.close();
++        resolve(dump);
++      };
 +    };
 +  });
 +}
 +
++async function restoreIDB(dump: DbDump): Promise<boolean> {
++  // Wipe the live DB first. We're called from the recovery path where
++  // the live DB is already presumed broken or being replaced.
++  await new Promise<void>((r) => {
++    const req = indexedDB.deleteDatabase(dump.name);
++    req.onsuccess = () => r();
++    req.onerror = () => r();
++  });
++
++  return new Promise((resolve) => {
++    const open = indexedDB.open(dump.name, dump.version);
++    open.onupgradeneeded = () => {
++      const db = open.result;
++      for (const meta of dump.stores) {
++        const store = db.createObjectStore(meta.name, {
++          keyPath: meta.keyPath ?? undefined,
++          autoIncrement: meta.autoIncrement,
++        });
++        for (const idx of meta.indexes) {
++          store.createIndex(idx.name, idx.keyPath, {
++            unique: idx.unique,
++            multiEntry: idx.multiEntry,
++          });
++        }
++      }
++    };
++    open.onsuccess = () => {
++      const db = open.result;
++      const storeNames = dump.stores.map((s) => s.name);
++      if (storeNames.length === 0) {
++        db.close();
++        resolve(true);
++        return;
++      }
++      const tx = db.transaction(storeNames, 'readwrite');
++      for (const meta of dump.stores) {
++        const store = tx.objectStore(meta.name);
++        const recs = dump.records[meta.name] ?? [];
++        for (const rec of recs) {
++          const value = unpack(rec.value);
++          if (meta.keyPath) {
++            store.put(value);
++          } else {
++            store.put(value, unpack(rec.key) as IDBValidKey);
++          }
++        }
++      }
++      tx.oncomplete = () => {
++        db.close();
++        resolve(true);
++      };
++      tx.onerror = () => {
++        db.close();
++        resolve(false);
++      };
++    };
++    open.onerror = () => resolve(false);
++  });
++}
++
++async function writeCheckpointBlob(name: string, dump: DbDump): Promise<boolean> {
++  try {
++    const cache = await caches.open(CHECKPOINT_CACHE);
++    await cache.put(
++      `/${name}`,
++      new Response(JSON.stringify(dump), {
++        headers: { 'Content-Type': 'application/json' },
++      })
++    );
++    return true;
++  } catch {
++    return false;
++  }
++}
++
++async function readCheckpointBlob(name: string): Promise<DbDump | null> {
++  try {
++    const cache = await caches.open(CHECKPOINT_CACHE);
++    const resp = await cache.match(`/${name}`);
++    if (!resp) return null;
++    return (await resp.json()) as DbDump;
++  } catch {
++    return null;
++  }
++}
++
 +/**
-+ * Create a checkpoint of all crypto databases.
-+ * Call after a successful startup + initial sync.
++ * Snapshot all crypto databases to the Cache API. Called after initial
++ * sync settles and on a periodic timer.
 + */
 +export const checkpointCryptoStores = async (): Promise<void> => {
 +  const dbNames = getCryptoDbNames();
++  if (dbNames.length === 0) return;
++
 +  let ok = true;
 +  for (const name of dbNames) {
-+    const success = await cloneIDB(name, name + CHECKPOINT_SUFFIX);
-+    if (!success) ok = false;
++    const dump = await dumpIDB(name);
++    if (!dump) {
++      ok = false;
++      logFailureEvent('checkpoint_failed', { db: name, reason: 'dump_returned_null' });
++      continue;
++    }
++    const written = await writeCheckpointBlob(name, dump);
++    if (!written) {
++      ok = false;
++      logFailureEvent('checkpoint_failed', { db: name, reason: 'cache_put_failed' });
++    }
 +  }
-+  if (ok && dbNames.length > 0) {
++  if (ok) {
 +    localStorage.setItem(CHECKPOINT_TS_KEY, String(Date.now()));
++    logFailureEvent('checkpoint_written', { dbs: dbNames });
 +  }
 +};
 +
 +/**
-+ * Restore crypto databases from their checkpoint copies.
-+ * Returns true if at least one checkpoint was restored.
++ * Restore crypto databases from their Cache-API checkpoints.
++ * Returns true if at least one DB was restored.
 + */
 +async function restoreFromCheckpoint(): Promise<boolean> {
-+  const ts = localStorage.getItem(CHECKPOINT_TS_KEY);
-+  if (!ts) return false;
-+
 +  const dbNames = getCryptoDbNames();
-+  if (dbNames.length === 0) return false;
++  if (dbNames.length === 0) {
++    logFailureEvent('checkpoint_missing', { reason: 'no_user_id' });
++    return false;
++  }
 +
-+  // Verify checkpoints exist before deleting originals.
-+  const allDbs = await indexedDB.databases();
-+  const allDbNames = new Set(allDbs.map((d) => d.name));
-+  const checkpointNames = dbNames.map((n) => n + CHECKPOINT_SUFFIX);
-+  const hasCheckpoints = checkpointNames.some((n) => allDbNames.has(n));
-+  if (!hasCheckpoints) return false;
++  const dumps: { name: string; dump: DbDump }[] = [];
++  for (const name of dbNames) {
++    const dump = await readCheckpointBlob(name);
++    if (dump) dumps.push({ name, dump });
++  }
++  if (dumps.length === 0) {
++    logFailureEvent('checkpoint_missing', { reason: 'no_blobs', dbs: dbNames });
++    return false;
++  }
 +
 +  let restored = false;
-+  for (const name of dbNames) {
-+    const cpName = name + CHECKPOINT_SUFFIX;
-+    if (!allDbNames.has(cpName)) continue;
-+
-+    // Delete corrupted original.
-+    await new Promise<void>((resolve) => {
-+      const req = indexedDB.deleteDatabase(name);
-+      req.onsuccess = () => resolve();
-+      req.onerror = () => resolve();
-+    });
-+
-+    // Clone checkpoint back to original.
-+    const ok = await cloneIDB(cpName, name);
++  for (const { name, dump } of dumps) {
++    const ok = await restoreIDB(dump);
 +    if (ok) restored = true;
++    else logFailureEvent('checkpoint_failed', { db: name, reason: 'restore_failed' });
 +  }
 +
 +  // Also delete the sync store — it'll rebuild from server.
@@ -43388,6 +44669,9 @@ index 498d4f75..088f4c55 100644
 +    indexedDB.deleteDatabase('web-sync-store');
 +  }
 +
++  if (restored) {
++    logFailureEvent('checkpoint_restored', { dbs: dumps.map((d) => d.name) });
++  }
 +  return restored;
 +}
 diff --git a/src/colors.css.ts b/src/colors.css.ts

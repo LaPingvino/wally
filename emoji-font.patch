@@ -1,8 +1,72 @@
+diff --git a/.gitignore b/.gitignore
+index 1af58a97..f75536e4 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -4,4 +4,5 @@ node_modules
+ devAssets
+ 
+ .DS_Store
+-.idea
+\ No newline at end of file
++.idea
++public/font/NotoColorEmoji.Bahai.*.ttf
+diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
+new file mode 100644
+index 00000000..7e3a46eb
+--- /dev/null
++++ b/src/app/components/room-listbox/RoomListbox.tsx
+@@ -0,0 +1,46 @@
++import React, { ReactNode } from 'react';
++
++interface RoomListboxProps {
++  id?: string;
++  'aria-label': string;
++  items: string[];
++  focusedIndex: number;
++  onKeyDown: React.KeyboardEventHandler<HTMLDivElement>;
++  onFocus?: React.FocusEventHandler<HTMLDivElement>;
++  children: ReactNode;
++}
++
++export function RoomListbox({
++  id,
++  'aria-label': ariaLabel,
++  items,
++  focusedIndex,
++  onKeyDown,
++  onFocus,
++  children,
++}: RoomListboxProps) {
++  const activedescendant =
++    focusedIndex >= 0 && items[focusedIndex]
++      ? `room-option-${items[focusedIndex]}`
++      : undefined;
++
++  return (
++    <div
++      id={id}
++      role="listbox"
++      aria-label={ariaLabel}
++      aria-activedescendant={activedescendant}
++      aria-orientation="vertical"
++      tabIndex={0}
++      onKeyDown={onKeyDown}
++      onFocus={(evt) => {
++        if (evt.target === evt.currentTarget) onFocus?.(evt);
++      }}
++      onMouseDown={(evt) => {
++        if (evt.target === evt.currentTarget) evt.preventDefault();
++      }}
++    >
++      {children}
++    </div>
++  );
++}
 diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
-index b861a060b7..6ec13f6799 100644
+index b861a060..6ec13f67 100644
 --- a/src/app/features/settings/general/General.tsx
 +++ b/src/app/features/settings/general/General.tsx
-@@ -32,7 +32,7 @@
+@@ -32,7 +32,7 @@ import FocusTrap from 'focus-trap-react';
  import { Page, PageContent, PageHeader } from '../../../components/page';
  import { SequenceCard } from '../../../components/sequence-card';
  import { useSetting } from '../../../state/hooks/settings';
@@ -11,7 +75,7 @@ index b861a060b7..6ec13f6799 100644
  import { SettingTile } from '../../../components/setting-tile';
  import { KeySymbol } from '../../../utils/key-symbol';
  import { isMacOS } from '../../../utils/user-agent';
-@@ -259,6 +259,95 @@
+@@ -259,6 +259,95 @@ function SystemThemePreferences() {
    );
  }
  
@@ -107,7 +171,7 @@ index b861a060b7..6ec13f6799 100644
  function PageZoomInput() {
    const [pageZoom, setPageZoom] = useSetting(settingsAtom, 'pageZoom');
    const [currentZoom, setCurrentZoom] = useState(`${pageZoom}`);
-@@ -306,7 +395,6 @@
+@@ -306,7 +395,6 @@ function PageZoomInput() {
  function Appearance() {
    const [systemTheme, setSystemTheme] = useSetting(settingsAtom, 'useSystemTheme');
    const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
@@ -115,7 +179,7 @@ index b861a060b7..6ec13f6799 100644
  
    return (
      <Box direction="Column" gap="100">
-@@ -342,8 +430,9 @@
+@@ -342,8 +430,9 @@ function Appearance() {
  
        <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
          <SettingTile
@@ -127,11 +191,364 @@ index b861a060b7..6ec13f6799 100644
          />
        </SequenceCard>
  
+diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
+new file mode 100644
+index 00000000..7ed76e62
+--- /dev/null
++++ b/src/app/hooks/useNavigateUnread.ts
+@@ -0,0 +1,207 @@
++import { useCallback, useMemo } from 'react';
++import { useAtomValue, useAtom } from 'jotai';
++import { atom } from 'jotai';
++import { useNavigate } from 'react-router-dom';
++import { MatrixClient } from 'matrix-js-sdk';
++import { roomToUnreadAtom } from '../state/room/roomToUnread';
++import { mDirectAtom } from '../state/mDirectList';
++import { roomToParentsAtom } from '../state/room/roomToParents';
++import { useMatrixClient } from './useMatrixClient';
++import { getCanonicalAliasOrRoomId } from '../utils/matrix';
++import {
++  getDirectRoomPath,
++  getHomeRoomPath,
++  getSpaceRoomPath,
++} from '../pages/pathUtils';
++import { AccountDataEvent } from '../../types/matrix/accountData';
++import {
++  factoryRoomIdByActivity,
++  factoryRoomIdByAtoZ,
++  factoryRoomIdByUnreadFirst,
++} from '../utils/sort';
++import { settingsAtom } from '../state/settings';
++import { useSelectedRoom } from './router/useSelectedRoom';
++
++/**
++ * Track the last navigated room by ID + its position in the list at the time.
++ * Using room ID (not just index) means we can correctly position ourselves
++ * even when the list shrinks as rooms are read.
++ */
++const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
++
++/**
++ * The roomId last navigated to via unread nav (keyboard shortcuts or inbox buttons).
++ * Used to show the ↑↓ nav bar in the timeline only when in "unread browsing mode".
++ */
++export const unreadNavRoomAtom = atom<string | null>(null);
++
++type SidebarItem = string | { id: string; content: string[] };
++
++/** Flat ordered list of space IDs from the user's sidebar config. */
++function getSidebarSpaceIds(mx: MatrixClient): string[] {
++  const content = mx
++    .getAccountData(AccountDataEvent.CinnySpaces)
++    ?.getContent<{ sidebar?: SidebarItem[] }>();
++  const sidebar = content?.sidebar ?? [];
++  const ids: string[] = [];
++  sidebar.forEach((item) => {
++    if (typeof item === 'string') ids.push(item);
++    else if (typeof item === 'object' && Array.isArray(item.content))
++      item.content.forEach((id) => ids.push(id));
++  });
++  return ids;
++}
++
++/**
++ * Walk up the parent chain (via roomToParents) until we find a space that is
++ * in the sidebar. Returns the sidebar index, or Infinity if none found.
++ */
++function getSidebarIndex(
++  roomId: string,
++  roomToParents: Map<string, Set<string>>,
++  sidebarIndex: Map<string, number>
++): number {
++  const visited = new Set<string>();
++  let frontier = new Set([roomId]);
++  while (frontier.size > 0) {
++    const next = new Set<string>();
++    for (const id of frontier) {
++      for (const parent of roomToParents.get(id) ?? []) {
++        const idx = sidebarIndex.get(parent);
++        if (idx !== undefined) return idx;
++        if (!visited.has(parent)) {
++          visited.add(parent);
++          next.add(parent);
++        }
++      }
++    }
++    frontier = next;
++  }
++  return Infinity;
++}
++
++export function useNavigateUnread() {
++  const navigate = useNavigate();
++  const mx = useMatrixClient();
++  const roomToUnread = useAtomValue(roomToUnreadAtom);
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
++  const settings = useAtomValue(settingsAtom);
++  const roomSortOrder: string =
++    (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
++  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
++  const setUnreadNavRoom = useAtom(unreadNavRoomAtom)[1];
++  const selectedRoomId = useSelectedRoom();
++
++  const unreadEntries = useMemo(() => {
++    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++    const hasUnread = (id: string) => (roomToUnread.get(id)?.total ?? 0) > 0;
++
++    // Build sidebar position lookup (space ID → index)
++    const sidebarSpaceIds = getSidebarSpaceIds(mx);
++    const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
++
++    // All rooms with unread, sorted by:
++    //   1. sidebar position of their nearest ancestor space
++    //   2. within same space: current roomSortOrder
++    const allUnread = Array.from(roomToUnread.keys()).filter(
++      (id) => hasUnread(id) && !mx.getRoom(id)?.isSpaceRoom()
++    );
++
++    const sortFallback =
++      roomSortOrder === 'az'
++        ? factoryRoomIdByAtoZ(mx)
++        : roomSortOrder === 'unread'
++        ? factoryRoomIdByUnreadFirst(
++            (id) => getUnread(id).highlight,
++            (id) => getUnread(id).total,
++            factoryRoomIdByActivity(mx)
++          )
++        : factoryRoomIdByActivity(mx);
++
++    allUnread.sort((a, b) => {
++      const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
++      const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
++      if (ai !== bi) return ai - bi;
++      return sortFallback(a, b);
++    });
++
++    return allUnread.map((id) => [id, roomToUnread.get(id)!] as const);
++  }, [mx, roomToUnread, roomToParents, roomSortOrder]);
++
++  const navigateToRoom = useCallback(
++    (roomId: string) => {
++      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++      const isDirect = mDirects.has(roomId);
++      if (isDirect) {
++        navigate(getDirectRoomPath(roomIdOrAlias));
++      } else {
++        const parents = roomToParents.get(roomId);
++        if (parents && parents.size > 0) {
++          const spaceId = Array.from(parents)[0];
++          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
++        } else {
++          navigate(getHomeRoomPath(roomIdOrAlias));
++        }
++      }
++    },
++    [mx, mDirects, roomToParents, navigate]
++  );
++
++  /**
++   * Resolve the base index to navigate relative to.
++   * Priority: lastNavigated room ID > selectedRoomId > fallback.
++   * fallback = -1 (for next → first room) or length (for prev → last room).
++   *
++   * When the last-navigated room has been read (not in list):
++   *   next: stay at the same position in the shrunk list (clamped - 1 → next = clamped)
++   *   prev: go to the room before the original position (clamped → prev = clamped - 1)
++   *         but avoid wrapping index 0 to end by using max(1, clamped).
++   */
++  const resolveBaseIndex = useCallback(
++    (fallback: number): number => {
++      if (lastNavigated) {
++        const found = unreadEntries.findIndex(([id]) => id === lastNavigated.roomId);
++        if (found >= 0) return found;
++        const clamped = Math.min(lastNavigated.index, unreadEntries.length);
++        return fallback < 0 ? clamped - 1 : Math.max(1, clamped);
++      }
++      if (selectedRoomId) {
++        const found = unreadEntries.findIndex(([id]) => id === selectedRoomId);
++        if (found >= 0) return found;
++      }
++      return fallback;
++    },
++    [unreadEntries, lastNavigated, selectedRoomId]
++  );
++
++  const navigateNext = useCallback(() => {
++    if (unreadEntries.length === 0) return;
++    const baseIndex = resolveBaseIndex(-1);
++    const next = (baseIndex + 1) % unreadEntries.length;
++    const roomId = unreadEntries[next][0];
++    setLastNavigated({ roomId, index: next });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
++
++  const navigatePrev = useCallback(() => {
++    if (unreadEntries.length === 0) return;
++    const baseIndex = resolveBaseIndex(unreadEntries.length);
++    const prev = (baseIndex - 1 + unreadEntries.length) % unreadEntries.length;
++    const roomId = unreadEntries[prev][0];
++    setLastNavigated({ roomId, index: prev });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
++
++  const navigateFirst = useCallback(() => {
++    if (unreadEntries.length === 0) return;
++    const roomId = unreadEntries[0][0];
++    setLastNavigated({ roomId, index: 0 });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
++
++  return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
++}
+diff --git a/src/app/hooks/useRoomListKeyboard.ts b/src/app/hooks/useRoomListKeyboard.ts
+new file mode 100644
+index 00000000..8144229c
+--- /dev/null
++++ b/src/app/hooks/useRoomListKeyboard.ts
+@@ -0,0 +1,125 @@
++import { useCallback, useEffect, useState } from 'react';
++import { Virtualizer } from '@tanstack/react-virtual';
++import { isKeyHotkey } from 'is-hotkey';
++
++interface UseRoomListKeyboardOptions {
++  items: string[];
++  selectedRoomId: string | undefined;
++  virtualizer: Virtualizer<HTMLDivElement, Element>;
++  onNavigate: (roomId: string) => void;
++  enabled?: boolean;
++  onTypeChar?: (key: string) => void;
++}
++
++export const useRoomListKeyboard = ({
++  items,
++  selectedRoomId,
++  virtualizer,
++  onNavigate,
++  enabled = true,
++  onTypeChar,
++}: UseRoomListKeyboardOptions) => {
++  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
++
++  useEffect(() => {
++    if (focusedIndex >= items.length) {
++      setFocusedIndex(items.length - 1);
++    }
++  }, [items.length, focusedIndex]);
++
++  // Called when the listbox div receives focus (e.g. via Tab)
++  const handleFocus = useCallback(() => {
++    if (focusedIndex < 0) {
++      const selectedIndex = selectedRoomId ? items.indexOf(selectedRoomId) : 0;
++      const idx = selectedIndex >= 0 ? selectedIndex : 0;
++      setFocusedIndex(idx);
++      virtualizer.scrollToIndex(idx, { align: 'auto' });
++    }
++  }, [focusedIndex, items, selectedRoomId, virtualizer]);
++
++  const handleKeyDown = useCallback(
++    (evt: React.KeyboardEvent<HTMLDivElement>) => {
++      if (!enabled) return;
++
++      if (isKeyHotkey('arrowdown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? 0 : Math.min(prev + 1, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('arrowup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? items.length - 1 : Math.max(prev - 1, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('home', evt)) {
++        evt.preventDefault();
++        setFocusedIndex(0);
++        virtualizer.scrollToIndex(0, { align: 'start' });
++        return;
++      }
++
++      if (isKeyHotkey('end', evt)) {
++        evt.preventDefault();
++        const lastIndex = items.length - 1;
++        setFocusedIndex(lastIndex);
++        virtualizer.scrollToIndex(lastIndex, { align: 'end' });
++        return;
++      }
++
++      if ((isKeyHotkey('enter', evt) || isKeyHotkey('space', evt)) && focusedIndex >= 0) {
++        // Let child buttons (e.g. phone icon) handle their own Enter/Space
++        if (evt.target !== evt.currentTarget) return;
++        evt.preventDefault();
++        const roomId = items[focusedIndex];
++        if (roomId) {
++          onNavigate(roomId);
++        }
++        return;
++      }
++
++      if (isKeyHotkey('pagedown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.min(prev + 10, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('pageup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.max(prev - 10, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      // Single printable character: redirect to search modal (via onTypeChar callback)
++      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey && onTypeChar) {
++        evt.preventDefault();
++        onTypeChar(evt.key);
++      }
++    },
++    [enabled, items, focusedIndex, virtualizer, onNavigate, onTypeChar]
++  );
++
++  return {
++    focusedIndex,
++    handleKeyDown,
++    handleFocus,
++    setFocusedIndex,
++  };
++};
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index b96c5e92cd..65fe21586f 100644
+index ce952bfc..65fe2158 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
-@@ -10,7 +10,7 @@
+@@ -1,7 +1,7 @@
+ import { useAtomValue } from 'jotai';
+ import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
+ import { useNavigate } from 'react-router-dom';
+-import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
++import { MatrixEvent, Room, RoomEvent, RoomEventHandlerMap, RoomMemberEvent } from 'matrix-js-sdk';
+ import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
+ import LogoSVG from '../../../../public/res/svg/cinny.svg';
+ import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
+@@ -10,7 +10,7 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
  import InviteSound from '../../../../public/sound/invite.ogg';
  import { notificationPermission, setFavicon } from '../../utils/dom';
  import { useSetting } from '../../state/hooks/settings';
@@ -140,17 +557,18 @@ index b96c5e92cd..65fe21586f 100644
  import { allInvitesAtom } from '../../state/room-list/inviteList';
  import { usePreviousValue } from '../../hooks/usePreviousValue';
  import { useMatrixClient } from '../../hooks/useMatrixClient';
-@@ -28,12 +28,19 @@
+@@ -28,12 +28,19 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
  
  function SystemEmojiFeature() {
 -  const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
-+  const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
- 
+-
 -  if (twitterEmoji) {
 -    document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
 -  } else {
 -    document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
++  const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
++
 +  switch (emojiFont) {
 +    case EmojiFont.Twemoji:
 +      document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
@@ -165,11 +583,61 @@ index b96c5e92cd..65fe21586f 100644
    }
  
    return null;
+@@ -231,8 +238,49 @@ function MessageNotifications() {
+       }
+     };
+     mx.on(RoomEvent.Timeline, handleTimelineEvent);
++
++    // Reaction to my own message
++    const handleReactionEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
++      mEvent,
++      room,
++      _toStart,
++      _removed,
++      data
++    ) => {
++      if (!data.liveEvent || mEvent.getType() !== 'm.reaction') return;
++      const rel = mEvent.getContent()['m.relates_to'] as
++        | { rel_type?: string; event_id?: string; key?: string }
++        | undefined;
++      if (rel?.rel_type !== 'm.annotation' || !rel.event_id) return;
++      const targetEvt = room?.findEventById(rel.event_id);
++      if (targetEvt?.getSender() !== mx.getUserId()) return;
++      if (notificationSound) playReactionSound();
++      const reactor = mEvent.getSender() ?? 'Someone';
++      const reactorName = room
++        ? (getMemberDisplayName(room, reactor) ?? getMxIdLocalPart(reactor) ?? reactor)
++        : reactor;
++      announce(`${reactorName} reacted ${rel.key ?? ''} to your message`);
++    };
++    mx.on(RoomEvent.Timeline, handleReactionEvent);
++
++    // Typing sound for current room
++    const handleTyping = (event: MatrixEvent, room: Room) => {
++      if (room.roomId !== selectedRoomId) return;
++      const typingUserIds =
++        (event.getContent() as { user_ids?: string[] }).user_ids ?? [];
++      const othersTyping = typingUserIds.filter((uid) => uid !== mx.getUserId());
++      if (othersTyping.length > 0 && prevTypingCountRef.current === 0) {
++        if (inRoomActivitySound) playTypingSound();
++        announce('Someone is typing');
++      }
++      prevTypingCountRef.current = othersTyping.length;
++    };
++    mx.on(RoomMemberEvent.Typing, handleTyping);
++
+     return () => {
+       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
++      mx.removeListener(RoomEvent.Timeline, handleReactionEvent);
++      mx.removeListener(RoomMemberEvent.Typing, handleTyping);
+     };
+   }, [
+     mx,
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 9fbad4ff0f..dccb6ed8b9 100644
+index 9fbad4ff..dccb6ed8 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
-@@ -14,6 +14,11 @@
+@@ -14,6 +14,11 @@ export enum MessageLayout {
    Compact = 1,
    Bubble = 2,
  }
@@ -181,7 +649,7 @@ index 9fbad4ff0f..dccb6ed8b9 100644
  
  export interface Settings {
    themeId?: string;
-@@ -23,7 +28,8 @@
+@@ -23,7 +28,8 @@ export interface Settings {
    monochromeMode?: boolean;
    isMarkdown: boolean;
    editorToolbar: boolean;
@@ -191,7 +659,7 @@ index 9fbad4ff0f..dccb6ed8b9 100644
    pageZoom: number;
    hideActivity: boolean;
  
-@@ -57,7 +63,7 @@
+@@ -57,7 +63,7 @@ const defaultSettings: Settings = {
    monochromeMode: false,
    isMarkdown: true,
    editorToolbar: false,
@@ -200,7 +668,7 @@ index 9fbad4ff0f..dccb6ed8b9 100644
    pageZoom: 100,
    hideActivity: false,
  
-@@ -86,9 +92,17 @@
+@@ -86,9 +92,17 @@ const defaultSettings: Settings = {
  export const getSettings = () => {
    const settings = localStorage.getItem(STORAGE_KEY);
    if (settings === null) return defaultSettings;
@@ -219,8 +687,83 @@ index 9fbad4ff0f..dccb6ed8b9 100644
    };
  };
  
+diff --git a/src/app/utils/sounds.ts b/src/app/utils/sounds.ts
+new file mode 100644
+index 00000000..70f6eacf
+--- /dev/null
++++ b/src/app/utils/sounds.ts
+@@ -0,0 +1,69 @@
++// Shared lazy AudioContext + named tone generators.
++// All sounds are short Web Audio API tones — no asset files needed.
++// Callers are responsible for checking user settings before calling.
++
++let audioCtx: AudioContext | null = null;
++
++function ctx(): AudioContext {
++  if (!audioCtx || audioCtx.state === 'closed') {
++    audioCtx = new AudioContext();
++  }
++  return audioCtx;
++}
++
++function tone(freq: number, dur: number, gain: number, type: OscillatorType = 'sine'): void {
++  try {
++    const c = ctx();
++    // Browsers start AudioContext suspended; resume() is a no-op if already running.
++    void c.resume();
++    const now = c.currentTime;
++    const g = c.createGain();
++    g.connect(c.destination);
++    g.gain.setValueAtTime(0, now);
++    g.gain.linearRampToValueAtTime(gain, now + 0.01);
++    g.gain.setValueAtTime(gain, now + dur - 0.02);
++    g.gain.linearRampToValueAtTime(0, now + dur);
++    const osc = c.createOscillator();
++    osc.type = type;
++    osc.frequency.value = freq;
++    osc.connect(g);
++    osc.start(now);
++    osc.stop(now + dur);
++  } catch {
++    // Audio not supported or blocked by browser
++  }
++}
++
++/** C5->E5 two-tone ascending -- urgent mention alert */
++export function playMentionSound(): void {
++  tone(523.25, 0.12, 0.25);
++  setTimeout(() => tone(659.25, 0.15, 0.3), 120);
++}
++
++/** Single A4 soft beep -- activity in current room */
++export function playCurrentRoomSound(): void {
++  tone(440, 0.08, 0.1);
++}
++
++/** Low Eb4 tick, very quiet -- activity in another room */
++export function playOtherRoomSound(): void {
++  tone(311.13, 0.06, 0.07);
++}
++
++/** Very brief 800Hz click -- someone started typing */
++export function playTypingSound(): void {
++  tone(800, 0.04, 0.05, 'square');
++}
++
++/** A5->C#6 two quick sparkle tones -- reaction received */
++export function playReactionSound(): void {
++  tone(880, 0.08, 0.15);
++  setTimeout(() => tone(1108.73, 0.1, 0.12), 80);
++}
++
++/** A4->C#5->E5 three-step sweep -- reply to your message */
++export function playReplyToMeSound(): void {
++  tone(440, 0.1, 0.15);
++  setTimeout(() => tone(554.37, 0.1, 0.15), 100);
++  setTimeout(() => tone(659.25, 0.12, 0.18), 200);
++}
 diff --git a/src/index.css b/src/index.css
-index ca28536d22..699e20fcb6 100644
+index ca28536d..699e20fc 100644
 --- a/src/index.css
 +++ b/src/index.css
 @@ -5,6 +5,12 @@
