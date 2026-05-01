@@ -14,6 +14,7 @@ import {
 } from '../state/hooks/roomList';
 import { useMatrixClient } from './useMatrixClient';
 import { getCanonicalAliasOrRoomId } from '../utils/matrix';
+import { getAccountData } from '../utils/room';
 import {
   getDirectPath,
   getDirectRoomPath,
@@ -72,9 +73,9 @@ type SidebarItem = string | { id: string; content: string[] };
 
 /** Flat ordered list of space IDs from the user's sidebar config. */
 function getSidebarSpaceIds(mx: MatrixClient): string[] {
-  const content = mx
-    .getAccountData(AccountDataEvent.CinnySpaces)
-    ?.getContent<{ sidebar?: SidebarItem[] }>();
+  const content = getAccountData(mx, AccountDataEvent.CinnySpaces)?.getContent<{
+    sidebar?: SidebarItem[];
+  }>();
   const sidebar = content?.sidebar ?? [];
   const ids: string[] = [];
   sidebar.forEach((item) => {
