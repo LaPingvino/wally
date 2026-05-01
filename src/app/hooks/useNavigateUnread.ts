@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useAtomValue, useAtom, atom } from 'jotai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MatrixClient } from 'matrix-js-sdk';
@@ -15,8 +15,11 @@ import {
 import { useMatrixClient } from './useMatrixClient';
 import { getCanonicalAliasOrRoomId } from '../utils/matrix';
 import {
+  getDirectPath,
   getDirectRoomPath,
+  getHomePath,
   getHomeRoomPath,
+  getSpacePath,
   getSpaceRoomPath,
 } from '../pages/pathUtils';
 import { AccountDataEvent } from '../../types/matrix/accountData';
@@ -38,6 +41,20 @@ import { bottomBarDismissedAtom } from '../state/bottomBarDismiss';
 export const mentionNavAtom = atom<{ roomId: string; eventIds: string[]; index: number } | null>(
   null
 );
+
+/**
+ * Pending cross-bucket jump.
+ *
+ * Set by useNavigateUnread when the user steps off the end of the current
+ * view's unreads — we navigate to the next/prev bucket's URL but can't
+ * pick the actual room to land in here, because the destination view's
+ * sorted room list isn't available until that page mounts and renders.
+ *
+ * Pages that own a bucket's room list (Home, Direct, Space) call
+ * usePendingBucketJump(bucket, sortedRoomIds) which watches this atom
+ * and, on a match, navigates to first or last room and clears it.
+ */
+export const pendingBucketJumpAtom = atom<{ bucket: string; edge: 'first' | 'last' } | null>(null);
 
 type SidebarItem = string | { id: string; content: string[] };
 
@@ -142,18 +159,28 @@ export function useNavigateUnread() {
     return [HOME_BUCKET, DIRECT_BUCKET, ...getSidebarSpaceIds(mx)];
   }, [mx]);
 
-  // ── Per-bucket unread sets, computed fresh from roomToUnread ──
-  // For home/direct: orphan rooms / direct rooms with unreads.
-  // For each space: unread rooms whose sidebar-space resolves to that space.
-  const unreadByBucket = useMemo((): Map<string, Set<string>> => {
+  // ── Per-bucket FULL room sets (not just unreads). Used by the
+  //    cross-space jump: when we step out of the current view we land on
+  //    the first/last ROOM in the next bucket, even if it's read. The
+  //    user can then walk unreads within that bucket from there. This is
+  //    simpler and more predictable than trying to compute "first unread"
+  //    for buckets whose display order we don't know at hook time.
+  const allRoomsByBucket = useMemo((): Map<string, string[]> => {
     const sidebarSet = new Set(getSidebarSpaceIds(mx));
-    const buckets = new Map<string, Set<string>>();
-    for (const b of sidebarBuckets) buckets.set(b, new Set<string>());
-
     const homeOrphanSet = new Set(homeRooms);
     const directSet = new Set(directRooms);
+    const buckets = new Map<string, string[]>();
+    for (const b of sidebarBuckets) buckets.set(b, []);
 
-    for (const id of roomToUnread.keys()) {
+    // We need to enumerate every joined room. Use the union of the lists
+    // we already pulled (homeRooms ∪ directRooms ∪ rooms with parents).
+    const allIds = new Set<string>([...homeRooms, ...directRooms]);
+    for (const id of roomToParents.keys()) allIds.add(id);
+    // Also include unread rooms (covers the rare case where a room is in
+    // a sidebar space but somehow missing from the above sets).
+    for (const id of roomToUnread.keys()) allIds.add(id);
+
+    for (const id of allIds) {
       const room = mx.getRoom(id);
       if (!room || room.isSpaceRoom()) continue;
 
@@ -162,62 +189,80 @@ export function useNavigateUnread() {
       else if (homeOrphanSet.has(id)) bucket = HOME_BUCKET;
       else bucket = findSidebarSpaceForRoom(id, roomToParents, sidebarSet);
 
-      if (bucket && buckets.has(bucket)) buckets.get(bucket)!.add(id);
+      if (bucket && buckets.has(bucket)) buckets.get(bucket)!.push(id);
     }
-    return buckets;
-  }, [mx, sidebarBuckets, roomToUnread, roomToParents, homeRooms, directRooms]);
 
-  // ── For "next-space-with-unreads" lookup we need the bucket's room list
-  //    to pick top/bottom unread. For home/direct we have it. For other
-  //    spaces, we don't have their full room list (would need a separate
-  //    hook per space) — so we fall back to a SORT of just the unread
-  //    rooms in that bucket using the same sortFn. Close enough to the
-  //    visible-list order in practice.
-  const sortFnForBucket = useMemo(() => {
+    // Sort each bucket with the current sort order.
     const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
-    return roomSortOrder === 'az'
-      ? factoryRoomIdByAtoZ(mx)
-      : roomSortOrder === 'unread'
-      ? factoryRoomIdByUnreadFirst(
-          (id) => getUnread(id).highlight,
-          (id) => getUnread(id).total,
-          factoryRoomIdByActivity(mx)
-        )
-      : factoryRoomIdByActivity(mx);
-  }, [mx, roomToUnread, roomSortOrder]);
+    const sortFn =
+      roomSortOrder === 'az'
+        ? factoryRoomIdByAtoZ(mx)
+        : roomSortOrder === 'unread'
+        ? factoryRoomIdByUnreadFirst(
+            (id) => getUnread(id).highlight,
+            (id) => getUnread(id).total,
+            factoryRoomIdByActivity(mx)
+          )
+        : factoryRoomIdByActivity(mx);
+    for (const ids of buckets.values()) ids.sort(sortFn);
 
-  const firstUnreadInBucket = useCallback(
+    return buckets;
+  }, [
+    mx,
+    sidebarBuckets,
+    roomToUnread,
+    roomToParents,
+    homeRooms,
+    directRooms,
+    roomSortOrder,
+  ]);
+
+  /** First room (any read state) in a bucket, in the bucket's sort order. */
+  const firstRoomInBucket = useCallback(
     (bucket: string): string | undefined => {
-      // For the current view, prefer display order.
-      if (bucket === currentBucket && currentViewRooms.length > 0) {
-        for (const id of currentViewRooms) if (roomToUnread.has(id)) return id;
-      }
-      const unreads = unreadByBucket.get(bucket);
-      if (!unreads || unreads.size === 0) return undefined;
-      return [...unreads].sort(sortFnForBucket)[0];
+      if (bucket === currentBucket && currentViewRooms.length > 0) return currentViewRooms[0];
+      const ids = allRoomsByBucket.get(bucket);
+      return ids && ids.length > 0 ? ids[0] : undefined;
     },
-    [currentBucket, currentViewRooms, unreadByBucket, roomToUnread, sortFnForBucket]
+    [currentBucket, currentViewRooms, allRoomsByBucket]
   );
 
-  const lastUnreadInBucket = useCallback(
+  /** Last room (any read state) in a bucket, in the bucket's sort order. */
+  const lastRoomInBucket = useCallback(
     (bucket: string): string | undefined => {
-      if (bucket === currentBucket && currentViewRooms.length > 0) {
-        for (let i = currentViewRooms.length - 1; i >= 0; i -= 1) {
-          if (roomToUnread.has(currentViewRooms[i])) return currentViewRooms[i];
-        }
-      }
-      const unreads = unreadByBucket.get(bucket);
-      if (!unreads || unreads.size === 0) return undefined;
-      const sorted = [...unreads].sort(sortFnForBucket);
-      return sorted[sorted.length - 1];
+      if (bucket === currentBucket && currentViewRooms.length > 0)
+        return currentViewRooms[currentViewRooms.length - 1];
+      const ids = allRoomsByBucket.get(bucket);
+      return ids && ids.length > 0 ? ids[ids.length - 1] : undefined;
     },
-    [currentBucket, currentViewRooms, unreadByBucket, roomToUnread, sortFnForBucket]
+    [currentBucket, currentViewRooms, allRoomsByBucket]
   );
 
-  // ── Step within current view first; if exhausted, jump to neighbouring
-  //    bucket (in sidebar order). Wraps around the sidebar.
+  /** Does this bucket contain at least one unread room? */
+  const bucketHasUnread = useCallback(
+    (bucket: string): boolean => {
+      const ids = allRoomsByBucket.get(bucket);
+      if (!ids) return false;
+      for (const id of ids) if (roomToUnread.has(id)) return true;
+      return false;
+    },
+    [allRoomsByBucket, roomToUnread]
+  );
+
+  const setPendingBucketJump = useAtom(pendingBucketJumpAtom)[1];
+
+  /**
+   * Step within current view first. If exhausted, find next/prev bucket
+   * with unreads, navigate to its URL, and store a pending-jump request
+   * so the destination view (once mounted with its sorted room list)
+   * picks first/last room. Returns:
+   *   - a roomId to navigate to within the current view (caller routes)
+   *   - or null when we've delegated to a cross-bucket jump (caller
+   *     should not navigate further; we already did)
+   *   - or undefined if we have nothing to do.
+   */
   const stepUnread = useCallback(
-    (direction: 1 | -1, predicate: (id: string) => boolean): string | undefined => {
+    (direction: 1 | -1, predicate: (id: string) => boolean): string | null | undefined => {
       // 1) Walk current view in display order from the selected room.
       const idx = selectedRoomId ? currentViewRooms.indexOf(selectedRoomId) : -1;
       if (direction === 1) {
@@ -231,19 +276,34 @@ export function useNavigateUnread() {
         }
       }
 
-      // 2) No more in current view. Walk sidebar buckets.
+      // 2) No more in current view. Find next/prev bucket WITH unreads.
       const bIdx = sidebarBuckets.indexOf(currentBucket);
-      if (bIdx === -1) return undefined;
-      const total = sidebarBuckets.length;
-      // Visit buckets in order; wrap around past the current bucket.
-      for (let step = 1; step <= total; step += 1) {
-        const i = (bIdx + direction * step + total * 2) % total;
-        const bucket = sidebarBuckets[i];
-        const candidate = direction === 1 ? firstUnreadInBucket(bucket) : lastUnreadInBucket(bucket);
-        if (candidate && predicate(candidate)) return candidate;
+      if (bIdx !== -1) {
+        const total = sidebarBuckets.length;
+        for (let step = 1; step <= total; step += 1) {
+          const i = (bIdx + direction * step + total * 2) % total;
+          const bucket = sidebarBuckets[i];
+          if (bucket === currentBucket) continue;
+          if (!bucketHasUnread(bucket)) continue;
+
+          // Navigate to the bucket's URL; the destination view will land
+          // on first/last room once its sorted list is ready.
+          const edge: 'first' | 'last' = direction === 1 ? 'first' : 'last';
+          setPendingBucketJump({ bucket, edge });
+          if (bucket === HOME_BUCKET) {
+            navigate(getHomePath());
+          } else if (bucket === DIRECT_BUCKET) {
+            navigate(getDirectPath());
+          } else {
+            navigate(getSpacePath(getCanonicalAliasOrRoomId(mx, bucket)));
+          }
+          setBottomBarDismissed(false);
+          return null;
+        }
       }
 
-      // 3) Last resort — wrap within current view from the other end.
+      // 3) Last resort — no other bucket has unreads. Wrap within current
+      //    view from the other end.
       if (direction === 1) {
         for (let i = 0; i < currentViewRooms.length; i += 1) {
           if (predicate(currentViewRooms[i])) return currentViewRooms[i];
@@ -260,8 +320,11 @@ export function useNavigateUnread() {
       currentViewRooms,
       sidebarBuckets,
       currentBucket,
-      firstUnreadInBucket,
-      lastUnreadInBucket,
+      bucketHasUnread,
+      setPendingBucketJump,
+      navigate,
+      mx,
+      setBottomBarDismissed,
     ]
   );
 
@@ -287,6 +350,8 @@ export function useNavigateUnread() {
   const goPrev = useCallback(
     (predicate: (id: string) => boolean) => {
       const target = stepUnread(-1, predicate);
+      // null = cross-bucket jump already navigated; nothing more to do.
+      if (target === null) return;
       if (!target) return;
       setBottomBarDismissed(false);
       navigateToRoom(target);
@@ -296,6 +361,7 @@ export function useNavigateUnread() {
   const goNext = useCallback(
     (predicate: (id: string) => boolean) => {
       const target = stepUnread(1, predicate);
+      if (target === null) return;
       if (!target) return;
       setBottomBarDismissed(false);
       navigateToRoom(target);
@@ -320,30 +386,37 @@ export function useNavigateUnread() {
   const navigateFirst = useCallback(() => {
     // First overall unread: scan sidebar buckets in order.
     for (const b of sidebarBuckets) {
-      const target = firstUnreadInBucket(b);
-      if (target) {
-        setBottomBarDismissed(false);
-        navigateToRoom(target);
-        return;
+      const ids = allRoomsByBucket.get(b);
+      if (!ids) continue;
+      for (const id of ids) {
+        if (roomToUnread.has(id)) {
+          setBottomBarDismissed(false);
+          navigateToRoom(id);
+          return;
+        }
       }
     }
-  }, [sidebarBuckets, firstUnreadInBucket, setBottomBarDismissed, navigateToRoom]);
+  }, [sidebarBuckets, allRoomsByBucket, roomToUnread, setBottomBarDismissed, navigateToRoom]);
 
   const unreadCount = useMemo(() => {
     let n = 0;
-    for (const set of unreadByBucket.values()) n += set.size;
+    for (const ids of allRoomsByBucket.values()) {
+      for (const id of ids) {
+        if ((roomToUnread.get(id)?.total ?? 0) > 0) n += 1;
+      }
+    }
     return n;
-  }, [unreadByBucket]);
+  }, [allRoomsByBucket, roomToUnread]);
 
   const mentionCount = useMemo(() => {
     let n = 0;
-    for (const set of unreadByBucket.values()) {
-      for (const id of set) {
+    for (const ids of allRoomsByBucket.values()) {
+      for (const id of ids) {
         if ((roomToUnread.get(id)?.highlight ?? 0) > 0) n += 1;
       }
     }
     return n;
-  }, [unreadByBucket, roomToUnread]);
+  }, [allRoomsByBucket, roomToUnread]);
 
   return {
     navigateNext,
@@ -355,3 +428,34 @@ export function useNavigateUnread() {
     mentionCount,
   };
 }
+
+/**
+ * Drains the pending-bucket-jump request: when the destination view's
+ * sorted room list is ready and matches the pending bucket, navigate to
+ * its first or last room and clear the atom.
+ *
+ * Call from each page that owns a bucket's room list. `bucket` is the
+ * bucket sentinel for this page (HOME_BUCKET / DIRECT_BUCKET / spaceId).
+ */
+export function usePendingBucketJump(
+  bucket: string,
+  sortedRoomIds: string[],
+  navigateRoom: (roomId: string) => void
+): void {
+  const [pending, setPending] = useAtom(pendingBucketJumpAtom);
+  // Stable refs so the effect can fire when sortedRoomIds becomes ready
+  // without retriggering when navigateRoom identity changes.
+  React.useEffect(() => {
+    if (!pending) return;
+    if (pending.bucket !== bucket) return;
+    if (sortedRoomIds.length === 0) return;
+    const target =
+      pending.edge === 'first' ? sortedRoomIds[0] : sortedRoomIds[sortedRoomIds.length - 1];
+    setPending(null);
+    navigateRoom(target);
+  }, [pending, bucket, sortedRoomIds, navigateRoom, setPending]);
+}
+
+/** Sentinel bucket IDs exported so page components can pass them in. */
+export const NAV_HOME_BUCKET = HOME_BUCKET;
+export const NAV_DIRECT_BUCKET = DIRECT_BUCKET;

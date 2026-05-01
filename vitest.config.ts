@@ -4,5 +4,8 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    // src/cinny-web/ is a nested clone left behind by makepkg's source
+    // extraction; excluding so vitest doesn't double-pick its tests.
+    exclude: ['node_modules/**', 'dist/**', 'src/cinny-web/**'],
   },
 });

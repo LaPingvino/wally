@@ -65,20 +65,37 @@ async function writeEvents(events: FailureEvent[]): Promise<void> {
   }
 }
 
+// Serialise log writes through a promise chain so concurrent calls don't
+// race on the read-modify-write of the single Cache entry. Without this,
+// two events fired in quick succession (e.g. checkpoint_missing followed
+// immediately by idb_wiped) would both read the same baseline, both
+// push, and the second write would overwrite the first — losing the
+// earlier event entirely. Observed in the wild on Chromebook recovery.
+let logChain: Promise<void> = Promise.resolve();
+
 /**
  * Append a single failure event. Best-effort: any storage failure is
  * swallowed because diagnostics must never themselves break the app.
+ * Calls are serialised in the order they're invoked.
  */
-export async function logFailureEvent(
+export function logFailureEvent(
   kind: FailureEventKind,
   details?: Record<string, unknown>
 ): Promise<void> {
   const event: FailureEvent = { ts: Date.now(), kind };
   if (details) event.details = details;
-  const events = await readEvents();
-  events.push(event);
-  if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
-  await writeEvents(events);
+  logChain = logChain
+    .then(async () => {
+      const events = await readEvents();
+      events.push(event);
+      if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
+      await writeEvents(events);
+    })
+    .catch(() => {
+      // Reset the chain on error so a single failure doesn't poison
+      // every subsequent write.
+    });
+  return logChain;
 }
 
 /** Fetch the full buffer. */

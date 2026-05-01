@@ -85,6 +85,7 @@ import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
+import { usePendingBucketJump } from '../../../hooks/useNavigateUnread';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
@@ -585,6 +586,9 @@ export function Space() {
   const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
 
   const { navigateRoom } = useRoomNavigate();
+  // Drain pending cross-bucket jump from useNavigateUnread once our
+  // sorted room list (display order) is ready.
+  usePendingBucketJump(space.roomId, roomsOnly, navigateRoom);
 
   const setSearchModal = useSetAtom(searchModalAtom);
   const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
