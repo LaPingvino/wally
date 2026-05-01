@@ -32511,18 +32511,24 @@ index 00000000..4bba79de
 +}
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
-index 00000000..319def10
+index 00000000..e082bc7c
 --- /dev/null
 +++ b/src/app/hooks/useNavigateUnread.ts
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,357 @@
 +import { useCallback, useMemo } from 'react';
-+import { useAtomValue, useAtom } from 'jotai';
-+import { atom } from 'jotai';
-+import { useNavigate } from 'react-router-dom';
++import { useAtomValue, useAtom, atom } from 'jotai';
++import { useNavigate, useLocation } from 'react-router-dom';
 +import { MatrixClient } from 'matrix-js-sdk';
 +import { roomToUnreadAtom } from '../state/room/roomToUnread';
 +import { mDirectAtom } from '../state/mDirectList';
 +import { roomToParentsAtom } from '../state/room/roomToParents';
++import { allRoomsAtom } from '../state/room-list/roomList';
++import {
++  useChildRoomScopeFactory,
++  useDirects,
++  useOrphanRooms,
++  useSpaceChildren,
++} from '../state/hooks/roomList';
 +import { useMatrixClient } from './useMatrixClient';
 +import { getCanonicalAliasOrRoomId } from '../utils/matrix';
 +import {
@@ -32538,14 +32544,8 @@ index 00000000..319def10
 +} from '../utils/sort';
 +import { settingsAtom } from '../state/settings';
 +import { useSelectedRoom } from './router/useSelectedRoom';
++import { useSelectedSpace } from './router/useSelectedSpace';
 +import { bottomBarDismissedAtom } from '../state/bottomBarDismiss';
-+
-+/**
-+ * Track the last navigated room by ID + its position in the list at the time.
-+ * Using room ID (not just index) means we can correctly position ourselves
-+ * even when the list shrinks as rooms are read.
-+ */
-+const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
 +
 +/**
 + * Within-room mention navigation state.
@@ -32575,21 +32575,20 @@ index 00000000..319def10
 +
 +/**
 + * Walk up the parent chain (via roomToParents) until we find a space that is
-+ * in the sidebar. Returns the sidebar index, or Infinity if none found.
++ * in the sidebar. Returns the sidebar id, or undefined if none found.
 + */
-+function getSidebarIndex(
++function findSidebarSpaceForRoom(
 +  roomId: string,
 +  roomToParents: Map<string, Set<string>>,
-+  sidebarIndex: Map<string, number>
-+): number {
++  sidebarSet: Set<string>
++): string | undefined {
 +  const visited = new Set<string>();
 +  let frontier = new Set([roomId]);
 +  while (frontier.size > 0) {
 +    const next = new Set<string>();
 +    for (const id of frontier) {
 +      for (const parent of roomToParents.get(id) ?? []) {
-+        const idx = sidebarIndex.get(parent);
-+        if (idx !== undefined) return idx;
++        if (sidebarSet.has(parent)) return parent;
 +        if (!visited.has(parent)) {
 +          visited.add(parent);
 +          next.add(parent);
@@ -32598,11 +32597,20 @@ index 00000000..319def10
 +    }
 +    frontier = next;
 +  }
-+  return Infinity;
++  return undefined;
 +}
++
++// View-bucket sentinels used in the sidebar order. The sidebar UI shows
++// Home and Direct as their own tabs alongside the spaces, so we treat
++// them as pseudo-spaces in the navigation order.
++const HOME_BUCKET = '__home__';
++const DIRECT_BUCKET = '__direct__';
++
++type View = 'home' | 'direct' | 'space';
 +
 +export function useNavigateUnread() {
 +  const navigate = useNavigate();
++  const location = useLocation();
 +  const mx = useMatrixClient();
 +  const roomToUnread = useAtomValue(roomToUnreadAtom);
 +  const mDirects = useAtomValue(mDirectAtom);
@@ -32610,84 +32618,169 @@ index 00000000..319def10
 +  const settings = useAtomValue(settingsAtom);
 +  const roomSortOrder: string =
 +    (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
-+  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
 +  const setBottomBarDismissed = useAtom(bottomBarDismissedAtom)[1];
 +  const selectedRoomId = useSelectedRoom();
++  const selectedSpaceId = useSelectedSpace();
 +
-+  // Sorted list of rooms matching a predicate (unread or mention) plus the
-+  // shared comparator used to virtually position the currently-selected
-+  // room within that list.
-+  //
-+  // Ordering rules (the user-visible behaviour):
-+  //   1. Rooms whose containing space matches the *currently open* space
-+  //      come first, in the room-list's normal sort order. This keeps
-+  //      "next unread" walking through the active space before jumping
-+  //      anywhere else.
-+  //   2. Then every other room grouped by sidebar space index. Within a
-+  //      space, rooms use the room-list's normal sort.
-+  const buildSortedRooms = useCallback(
-+    (matches: (id: string) => boolean) => {
-+      const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++  // Determine current view from the URL.
++  const view: View = location.pathname.startsWith('/direct/')
++    ? 'direct'
++    : location.pathname.startsWith('/home/') || (!selectedSpaceId && !location.pathname.startsWith('/direct/'))
++    ? 'home'
++    : 'space';
++  const currentBucket: string =
++    view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : selectedSpaceId ?? HOME_BUCKET;
 +
-+      const sidebarSpaceIds = getSidebarSpaceIds(mx);
-+      const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
++  // ── Get rooms for each view in display order ──
++  const homeRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
++  const directRooms = useDirects(mx, allRoomsAtom, mDirects);
++  const spaceChildSelector = useChildRoomScopeFactory(mx, mDirects, roomToParents);
++  const spaceRooms = useSpaceChildren(allRoomsAtom, selectedSpaceId ?? '', spaceChildSelector);
 +
-+      // Active space = the space containing the currently-selected room
-+      // (Infinity if none — Home/DM views, or the user just landed).
-+      const activeSidebarIdx = selectedRoomId
-+        ? getSidebarIndex(selectedRoomId, roomToParents, sidebarIndex)
-+        : Infinity;
++  // Pick the appropriate list and apply current sort.
++  const currentViewRooms = useMemo(() => {
++    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++    const sortFn =
++      roomSortOrder === 'az'
++        ? factoryRoomIdByAtoZ(mx)
++        : roomSortOrder === 'unread'
++        ? factoryRoomIdByUnreadFirst(
++            (id) => getUnread(id).highlight,
++            (id) => getUnread(id).total,
++            factoryRoomIdByActivity(mx)
++          )
++        : factoryRoomIdByActivity(mx);
++    const base = view === 'home' ? homeRooms : view === 'direct' ? directRooms : spaceRooms;
++    return [...base].sort(sortFn);
++  }, [view, homeRooms, directRooms, spaceRooms, mx, roomToUnread, roomSortOrder]);
 +
-+      const rooms = Array.from(roomToUnread.keys()).filter(
-+        (id) => matches(id) && !mx.getRoom(id)?.isSpaceRoom()
-+      );
++  // ── Sidebar bucket order: home, direct, then user's sidebar spaces ──
++  const sidebarBuckets = useMemo(() => {
++    return [HOME_BUCKET, DIRECT_BUCKET, ...getSidebarSpaceIds(mx)];
++  }, [mx]);
 +
-+      const sortFallback =
-+        roomSortOrder === 'az'
-+          ? factoryRoomIdByAtoZ(mx)
-+          : roomSortOrder === 'unread'
-+          ? factoryRoomIdByUnreadFirst(
-+              (id) => getUnread(id).highlight,
-+              (id) => getUnread(id).total,
-+              factoryRoomIdByActivity(mx)
-+            )
-+          : factoryRoomIdByActivity(mx);
++  // ── Per-bucket unread sets, computed fresh from roomToUnread ──
++  // For home/direct: orphan rooms / direct rooms with unreads.
++  // For each space: unread rooms whose sidebar-space resolves to that space.
++  const unreadByBucket = useMemo((): Map<string, Set<string>> => {
++    const sidebarSet = new Set(getSidebarSpaceIds(mx));
++    const buckets = new Map<string, Set<string>>();
++    for (const b of sidebarBuckets) buckets.set(b, new Set<string>());
 +
-+      // 0 = in active space, 1 = elsewhere — sorted ascending so active
-+      // space wins. Beyond that, group by sidebar space index, then
-+      // fall back to the user's room-sort preference.
-+      const compare = (a: string, b: string): number => {
-+        const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
-+        const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
-+        const aBucket = ai === activeSidebarIdx ? 0 : 1;
-+        const bBucket = bi === activeSidebarIdx ? 0 : 1;
-+        if (aBucket !== bBucket) return aBucket - bBucket;
-+        if (ai !== bi) return ai - bi;
-+        return sortFallback(a, b);
-+      };
++    const homeOrphanSet = new Set(homeRooms);
++    const directSet = new Set(directRooms);
 +
-+      rooms.sort(compare);
++    for (const id of roomToUnread.keys()) {
++      const room = mx.getRoom(id);
++      if (!room || room.isSpaceRoom()) continue;
 +
-+      return {
-+        entries: rooms.map((id) => [id, roomToUnread.get(id)!] as const),
-+        compare,
-+      };
++      let bucket: string | undefined;
++      if (directSet.has(id)) bucket = DIRECT_BUCKET;
++      else if (homeOrphanSet.has(id)) bucket = HOME_BUCKET;
++      else bucket = findSidebarSpaceForRoom(id, roomToParents, sidebarSet);
++
++      if (bucket && buckets.has(bucket)) buckets.get(bucket)!.add(id);
++    }
++    return buckets;
++  }, [mx, sidebarBuckets, roomToUnread, roomToParents, homeRooms, directRooms]);
++
++  // ── For "next-space-with-unreads" lookup we need the bucket's room list
++  //    to pick top/bottom unread. For home/direct we have it. For other
++  //    spaces, we don't have their full room list (would need a separate
++  //    hook per space) — so we fall back to a SORT of just the unread
++  //    rooms in that bucket using the same sortFn. Close enough to the
++  //    visible-list order in practice.
++  const sortFnForBucket = useMemo(() => {
++    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++    return roomSortOrder === 'az'
++      ? factoryRoomIdByAtoZ(mx)
++      : roomSortOrder === 'unread'
++      ? factoryRoomIdByUnreadFirst(
++          (id) => getUnread(id).highlight,
++          (id) => getUnread(id).total,
++          factoryRoomIdByActivity(mx)
++        )
++      : factoryRoomIdByActivity(mx);
++  }, [mx, roomToUnread, roomSortOrder]);
++
++  const firstUnreadInBucket = useCallback(
++    (bucket: string): string | undefined => {
++      // For the current view, prefer display order.
++      if (bucket === currentBucket && currentViewRooms.length > 0) {
++        for (const id of currentViewRooms) if (roomToUnread.has(id)) return id;
++      }
++      const unreads = unreadByBucket.get(bucket);
++      if (!unreads || unreads.size === 0) return undefined;
++      return [...unreads].sort(sortFnForBucket)[0];
 +    },
-+    [mx, roomToUnread, roomToParents, roomSortOrder, selectedRoomId]
++    [currentBucket, currentViewRooms, unreadByBucket, roomToUnread, sortFnForBucket]
 +  );
 +
-+  const unread = useMemo(
-+    () => buildSortedRooms((id) => (roomToUnread.get(id)?.total ?? 0) > 0),
-+    [buildSortedRooms, roomToUnread]
++  const lastUnreadInBucket = useCallback(
++    (bucket: string): string | undefined => {
++      if (bucket === currentBucket && currentViewRooms.length > 0) {
++        for (let i = currentViewRooms.length - 1; i >= 0; i -= 1) {
++          if (roomToUnread.has(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      }
++      const unreads = unreadByBucket.get(bucket);
++      if (!unreads || unreads.size === 0) return undefined;
++      const sorted = [...unreads].sort(sortFnForBucket);
++      return sorted[sorted.length - 1];
++    },
++    [currentBucket, currentViewRooms, unreadByBucket, roomToUnread, sortFnForBucket]
 +  );
 +
-+  const mention = useMemo(
-+    () => buildSortedRooms((id) => (roomToUnread.get(id)?.highlight ?? 0) > 0),
-+    [buildSortedRooms, roomToUnread]
-+  );
++  // ── Step within current view first; if exhausted, jump to neighbouring
++  //    bucket (in sidebar order). Wraps around the sidebar.
++  const stepUnread = useCallback(
++    (direction: 1 | -1, predicate: (id: string) => boolean): string | undefined => {
++      // 1) Walk current view in display order from the selected room.
++      const idx = selectedRoomId ? currentViewRooms.indexOf(selectedRoomId) : -1;
++      if (direction === 1) {
++        for (let i = idx + 1; i < currentViewRooms.length; i += 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      } else {
++        const start = idx === -1 ? currentViewRooms.length : idx;
++        for (let i = start - 1; i >= 0; i -= 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      }
 +
-+  const unreadEntries = unread.entries;
-+  const mentionEntries = mention.entries;
++      // 2) No more in current view. Walk sidebar buckets.
++      const bIdx = sidebarBuckets.indexOf(currentBucket);
++      if (bIdx === -1) return undefined;
++      const total = sidebarBuckets.length;
++      // Visit buckets in order; wrap around past the current bucket.
++      for (let step = 1; step <= total; step += 1) {
++        const i = (bIdx + direction * step + total * 2) % total;
++        const bucket = sidebarBuckets[i];
++        const candidate = direction === 1 ? firstUnreadInBucket(bucket) : lastUnreadInBucket(bucket);
++        if (candidate && predicate(candidate)) return candidate;
++      }
++
++      // 3) Last resort — wrap within current view from the other end.
++      if (direction === 1) {
++        for (let i = 0; i < currentViewRooms.length; i += 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      } else {
++        for (let i = currentViewRooms.length - 1; i >= 0; i -= 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      }
++      return undefined;
++    },
++    [
++      selectedRoomId,
++      currentViewRooms,
++      sidebarBuckets,
++      currentBucket,
++      firstUnreadInBucket,
++      lastUnreadInBucket,
++    ]
++  );
 +
 +  const navigateToRoom = useCallback(
 +    (roomId: string) => {
@@ -32695,105 +32788,79 @@ index 00000000..319def10
 +      const isDirect = mDirects.has(roomId);
 +      if (isDirect) {
 +        navigate(getDirectRoomPath(roomIdOrAlias));
-+      } else {
-+        const parents = roomToParents.get(roomId);
-+        if (parents && parents.size > 0) {
-+          const spaceId = Array.from(parents)[0];
-+          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
-+        } else {
-+          navigate(getHomeRoomPath(roomIdOrAlias));
-+        }
++        return;
 +      }
++      const parents = roomToParents.get(roomId);
++      if (parents && parents.size > 0) {
++        const spaceId = Array.from(parents)[0];
++        navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
++        return;
++      }
++      navigate(getHomeRoomPath(roomIdOrAlias));
 +    },
 +    [mx, mDirects, roomToParents, navigate]
 +  );
 +
-+  /**
-+   * Step prev/next through `entries`. The "anchor" we step from is the
-+   * currently-selected room — if it's already in the unread list, we use
-+   * its index directly; otherwise we use `compare` to find the slot
-+   * where it would virtually sort and step from there.
-+   *
-+   * This lets prev/next behave correctly when the current room has no
-+   * unreads: next picks the first unread that sorts after the current
-+   * room, prev picks the last unread that sorts before it. Wrapping at
-+   * either end falls through to the global list (other spaces).
-+   */
-+  const stepTo = useCallback(
-+    (
-+      entries: ReadonlyArray<readonly [string, unknown]>,
-+      compare: (a: string, b: string) => number,
-+      direction: 1 | -1
-+    ) => {
-+      if (entries.length === 0) return;
-+
-+      let baseIndex: number;
-+
-+      // Anchor: prefer lastNavigated when its room is still in the list.
-+      if (lastNavigated) {
-+        const found = entries.findIndex(([id]) => id === lastNavigated.roomId);
-+        if (found >= 0) {
-+          baseIndex = found;
-+        } else {
-+          baseIndex = direction === 1 ? -1 : entries.length;
-+        }
-+      } else if (selectedRoomId) {
-+        const found = entries.findIndex(([id]) => id === selectedRoomId);
-+        if (found >= 0) {
-+          baseIndex = found;
-+        } else {
-+          // selectedRoom is not unread — find its virtual position.
-+          // insertAt = first index whose entry sorts AFTER selected.
-+          let insertAt = entries.length;
-+          for (let i = 0; i < entries.length; i += 1) {
-+            if (compare(entries[i][0], selectedRoomId) >= 0) {
-+              insertAt = i;
-+              break;
-+            }
-+          }
-+          // For next: virtual base is insertAt - 1, so target = insertAt
-+          //           = first unread sorting after selected.
-+          // For prev: virtual base is insertAt, so target = insertAt - 1
-+          //           = last unread sorting before selected.
-+          baseIndex = direction === 1 ? insertAt - 1 : insertAt;
-+        }
-+      } else {
-+        baseIndex = direction === 1 ? -1 : entries.length;
-+      }
-+
-+      const target = ((baseIndex + direction) % entries.length + entries.length) % entries.length;
-+      const roomId = entries[target][0];
-+      setLastNavigated({ roomId, index: target });
++  const goPrev = useCallback(
++    (predicate: (id: string) => boolean) => {
++      const target = stepUnread(-1, predicate);
++      if (!target) return;
 +      setBottomBarDismissed(false);
-+      navigateToRoom(roomId);
++      navigateToRoom(target);
 +    },
-+    [lastNavigated, selectedRoomId, setLastNavigated, setBottomBarDismissed, navigateToRoom]
++    [stepUnread, setBottomBarDismissed, navigateToRoom]
++  );
++  const goNext = useCallback(
++    (predicate: (id: string) => boolean) => {
++      const target = stepUnread(1, predicate);
++      if (!target) return;
++      setBottomBarDismissed(false);
++      navigateToRoom(target);
++    },
++    [stepUnread, setBottomBarDismissed, navigateToRoom]
 +  );
 +
-+  const navigateNext = useCallback(
-+    () => stepTo(unread.entries, unread.compare, 1),
-+    [stepTo, unread]
++  const isUnread = useCallback(
++    (id: string) => (roomToUnread.get(id)?.total ?? 0) > 0,
++    [roomToUnread]
 +  );
-+  const navigatePrev = useCallback(
-+    () => stepTo(unread.entries, unread.compare, -1),
-+    [stepTo, unread]
++  const isMention = useCallback(
++    (id: string) => (roomToUnread.get(id)?.highlight ?? 0) > 0,
++    [roomToUnread]
 +  );
-+  const navigateNextMention = useCallback(
-+    () => stepTo(mention.entries, mention.compare, 1),
-+    [stepTo, mention]
-+  );
-+  const navigatePrevMention = useCallback(
-+    () => stepTo(mention.entries, mention.compare, -1),
-+    [stepTo, mention]
-+  );
++
++  const navigateNext = useCallback(() => goNext(isUnread), [goNext, isUnread]);
++  const navigatePrev = useCallback(() => goPrev(isUnread), [goPrev, isUnread]);
++  const navigateNextMention = useCallback(() => goNext(isMention), [goNext, isMention]);
++  const navigatePrevMention = useCallback(() => goPrev(isMention), [goPrev, isMention]);
 +
 +  const navigateFirst = useCallback(() => {
-+    if (unreadEntries.length === 0) return;
-+    const roomId = unreadEntries[0][0];
-+    setLastNavigated({ roomId, index: 0 });
-+    setBottomBarDismissed(false);
-+    navigateToRoom(roomId);
-+  }, [unreadEntries, setLastNavigated, setBottomBarDismissed, navigateToRoom]);
++    // First overall unread: scan sidebar buckets in order.
++    for (const b of sidebarBuckets) {
++      const target = firstUnreadInBucket(b);
++      if (target) {
++        setBottomBarDismissed(false);
++        navigateToRoom(target);
++        return;
++      }
++    }
++  }, [sidebarBuckets, firstUnreadInBucket, setBottomBarDismissed, navigateToRoom]);
++
++  const unreadCount = useMemo(() => {
++    let n = 0;
++    for (const set of unreadByBucket.values()) n += set.size;
++    return n;
++  }, [unreadByBucket]);
++
++  const mentionCount = useMemo(() => {
++    let n = 0;
++    for (const set of unreadByBucket.values()) {
++      for (const id of set) {
++        if ((roomToUnread.get(id)?.highlight ?? 0) > 0) n += 1;
++      }
++    }
++    return n;
++  }, [unreadByBucket, roomToUnread]);
 +
 +  return {
 +    navigateNext,
@@ -32801,11 +32868,10 @@ index 00000000..319def10
 +    navigateNextMention,
 +    navigatePrevMention,
 +    navigateFirst,
-+    unreadCount: unreadEntries.length,
-+    mentionCount: mentionEntries.length,
++    unreadCount,
++    mentionCount,
 +  };
 +}
-+
 diff --git a/src/app/hooks/useParticipantDimensions.ts b/src/app/hooks/useParticipantDimensions.ts
 new file mode 100644
 index 00000000..3ac145a6
@@ -34417,7 +34483,7 @@ index 00000000..364c9493
 +  );
 +}
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc..ded17ec0 100644
+index ce952bfc..294d27d2 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -34443,7 +34509,7 @@ index ce952bfc..ded17ec0 100644
  import {
    getMemberDisplayName,
    getNotificationType,
-@@ -23,18 +23,164 @@ import {
+@@ -23,18 +23,175 @@ import {
  } from '../../utils/room';
  import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
  import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
@@ -34455,7 +34521,7 @@ index ce952bfc..ded17ec0 100644
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 +import { SyncState } from 'matrix-js-sdk';
 +import { repairIDBAndReload, backupSessionToCache, checkpointCryptoStores } from '../../../client/initMatrix';
-+import { logFailureEvent, dumpFailureLog } from '../../../client/diagnostics';
++import { logFailureEvent, dumpFailureLog, setHeartbeatContext } from '../../../client/diagnostics';
 +import { MemoryWatchdog } from './MemoryWatchdog';
 +
 +/**
@@ -34563,9 +34629,20 @@ index ce952bfc..ded17ec0 100644
 +        // Small delay to let crypto settle after first sync.
 +        setTimeout(doCheckpoint, 5_000);
 +      }
++      // Update heartbeat context so a post-crash log can show what
++      // sync state we were in. Forensics for OS-level kills.
++      setHeartbeatContext({
++        syncState: state,
++        userId: mx.getUserId(),
++      });
 +    };
 +
 +    mx.on('sync' as any, onSync);
++    // Initial fix-up so we always have at least minimal context.
++    setHeartbeatContext({
++      syncState: mx.getSyncState(),
++      userId: mx.getUserId(),
++    });
 +
 +    // Periodic checkpoint.
 +    const interval = setInterval(doCheckpoint, CHECKPOINT_INTERVAL);
@@ -34614,7 +34691,7 @@ index ce952bfc..ded17ec0 100644
  
    return null;
  }
-@@ -42,11 +188,13 @@ function SystemEmojiFeature() {
+@@ -42,11 +199,13 @@ function SystemEmojiFeature() {
  function PageZoomFeature() {
    const [pageZoom] = useSetting(settingsAtom, 'pageZoom');
  
@@ -34633,7 +34710,7 @@ index ce952bfc..ded17ec0 100644
  
    return null;
  }
-@@ -136,6 +284,8 @@ function MessageNotifications() {
+@@ -136,6 +295,8 @@ function MessageNotifications() {
    const useAuthentication = useMediaAuthentication();
    const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
    const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
@@ -34642,7 +34719,7 @@ index ce952bfc..ded17ec0 100644
  
    const navigate = useNavigate();
    const notificationSelected = useInboxNotificationsSelected();
-@@ -146,6 +296,8 @@ function MessageNotifications() {
+@@ -146,6 +307,8 @@ function MessageNotifications() {
        roomName,
        roomAvatar,
        username,
@@ -34651,7 +34728,7 @@ index ce952bfc..ded17ec0 100644
      }: {
        roomName: string;
        roomAvatar?: string;
-@@ -161,7 +313,10 @@ function MessageNotifications() {
+@@ -161,7 +324,10 @@ function MessageNotifications() {
        });
  
        noti.onclick = () => {
@@ -34663,7 +34740,7 @@ index ce952bfc..ded17ec0 100644
          noti.close();
          notifRef.current = undefined;
        };
-@@ -200,7 +355,7 @@ function MessageNotifications() {
+@@ -200,7 +366,7 @@ function MessageNotifications() {
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
        if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
@@ -34672,7 +34749,7 @@ index ce952bfc..ded17ec0 100644
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
  
-@@ -231,8 +386,63 @@ function MessageNotifications() {
+@@ -231,8 +397,63 @@ function MessageNotifications() {
        }
      };
      mx.on(RoomEvent.Timeline, handleTimelineEvent);
@@ -34736,7 +34813,7 @@ index ce952bfc..ded17ec0 100644
      };
    }, [
      mx,
-@@ -243,6 +453,7 @@ function MessageNotifications() {
+@@ -243,6 +464,7 @@ function MessageNotifications() {
      notify,
      selectedRoomId,
      useAuthentication,
@@ -34744,7 +34821,7 @@ index ce952bfc..ded17ec0 100644
    ]);
  
    return (
-@@ -257,14 +468,23 @@ type ClientNonUIFeaturesProps = {
+@@ -257,14 +479,23 @@ type ClientNonUIFeaturesProps = {
    children: ReactNode;
  };
  
@@ -34769,10 +34846,10 @@ index ce952bfc..ded17ec0 100644
      </>
    );
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index 93f0526e..b4303337 100644
+index 93f0526e..e6154863 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -13,29 +13,61 @@ import {
+@@ -13,29 +13,64 @@ import {
    Spinner,
    Text,
  } from 'folds';
@@ -34794,6 +34871,9 @@ index 93f0526e..b4303337 100644
    startClient,
  } from '../../../client/initMatrix';
 +import {
++  dumpFailureLog,
++  exposeDiagnosticsOnWindow,
++  installCryptoIdbErrorListener,
 +  logFailureEvent,
 +  runStartupIntegrityCheck,
 +  startHeartbeat,
@@ -34838,7 +34918,7 @@ index 93f0526e..b4303337 100644
  
  function ClientRootLoading() {
    return (
-@@ -103,7 +135,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+@@ -103,7 +138,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                        logoutClient(mx);
                        return;
                      }
@@ -34862,7 +34942,7 @@ index 93f0526e..b4303337 100644
                    }}
                    size="300"
                    radii="300"
-@@ -128,8 +175,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -128,8 +178,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -34881,7 +34961,7 @@ index 93f0526e..b4303337 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -146,12 +201,63 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -146,12 +204,69 @@ export function ClientRoot({ children }: ClientRootProps) {
    const [loading, setLoading] = useState(true);
    const { baseUrl, userId } = getFallbackSession() ?? {};
  
@@ -34921,6 +35001,12 @@ index 93f0526e..b4303337 100644
 +      // Guard against repair loops via a sessionStorage marker — if the
 +      // last reload was caused by us, skip the auto-repair and let the
 +      // normal failure UI handle it.
++      // Always expose wallyDiag() and dump the buffer to console — even
++      // on the post-repair path we want this visible so the user can
++      // inspect what happened in the previous session.
++      exposeDiagnosticsOnWindow();
++      void dumpFailureLog();
++
 +      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
 +      const justRepaired = sessionStorage.getItem(REPAIR_GUARD) === '1';
 +      if (!justRepaired) {
@@ -34946,7 +35032,7 @@ index 93f0526e..b4303337 100644
        return initClient(session);
      }, [])
    );
-@@ -160,8 +266,23 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -160,8 +275,41 @@ export function ClientRoot({ children }: ClientRootProps) {
      useCallback((m) => startClient(m), [])
    );
  
@@ -34967,10 +35053,28 @@ index 93f0526e..b4303337 100644
 +    startHeartbeat();
 +  }, []);
 +
++  // Catch IDB query failures fired from background promises (matrix-sdk-crypto's
++  // internal queries are fire-and-forget so they don't reach loadMatrix's
++  // try/catch). When one fires we log it and trigger the same auto-repair
++  // path the pre-flight probe uses. Guard so we only fire once per session
++  // and respect the same anti-loop sessionStorage marker.
++  useEffect(() => {
++    return installCryptoIdbErrorListener(({ message }) => {
++      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
++      if (sessionStorage.getItem(REPAIR_GUARD) === '1') return;
++      sessionStorage.setItem(REPAIR_GUARD, '1');
++      void logFailureEvent('startup_auto_repair', {
++        source: 'unhandledrejection',
++        message: message.slice(0, 200),
++      });
++      void repairIDBAndReload();
++    });
++  }, []);
++
    useEffect(() => {
      if (loadState.status === AsyncStatus.Idle) {
        loadMatrix();
-@@ -177,7 +298,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -177,7 +325,7 @@ export function ClientRoot({ children }: ClientRootProps) {
    useSyncState(
      mx,
      useCallback((state) => {
@@ -34979,7 +35083,7 @@ index 93f0526e..b4303337 100644
          setLoading(false);
        }
      }, [])
-@@ -185,18 +306,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -185,18 +333,13 @@ export function ClientRoot({ children }: ClientRootProps) {
  
    return (
      <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -35001,7 +35105,7 @@ index 93f0526e..b4303337 100644
                <Dialog>
                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                    {loadState.status === AsyncStatus.Error && (
-@@ -210,6 +326,30 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -210,6 +353,30 @@ export function ClientRoot({ children }: ClientRootProps) {
                        Retry
                      </Text>
                    </Button>
@@ -35032,7 +35136,7 @@ index 93f0526e..b4303337 100644
                  </Box>
                </Dialog>
              </Box>
-@@ -219,20 +359,16 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -219,20 +386,16 @@ export function ClientRoot({ children }: ClientRootProps) {
            <ClientRootLoading />
          ) : (
            <MatrixClientProvider value={mx}>
@@ -44047,10 +44151,10 @@ index 00000000..e9fc3802
 +}
 diff --git a/src/client/diagnostics.ts b/src/client/diagnostics.ts
 new file mode 100644
-index 00000000..82c4377c
+index 00000000..7ed068ab
 --- /dev/null
 +++ b/src/client/diagnostics.ts
-@@ -0,0 +1,463 @@
+@@ -0,0 +1,501 @@
 +// Failure-mode event log.
 +//
 +// We have several layers of crash/corruption recovery. Until now, when a
@@ -44181,20 +44285,49 @@ index 00000000..82c4377c
 +// ---------------------------------------------------------------------------
 +
 +const HEARTBEAT_KEY = 'cinny_heartbeat_ms';
++const HEARTBEAT_CONTEXT_KEY = 'cinny_heartbeat_context';
 +const HEARTBEAT_INTERVAL_MS = 5_000;
 +// Gap larger than this means the previous session ended without firing
 +// pagehide — almost certainly an OS/browser crash or a forced tab discard.
 +const CRASH_GAP_MS = 60_000;
 +
++// Active context the app reports for forensics. Updated via setHeartbeatContext.
++const heartbeatContext: Record<string, unknown> = {};
 +let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 +
 +const writeHeartbeat = (): void => {
 +  try {
 +    localStorage.setItem(HEARTBEAT_KEY, String(Date.now()));
++    if (Object.keys(heartbeatContext).length > 0) {
++      localStorage.setItem(HEARTBEAT_CONTEXT_KEY, JSON.stringify(heartbeatContext));
++    }
 +  } catch {
 +    // private browsing / quota exceeded — give up silently
 +  }
 +};
++
++/**
++ * Update the per-tick context that gets written alongside the heartbeat.
++ * Use this to record what the app was doing when (if) the OS kills us:
++ *   setHeartbeatContext({ syncing: true, lastEventTs: Date.now() })
++ * Keys merge; pass undefined to clear a key.
++ */
++export function setHeartbeatContext(patch: Record<string, unknown>): void {
++  for (const [k, v] of Object.entries(patch)) {
++    if (v === undefined) delete heartbeatContext[k];
++    else heartbeatContext[k] = v;
++  }
++}
++
++function readHeartbeatContext(): Record<string, unknown> | null {
++  try {
++    const raw = localStorage.getItem(HEARTBEAT_CONTEXT_KEY);
++    if (!raw) return null;
++    return JSON.parse(raw);
++  } catch {
++    return null;
++  }
++}
 +
 +/** Begin writing a heartbeat to localStorage every 5s. Idempotent. */
 +export function startHeartbeat(): void {
@@ -44313,9 +44446,14 @@ index 00000000..82c4377c
 +  }
 +  for (const info of dbs) {
 +    if (!info.name) continue;
-+    // Skip our own throwaway probe DBs.
++    // Skip transient/throwaway DBs:
++    //   - our own probe DBs from this and the legacy session-health probe
++    //   - matrix-js-sdk's healthcheck DBs (created+deleted in a tight
++    //     loop during init; opening one as it's being deleted times out
++    //     and triggers a false-positive auto-repair).
 +    if (info.name.startsWith('cinny-startup-probe-')) continue;
 +    if (info.name.startsWith('idb-health-')) continue;
++    if (info.name.startsWith('checkIndexedDBSupport-')) continue;
 +    // eslint-disable-next-line no-await-in-loop
 +    const r = await probeExistingIdb(info.name);
 +    if (!r.ok) return { db: info.name, reason: r.reason ?? 'unknown' };
@@ -44440,9 +44578,13 @@ index 00000000..82c4377c
 +  }
 +
 +  if (uncleanShutdown) {
++    const lastContext = readHeartbeatContext();
 +    await logFailureEvent('unclean_shutdown_detected', {
 +      gapMs: heartbeatGapMs,
 +      visibilityState: document.visibilityState,
++      // What the app was doing at the last heartbeat — blank means no
++      // consumer set context yet (e.g., crash before initial sync).
++      lastContext: lastContext ?? null,
 +    });
 +  }
 +
@@ -44515,7 +44657,7 @@ index 00000000..82c4377c
 +  return () => window.removeEventListener('unhandledrejection', handler);
 +}
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..a1bfd10d 100644
+index 498d4f75..7e873cf5 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,38 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -44685,7 +44827,7 @@ index 498d4f75..a1bfd10d 100644
    const dbs = await window.indexedDB.databases();
  
    dbs.forEach((idbInfo) => {
-@@ -79,3 +175,542 @@ export const clearLoginData = async () => {
+@@ -79,3 +175,514 @@ export const clearLoginData = async () => {
    window.localStorage.clear();
    window.location.reload();
  };
@@ -44824,75 +44966,47 @@ index 498d4f75..a1bfd10d 100644
 +/**
 + * Names of databases that hold crypto material worth checkpointing.
 + *
-+ * The two rust-crypto stores are the load-bearing ones: lose those and the
-+ * device shows up unverified after recovery. The legacy JS crypto store is
-+ * kept for users who haven't yet migrated. Prefer dynamic enumeration
-+ * (databases()) over hardcoded names so we never miss a store.
++ * Discovers existing DBs via `indexedDB.databases()` and filters to ones
++ * that look crypto-related. Crucially we DO NOT call `indexedDB.open()`
++ * to verify existence — that creates a new DB if the name doesn't exist,
++ * and deleting the stub would race with anything the SDK is doing in
++ * parallel (we previously deleted matrix-sdk-crypto-meta this way during
++ * its brief no-stores window, breaking decryption of the main store).
++ *
++ * Both `<prefix>::matrix-sdk-crypto` and `<prefix>::matrix-sdk-crypto-meta`
++ * are required: the meta store holds the encryption key for the main one.
 + */
 +async function getCryptoDbNames(): Promise<string[]> {
-+  const userId = localStorage.getItem('cinny_user_id');
-+
-+  // Static candidates — guaranteed names regardless of what databases()
-+  // returns (it can be stale or unsupported in some browsers).
-+  const candidates = new Set<string>([
-+    `${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto`,
-+    `${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto-meta`,
-+  ]);
-+  if (userId) {
-+    candidates.add(`crypto${userId}`);
-+    candidates.add(`matrix-js-sdk${userId}`);
-+  }
-+
-+  // Augment with anything the browser actually has matching crypto
-+  // patterns. This catches secondary accounts (different prefix) and
-+  // any future renames in matrix-js-sdk.
++  const result = new Set<string>();
 +  try {
 +    const dbs = await indexedDB.databases();
 +    for (const info of dbs) {
 +      const n = info.name;
 +      if (!n) continue;
-+      if (n.includes('matrix-sdk-crypto') || n.startsWith('crypto@') || n.startsWith('matrix-js-sdk@')) {
-+        candidates.add(n);
++      // matrix-js-sdk's own healthcheck DBs — transient, never useful.
++      if (n.startsWith('checkIndexedDBSupport-')) continue;
++      // Our own probe DBs.
++      if (n.startsWith('cinny-startup-probe-')) continue;
++      if (n.startsWith('idb-health-')) continue;
++      if (
++        n.includes('matrix-sdk-crypto') ||
++        n.startsWith('crypto@') ||
++        n.startsWith('matrix-js-sdk@')
++      ) {
++        result.add(n);
 +      }
 +    }
 +  } catch {
-+    // databases() unsupported — stick with the static list
++    // databases() unsupported — fall back to known names only.
++    const userId = localStorage.getItem('cinny_user_id');
++    result.add(`${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto`);
++    result.add(`${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto-meta`);
++    if (userId) {
++      result.add(`crypto${userId}`);
++      result.add(`matrix-js-sdk${userId}`);
++    }
 +  }
-+
-+  // Filter to ones that actually exist (avoid creating empty stub DBs
-+  // via dumpIDB's open call).
-+  const result: string[] = [];
-+  for (const name of candidates) {
-+    // eslint-disable-next-line no-await-in-loop
-+    const exists = await new Promise<boolean>((resolve) => {
-+      let created = false;
-+      const req = indexedDB.open(name);
-+      req.onupgradeneeded = () => {
-+        // The DB didn't exist — onupgradeneeded fires before onsuccess.
-+        // Mark and tear down.
-+        created = true;
-+      };
-+      req.onsuccess = () => {
-+        const db = req.result;
-+        const hasStores = db.objectStoreNames.length > 0;
-+        db.close();
-+        if (created || !hasStores) {
-+          // Either it was just created by this open, or it has no stores
-+          // — either way we don't want to checkpoint it. Delete the empty
-+          // stub so we don't leak DBs across reloads.
-+          indexedDB.deleteDatabase(name);
-+          resolve(false);
-+        } else {
-+          resolve(true);
-+        }
-+      };
-+      req.onerror = () => resolve(false);
-+      // Cap so a wedged DB doesn't hang the entire enumeration.
-+      setTimeout(() => resolve(false), 3_000);
-+    });
-+    if (exists) result.push(name);
-+  }
-+  return result;
++  return Array.from(result);
 +}
 +
 +// JSON doesn't carry binary or non-plain types. The crypto stores hold
