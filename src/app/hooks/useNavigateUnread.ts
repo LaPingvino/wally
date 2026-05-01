@@ -520,12 +520,25 @@ export const NAV_DIRECT_BUCKET = DIRECT_BUCKET;
  */
 export function usePublishCurrentView(bucket: string, rooms: string[]): void {
   const setView = useAtom(currentViewRoomsAtom)[1];
+  // Pages recompute rooms each render — same content but new array
+  // reference. Stabilize by content so the effect only refires when
+  // the bucket changes or a room actually moved/joined/left, not on
+  // every sync tick. Without this, every unread update would cascade
+  // re-renders through every useNavigateUnread consumer and rebuild
+  // allRoomsByBucket, which can stall the UI under sync churn.
+  const lastRef = React.useRef<string[]>(rooms);
+  const stableRooms = React.useMemo(() => {
+    const last = lastRef.current;
+    if (last.length === rooms.length && last.every((id, i) => id === rooms[i])) {
+      return last;
+    }
+    lastRef.current = rooms;
+    return rooms;
+  }, [rooms]);
   React.useEffect(() => {
-    setView({ bucket, rooms });
+    setView({ bucket, rooms: stableRooms });
     return () => {
       setView((prev) => (prev && prev.bucket === bucket ? null : prev));
     };
-    // rooms identity changes per render — that's the point, we want
-    // every update.
-  }, [bucket, rooms, setView]);
+  }, [bucket, stableRooms, setView]);
 }
