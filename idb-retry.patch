@@ -34417,7 +34417,7 @@ index 00000000..364c9493
 +  );
 +}
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc..ded17ec0 100644
+index ce952bfc..294d27d2 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -34443,7 +34443,7 @@ index ce952bfc..ded17ec0 100644
  import {
    getMemberDisplayName,
    getNotificationType,
-@@ -23,18 +23,164 @@ import {
+@@ -23,18 +23,175 @@ import {
  } from '../../utils/room';
  import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
  import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
@@ -34455,7 +34455,7 @@ index ce952bfc..ded17ec0 100644
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 +import { SyncState } from 'matrix-js-sdk';
 +import { repairIDBAndReload, backupSessionToCache, checkpointCryptoStores } from '../../../client/initMatrix';
-+import { logFailureEvent, dumpFailureLog } from '../../../client/diagnostics';
++import { logFailureEvent, dumpFailureLog, setHeartbeatContext } from '../../../client/diagnostics';
 +import { MemoryWatchdog } from './MemoryWatchdog';
 +
 +/**
@@ -34563,9 +34563,20 @@ index ce952bfc..ded17ec0 100644
 +        // Small delay to let crypto settle after first sync.
 +        setTimeout(doCheckpoint, 5_000);
 +      }
++      // Update heartbeat context so a post-crash log can show what
++      // sync state we were in. Forensics for OS-level kills.
++      setHeartbeatContext({
++        syncState: state,
++        userId: mx.getUserId(),
++      });
 +    };
 +
 +    mx.on('sync' as any, onSync);
++    // Initial fix-up so we always have at least minimal context.
++    setHeartbeatContext({
++      syncState: mx.getSyncState(),
++      userId: mx.getUserId(),
++    });
 +
 +    // Periodic checkpoint.
 +    const interval = setInterval(doCheckpoint, CHECKPOINT_INTERVAL);
@@ -34614,7 +34625,7 @@ index ce952bfc..ded17ec0 100644
  
    return null;
  }
-@@ -42,11 +188,13 @@ function SystemEmojiFeature() {
+@@ -42,11 +199,13 @@ function SystemEmojiFeature() {
  function PageZoomFeature() {
    const [pageZoom] = useSetting(settingsAtom, 'pageZoom');
  
@@ -34633,7 +34644,7 @@ index ce952bfc..ded17ec0 100644
  
    return null;
  }
-@@ -136,6 +284,8 @@ function MessageNotifications() {
+@@ -136,6 +295,8 @@ function MessageNotifications() {
    const useAuthentication = useMediaAuthentication();
    const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
    const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
@@ -34642,7 +34653,7 @@ index ce952bfc..ded17ec0 100644
  
    const navigate = useNavigate();
    const notificationSelected = useInboxNotificationsSelected();
-@@ -146,6 +296,8 @@ function MessageNotifications() {
+@@ -146,6 +307,8 @@ function MessageNotifications() {
        roomName,
        roomAvatar,
        username,
@@ -34651,7 +34662,7 @@ index ce952bfc..ded17ec0 100644
      }: {
        roomName: string;
        roomAvatar?: string;
-@@ -161,7 +313,10 @@ function MessageNotifications() {
+@@ -161,7 +324,10 @@ function MessageNotifications() {
        });
  
        noti.onclick = () => {
@@ -34663,7 +34674,7 @@ index ce952bfc..ded17ec0 100644
          noti.close();
          notifRef.current = undefined;
        };
-@@ -200,7 +355,7 @@ function MessageNotifications() {
+@@ -200,7 +366,7 @@ function MessageNotifications() {
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
        if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
@@ -34672,7 +34683,7 @@ index ce952bfc..ded17ec0 100644
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
  
-@@ -231,8 +386,63 @@ function MessageNotifications() {
+@@ -231,8 +397,63 @@ function MessageNotifications() {
        }
      };
      mx.on(RoomEvent.Timeline, handleTimelineEvent);
@@ -34736,7 +34747,7 @@ index ce952bfc..ded17ec0 100644
      };
    }, [
      mx,
-@@ -243,6 +453,7 @@ function MessageNotifications() {
+@@ -243,6 +464,7 @@ function MessageNotifications() {
      notify,
      selectedRoomId,
      useAuthentication,
@@ -34744,7 +34755,7 @@ index ce952bfc..ded17ec0 100644
    ]);
  
    return (
-@@ -257,14 +468,23 @@ type ClientNonUIFeaturesProps = {
+@@ -257,14 +479,23 @@ type ClientNonUIFeaturesProps = {
    children: ReactNode;
  };
  
@@ -34769,10 +34780,10 @@ index ce952bfc..ded17ec0 100644
      </>
    );
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index 93f0526e..a6ba4590 100644
+index 93f0526e..e6154863 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -13,29 +13,63 @@ import {
+@@ -13,29 +13,64 @@ import {
    Spinner,
    Text,
  } from 'folds';
@@ -34796,6 +34807,7 @@ index 93f0526e..a6ba4590 100644
 +import {
 +  dumpFailureLog,
 +  exposeDiagnosticsOnWindow,
++  installCryptoIdbErrorListener,
 +  logFailureEvent,
 +  runStartupIntegrityCheck,
 +  startHeartbeat,
@@ -34840,7 +34852,7 @@ index 93f0526e..a6ba4590 100644
  
  function ClientRootLoading() {
    return (
-@@ -103,7 +137,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+@@ -103,7 +138,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                        logoutClient(mx);
                        return;
                      }
@@ -34864,7 +34876,7 @@ index 93f0526e..a6ba4590 100644
                    }}
                    size="300"
                    radii="300"
-@@ -128,8 +177,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -128,8 +178,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -34883,7 +34895,7 @@ index 93f0526e..a6ba4590 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -146,12 +203,69 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -146,12 +204,69 @@ export function ClientRoot({ children }: ClientRootProps) {
    const [loading, setLoading] = useState(true);
    const { baseUrl, userId } = getFallbackSession() ?? {};
  
@@ -34954,7 +34966,7 @@ index 93f0526e..a6ba4590 100644
        return initClient(session);
      }, [])
    );
-@@ -160,8 +274,23 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -160,8 +275,41 @@ export function ClientRoot({ children }: ClientRootProps) {
      useCallback((m) => startClient(m), [])
    );
  
@@ -34975,10 +34987,28 @@ index 93f0526e..a6ba4590 100644
 +    startHeartbeat();
 +  }, []);
 +
++  // Catch IDB query failures fired from background promises (matrix-sdk-crypto's
++  // internal queries are fire-and-forget so they don't reach loadMatrix's
++  // try/catch). When one fires we log it and trigger the same auto-repair
++  // path the pre-flight probe uses. Guard so we only fire once per session
++  // and respect the same anti-loop sessionStorage marker.
++  useEffect(() => {
++    return installCryptoIdbErrorListener(({ message }) => {
++      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
++      if (sessionStorage.getItem(REPAIR_GUARD) === '1') return;
++      sessionStorage.setItem(REPAIR_GUARD, '1');
++      void logFailureEvent('startup_auto_repair', {
++        source: 'unhandledrejection',
++        message: message.slice(0, 200),
++      });
++      void repairIDBAndReload();
++    });
++  }, []);
++
    useEffect(() => {
      if (loadState.status === AsyncStatus.Idle) {
        loadMatrix();
-@@ -177,7 +306,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -177,7 +325,7 @@ export function ClientRoot({ children }: ClientRootProps) {
    useSyncState(
      mx,
      useCallback((state) => {
@@ -34987,7 +35017,7 @@ index 93f0526e..a6ba4590 100644
          setLoading(false);
        }
      }, [])
-@@ -185,18 +314,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -185,18 +333,13 @@ export function ClientRoot({ children }: ClientRootProps) {
  
    return (
      <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -35009,7 +35039,7 @@ index 93f0526e..a6ba4590 100644
                <Dialog>
                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                    {loadState.status === AsyncStatus.Error && (
-@@ -210,6 +334,30 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -210,6 +353,30 @@ export function ClientRoot({ children }: ClientRootProps) {
                        Retry
                      </Text>
                    </Button>
@@ -35040,7 +35070,7 @@ index 93f0526e..a6ba4590 100644
                  </Box>
                </Dialog>
              </Box>
-@@ -219,20 +367,16 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -219,20 +386,16 @@ export function ClientRoot({ children }: ClientRootProps) {
            <ClientRootLoading />
          ) : (
            <MatrixClientProvider value={mx}>
@@ -44055,10 +44085,10 @@ index 00000000..e9fc3802
 +}
 diff --git a/src/client/diagnostics.ts b/src/client/diagnostics.ts
 new file mode 100644
-index 00000000..845a15c6
+index 00000000..7ed068ab
 --- /dev/null
 +++ b/src/client/diagnostics.ts
-@@ -0,0 +1,468 @@
+@@ -0,0 +1,501 @@
 +// Failure-mode event log.
 +//
 +// We have several layers of crash/corruption recovery. Until now, when a
@@ -44189,20 +44219,49 @@ index 00000000..845a15c6
 +// ---------------------------------------------------------------------------
 +
 +const HEARTBEAT_KEY = 'cinny_heartbeat_ms';
++const HEARTBEAT_CONTEXT_KEY = 'cinny_heartbeat_context';
 +const HEARTBEAT_INTERVAL_MS = 5_000;
 +// Gap larger than this means the previous session ended without firing
 +// pagehide — almost certainly an OS/browser crash or a forced tab discard.
 +const CRASH_GAP_MS = 60_000;
 +
++// Active context the app reports for forensics. Updated via setHeartbeatContext.
++const heartbeatContext: Record<string, unknown> = {};
 +let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 +
 +const writeHeartbeat = (): void => {
 +  try {
 +    localStorage.setItem(HEARTBEAT_KEY, String(Date.now()));
++    if (Object.keys(heartbeatContext).length > 0) {
++      localStorage.setItem(HEARTBEAT_CONTEXT_KEY, JSON.stringify(heartbeatContext));
++    }
 +  } catch {
 +    // private browsing / quota exceeded — give up silently
 +  }
 +};
++
++/**
++ * Update the per-tick context that gets written alongside the heartbeat.
++ * Use this to record what the app was doing when (if) the OS kills us:
++ *   setHeartbeatContext({ syncing: true, lastEventTs: Date.now() })
++ * Keys merge; pass undefined to clear a key.
++ */
++export function setHeartbeatContext(patch: Record<string, unknown>): void {
++  for (const [k, v] of Object.entries(patch)) {
++    if (v === undefined) delete heartbeatContext[k];
++    else heartbeatContext[k] = v;
++  }
++}
++
++function readHeartbeatContext(): Record<string, unknown> | null {
++  try {
++    const raw = localStorage.getItem(HEARTBEAT_CONTEXT_KEY);
++    if (!raw) return null;
++    return JSON.parse(raw);
++  } catch {
++    return null;
++  }
++}
 +
 +/** Begin writing a heartbeat to localStorage every 5s. Idempotent. */
 +export function startHeartbeat(): void {
@@ -44453,9 +44512,13 @@ index 00000000..845a15c6
 +  }
 +
 +  if (uncleanShutdown) {
++    const lastContext = readHeartbeatContext();
 +    await logFailureEvent('unclean_shutdown_detected', {
 +      gapMs: heartbeatGapMs,
 +      visibilityState: document.visibilityState,
++      // What the app was doing at the last heartbeat — blank means no
++      // consumer set context yet (e.g., crash before initial sync).
++      lastContext: lastContext ?? null,
 +    });
 +  }
 +
