@@ -34,6 +34,7 @@ import {
   exposeDiagnosticsOnWindow,
   installCryptoIdbErrorListener,
   logFailureEvent,
+  requestPersistentStorage,
   runStartupIntegrityCheck,
   startHeartbeat,
 } from '../../../client/diagnostics';
@@ -288,8 +289,11 @@ export function ClientRoot({ children }: ClientRootProps) {
 
   // Heartbeat lets us detect unclean shutdowns (Chromebook crashes etc.)
   // on the next page load. Idempotent — safe to call repeatedly.
+  // Also request persistent storage so the browser doesn't evict our
+  // checkpoint blobs under storage pressure.
   useEffect(() => {
     startHeartbeat();
+    void requestPersistentStorage();
   }, []);
 
   // Catch IDB query failures fired from background promises (matrix-sdk-crypto's

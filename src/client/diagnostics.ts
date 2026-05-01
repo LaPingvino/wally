@@ -189,6 +189,33 @@ function readHeartbeatContext(): Record<string, unknown> | null {
   }
 }
 
+/**
+ * Ask the browser for persistent storage so it doesn't evict our
+ * checkpoint blobs (Cache API) under storage pressure. Without this the
+ * Chromebook will quietly garbage-collect our crypto checkpoints before
+ * we need them, leading to checkpoint_missing on every recovery.
+ *
+ * Best-effort: not all browsers grant this, and not all browsers count
+ * the prompt as user-initiated. Logs a diagnostic event so we can see
+ * whether it succeeded.
+ */
+export async function requestPersistentStorage(): Promise<void> {
+  if (!navigator.storage || !navigator.storage.persist) return;
+  try {
+    const already = await navigator.storage.persisted();
+    if (already) {
+      void logFailureEvent('startup_storage_estimate', { persisted: 'already' });
+      return;
+    }
+    const granted = await navigator.storage.persist();
+    void logFailureEvent('startup_storage_estimate', {
+      persisted: granted ? 'granted' : 'denied',
+    });
+  } catch {
+    // never break startup
+  }
+}
+
 /** Begin writing a heartbeat to localStorage every 5s. Idempotent. */
 export function startHeartbeat(): void {
   if (heartbeatTimer !== null) return;

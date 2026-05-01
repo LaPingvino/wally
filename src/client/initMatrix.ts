@@ -647,11 +647,44 @@ export const checkpointCryptoStores = async (): Promise<void> => {
 };
 
 /**
+ * List every checkpoint blob currently in the Cache API and return their
+ * DB names. Robust against `indexedDB.databases()` not listing names we
+ * have blobs for (post-crash, the live DB may be gone but the blob is
+ * still in cache — we want to restore it anyway).
+ */
+async function listCheckpointBlobNames(): Promise<string[]> {
+  try {
+    const cache = await caches.open(CHECKPOINT_CACHE);
+    const reqs = await cache.keys();
+    return reqs
+      .map((r) => {
+        try {
+          const u = new URL(r.url);
+          // We store blobs at `/${dbName}` — strip the leading slash.
+          return decodeURIComponent(u.pathname).replace(/^\//, '');
+        } catch {
+          return '';
+        }
+      })
+      .filter((n) => n.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Restore crypto databases from their Cache-API checkpoints.
  * Returns true if at least one DB was restored.
  */
 async function restoreFromCheckpoint(): Promise<boolean> {
-  const dbNames = await getCryptoDbNames();
+  // Source the names from the Cache API itself, not from the live IDB
+  // list. The live DBs may have just been wiped/damaged but the blobs
+  // survive — and we want to restore every blob we've got.
+  const cacheNames = await listCheckpointBlobNames();
+  // Union with current crypto DB names as a belt-and-braces safety net
+  // (covers a future case where the cache key format changes).
+  const fromIdb = await getCryptoDbNames();
+  const dbNames = Array.from(new Set([...cacheNames, ...fromIdb]));
   if (dbNames.length === 0) {
     logFailureEvent('checkpoint_missing', { reason: 'no_user_id' });
     return false;
