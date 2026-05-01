@@ -32511,23 +32511,32 @@ index 00000000..4bba79de
 +}
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
-index 00000000..319def10
+index 00000000..2040a074
 --- /dev/null
 +++ b/src/app/hooks/useNavigateUnread.ts
-@@ -0,0 +1,291 @@
-+import { useCallback, useMemo } from 'react';
-+import { useAtomValue, useAtom } from 'jotai';
-+import { atom } from 'jotai';
-+import { useNavigate } from 'react-router-dom';
+@@ -0,0 +1,514 @@
++import React, { useCallback, useMemo } from 'react';
++import { useAtomValue, useAtom, atom } from 'jotai';
++import { useNavigate, useLocation } from 'react-router-dom';
 +import { MatrixClient } from 'matrix-js-sdk';
 +import { roomToUnreadAtom } from '../state/room/roomToUnread';
 +import { mDirectAtom } from '../state/mDirectList';
 +import { roomToParentsAtom } from '../state/room/roomToParents';
++import { allRoomsAtom } from '../state/room-list/roomList';
++import {
++  useChildRoomScopeFactory,
++  useDirects,
++  useOrphanRooms,
++  useSpaceChildren,
++} from '../state/hooks/roomList';
 +import { useMatrixClient } from './useMatrixClient';
 +import { getCanonicalAliasOrRoomId } from '../utils/matrix';
 +import {
++  getDirectPath,
 +  getDirectRoomPath,
++  getHomePath,
 +  getHomeRoomPath,
++  getSpacePath,
 +  getSpaceRoomPath,
 +} from '../pages/pathUtils';
 +import { AccountDataEvent } from '../../types/matrix/accountData';
@@ -32538,14 +32547,8 @@ index 00000000..319def10
 +} from '../utils/sort';
 +import { settingsAtom } from '../state/settings';
 +import { useSelectedRoom } from './router/useSelectedRoom';
++import { useSelectedSpace } from './router/useSelectedSpace';
 +import { bottomBarDismissedAtom } from '../state/bottomBarDismiss';
-+
-+/**
-+ * Track the last navigated room by ID + its position in the list at the time.
-+ * Using room ID (not just index) means we can correctly position ourselves
-+ * even when the list shrinks as rooms are read.
-+ */
-+const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
 +
 +/**
 + * Within-room mention navigation state.
@@ -32555,6 +32558,32 @@ index 00000000..319def10
 +export const mentionNavAtom = atom<{ roomId: string; eventIds: string[]; index: number } | null>(
 +  null
 +);
++
++/**
++ * The currently-displayed room list, published by whichever page owns
++ * the visible sidebar (Home, Direct, Space). Read by useNavigateUnread
++ * so prev/next walks the exact ordering the user sees — not a
++ * recomputed approximation.
++ *
++ * `bucket` is the bucket sentinel (HOME_BUCKET / DIRECT_BUCKET / spaceId)
++ * for the page that set this. `rooms` is the displayed room IDs in
++ * order, after all filters (favorites, closed categories, hierarchy).
++ */
++export const currentViewRoomsAtom = atom<{ bucket: string; rooms: string[] } | null>(null);
++
++/**
++ * Pending cross-bucket jump.
++ *
++ * Set by useNavigateUnread when the user steps off the end of the current
++ * view's unreads — we navigate to the next/prev bucket's URL but can't
++ * pick the actual room to land in here, because the destination view's
++ * sorted room list isn't available until that page mounts and renders.
++ *
++ * Pages that own a bucket's room list (Home, Direct, Space) call
++ * usePendingBucketJump(bucket, sortedRoomIds) which watches this atom
++ * and, on a match, navigates to first or last room and clears it.
++ */
++export const pendingBucketJumpAtom = atom<{ bucket: string; edge: 'first' | 'last' } | null>(null);
 +
 +type SidebarItem = string | { id: string; content: string[] };
 +
@@ -32575,21 +32604,20 @@ index 00000000..319def10
 +
 +/**
 + * Walk up the parent chain (via roomToParents) until we find a space that is
-+ * in the sidebar. Returns the sidebar index, or Infinity if none found.
++ * in the sidebar. Returns the sidebar id, or undefined if none found.
 + */
-+function getSidebarIndex(
++function findSidebarSpaceForRoom(
 +  roomId: string,
 +  roomToParents: Map<string, Set<string>>,
-+  sidebarIndex: Map<string, number>
-+): number {
++  sidebarSet: Set<string>
++): string | undefined {
 +  const visited = new Set<string>();
 +  let frontier = new Set([roomId]);
 +  while (frontier.size > 0) {
 +    const next = new Set<string>();
 +    for (const id of frontier) {
 +      for (const parent of roomToParents.get(id) ?? []) {
-+        const idx = sidebarIndex.get(parent);
-+        if (idx !== undefined) return idx;
++        if (sidebarSet.has(parent)) return parent;
 +        if (!visited.has(parent)) {
 +          visited.add(parent);
 +          next.add(parent);
@@ -32598,11 +32626,20 @@ index 00000000..319def10
 +    }
 +    frontier = next;
 +  }
-+  return Infinity;
++  return undefined;
 +}
++
++// View-bucket sentinels used in the sidebar order. The sidebar UI shows
++// Home and Direct as their own tabs alongside the spaces, so we treat
++// them as pseudo-spaces in the navigation order.
++const HOME_BUCKET = '__home__';
++const DIRECT_BUCKET = '__direct__';
++
++type View = 'home' | 'direct' | 'space';
 +
 +export function useNavigateUnread() {
 +  const navigate = useNavigate();
++  const location = useLocation();
 +  const mx = useMatrixClient();
 +  const roomToUnread = useAtomValue(roomToUnreadAtom);
 +  const mDirects = useAtomValue(mDirectAtom);
@@ -32610,84 +32647,236 @@ index 00000000..319def10
 +  const settings = useAtomValue(settingsAtom);
 +  const roomSortOrder: string =
 +    (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
-+  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
 +  const setBottomBarDismissed = useAtom(bottomBarDismissedAtom)[1];
 +  const selectedRoomId = useSelectedRoom();
++  const selectedSpaceId = useSelectedSpace();
 +
-+  // Sorted list of rooms matching a predicate (unread or mention) plus the
-+  // shared comparator used to virtually position the currently-selected
-+  // room within that list.
-+  //
-+  // Ordering rules (the user-visible behaviour):
-+  //   1. Rooms whose containing space matches the *currently open* space
-+  //      come first, in the room-list's normal sort order. This keeps
-+  //      "next unread" walking through the active space before jumping
-+  //      anywhere else.
-+  //   2. Then every other room grouped by sidebar space index. Within a
-+  //      space, rooms use the room-list's normal sort.
-+  const buildSortedRooms = useCallback(
-+    (matches: (id: string) => boolean) => {
-+      const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++  // Determine current view from the URL.
++  const view: View = location.pathname.startsWith('/direct/')
++    ? 'direct'
++    : location.pathname.startsWith('/home/') || (!selectedSpaceId && !location.pathname.startsWith('/direct/'))
++    ? 'home'
++    : 'space';
++  const currentBucket: string =
++    view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : selectedSpaceId ?? HOME_BUCKET;
 +
-+      const sidebarSpaceIds = getSidebarSpaceIds(mx);
-+      const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
++  // ── Get rooms for each view in display order ──
++  const homeRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
++  const directRooms = useDirects(mx, allRoomsAtom, mDirects);
++  const spaceChildSelector = useChildRoomScopeFactory(mx, mDirects, roomToParents);
++  const spaceRooms = useSpaceChildren(allRoomsAtom, selectedSpaceId ?? '', spaceChildSelector);
 +
-+      // Active space = the space containing the currently-selected room
-+      // (Infinity if none — Home/DM views, or the user just landed).
-+      const activeSidebarIdx = selectedRoomId
-+        ? getSidebarIndex(selectedRoomId, roomToParents, sidebarIndex)
-+        : Infinity;
++  // Prefer the published current-view list (set by whichever page owns
++  // the visible sidebar) so we walk EXACTLY what the user sees. Fall
++  // back to a freshly-computed list when no page has published yet —
++  // covers the moment between mount and first render.
++  const publishedView = useAtomValue(currentViewRoomsAtom);
++  const currentViewRooms = useMemo(() => {
++    if (publishedView && publishedView.bucket === currentBucket) {
++      return publishedView.rooms;
++    }
++    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++    const sortFn =
++      roomSortOrder === 'az'
++        ? factoryRoomIdByAtoZ(mx)
++        : roomSortOrder === 'unread'
++        ? factoryRoomIdByUnreadFirst(
++            (id) => getUnread(id).highlight,
++            (id) => getUnread(id).total,
++            factoryRoomIdByActivity(mx)
++          )
++        : factoryRoomIdByActivity(mx);
++    const base = view === 'home' ? homeRooms : view === 'direct' ? directRooms : spaceRooms;
++    return [...base].sort(sortFn);
++  }, [
++    publishedView,
++    currentBucket,
++    view,
++    homeRooms,
++    directRooms,
++    spaceRooms,
++    mx,
++    roomToUnread,
++    roomSortOrder,
++  ]);
 +
-+      const rooms = Array.from(roomToUnread.keys()).filter(
-+        (id) => matches(id) && !mx.getRoom(id)?.isSpaceRoom()
-+      );
++  // ── Sidebar bucket order: home, direct, then user's sidebar spaces ──
++  const sidebarBuckets = useMemo(() => {
++    return [HOME_BUCKET, DIRECT_BUCKET, ...getSidebarSpaceIds(mx)];
++  }, [mx]);
 +
-+      const sortFallback =
-+        roomSortOrder === 'az'
-+          ? factoryRoomIdByAtoZ(mx)
-+          : roomSortOrder === 'unread'
-+          ? factoryRoomIdByUnreadFirst(
-+              (id) => getUnread(id).highlight,
-+              (id) => getUnread(id).total,
-+              factoryRoomIdByActivity(mx)
-+            )
-+          : factoryRoomIdByActivity(mx);
++  // ── Per-bucket FULL room sets (not just unreads). Used by the
++  //    cross-space jump: when we step out of the current view we land on
++  //    the first/last ROOM in the next bucket, even if it's read. The
++  //    user can then walk unreads within that bucket from there. This is
++  //    simpler and more predictable than trying to compute "first unread"
++  //    for buckets whose display order we don't know at hook time.
++  const allRoomsByBucket = useMemo((): Map<string, string[]> => {
++    const sidebarSet = new Set(getSidebarSpaceIds(mx));
++    const homeOrphanSet = new Set(homeRooms);
++    const directSet = new Set(directRooms);
++    const buckets = new Map<string, string[]>();
++    for (const b of sidebarBuckets) buckets.set(b, []);
 +
-+      // 0 = in active space, 1 = elsewhere — sorted ascending so active
-+      // space wins. Beyond that, group by sidebar space index, then
-+      // fall back to the user's room-sort preference.
-+      const compare = (a: string, b: string): number => {
-+        const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
-+        const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
-+        const aBucket = ai === activeSidebarIdx ? 0 : 1;
-+        const bBucket = bi === activeSidebarIdx ? 0 : 1;
-+        if (aBucket !== bBucket) return aBucket - bBucket;
-+        if (ai !== bi) return ai - bi;
-+        return sortFallback(a, b);
-+      };
++    // We need to enumerate every joined room. Use the union of the lists
++    // we already pulled (homeRooms ∪ directRooms ∪ rooms with parents).
++    const allIds = new Set<string>([...homeRooms, ...directRooms]);
++    for (const id of roomToParents.keys()) allIds.add(id);
++    // Also include unread rooms (covers the rare case where a room is in
++    // a sidebar space but somehow missing from the above sets).
++    for (const id of roomToUnread.keys()) allIds.add(id);
 +
-+      rooms.sort(compare);
++    for (const id of allIds) {
++      const room = mx.getRoom(id);
++      if (!room || room.isSpaceRoom()) continue;
 +
-+      return {
-+        entries: rooms.map((id) => [id, roomToUnread.get(id)!] as const),
-+        compare,
-+      };
++      let bucket: string | undefined;
++      if (directSet.has(id)) bucket = DIRECT_BUCKET;
++      else if (homeOrphanSet.has(id)) bucket = HOME_BUCKET;
++      else bucket = findSidebarSpaceForRoom(id, roomToParents, sidebarSet);
++
++      if (bucket && buckets.has(bucket)) buckets.get(bucket)!.push(id);
++    }
++
++    // Sort each bucket with the current sort order.
++    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++    const sortFn =
++      roomSortOrder === 'az'
++        ? factoryRoomIdByAtoZ(mx)
++        : roomSortOrder === 'unread'
++        ? factoryRoomIdByUnreadFirst(
++            (id) => getUnread(id).highlight,
++            (id) => getUnread(id).total,
++            factoryRoomIdByActivity(mx)
++          )
++        : factoryRoomIdByActivity(mx);
++    for (const ids of buckets.values()) ids.sort(sortFn);
++
++    return buckets;
++  }, [
++    mx,
++    sidebarBuckets,
++    roomToUnread,
++    roomToParents,
++    homeRooms,
++    directRooms,
++    roomSortOrder,
++  ]);
++
++  /** First room (any read state) in a bucket, in the bucket's sort order. */
++  const firstRoomInBucket = useCallback(
++    (bucket: string): string | undefined => {
++      if (bucket === currentBucket && currentViewRooms.length > 0) return currentViewRooms[0];
++      const ids = allRoomsByBucket.get(bucket);
++      return ids && ids.length > 0 ? ids[0] : undefined;
 +    },
-+    [mx, roomToUnread, roomToParents, roomSortOrder, selectedRoomId]
++    [currentBucket, currentViewRooms, allRoomsByBucket]
 +  );
 +
-+  const unread = useMemo(
-+    () => buildSortedRooms((id) => (roomToUnread.get(id)?.total ?? 0) > 0),
-+    [buildSortedRooms, roomToUnread]
++  /** Last room (any read state) in a bucket, in the bucket's sort order. */
++  const lastRoomInBucket = useCallback(
++    (bucket: string): string | undefined => {
++      if (bucket === currentBucket && currentViewRooms.length > 0)
++        return currentViewRooms[currentViewRooms.length - 1];
++      const ids = allRoomsByBucket.get(bucket);
++      return ids && ids.length > 0 ? ids[ids.length - 1] : undefined;
++    },
++    [currentBucket, currentViewRooms, allRoomsByBucket]
 +  );
 +
-+  const mention = useMemo(
-+    () => buildSortedRooms((id) => (roomToUnread.get(id)?.highlight ?? 0) > 0),
-+    [buildSortedRooms, roomToUnread]
++  /** Does this bucket contain at least one unread room? */
++  const bucketHasUnread = useCallback(
++    (bucket: string): boolean => {
++      const ids = allRoomsByBucket.get(bucket);
++      if (!ids) return false;
++      for (const id of ids) if (roomToUnread.has(id)) return true;
++      return false;
++    },
++    [allRoomsByBucket, roomToUnread]
 +  );
 +
-+  const unreadEntries = unread.entries;
-+  const mentionEntries = mention.entries;
++  const setPendingBucketJump = useAtom(pendingBucketJumpAtom)[1];
++
++  /**
++   * Step within current view first. If exhausted, find next/prev bucket
++   * with unreads, navigate to its URL, and store a pending-jump request
++   * so the destination view (once mounted with its sorted room list)
++   * picks first/last room. Returns:
++   *   - a roomId to navigate to within the current view (caller routes)
++   *   - or null when we've delegated to a cross-bucket jump (caller
++   *     should not navigate further; we already did)
++   *   - or undefined if we have nothing to do.
++   */
++  const stepUnread = useCallback(
++    (direction: 1 | -1, predicate: (id: string) => boolean): string | null | undefined => {
++      // 1) Walk current view in display order from the selected room.
++      const idx = selectedRoomId ? currentViewRooms.indexOf(selectedRoomId) : -1;
++      if (direction === 1) {
++        for (let i = idx + 1; i < currentViewRooms.length; i += 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      } else {
++        const start = idx === -1 ? currentViewRooms.length : idx;
++        for (let i = start - 1; i >= 0; i -= 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      }
++
++      // 2) No more in current view. Find next/prev bucket WITH unreads.
++      // If our bucket isn't in the sidebar (rare — viewing a space not
++      // added to the sidebar), pretend we're at position -1 so going
++      // forward starts at index 0 and going backward wraps to the end.
++      const rawIdx = sidebarBuckets.indexOf(currentBucket);
++      const bIdx = rawIdx === -1 ? -1 : rawIdx;
++      {
++        const total = sidebarBuckets.length;
++        for (let step = 1; step <= total; step += 1) {
++          const i = (bIdx + direction * step + total * 2) % total;
++          const bucket = sidebarBuckets[i];
++          if (bucket === currentBucket) continue;
++          if (!bucketHasUnread(bucket)) continue;
++
++          // Navigate to the bucket's URL; the destination view will land
++          // on first/last room once its sorted list is ready.
++          const edge: 'first' | 'last' = direction === 1 ? 'first' : 'last';
++          setPendingBucketJump({ bucket, edge });
++          if (bucket === HOME_BUCKET) {
++            navigate(getHomePath());
++          } else if (bucket === DIRECT_BUCKET) {
++            navigate(getDirectPath());
++          } else {
++            navigate(getSpacePath(getCanonicalAliasOrRoomId(mx, bucket)));
++          }
++          setBottomBarDismissed(false);
++          return null;
++        }
++      }
++
++      // 3) Last resort — no other bucket has unreads. Wrap within current
++      //    view from the other end.
++      if (direction === 1) {
++        for (let i = 0; i < currentViewRooms.length; i += 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      } else {
++        for (let i = currentViewRooms.length - 1; i >= 0; i -= 1) {
++          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
++        }
++      }
++      return undefined;
++    },
++    [
++      selectedRoomId,
++      currentViewRooms,
++      sidebarBuckets,
++      currentBucket,
++      bucketHasUnread,
++      setPendingBucketJump,
++      navigate,
++      mx,
++      setBottomBarDismissed,
++    ]
++  );
 +
 +  const navigateToRoom = useCallback(
 +    (roomId: string) => {
@@ -32695,105 +32884,89 @@ index 00000000..319def10
 +      const isDirect = mDirects.has(roomId);
 +      if (isDirect) {
 +        navigate(getDirectRoomPath(roomIdOrAlias));
-+      } else {
-+        const parents = roomToParents.get(roomId);
-+        if (parents && parents.size > 0) {
-+          const spaceId = Array.from(parents)[0];
-+          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
-+        } else {
-+          navigate(getHomeRoomPath(roomIdOrAlias));
-+        }
++        return;
 +      }
++      const parents = roomToParents.get(roomId);
++      if (parents && parents.size > 0) {
++        const spaceId = Array.from(parents)[0];
++        navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
++        return;
++      }
++      navigate(getHomeRoomPath(roomIdOrAlias));
 +    },
 +    [mx, mDirects, roomToParents, navigate]
 +  );
 +
-+  /**
-+   * Step prev/next through `entries`. The "anchor" we step from is the
-+   * currently-selected room — if it's already in the unread list, we use
-+   * its index directly; otherwise we use `compare` to find the slot
-+   * where it would virtually sort and step from there.
-+   *
-+   * This lets prev/next behave correctly when the current room has no
-+   * unreads: next picks the first unread that sorts after the current
-+   * room, prev picks the last unread that sorts before it. Wrapping at
-+   * either end falls through to the global list (other spaces).
-+   */
-+  const stepTo = useCallback(
-+    (
-+      entries: ReadonlyArray<readonly [string, unknown]>,
-+      compare: (a: string, b: string) => number,
-+      direction: 1 | -1
-+    ) => {
-+      if (entries.length === 0) return;
-+
-+      let baseIndex: number;
-+
-+      // Anchor: prefer lastNavigated when its room is still in the list.
-+      if (lastNavigated) {
-+        const found = entries.findIndex(([id]) => id === lastNavigated.roomId);
-+        if (found >= 0) {
-+          baseIndex = found;
-+        } else {
-+          baseIndex = direction === 1 ? -1 : entries.length;
-+        }
-+      } else if (selectedRoomId) {
-+        const found = entries.findIndex(([id]) => id === selectedRoomId);
-+        if (found >= 0) {
-+          baseIndex = found;
-+        } else {
-+          // selectedRoom is not unread — find its virtual position.
-+          // insertAt = first index whose entry sorts AFTER selected.
-+          let insertAt = entries.length;
-+          for (let i = 0; i < entries.length; i += 1) {
-+            if (compare(entries[i][0], selectedRoomId) >= 0) {
-+              insertAt = i;
-+              break;
-+            }
-+          }
-+          // For next: virtual base is insertAt - 1, so target = insertAt
-+          //           = first unread sorting after selected.
-+          // For prev: virtual base is insertAt, so target = insertAt - 1
-+          //           = last unread sorting before selected.
-+          baseIndex = direction === 1 ? insertAt - 1 : insertAt;
-+        }
-+      } else {
-+        baseIndex = direction === 1 ? -1 : entries.length;
-+      }
-+
-+      const target = ((baseIndex + direction) % entries.length + entries.length) % entries.length;
-+      const roomId = entries[target][0];
-+      setLastNavigated({ roomId, index: target });
++  const goPrev = useCallback(
++    (predicate: (id: string) => boolean) => {
++      const target = stepUnread(-1, predicate);
++      // null = cross-bucket jump already navigated; nothing more to do.
++      if (target === null) return;
++      if (!target) return;
 +      setBottomBarDismissed(false);
-+      navigateToRoom(roomId);
++      navigateToRoom(target);
 +    },
-+    [lastNavigated, selectedRoomId, setLastNavigated, setBottomBarDismissed, navigateToRoom]
++    [stepUnread, setBottomBarDismissed, navigateToRoom]
++  );
++  const goNext = useCallback(
++    (predicate: (id: string) => boolean) => {
++      const target = stepUnread(1, predicate);
++      if (target === null) return;
++      if (!target) return;
++      setBottomBarDismissed(false);
++      navigateToRoom(target);
++    },
++    [stepUnread, setBottomBarDismissed, navigateToRoom]
 +  );
 +
-+  const navigateNext = useCallback(
-+    () => stepTo(unread.entries, unread.compare, 1),
-+    [stepTo, unread]
++  const isUnread = useCallback(
++    (id: string) => (roomToUnread.get(id)?.total ?? 0) > 0,
++    [roomToUnread]
 +  );
-+  const navigatePrev = useCallback(
-+    () => stepTo(unread.entries, unread.compare, -1),
-+    [stepTo, unread]
++  const isMention = useCallback(
++    (id: string) => (roomToUnread.get(id)?.highlight ?? 0) > 0,
++    [roomToUnread]
 +  );
-+  const navigateNextMention = useCallback(
-+    () => stepTo(mention.entries, mention.compare, 1),
-+    [stepTo, mention]
-+  );
-+  const navigatePrevMention = useCallback(
-+    () => stepTo(mention.entries, mention.compare, -1),
-+    [stepTo, mention]
-+  );
++
++  const navigateNext = useCallback(() => goNext(isUnread), [goNext, isUnread]);
++  const navigatePrev = useCallback(() => goPrev(isUnread), [goPrev, isUnread]);
++  const navigateNextMention = useCallback(() => goNext(isMention), [goNext, isMention]);
++  const navigatePrevMention = useCallback(() => goPrev(isMention), [goPrev, isMention]);
 +
 +  const navigateFirst = useCallback(() => {
-+    if (unreadEntries.length === 0) return;
-+    const roomId = unreadEntries[0][0];
-+    setLastNavigated({ roomId, index: 0 });
-+    setBottomBarDismissed(false);
-+    navigateToRoom(roomId);
-+  }, [unreadEntries, setLastNavigated, setBottomBarDismissed, navigateToRoom]);
++    // First overall unread: scan sidebar buckets in order.
++    for (const b of sidebarBuckets) {
++      const ids = allRoomsByBucket.get(b);
++      if (!ids) continue;
++      for (const id of ids) {
++        if (roomToUnread.has(id)) {
++          setBottomBarDismissed(false);
++          navigateToRoom(id);
++          return;
++        }
++      }
++    }
++  }, [sidebarBuckets, allRoomsByBucket, roomToUnread, setBottomBarDismissed, navigateToRoom]);
++
++  const unreadCount = useMemo(() => {
++    let n = 0;
++    for (const ids of allRoomsByBucket.values()) {
++      for (const id of ids) {
++        if ((roomToUnread.get(id)?.total ?? 0) > 0) n += 1;
++      }
++    }
++    return n;
++  }, [allRoomsByBucket, roomToUnread]);
++
++  const mentionCount = useMemo(() => {
++    let n = 0;
++    for (const ids of allRoomsByBucket.values()) {
++      for (const id of ids) {
++        if ((roomToUnread.get(id)?.highlight ?? 0) > 0) n += 1;
++      }
++    }
++    return n;
++  }, [allRoomsByBucket, roomToUnread]);
 +
 +  return {
 +    navigateNext,
@@ -32801,11 +32974,61 @@ index 00000000..319def10
 +    navigateNextMention,
 +    navigatePrevMention,
 +    navigateFirst,
-+    unreadCount: unreadEntries.length,
-+    mentionCount: mentionEntries.length,
++    unreadCount,
++    mentionCount,
 +  };
 +}
 +
++/**
++ * Drains the pending-bucket-jump request: when the destination view's
++ * sorted room list is ready and matches the pending bucket, navigate to
++ * its first or last room and clear the atom.
++ *
++ * Call from each page that owns a bucket's room list. `bucket` is the
++ * bucket sentinel for this page (HOME_BUCKET / DIRECT_BUCKET / spaceId).
++ */
++export function usePendingBucketJump(
++  bucket: string,
++  sortedRoomIds: string[],
++  navigateRoom: (roomId: string) => void
++): void {
++  const [pending, setPending] = useAtom(pendingBucketJumpAtom);
++  // Stable refs so the effect can fire when sortedRoomIds becomes ready
++  // without retriggering when navigateRoom identity changes.
++  React.useEffect(() => {
++    if (!pending) return;
++    if (pending.bucket !== bucket) return;
++    if (sortedRoomIds.length === 0) return;
++    const target =
++      pending.edge === 'first' ? sortedRoomIds[0] : sortedRoomIds[sortedRoomIds.length - 1];
++    setPending(null);
++    navigateRoom(target);
++  }, [pending, bucket, sortedRoomIds, navigateRoom, setPending]);
++}
++
++/** Sentinel bucket IDs exported so page components can pass them in. */
++export const NAV_HOME_BUCKET = HOME_BUCKET;
++export const NAV_DIRECT_BUCKET = DIRECT_BUCKET;
++
++/**
++ * Publishes the page's displayed room list to currentViewRoomsAtom so
++ * useNavigateUnread reads the exact same ordering the user sees.
++ *
++ * Pages should call this with their fully-transformed list (after
++ * favorites filtering, closed-category hiding, hierarchy flattening).
++ * Clears the atom on unmount so a stale list doesn't leak across views.
++ */
++export function usePublishCurrentView(bucket: string, rooms: string[]): void {
++  const setView = useAtom(currentViewRoomsAtom)[1];
++  React.useEffect(() => {
++    setView({ bucket, rooms });
++    return () => {
++      setView((prev) => (prev && prev.bucket === bucket ? null : prev));
++    };
++    // rooms identity changes per render — that's the point, we want
++    // every update.
++  }, [bucket, rooms, setView]);
++}
 diff --git a/src/app/hooks/useParticipantDimensions.ts b/src/app/hooks/useParticipantDimensions.ts
 new file mode 100644
 index 00000000..3ac145a6
@@ -34780,10 +35003,10 @@ index ce952bfc..294d27d2 100644
      </>
    );
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index 93f0526e..e6154863 100644
+index 93f0526e..19cfcf71 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -13,29 +13,64 @@ import {
+@@ -13,29 +13,65 @@ import {
    Spinner,
    Text,
  } from 'folds';
@@ -34809,6 +35032,7 @@ index 93f0526e..e6154863 100644
 +  exposeDiagnosticsOnWindow,
 +  installCryptoIdbErrorListener,
 +  logFailureEvent,
++  requestPersistentStorage,
 +  runStartupIntegrityCheck,
 +  startHeartbeat,
 +} from '../../../client/diagnostics';
@@ -34852,7 +35076,7 @@ index 93f0526e..e6154863 100644
  
  function ClientRootLoading() {
    return (
-@@ -103,7 +138,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+@@ -103,7 +139,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                        logoutClient(mx);
                        return;
                      }
@@ -34876,7 +35100,7 @@ index 93f0526e..e6154863 100644
                    }}
                    size="300"
                    radii="300"
-@@ -128,8 +178,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -128,8 +179,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -34895,7 +35119,7 @@ index 93f0526e..e6154863 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -146,12 +204,69 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -146,12 +205,69 @@ export function ClientRoot({ children }: ClientRootProps) {
    const [loading, setLoading] = useState(true);
    const { baseUrl, userId } = getFallbackSession() ?? {};
  
@@ -34966,7 +35190,7 @@ index 93f0526e..e6154863 100644
        return initClient(session);
      }, [])
    );
-@@ -160,8 +275,41 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -160,8 +276,44 @@ export function ClientRoot({ children }: ClientRootProps) {
      useCallback((m) => startClient(m), [])
    );
  
@@ -34983,8 +35207,11 @@ index 93f0526e..e6154863 100644
  
 +  // Heartbeat lets us detect unclean shutdowns (Chromebook crashes etc.)
 +  // on the next page load. Idempotent — safe to call repeatedly.
++  // Also request persistent storage so the browser doesn't evict our
++  // checkpoint blobs under storage pressure.
 +  useEffect(() => {
 +    startHeartbeat();
++    void requestPersistentStorage();
 +  }, []);
 +
 +  // Catch IDB query failures fired from background promises (matrix-sdk-crypto's
@@ -35008,7 +35235,7 @@ index 93f0526e..e6154863 100644
    useEffect(() => {
      if (loadState.status === AsyncStatus.Idle) {
        loadMatrix();
-@@ -177,7 +325,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -177,7 +329,7 @@ export function ClientRoot({ children }: ClientRootProps) {
    useSyncState(
      mx,
      useCallback((state) => {
@@ -35017,7 +35244,7 @@ index 93f0526e..e6154863 100644
          setLoading(false);
        }
      }, [])
-@@ -185,18 +333,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -185,18 +337,13 @@ export function ClientRoot({ children }: ClientRootProps) {
  
    return (
      <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -35039,7 +35266,7 @@ index 93f0526e..e6154863 100644
                <Dialog>
                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                    {loadState.status === AsyncStatus.Error && (
-@@ -210,6 +353,30 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -210,6 +357,30 @@ export function ClientRoot({ children }: ClientRootProps) {
                        Retry
                      </Text>
                    </Button>
@@ -35070,7 +35297,7 @@ index 93f0526e..e6154863 100644
                  </Box>
                </Dialog>
              </Box>
-@@ -219,20 +386,16 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -219,20 +390,16 @@ export function ClientRoot({ children }: ClientRootProps) {
            <ClientRootLoading />
          ) : (
            <MatrixClientProvider value={mx}>
@@ -36877,7 +37104,7 @@ index 00000000..489c034f
 +  });
 +});
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf109..519723ba 100644
+index 04edf109..e80bb9d0 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -1,5 +1,5 @@
@@ -36905,7 +37132,7 @@ index 04edf109..519723ba 100644
  import {
    NavButton,
    NavCategory,
-@@ -51,6 +52,12 @@ import {
+@@ -51,6 +52,17 @@ import {
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
  import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected';
@@ -36914,11 +37141,16 @@ index 04edf109..519723ba 100644
 +import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 +import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 +import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
++import {
++  NAV_DIRECT_BUCKET,
++  usePendingBucketJump,
++  usePublishCurrentView,
++} from '../../../hooks/useNavigateUnread';
 +import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
  
  type DirectMenuProps = {
    requestClose: () => void;
-@@ -60,6 +67,7 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+@@ -60,6 +72,7 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const orphanRooms = useDirectRooms();
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
@@ -36926,7 +37158,7 @@ index 04edf109..519723ba 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -70,6 +78,37 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+@@ -70,6 +83,37 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -36964,7 +37196,7 @@ index 04edf109..519723ba 100644
          <MenuItem
            onClick={handleMarkAsRead}
            size="300"
-@@ -168,6 +207,7 @@ function DirectEmpty() {
+@@ -168,6 +212,7 @@ function DirectEmpty() {
  }
  
  const DEFAULT_CATEGORY_ID = makeNavCategoryId('direct', 'direct');
@@ -36972,7 +37204,7 @@ index 04edf109..519723ba 100644
  export function Direct() {
    const mx = useMatrixClient();
    useNavToActivePathMapper('direct');
-@@ -182,20 +222,49 @@ export function Direct() {
+@@ -182,20 +227,52 @@ export function Direct() {
    const selectedRoomId = useSelectedRoom();
    const noRoomToDisplay = directs.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
@@ -37012,6 +37244,9 @@ index 04edf109..519723ba 100644
 +  });
 +
 +  const { navigateRoom } = useRoomNavigate();
++  usePublishCurrentView(NAV_DIRECT_BUCKET, sortedDirects);
++  usePendingBucketJump(NAV_DIRECT_BUCKET, sortedDirects, navigateRoom);
++
 +  const setSearchModal = useSetAtom(searchModalAtom);
 +  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
 +
@@ -37024,7 +37259,7 @@ index 04edf109..519723ba 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -228,6 +297,37 @@ export function Direct() {
+@@ -228,6 +305,37 @@ export function Direct() {
                  </NavButton>
                </NavItem>
              </NavCategory>
@@ -37062,7 +37297,7 @@ index 04edf109..519723ba 100644
              <NavCategory>
                <NavCategoryHeader>
                  <RoomNavCategoryButton
-@@ -238,43 +338,52 @@ export function Direct() {
+@@ -238,43 +346,52 @@ export function Direct() {
                    Chats
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -37498,7 +37733,7 @@ index 00000000..a411b8a6
 +export * from './Favorites';
 +export * from './RoomProvider';
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963..c430603a 100644
+index d87db963..e4bbd5f3 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -1,4 +1,4 @@
@@ -37527,7 +37762,7 @@ index d87db963..c430603a 100644
  import {
    NavButton,
    NavCategory,
-@@ -62,9 +63,15 @@ import {
+@@ -62,9 +63,20 @@ import {
    getRoomNotificationMode,
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
@@ -37536,6 +37771,11 @@ index d87db963..c430603a 100644
 +import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 +import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 +import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
++import {
++  NAV_HOME_BUCKET,
++  usePendingBucketJump,
++  usePublishCurrentView,
++} from '../../../hooks/useNavigateUnread';
  import { UseStateProvider } from '../../../components/UseStateProvider';
  import { JoinAddressPrompt } from '../../../components/join-address-prompt';
  import { _RoomSearchParams } from '../../paths';
@@ -37543,7 +37783,7 @@ index d87db963..c430603a 100644
  
  type HomeMenuProps = {
    requestClose: () => void;
-@@ -74,6 +81,7 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
+@@ -74,6 +86,7 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
    const mx = useMatrixClient();
@@ -37551,7 +37791,7 @@ index d87db963..c430603a 100644
  
    const handleMarkAsRead = () => {
      if (!unread) return;
-@@ -84,6 +92,37 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
+@@ -84,6 +97,37 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -37589,7 +37829,7 @@ index d87db963..c430603a 100644
          <MenuItem
            onClick={handleMarkAsRead}
            size="300"
-@@ -194,6 +233,7 @@ function HomeEmpty() {
+@@ -194,6 +238,7 @@ function HomeEmpty() {
  }
  
  const DEFAULT_CATEGORY_ID = makeNavCategoryId('home', 'room');
@@ -37597,7 +37837,7 @@ index d87db963..c430603a 100644
  export function Home() {
    const mx = useMatrixClient();
    useNavToActivePathMapper('home');
-@@ -208,24 +248,49 @@ export function Home() {
+@@ -208,24 +253,54 @@ export function Home() {
    const searchSelected = useHomeSearchSelected();
    const noRoomToDisplay = rooms.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
@@ -37641,6 +37881,11 @@ index d87db963..c430603a 100644
 +  });
 +
 +  const { navigateRoom } = useRoomNavigate();
++  // Publish the displayed list to useNavigateUnread + drain any
++  // pending cross-bucket jump.
++  usePublishCurrentView(NAV_HOME_BUCKET, sortedRooms);
++  usePendingBucketJump(NAV_HOME_BUCKET, sortedRooms, navigateRoom);
++
 +  const setSearchModal = useSetAtom(searchModalAtom);
 +  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
 +
@@ -37653,7 +37898,7 @@ index d87db963..c430603a 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -312,6 +377,35 @@ export function Home() {
+@@ -312,6 +387,35 @@ export function Home() {
                  </NavLink>
                </NavItem>
              </NavCategory>
@@ -37689,7 +37934,7 @@ index d87db963..c430603a 100644
              <NavCategory>
                <NavCategoryHeader>
                  <RoomNavCategoryButton
-@@ -322,41 +416,50 @@ export function Home() {
+@@ -322,41 +426,50 @@ export function Home() {
                    Rooms
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -39423,7 +39668,7 @@ index d44cfaa2..063a8235 100644
  export * from './SearchTab';
 +export * from './ActiveCallTab';
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 2a7c6199..cc74d56c 100644
+index 2a7c6199..5c092d22 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -2,11 +2,12 @@ import React, {
@@ -39452,7 +39697,7 @@ index 2a7c6199..cc74d56c 100644
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
  import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
-@@ -76,6 +79,10 @@ import {
+@@ -76,8 +79,13 @@ import {
    getRoomNotificationMode,
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
@@ -39462,8 +39707,11 @@ index 2a7c6199..cc74d56c 100644
 +import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
  import { useOpenSpaceSettings } from '../../../state/hooks/spaceSettings';
  import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
++import { usePendingBucketJump, usePublishCurrentView } from '../../../hooks/useNavigateUnread';
  import { useRoomCreators } from '../../../hooks/useRoomCreators';
-@@ -94,6 +101,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
+ import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
+ import { ContainerColor } from '../../../styles/ContainerColor.css';
+@@ -94,6 +102,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const [developerTools] = useSetting(settingsAtom, 'developerTools');
@@ -39471,7 +39719,7 @@ index 2a7c6199..cc74d56c 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -150,6 +158,47 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
+@@ -150,6 +159,47 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
              }}
            />
          )}
@@ -39519,7 +39767,7 @@ index 2a7c6199..cc74d56c 100644
          <MenuItem
            onClick={handleMarkAsRead}
            size="300"
-@@ -395,6 +444,8 @@ export function Space() {
+@@ -395,6 +445,8 @@ export function Space() {
  
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
  
@@ -39528,7 +39776,7 @@ index 2a7c6199..cc74d56c 100644
    const getRoom = useCallback(
      (rId: string): Room | undefined => {
        if (allJoinedRooms.has(rId)) {
-@@ -405,6 +456,31 @@ export function Space() {
+@@ -405,6 +457,31 @@ export function Space() {
      [mx, allJoinedRooms]
    );
  
@@ -39560,7 +39808,7 @@ index 2a7c6199..cc74d56c 100644
    const hierarchy = useSpaceJoinedHierarchy(
      space.roomId,
      getRoom,
-@@ -419,26 +495,122 @@ export function Space() {
+@@ -419,26 +496,126 @@ export function Space() {
        },
        [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
      ),
@@ -39659,6 +39907,10 @@ index 2a7c6199..cc74d56c 100644
 +  const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
 +
 +  const { navigateRoom } = useRoomNavigate();
++  // Publish the displayed list to useNavigateUnread + drain any
++  // pending cross-bucket jump.
++  usePublishCurrentView(space.roomId, roomsOnly);
++  usePendingBucketJump(space.roomId, roomsOnly, navigateRoom);
 +
 +  const setSearchModal = useSetAtom(searchModalAtom);
 +  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
@@ -39689,7 +39941,7 @@ index 2a7c6199..cc74d56c 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -484,57 +656,96 @@ export function Space() {
+@@ -484,57 +661,96 @@ export function Space() {
                </NavLink>
              </NavItem>
            </NavCategory>
@@ -44085,10 +44337,10 @@ index 00000000..e9fc3802
 +}
 diff --git a/src/client/diagnostics.ts b/src/client/diagnostics.ts
 new file mode 100644
-index 00000000..7ed068ab
+index 00000000..774a5c56
 --- /dev/null
 +++ b/src/client/diagnostics.ts
-@@ -0,0 +1,501 @@
+@@ -0,0 +1,545 @@
 +// Failure-mode event log.
 +//
 +// We have several layers of crash/corruption recovery. Until now, when a
@@ -44156,20 +44408,37 @@ index 00000000..7ed068ab
 +  }
 +}
 +
++// Serialise log writes through a promise chain so concurrent calls don't
++// race on the read-modify-write of the single Cache entry. Without this,
++// two events fired in quick succession (e.g. checkpoint_missing followed
++// immediately by idb_wiped) would both read the same baseline, both
++// push, and the second write would overwrite the first — losing the
++// earlier event entirely. Observed in the wild on Chromebook recovery.
++let logChain: Promise<void> = Promise.resolve();
++
 +/**
 + * Append a single failure event. Best-effort: any storage failure is
 + * swallowed because diagnostics must never themselves break the app.
++ * Calls are serialised in the order they're invoked.
 + */
-+export async function logFailureEvent(
++export function logFailureEvent(
 +  kind: FailureEventKind,
 +  details?: Record<string, unknown>
 +): Promise<void> {
 +  const event: FailureEvent = { ts: Date.now(), kind };
 +  if (details) event.details = details;
-+  const events = await readEvents();
-+  events.push(event);
-+  if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
-+  await writeEvents(events);
++  logChain = logChain
++    .then(async () => {
++      const events = await readEvents();
++      events.push(event);
++      if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
++      await writeEvents(events);
++    })
++    .catch(() => {
++      // Reset the chain on error so a single failure doesn't poison
++      // every subsequent write.
++    });
++  return logChain;
 +}
 +
 +/** Fetch the full buffer. */
@@ -44260,6 +44529,33 @@ index 00000000..7ed068ab
 +    return JSON.parse(raw);
 +  } catch {
 +    return null;
++  }
++}
++
++/**
++ * Ask the browser for persistent storage so it doesn't evict our
++ * checkpoint blobs (Cache API) under storage pressure. Without this the
++ * Chromebook will quietly garbage-collect our crypto checkpoints before
++ * we need them, leading to checkpoint_missing on every recovery.
++ *
++ * Best-effort: not all browsers grant this, and not all browsers count
++ * the prompt as user-initiated. Logs a diagnostic event so we can see
++ * whether it succeeded.
++ */
++export async function requestPersistentStorage(): Promise<void> {
++  if (!navigator.storage || !navigator.storage.persist) return;
++  try {
++    const already = await navigator.storage.persisted();
++    if (already) {
++      void logFailureEvent('startup_storage_estimate', { persisted: 'already' });
++      return;
++    }
++    const granted = await navigator.storage.persist();
++    void logFailureEvent('startup_storage_estimate', {
++      persisted: granted ? 'granted' : 'denied',
++    });
++  } catch {
++    // never break startup
 +  }
 +}
 +
@@ -44591,7 +44887,7 @@ index 00000000..7ed068ab
 +  return () => window.removeEventListener('unhandledrejection', handler);
 +}
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..7e873cf5 100644
+index 498d4f75..ba49352c 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,38 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -44761,7 +45057,7 @@ index 498d4f75..7e873cf5 100644
    const dbs = await window.indexedDB.databases();
  
    dbs.forEach((idbInfo) => {
-@@ -79,3 +175,514 @@ export const clearLoginData = async () => {
+@@ -79,3 +175,547 @@ export const clearLoginData = async () => {
    window.localStorage.clear();
    window.location.reload();
  };
@@ -45237,11 +45533,44 @@ index 498d4f75..7e873cf5 100644
 +};
 +
 +/**
++ * List every checkpoint blob currently in the Cache API and return their
++ * DB names. Robust against `indexedDB.databases()` not listing names we
++ * have blobs for (post-crash, the live DB may be gone but the blob is
++ * still in cache — we want to restore it anyway).
++ */
++async function listCheckpointBlobNames(): Promise<string[]> {
++  try {
++    const cache = await caches.open(CHECKPOINT_CACHE);
++    const reqs = await cache.keys();
++    return reqs
++      .map((r) => {
++        try {
++          const u = new URL(r.url);
++          // We store blobs at `/${dbName}` — strip the leading slash.
++          return decodeURIComponent(u.pathname).replace(/^\//, '');
++        } catch {
++          return '';
++        }
++      })
++      .filter((n) => n.length > 0);
++  } catch {
++    return [];
++  }
++}
++
++/**
 + * Restore crypto databases from their Cache-API checkpoints.
 + * Returns true if at least one DB was restored.
 + */
 +async function restoreFromCheckpoint(): Promise<boolean> {
-+  const dbNames = await getCryptoDbNames();
++  // Source the names from the Cache API itself, not from the live IDB
++  // list. The live DBs may have just been wiped/damaged but the blobs
++  // survive — and we want to restore every blob we've got.
++  const cacheNames = await listCheckpointBlobNames();
++  // Union with current crypto DB names as a belt-and-braces safety net
++  // (covers a future case where the cache key format changes).
++  const fromIdb = await getCryptoDbNames();
++  const dbNames = Array.from(new Set([...cacheNames, ...fromIdb]));
 +  if (dbNames.length === 0) {
 +    logFailureEvent('checkpoint_missing', { reason: 'no_user_id' });
 +    return false;
@@ -45741,16 +46070,19 @@ index a5af94d8..b5192f10 100644
  });
 diff --git a/vitest.config.ts b/vitest.config.ts
 new file mode 100644
-index 00000000..aa3ab472
+index 00000000..3f56518f
 --- /dev/null
 +++ b/vitest.config.ts
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,11 @@
 +import { defineConfig } from 'vitest/config';
 +
 +export default defineConfig({
 +  test: {
 +    environment: 'happy-dom',
 +    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
++    // src/cinny-web/ is a nested clone left behind by makepkg's source
++    // extraction; excluding so vitest doesn't double-pick its tests.
++    exclude: ['node_modules/**', 'dist/**', 'src/cinny-web/**'],
 +  },
 +});
 diff --git a/widget.html b/widget.html
