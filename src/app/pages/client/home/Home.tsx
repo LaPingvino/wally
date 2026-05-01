@@ -295,8 +295,17 @@ export function Home() {
     (roomId: string) => navigate(getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
     [navigate, mx]
   );
-  usePublishCurrentView(NAV_HOME_BUCKET, sortedRooms);
-  usePendingBucketJump(NAV_HOME_BUCKET, sortedRooms, navigateInBucket);
+  // Favorites are rendered above the main list as a separate section
+  // and are filtered out of sortedRooms. Include them at the front of
+  // the published view so prev/next can step to unread favorites
+  // (otherwise bucketHasUnread sees them but the visible list doesn't,
+  // causing a cross-bucket jump loop).
+  const navigableRooms = useMemo(() => {
+    if (favoriteRoomIds.length === 0) return sortedRooms;
+    return [...favoriteRoomIds, ...sortedRooms];
+  }, [favoriteRoomIds, sortedRooms]);
+  usePublishCurrentView(NAV_HOME_BUCKET, navigableRooms);
+  usePendingBucketJump(NAV_HOME_BUCKET, navigableRooms, navigateInBucket);
 
   const setSearchModal = useSetAtom(searchModalAtom);
   const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);

@@ -267,8 +267,16 @@ export function Direct() {
     (roomId: string) => navigate(getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
     [navigate, mx]
   );
-  usePublishCurrentView(NAV_DIRECT_BUCKET, sortedDirects);
-  usePendingBucketJump(NAV_DIRECT_BUCKET, sortedDirects, navigateInBucket);
+  // Prepend favorites so prev/next can reach unread favorite DMs (they
+  // render in a separate section above sortedDirects). Without this,
+  // bucketHasUnread sees them but the visible list doesn't, causing
+  // cross-bucket loops.
+  const navigableDirects = useMemo(() => {
+    if (favoriteRoomIds.length === 0) return sortedDirects;
+    return [...favoriteRoomIds, ...sortedDirects];
+  }, [favoriteRoomIds, sortedDirects]);
+  usePublishCurrentView(NAV_DIRECT_BUCKET, navigableDirects);
+  usePendingBucketJump(NAV_DIRECT_BUCKET, navigableDirects, navigateInBucket);
 
   const setSearchModal = useSetAtom(searchModalAtom);
   const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
