@@ -43,6 +43,18 @@ export const mentionNavAtom = atom<{ roomId: string; eventIds: string[]; index: 
 );
 
 /**
+ * The currently-displayed room list, published by whichever page owns
+ * the visible sidebar (Home, Direct, Space). Read by useNavigateUnread
+ * so prev/next walks the exact ordering the user sees — not a
+ * recomputed approximation.
+ *
+ * `bucket` is the bucket sentinel (HOME_BUCKET / DIRECT_BUCKET / spaceId)
+ * for the page that set this. `rooms` is the displayed room IDs in
+ * order, after all filters (favorites, closed categories, hierarchy).
+ */
+export const currentViewRoomsAtom = atom<{ bucket: string; rooms: string[] } | null>(null);
+
+/**
  * Pending cross-bucket jump.
  *
  * Set by useNavigateUnread when the user steps off the end of the current
@@ -137,8 +149,15 @@ export function useNavigateUnread() {
   const spaceChildSelector = useChildRoomScopeFactory(mx, mDirects, roomToParents);
   const spaceRooms = useSpaceChildren(allRoomsAtom, selectedSpaceId ?? '', spaceChildSelector);
 
-  // Pick the appropriate list and apply current sort.
+  // Prefer the published current-view list (set by whichever page owns
+  // the visible sidebar) so we walk EXACTLY what the user sees. Fall
+  // back to a freshly-computed list when no page has published yet —
+  // covers the moment between mount and first render.
+  const publishedView = useAtomValue(currentViewRoomsAtom);
   const currentViewRooms = useMemo(() => {
+    if (publishedView && publishedView.bucket === currentBucket) {
+      return publishedView.rooms;
+    }
     const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
     const sortFn =
       roomSortOrder === 'az'
@@ -152,7 +171,17 @@ export function useNavigateUnread() {
         : factoryRoomIdByActivity(mx);
     const base = view === 'home' ? homeRooms : view === 'direct' ? directRooms : spaceRooms;
     return [...base].sort(sortFn);
-  }, [view, homeRooms, directRooms, spaceRooms, mx, roomToUnread, roomSortOrder]);
+  }, [
+    publishedView,
+    currentBucket,
+    view,
+    homeRooms,
+    directRooms,
+    spaceRooms,
+    mx,
+    roomToUnread,
+    roomSortOrder,
+  ]);
 
   // ── Sidebar bucket order: home, direct, then user's sidebar spaces ──
   const sidebarBuckets = useMemo(() => {
@@ -277,8 +306,12 @@ export function useNavigateUnread() {
       }
 
       // 2) No more in current view. Find next/prev bucket WITH unreads.
-      const bIdx = sidebarBuckets.indexOf(currentBucket);
-      if (bIdx !== -1) {
+      // If our bucket isn't in the sidebar (rare — viewing a space not
+      // added to the sidebar), pretend we're at position -1 so going
+      // forward starts at index 0 and going backward wraps to the end.
+      const rawIdx = sidebarBuckets.indexOf(currentBucket);
+      const bIdx = rawIdx === -1 ? -1 : rawIdx;
+      {
         const total = sidebarBuckets.length;
         for (let step = 1; step <= total; step += 1) {
           const i = (bIdx + direction * step + total * 2) % total;
@@ -459,3 +492,23 @@ export function usePendingBucketJump(
 /** Sentinel bucket IDs exported so page components can pass them in. */
 export const NAV_HOME_BUCKET = HOME_BUCKET;
 export const NAV_DIRECT_BUCKET = DIRECT_BUCKET;
+
+/**
+ * Publishes the page's displayed room list to currentViewRoomsAtom so
+ * useNavigateUnread reads the exact same ordering the user sees.
+ *
+ * Pages should call this with their fully-transformed list (after
+ * favorites filtering, closed-category hiding, hierarchy flattening).
+ * Clears the atom on unmount so a stale list doesn't leak across views.
+ */
+export function usePublishCurrentView(bucket: string, rooms: string[]): void {
+  const setView = useAtom(currentViewRoomsAtom)[1];
+  React.useEffect(() => {
+    setView({ bucket, rooms });
+    return () => {
+      setView((prev) => (prev && prev.bucket === bucket ? null : prev));
+    };
+    // rooms identity changes per render — that's the point, we want
+    // every update.
+  }, [bucket, rooms, setView]);
+}

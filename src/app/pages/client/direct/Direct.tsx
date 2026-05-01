@@ -57,7 +57,11 @@ import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
 import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
-import { NAV_DIRECT_BUCKET, usePendingBucketJump } from '../../../hooks/useNavigateUnread';
+import {
+  NAV_DIRECT_BUCKET,
+  usePendingBucketJump,
+  usePublishCurrentView,
+} from '../../../hooks/useNavigateUnread';
 import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
 
 type DirectMenuProps = {
@@ -257,6 +261,7 @@ export function Direct() {
   });
 
   const { navigateRoom } = useRoomNavigate();
+  usePublishCurrentView(NAV_DIRECT_BUCKET, sortedDirects);
   usePendingBucketJump(NAV_DIRECT_BUCKET, sortedDirects, navigateRoom);
 
   const setSearchModal = useSetAtom(searchModalAtom);

@@ -68,7 +68,11 @@ import { useRoomListKeyboard } from '../../../hooks/useRoomListKeyboard';
 import { searchModalAtom, searchModalInitialCharAtom } from '../../../state/searchModal';
 import { RoomListbox } from '../../../components/room-listbox/RoomListbox';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
-import { NAV_HOME_BUCKET, usePendingBucketJump } from '../../../hooks/useNavigateUnread';
+import {
+  NAV_HOME_BUCKET,
+  usePendingBucketJump,
+  usePublishCurrentView,
+} from '../../../hooks/useNavigateUnread';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { JoinAddressPrompt } from '../../../components/join-address-prompt';
 import { _RoomSearchParams } from '../../paths';
@@ -283,8 +287,9 @@ export function Home() {
   });
 
   const { navigateRoom } = useRoomNavigate();
-  // Drain pending cross-bucket jump from useNavigateUnread once our
-  // sorted room list is ready.
+  // Publish the displayed list to useNavigateUnread + drain any
+  // pending cross-bucket jump.
+  usePublishCurrentView(NAV_HOME_BUCKET, sortedRooms);
   usePendingBucketJump(NAV_HOME_BUCKET, sortedRooms, navigateRoom);
 
   const setSearchModal = useSetAtom(searchModalAtom);
