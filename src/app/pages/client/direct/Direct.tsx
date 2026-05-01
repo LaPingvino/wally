@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Avatar,
@@ -261,8 +261,14 @@ export function Direct() {
   });
 
   const { navigateRoom } = useRoomNavigate();
+  // Direct-bound navigator so a cross-bucket jump into Direct stays in
+  // Direct (the generic navigateRoom would re-pick a parent space).
+  const navigateInBucket = useCallback(
+    (roomId: string) => navigate(getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
+    [navigate, mx]
+  );
   usePublishCurrentView(NAV_DIRECT_BUCKET, sortedDirects);
-  usePendingBucketJump(NAV_DIRECT_BUCKET, sortedDirects, navigateRoom);
+  usePendingBucketJump(NAV_DIRECT_BUCKET, sortedDirects, navigateInBucket);
 
   const setSearchModal = useSetAtom(searchModalAtom);
   const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);

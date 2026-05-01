@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   Avatar,
@@ -586,10 +587,18 @@ export function Space() {
   const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
 
   const { navigateRoom } = useRoomNavigate();
+  const navigate = useNavigate();
+  // Space-bound navigator so a cross-bucket jump into THIS space lands
+  // in this space's URL, not whatever orphan parent navigateRoom would
+  // pick (which can route to a different sidebar bucket entirely).
+  const navigateInBucket = useCallback(
+    (roomId: string) => navigate(getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId))),
+    [navigate, mx, spaceIdOrAlias]
+  );
   // Publish the displayed list to useNavigateUnread + drain any
   // pending cross-bucket jump.
   usePublishCurrentView(space.roomId, roomsOnly);
-  usePendingBucketJump(space.roomId, roomsOnly, navigateRoom);
+  usePendingBucketJump(space.roomId, roomsOnly, navigateInBucket);
 
   const setSearchModal = useSetAtom(searchModalAtom);
   const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);

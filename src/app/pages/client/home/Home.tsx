@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
@@ -288,9 +288,15 @@ export function Home() {
 
   const { navigateRoom } = useRoomNavigate();
   // Publish the displayed list to useNavigateUnread + drain any
-  // pending cross-bucket jump.
+  // pending cross-bucket jump. Use a Home-bound navigator so the jump
+  // honours the bucket the user clicked towards (otherwise navigateRoom
+  // would re-pick a parent space and could land us in a different bucket).
+  const navigateInBucket = useCallback(
+    (roomId: string) => navigate(getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
+    [navigate, mx]
+  );
   usePublishCurrentView(NAV_HOME_BUCKET, sortedRooms);
-  usePendingBucketJump(NAV_HOME_BUCKET, sortedRooms, navigateRoom);
+  usePendingBucketJump(NAV_HOME_BUCKET, sortedRooms, navigateInBucket);
 
   const setSearchModal = useSetAtom(searchModalAtom);
   const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);

@@ -493,12 +493,20 @@ export function usePendingBucketJump(
   navigateRoom: (roomId: string) => void
 ): void {
   const [pending, setPending] = useAtom(pendingBucketJumpAtom);
-  // Stable refs so the effect can fire when sortedRoomIds becomes ready
-  // without retriggering when navigateRoom identity changes.
+  // Guard against firing twice for the same pending tuple — e.g. if
+  // sortedRoomIds or navigateRoom identity churns between when we
+  // schedule navigation and when React commits the cleared pending state.
+  const handledRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (!pending) return;
+    if (!pending) {
+      handledRef.current = null;
+      return;
+    }
     if (pending.bucket !== bucket) return;
     if (sortedRoomIds.length === 0) return;
+    const key = `${pending.bucket}|${pending.edge}`;
+    if (handledRef.current === key) return;
+    handledRef.current = key;
     const target =
       pending.edge === 'first' ? sortedRoomIds[0] : sortedRoomIds[sortedRoomIds.length - 1];
     setPending(null);
