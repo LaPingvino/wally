@@ -371,7 +371,13 @@ export function useNavigateUnread() {
       }
       const parents = roomToParents.get(roomId);
       if (parents && parents.size > 0) {
-        const spaceId = Array.from(parents)[0];
+        // Prefer a sidebar-ancestor space over the immediate parent.
+        // Subspaces aren't in the sidebar; opening them as their own
+        // bucket leaves currentBucket outside sidebarBuckets and breaks
+        // cross-bucket navigation.
+        const sidebarSet = new Set(getSidebarSpaceIds(mx));
+        const sidebarAncestor = findSidebarSpaceForRoom(roomId, roomToParents, sidebarSet);
+        const spaceId = sidebarAncestor ?? Array.from(parents)[0];
         navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
         return;
       }
