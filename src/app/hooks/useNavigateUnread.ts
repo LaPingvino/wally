@@ -258,27 +258,6 @@ export function useNavigateUnread() {
     roomSortOrder,
   ]);
 
-  /** First room (any read state) in a bucket, in the bucket's sort order. */
-  const firstRoomInBucket = useCallback(
-    (bucket: string): string | undefined => {
-      if (bucket === currentBucket && currentViewRooms.length > 0) return currentViewRooms[0];
-      const ids = allRoomsByBucket.get(bucket);
-      return ids && ids.length > 0 ? ids[0] : undefined;
-    },
-    [currentBucket, currentViewRooms, allRoomsByBucket]
-  );
-
-  /** Last room (any read state) in a bucket, in the bucket's sort order. */
-  const lastRoomInBucket = useCallback(
-    (bucket: string): string | undefined => {
-      if (bucket === currentBucket && currentViewRooms.length > 0)
-        return currentViewRooms[currentViewRooms.length - 1];
-      const ids = allRoomsByBucket.get(bucket);
-      return ids && ids.length > 0 ? ids[ids.length - 1] : undefined;
-    },
-    [currentBucket, currentViewRooms, allRoomsByBucket]
-  );
-
   /** Does this bucket contain at least one unread room? */
   const bucketHasUnread = useCallback(
     (bucket: string): boolean => {
