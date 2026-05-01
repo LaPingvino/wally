@@ -140,8 +140,19 @@ export function useNavigateUnread() {
     : location.pathname.startsWith('/home/') || (!selectedSpaceId && !location.pathname.startsWith('/direct/'))
     ? 'home'
     : 'space';
+  // If the URL space is a subspace (not in the sidebar), fall back to
+  // its sidebar-ancestor as the effective bucket so prev/next still
+  // walks the bucket order coherently. The in-view stepping still uses
+  // whatever roomsOnly the subspace page published.
+  const sidebarSpaceIds = useMemo(() => getSidebarSpaceIds(mx), [mx]);
+  const sidebarSet = useMemo(() => new Set(sidebarSpaceIds), [sidebarSpaceIds]);
+  const effectiveSpaceBucket: string | undefined = useMemo(() => {
+    if (!selectedSpaceId) return undefined;
+    if (sidebarSet.has(selectedSpaceId)) return selectedSpaceId;
+    return findSidebarSpaceForRoom(selectedSpaceId, roomToParents, sidebarSet) ?? selectedSpaceId;
+  }, [selectedSpaceId, sidebarSet, roomToParents]);
   const currentBucket: string =
-    view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : selectedSpaceId ?? HOME_BUCKET;
+    view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : effectiveSpaceBucket ?? HOME_BUCKET;
 
   // ── Get rooms for each view in display order ──
   const homeRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
@@ -185,8 +196,8 @@ export function useNavigateUnread() {
 
   // ── Sidebar bucket order: home, direct, then user's sidebar spaces ──
   const sidebarBuckets = useMemo(() => {
-    return [HOME_BUCKET, DIRECT_BUCKET, ...getSidebarSpaceIds(mx)];
-  }, [mx]);
+    return [HOME_BUCKET, DIRECT_BUCKET, ...sidebarSpaceIds];
+  }, [sidebarSpaceIds]);
 
   // ── Per-bucket FULL room sets (not just unreads). Used by the
   //    cross-space jump: when we step out of the current view we land on
@@ -195,7 +206,6 @@ export function useNavigateUnread() {
   //    simpler and more predictable than trying to compute "first unread"
   //    for buckets whose display order we don't know at hook time.
   const allRoomsByBucket = useMemo((): Map<string, string[]> => {
-    const sidebarSet = new Set(getSidebarSpaceIds(mx));
     const homeOrphanSet = new Set(homeRooms);
     const directSet = new Set(directRooms);
     const buckets = new Map<string, string[]>();
@@ -239,6 +249,7 @@ export function useNavigateUnread() {
   }, [
     mx,
     sidebarBuckets,
+    sidebarSet,
     roomToUnread,
     roomToParents,
     homeRooms,
@@ -375,7 +386,6 @@ export function useNavigateUnread() {
         // Subspaces aren't in the sidebar; opening them as their own
         // bucket leaves currentBucket outside sidebarBuckets and breaks
         // cross-bucket navigation.
-        const sidebarSet = new Set(getSidebarSpaceIds(mx));
         const sidebarAncestor = findSidebarSpaceForRoom(roomId, roomToParents, sidebarSet);
         const spaceId = sidebarAncestor ?? Array.from(parents)[0];
         navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
@@ -383,7 +393,7 @@ export function useNavigateUnread() {
       }
       navigate(getHomeRoomPath(roomIdOrAlias));
     },
-    [mx, mDirects, roomToParents, navigate]
+    [mx, mDirects, roomToParents, sidebarSet, navigate]
   );
 
   const goPrev = useCallback(
