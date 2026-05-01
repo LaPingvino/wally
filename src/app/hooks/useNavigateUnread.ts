@@ -1,11 +1,17 @@
 import { useCallback, useMemo } from 'react';
-import { useAtomValue, useAtom } from 'jotai';
-import { atom } from 'jotai';
-import { useNavigate } from 'react-router-dom';
+import { useAtomValue, useAtom, atom } from 'jotai';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { MatrixClient } from 'matrix-js-sdk';
 import { roomToUnreadAtom } from '../state/room/roomToUnread';
 import { mDirectAtom } from '../state/mDirectList';
 import { roomToParentsAtom } from '../state/room/roomToParents';
+import { allRoomsAtom } from '../state/room-list/roomList';
+import {
+  useChildRoomScopeFactory,
+  useDirects,
+  useOrphanRooms,
+  useSpaceChildren,
+} from '../state/hooks/roomList';
 import { useMatrixClient } from './useMatrixClient';
 import { getCanonicalAliasOrRoomId } from '../utils/matrix';
 import {
@@ -21,14 +27,8 @@ import {
 } from '../utils/sort';
 import { settingsAtom } from '../state/settings';
 import { useSelectedRoom } from './router/useSelectedRoom';
+import { useSelectedSpace } from './router/useSelectedSpace';
 import { bottomBarDismissedAtom } from '../state/bottomBarDismiss';
-
-/**
- * Track the last navigated room by ID + its position in the list at the time.
- * Using room ID (not just index) means we can correctly position ourselves
- * even when the list shrinks as rooms are read.
- */
-const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
 
 /**
  * Within-room mention navigation state.
@@ -58,21 +58,20 @@ function getSidebarSpaceIds(mx: MatrixClient): string[] {
 
 /**
  * Walk up the parent chain (via roomToParents) until we find a space that is
- * in the sidebar. Returns the sidebar index, or Infinity if none found.
+ * in the sidebar. Returns the sidebar id, or undefined if none found.
  */
-function getSidebarIndex(
+function findSidebarSpaceForRoom(
   roomId: string,
   roomToParents: Map<string, Set<string>>,
-  sidebarIndex: Map<string, number>
-): number {
+  sidebarSet: Set<string>
+): string | undefined {
   const visited = new Set<string>();
   let frontier = new Set([roomId]);
   while (frontier.size > 0) {
     const next = new Set<string>();
     for (const id of frontier) {
       for (const parent of roomToParents.get(id) ?? []) {
-        const idx = sidebarIndex.get(parent);
-        if (idx !== undefined) return idx;
+        if (sidebarSet.has(parent)) return parent;
         if (!visited.has(parent)) {
           visited.add(parent);
           next.add(parent);
@@ -81,11 +80,20 @@ function getSidebarIndex(
     }
     frontier = next;
   }
-  return Infinity;
+  return undefined;
 }
+
+// View-bucket sentinels used in the sidebar order. The sidebar UI shows
+// Home and Direct as their own tabs alongside the spaces, so we treat
+// them as pseudo-spaces in the navigation order.
+const HOME_BUCKET = '__home__';
+const DIRECT_BUCKET = '__direct__';
+
+type View = 'home' | 'direct' | 'space';
 
 export function useNavigateUnread() {
   const navigate = useNavigate();
+  const location = useLocation();
   const mx = useMatrixClient();
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const mDirects = useAtomValue(mDirectAtom);
@@ -93,84 +101,169 @@ export function useNavigateUnread() {
   const settings = useAtomValue(settingsAtom);
   const roomSortOrder: string =
     (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
-  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
   const setBottomBarDismissed = useAtom(bottomBarDismissedAtom)[1];
   const selectedRoomId = useSelectedRoom();
+  const selectedSpaceId = useSelectedSpace();
 
-  // Sorted list of rooms matching a predicate (unread or mention) plus the
-  // shared comparator used to virtually position the currently-selected
-  // room within that list.
-  //
-  // Ordering rules (the user-visible behaviour):
-  //   1. Rooms whose containing space matches the *currently open* space
-  //      come first, in the room-list's normal sort order. This keeps
-  //      "next unread" walking through the active space before jumping
-  //      anywhere else.
-  //   2. Then every other room grouped by sidebar space index. Within a
-  //      space, rooms use the room-list's normal sort.
-  const buildSortedRooms = useCallback(
-    (matches: (id: string) => boolean) => {
-      const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
+  // Determine current view from the URL.
+  const view: View = location.pathname.startsWith('/direct/')
+    ? 'direct'
+    : location.pathname.startsWith('/home/') || (!selectedSpaceId && !location.pathname.startsWith('/direct/'))
+    ? 'home'
+    : 'space';
+  const currentBucket: string =
+    view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : selectedSpaceId ?? HOME_BUCKET;
 
-      const sidebarSpaceIds = getSidebarSpaceIds(mx);
-      const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
+  // ── Get rooms for each view in display order ──
+  const homeRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
+  const directRooms = useDirects(mx, allRoomsAtom, mDirects);
+  const spaceChildSelector = useChildRoomScopeFactory(mx, mDirects, roomToParents);
+  const spaceRooms = useSpaceChildren(allRoomsAtom, selectedSpaceId ?? '', spaceChildSelector);
 
-      // Active space = the space containing the currently-selected room
-      // (Infinity if none — Home/DM views, or the user just landed).
-      const activeSidebarIdx = selectedRoomId
-        ? getSidebarIndex(selectedRoomId, roomToParents, sidebarIndex)
-        : Infinity;
+  // Pick the appropriate list and apply current sort.
+  const currentViewRooms = useMemo(() => {
+    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
+    const sortFn =
+      roomSortOrder === 'az'
+        ? factoryRoomIdByAtoZ(mx)
+        : roomSortOrder === 'unread'
+        ? factoryRoomIdByUnreadFirst(
+            (id) => getUnread(id).highlight,
+            (id) => getUnread(id).total,
+            factoryRoomIdByActivity(mx)
+          )
+        : factoryRoomIdByActivity(mx);
+    const base = view === 'home' ? homeRooms : view === 'direct' ? directRooms : spaceRooms;
+    return [...base].sort(sortFn);
+  }, [view, homeRooms, directRooms, spaceRooms, mx, roomToUnread, roomSortOrder]);
 
-      const rooms = Array.from(roomToUnread.keys()).filter(
-        (id) => matches(id) && !mx.getRoom(id)?.isSpaceRoom()
-      );
+  // ── Sidebar bucket order: home, direct, then user's sidebar spaces ──
+  const sidebarBuckets = useMemo(() => {
+    return [HOME_BUCKET, DIRECT_BUCKET, ...getSidebarSpaceIds(mx)];
+  }, [mx]);
 
-      const sortFallback =
-        roomSortOrder === 'az'
-          ? factoryRoomIdByAtoZ(mx)
-          : roomSortOrder === 'unread'
-          ? factoryRoomIdByUnreadFirst(
-              (id) => getUnread(id).highlight,
-              (id) => getUnread(id).total,
-              factoryRoomIdByActivity(mx)
-            )
-          : factoryRoomIdByActivity(mx);
+  // ── Per-bucket unread sets, computed fresh from roomToUnread ──
+  // For home/direct: orphan rooms / direct rooms with unreads.
+  // For each space: unread rooms whose sidebar-space resolves to that space.
+  const unreadByBucket = useMemo((): Map<string, Set<string>> => {
+    const sidebarSet = new Set(getSidebarSpaceIds(mx));
+    const buckets = new Map<string, Set<string>>();
+    for (const b of sidebarBuckets) buckets.set(b, new Set<string>());
 
-      // 0 = in active space, 1 = elsewhere — sorted ascending so active
-      // space wins. Beyond that, group by sidebar space index, then
-      // fall back to the user's room-sort preference.
-      const compare = (a: string, b: string): number => {
-        const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
-        const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
-        const aBucket = ai === activeSidebarIdx ? 0 : 1;
-        const bBucket = bi === activeSidebarIdx ? 0 : 1;
-        if (aBucket !== bBucket) return aBucket - bBucket;
-        if (ai !== bi) return ai - bi;
-        return sortFallback(a, b);
-      };
+    const homeOrphanSet = new Set(homeRooms);
+    const directSet = new Set(directRooms);
 
-      rooms.sort(compare);
+    for (const id of roomToUnread.keys()) {
+      const room = mx.getRoom(id);
+      if (!room || room.isSpaceRoom()) continue;
 
-      return {
-        entries: rooms.map((id) => [id, roomToUnread.get(id)!] as const),
-        compare,
-      };
+      let bucket: string | undefined;
+      if (directSet.has(id)) bucket = DIRECT_BUCKET;
+      else if (homeOrphanSet.has(id)) bucket = HOME_BUCKET;
+      else bucket = findSidebarSpaceForRoom(id, roomToParents, sidebarSet);
+
+      if (bucket && buckets.has(bucket)) buckets.get(bucket)!.add(id);
+    }
+    return buckets;
+  }, [mx, sidebarBuckets, roomToUnread, roomToParents, homeRooms, directRooms]);
+
+  // ── For "next-space-with-unreads" lookup we need the bucket's room list
+  //    to pick top/bottom unread. For home/direct we have it. For other
+  //    spaces, we don't have their full room list (would need a separate
+  //    hook per space) — so we fall back to a SORT of just the unread
+  //    rooms in that bucket using the same sortFn. Close enough to the
+  //    visible-list order in practice.
+  const sortFnForBucket = useMemo(() => {
+    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
+    return roomSortOrder === 'az'
+      ? factoryRoomIdByAtoZ(mx)
+      : roomSortOrder === 'unread'
+      ? factoryRoomIdByUnreadFirst(
+          (id) => getUnread(id).highlight,
+          (id) => getUnread(id).total,
+          factoryRoomIdByActivity(mx)
+        )
+      : factoryRoomIdByActivity(mx);
+  }, [mx, roomToUnread, roomSortOrder]);
+
+  const firstUnreadInBucket = useCallback(
+    (bucket: string): string | undefined => {
+      // For the current view, prefer display order.
+      if (bucket === currentBucket && currentViewRooms.length > 0) {
+        for (const id of currentViewRooms) if (roomToUnread.has(id)) return id;
+      }
+      const unreads = unreadByBucket.get(bucket);
+      if (!unreads || unreads.size === 0) return undefined;
+      return [...unreads].sort(sortFnForBucket)[0];
     },
-    [mx, roomToUnread, roomToParents, roomSortOrder, selectedRoomId]
+    [currentBucket, currentViewRooms, unreadByBucket, roomToUnread, sortFnForBucket]
   );
 
-  const unread = useMemo(
-    () => buildSortedRooms((id) => (roomToUnread.get(id)?.total ?? 0) > 0),
-    [buildSortedRooms, roomToUnread]
+  const lastUnreadInBucket = useCallback(
+    (bucket: string): string | undefined => {
+      if (bucket === currentBucket && currentViewRooms.length > 0) {
+        for (let i = currentViewRooms.length - 1; i >= 0; i -= 1) {
+          if (roomToUnread.has(currentViewRooms[i])) return currentViewRooms[i];
+        }
+      }
+      const unreads = unreadByBucket.get(bucket);
+      if (!unreads || unreads.size === 0) return undefined;
+      const sorted = [...unreads].sort(sortFnForBucket);
+      return sorted[sorted.length - 1];
+    },
+    [currentBucket, currentViewRooms, unreadByBucket, roomToUnread, sortFnForBucket]
   );
 
-  const mention = useMemo(
-    () => buildSortedRooms((id) => (roomToUnread.get(id)?.highlight ?? 0) > 0),
-    [buildSortedRooms, roomToUnread]
-  );
+  // ── Step within current view first; if exhausted, jump to neighbouring
+  //    bucket (in sidebar order). Wraps around the sidebar.
+  const stepUnread = useCallback(
+    (direction: 1 | -1, predicate: (id: string) => boolean): string | undefined => {
+      // 1) Walk current view in display order from the selected room.
+      const idx = selectedRoomId ? currentViewRooms.indexOf(selectedRoomId) : -1;
+      if (direction === 1) {
+        for (let i = idx + 1; i < currentViewRooms.length; i += 1) {
+          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
+        }
+      } else {
+        const start = idx === -1 ? currentViewRooms.length : idx;
+        for (let i = start - 1; i >= 0; i -= 1) {
+          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
+        }
+      }
 
-  const unreadEntries = unread.entries;
-  const mentionEntries = mention.entries;
+      // 2) No more in current view. Walk sidebar buckets.
+      const bIdx = sidebarBuckets.indexOf(currentBucket);
+      if (bIdx === -1) return undefined;
+      const total = sidebarBuckets.length;
+      // Visit buckets in order; wrap around past the current bucket.
+      for (let step = 1; step <= total; step += 1) {
+        const i = (bIdx + direction * step + total * 2) % total;
+        const bucket = sidebarBuckets[i];
+        const candidate = direction === 1 ? firstUnreadInBucket(bucket) : lastUnreadInBucket(bucket);
+        if (candidate && predicate(candidate)) return candidate;
+      }
+
+      // 3) Last resort — wrap within current view from the other end.
+      if (direction === 1) {
+        for (let i = 0; i < currentViewRooms.length; i += 1) {
+          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
+        }
+      } else {
+        for (let i = currentViewRooms.length - 1; i >= 0; i -= 1) {
+          if (predicate(currentViewRooms[i])) return currentViewRooms[i];
+        }
+      }
+      return undefined;
+    },
+    [
+      selectedRoomId,
+      currentViewRooms,
+      sidebarBuckets,
+      currentBucket,
+      firstUnreadInBucket,
+      lastUnreadInBucket,
+    ]
+  );
 
   const navigateToRoom = useCallback(
     (roomId: string) => {
@@ -178,105 +271,79 @@ export function useNavigateUnread() {
       const isDirect = mDirects.has(roomId);
       if (isDirect) {
         navigate(getDirectRoomPath(roomIdOrAlias));
-      } else {
-        const parents = roomToParents.get(roomId);
-        if (parents && parents.size > 0) {
-          const spaceId = Array.from(parents)[0];
-          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
-        } else {
-          navigate(getHomeRoomPath(roomIdOrAlias));
-        }
+        return;
       }
+      const parents = roomToParents.get(roomId);
+      if (parents && parents.size > 0) {
+        const spaceId = Array.from(parents)[0];
+        navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
+        return;
+      }
+      navigate(getHomeRoomPath(roomIdOrAlias));
     },
     [mx, mDirects, roomToParents, navigate]
   );
 
-  /**
-   * Step prev/next through `entries`. The "anchor" we step from is the
-   * currently-selected room — if it's already in the unread list, we use
-   * its index directly; otherwise we use `compare` to find the slot
-   * where it would virtually sort and step from there.
-   *
-   * This lets prev/next behave correctly when the current room has no
-   * unreads: next picks the first unread that sorts after the current
-   * room, prev picks the last unread that sorts before it. Wrapping at
-   * either end falls through to the global list (other spaces).
-   */
-  const stepTo = useCallback(
-    (
-      entries: ReadonlyArray<readonly [string, unknown]>,
-      compare: (a: string, b: string) => number,
-      direction: 1 | -1
-    ) => {
-      if (entries.length === 0) return;
-
-      let baseIndex: number;
-
-      // Anchor: prefer lastNavigated when its room is still in the list.
-      if (lastNavigated) {
-        const found = entries.findIndex(([id]) => id === lastNavigated.roomId);
-        if (found >= 0) {
-          baseIndex = found;
-        } else {
-          baseIndex = direction === 1 ? -1 : entries.length;
-        }
-      } else if (selectedRoomId) {
-        const found = entries.findIndex(([id]) => id === selectedRoomId);
-        if (found >= 0) {
-          baseIndex = found;
-        } else {
-          // selectedRoom is not unread — find its virtual position.
-          // insertAt = first index whose entry sorts AFTER selected.
-          let insertAt = entries.length;
-          for (let i = 0; i < entries.length; i += 1) {
-            if (compare(entries[i][0], selectedRoomId) >= 0) {
-              insertAt = i;
-              break;
-            }
-          }
-          // For next: virtual base is insertAt - 1, so target = insertAt
-          //           = first unread sorting after selected.
-          // For prev: virtual base is insertAt, so target = insertAt - 1
-          //           = last unread sorting before selected.
-          baseIndex = direction === 1 ? insertAt - 1 : insertAt;
-        }
-      } else {
-        baseIndex = direction === 1 ? -1 : entries.length;
-      }
-
-      const target = ((baseIndex + direction) % entries.length + entries.length) % entries.length;
-      const roomId = entries[target][0];
-      setLastNavigated({ roomId, index: target });
+  const goPrev = useCallback(
+    (predicate: (id: string) => boolean) => {
+      const target = stepUnread(-1, predicate);
+      if (!target) return;
       setBottomBarDismissed(false);
-      navigateToRoom(roomId);
+      navigateToRoom(target);
     },
-    [lastNavigated, selectedRoomId, setLastNavigated, setBottomBarDismissed, navigateToRoom]
+    [stepUnread, setBottomBarDismissed, navigateToRoom]
+  );
+  const goNext = useCallback(
+    (predicate: (id: string) => boolean) => {
+      const target = stepUnread(1, predicate);
+      if (!target) return;
+      setBottomBarDismissed(false);
+      navigateToRoom(target);
+    },
+    [stepUnread, setBottomBarDismissed, navigateToRoom]
   );
 
-  const navigateNext = useCallback(
-    () => stepTo(unread.entries, unread.compare, 1),
-    [stepTo, unread]
+  const isUnread = useCallback(
+    (id: string) => (roomToUnread.get(id)?.total ?? 0) > 0,
+    [roomToUnread]
   );
-  const navigatePrev = useCallback(
-    () => stepTo(unread.entries, unread.compare, -1),
-    [stepTo, unread]
+  const isMention = useCallback(
+    (id: string) => (roomToUnread.get(id)?.highlight ?? 0) > 0,
+    [roomToUnread]
   );
-  const navigateNextMention = useCallback(
-    () => stepTo(mention.entries, mention.compare, 1),
-    [stepTo, mention]
-  );
-  const navigatePrevMention = useCallback(
-    () => stepTo(mention.entries, mention.compare, -1),
-    [stepTo, mention]
-  );
+
+  const navigateNext = useCallback(() => goNext(isUnread), [goNext, isUnread]);
+  const navigatePrev = useCallback(() => goPrev(isUnread), [goPrev, isUnread]);
+  const navigateNextMention = useCallback(() => goNext(isMention), [goNext, isMention]);
+  const navigatePrevMention = useCallback(() => goPrev(isMention), [goPrev, isMention]);
 
   const navigateFirst = useCallback(() => {
-    if (unreadEntries.length === 0) return;
-    const roomId = unreadEntries[0][0];
-    setLastNavigated({ roomId, index: 0 });
-    setBottomBarDismissed(false);
-    navigateToRoom(roomId);
-  }, [unreadEntries, setLastNavigated, setBottomBarDismissed, navigateToRoom]);
+    // First overall unread: scan sidebar buckets in order.
+    for (const b of sidebarBuckets) {
+      const target = firstUnreadInBucket(b);
+      if (target) {
+        setBottomBarDismissed(false);
+        navigateToRoom(target);
+        return;
+      }
+    }
+  }, [sidebarBuckets, firstUnreadInBucket, setBottomBarDismissed, navigateToRoom]);
+
+  const unreadCount = useMemo(() => {
+    let n = 0;
+    for (const set of unreadByBucket.values()) n += set.size;
+    return n;
+  }, [unreadByBucket]);
+
+  const mentionCount = useMemo(() => {
+    let n = 0;
+    for (const set of unreadByBucket.values()) {
+      for (const id of set) {
+        if ((roomToUnread.get(id)?.highlight ?? 0) > 0) n += 1;
+      }
+    }
+    return n;
+  }, [unreadByBucket, roomToUnread]);
 
   return {
     navigateNext,
@@ -284,8 +351,7 @@ export function useNavigateUnread() {
     navigateNextMention,
     navigatePrevMention,
     navigateFirst,
-    unreadCount: unreadEntries.length,
-    mentionCount: mentionEntries.length,
+    unreadCount,
+    mentionCount,
   };
 }
-
