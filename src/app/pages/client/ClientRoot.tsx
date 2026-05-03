@@ -74,11 +74,40 @@ async function prefetchServerConfigs(mx: MatrixClient): Promise<ServerConfigs> {
 }
 
 function ClientRootLoading() {
+  // After auto-repair (`repairIDBAndReload`), sessionStorage flags which
+  // path was taken. Surface that here instead of the generic "Heating up"
+  // so the user knows the splash represents recovery work, not a cold start.
+  let recoveryStage: string | null = null;
+  try {
+    recoveryStage = sessionStorage.getItem('cinny_recovering_from_crash');
+  } catch {
+    // ignore — fall through to default copy
+  }
+
+  let label = 'Heating up';
+  let detail: string | null = null;
+  if (recoveryStage === 'checkpoint') {
+    label = 'Recovering from previous crash…';
+    detail = 'Restoring crypto state from checkpoint. Please stand by.';
+  } else if (recoveryStage === 'wipe') {
+    label = 'Recovering from previous crash…';
+    detail =
+      'Local cache was reset. After sync, you may see a red shield — re-verify with your recovery key or another signed-in device to clear it.';
+  } else if (recoveryStage === 'pending') {
+    label = 'Recovering from previous crash…';
+    detail = 'Please stand by.';
+  }
+
   return (
     <SplashScreen>
       <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
         <Spinner variant="Secondary" size="600" />
-        <Text>Heating up</Text>
+        <Text>{label}</Text>
+        {detail && (
+          <Text size="T200" priority="300" align="Center">
+            {detail}
+          </Text>
+        )}
       </Box>
     </SplashScreen>
   );

@@ -270,15 +270,38 @@ export const repairIDBAndReload = async () => {
     await restoreSessionFromCache();
   }
 
+  // Surface a banner on the next page load so the user knows what's happening
+  // instead of staring at a generic splash. Cleared by ClientRoot once sync
+  // completes. `checkpoint` vs `wipe` distinguishes the two recovery paths —
+  // the wipe path is the one where E2EE may need re-verification.
+  try {
+    sessionStorage.setItem(
+      'cinny_recovering_from_crash',
+      'pending'
+    );
+  } catch {
+    // ignore — banner is best-effort
+  }
+
   // Try restoring from checkpoint before nuking everything.
   const restored = await restoreFromCheckpoint();
   if (restored) {
+    try {
+      sessionStorage.setItem('cinny_recovering_from_crash', 'checkpoint');
+    } catch {
+      // ignore
+    }
     window.location.reload();
     return;
   }
 
   // No checkpoint available — full wipe.
   await logFailureEvent('idb_wiped');
+  try {
+    sessionStorage.setItem('cinny_recovering_from_crash', 'wipe');
+  } catch {
+    // ignore
+  }
   const dbs = await window.indexedDB.databases();
   dbs.forEach(({ name }) => {
     if (name) window.indexedDB.deleteDatabase(name);
