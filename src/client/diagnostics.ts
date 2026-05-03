@@ -32,7 +32,9 @@ export type FailureEventKind =
   | 'unclean_shutdown_detected'
   | 'startup_idb_probe_failed'
   | 'startup_auto_repair'
-  | 'startup_storage_estimate';
+  | 'startup_storage_estimate'
+  | 'device_keys_snapshot'
+  | 'device_keys_changed';
 
 export interface FailureEvent {
   ts: number;

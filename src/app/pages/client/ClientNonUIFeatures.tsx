@@ -126,7 +126,38 @@ function CryptoCheckpointManager() {
     logFailureEvent('startup');
     dumpFailureLog();
 
-    const doCheckpoint = () => {
+    // Device-key fingerprint tracking — diagnostic for the "checkpoint
+    // restored but device shows unverified" path. If curve25519/ed25519
+    // change across a reload we know crypto identity rotated, which
+    // proves the rust-store round-trip lost the device keys (server then
+    // sees fresh keys under the same device_id, invalidating signatures).
+    const LAST_KEYS_LS = 'cinny_device_keys_last';
+    const snapshotDeviceKeys = async (reason: string) => {
+      try {
+        const crypto = mx.getCrypto();
+        if (!crypto) return;
+        const keys = await crypto.getOwnDeviceKeys();
+        const fingerprint = {
+          curve25519: keys.curve25519,
+          ed25519: keys.ed25519,
+        };
+        const prevRaw = localStorage.getItem(LAST_KEYS_LS);
+        const prev = prevRaw ? (JSON.parse(prevRaw) as typeof fingerprint) : null;
+        if (prev && (prev.curve25519 !== fingerprint.curve25519 || prev.ed25519 !== fingerprint.ed25519)) {
+          logFailureEvent('device_keys_changed', { reason, prev, current: fingerprint });
+        }
+        logFailureEvent('device_keys_snapshot', { reason, ...fingerprint });
+        localStorage.setItem(LAST_KEYS_LS, JSON.stringify(fingerprint));
+      } catch (e) {
+        // best-effort diagnostic
+        console.warn('Device key snapshot failed:', e);
+      }
+    };
+
+    const doCheckpoint = async () => {
+      // Snapshot before checkpoint so the blob's identity is recorded in
+      // the log next to the `checkpoint_written` event.
+      await snapshotDeviceKeys('pre_checkpoint');
       checkpointCryptoStores().catch((e) => {
         console.warn('Crypto checkpoint failed:', e);
       });
@@ -136,6 +167,9 @@ function CryptoCheckpointManager() {
     const onSync = (state: SyncState | null) => {
       if (state === SyncState.Syncing && !checkpointedRef.current) {
         checkpointedRef.current = true;
+        // Snapshot device keys early — fires once sync is up, which is
+        // the moment we'd see a rotated identity post-recovery.
+        void snapshotDeviceKeys('post_sync');
         // Small delay to let crypto settle after first sync.
         setTimeout(doCheckpoint, 5_000);
       }
