@@ -327,9 +327,11 @@ export function ClientRoot({ children }: ClientRootProps) {
 
   // Catch IDB query failures fired from background promises (matrix-sdk-crypto's
   // internal queries are fire-and-forget so they don't reach loadMatrix's
-  // try/catch). When one fires we log it and trigger the same auto-repair
-  // path the pre-flight probe uses. Guard so we only fire once per session
-  // and respect the same anti-loop sessionStorage marker.
+  // try/catch). The listener gates on a real probe of the live DBs before
+  // calling us — a single transient `UnknownError` is no longer enough to
+  // trigger a wipe. We only get here when the probe confirms damage, so
+  // we go straight to repair. Anti-loop sessionStorage marker still guards
+  // against repeat repairs in the same recovery cycle.
   useEffect(() => {
     return installCryptoIdbErrorListener(({ message }) => {
       const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';

@@ -34,7 +34,8 @@ export type FailureEventKind =
   | 'startup_auto_repair'
   | 'startup_storage_estimate'
   | 'device_keys_snapshot'
-  | 'device_keys_changed';
+  | 'device_keys_changed'
+  | 'unhandledrejection_clean';
 
 export interface FailureEvent {
   ts: number;
@@ -422,6 +423,11 @@ export interface StartupIntegrityResult {
  * Expose the failure log on `window.wallyDiag` so you can call
  * `wallyDiag()` (or `await wallyDiag.json()`) from devtools at any time
  * to inspect what's been logged — even when the app failed to load.
+ *
+ * Also exposes `wallyDiag.state()` which captures the live
+ * Cache/IDB/localStorage state in one shot — what to grab when crypto
+ * goes haywire so the next investigation has the full picture without
+ * needing to remember three separate snippets.
  */
 export function exposeDiagnosticsOnWindow(): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -432,6 +438,35 @@ export function exposeDiagnosticsOnWindow(): void {
   };
   fn.json = () => getFailureLog();
   fn.clear = () => clearFailureLog();
+  fn.state = async () => {
+    let checkpointBlobs: string[] = [];
+    try {
+      const cache = await caches.open('cinny-crypto-checkpoint');
+      const keys = await cache.keys();
+      checkpointBlobs = keys.map((r) => r.url);
+    } catch (e) {
+      checkpointBlobs = [`<cache error: ${String(e)}>`];
+    }
+    let idbs: { name?: string; version?: number }[] = [];
+    try {
+      idbs = await indexedDB.databases();
+    } catch (e) {
+      idbs = [{ name: `<databases() threw: ${String(e)}>` }];
+    }
+    const cinnyLocalStorage: Record<string, string | null> = {};
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('cinny_')) cinnyLocalStorage[k] = localStorage.getItem(k);
+    }
+    const probe = await probeCryptoIdbs();
+    return {
+      ts: new Date().toISOString(),
+      checkpointBlobs,
+      idbs,
+      cinnyLocalStorage,
+      probeResult: probe ?? 'clean',
+    };
+  };
   w.wallyDiag = fn;
 }
 
@@ -514,8 +549,18 @@ export async function runStartupIntegrityCheck(): Promise<StartupIntegrityResult
  * queries). Even when these don't crash the app, they signal that crypto
  * is degraded and the user is heading toward the "unverified" state.
  *
- * Calls `onCryptoIdbError` once per page lifetime (rate-limited) so the
- * caller can decide whether to prompt for repair.
+ * **Gated by a real probe**: a single transient `UnknownError` is not
+ * enough to trigger repair. Browsers throw these from IDB during quota
+ * churn, racing closes, and momentary OS-level hiccups — and the cost of
+ * a false positive is a full crypto wipe. Before invoking the callback
+ * we run `probeCryptoIdbs()` to confirm the actual DBs are unreadable.
+ * If they probe clean, we log `unhandledrejection_clean` and skip
+ * repair; if they probe failed, we log `startup_idb_probe_failed` with
+ * the confirmed fault and invoke the callback.
+ *
+ * Calls `onCryptoIdbError` at most once per page lifetime (latched after
+ * the first probe completes either way — the synchronous startup probe
+ * on the next reload catches any genuinely-developing corruption).
  */
 export function installCryptoIdbErrorListener(
   onCryptoIdbError: (info: { message: string; stack?: string }) => void
@@ -531,16 +576,38 @@ export function installCryptoIdbErrorListener(
       return;
     }
     fired = true;
-    void logFailureEvent('startup_idb_probe_failed', {
-      source: 'unhandledrejection',
-      message,
-      stack: stack?.split('\n').slice(0, 5).join('\n'),
-    });
-    try {
-      onCryptoIdbError({ message, stack });
-    } catch {
-      // never break startup
-    }
+    const truncatedStack = stack?.split('\n').slice(0, 5).join('\n');
+    void (async () => {
+      // Probe the live DBs before declaring corruption. If they're
+      // readable, the rejection was a transient blip and a wipe would
+      // be destructive for no reason.
+      let cryptoFault: { db: string; reason: string } | null = null;
+      try {
+        cryptoFault = await probeCryptoIdbs();
+      } catch (e) {
+        // If the probe itself throws, treat that as confirmation of
+        // damage — better safe than silent.
+        cryptoFault = { db: '<probe>', reason: `probe threw: ${String(e)}` };
+      }
+      if (!cryptoFault) {
+        await logFailureEvent('unhandledrejection_clean', {
+          message,
+          stack: truncatedStack,
+        });
+        return;
+      }
+      await logFailureEvent('startup_idb_probe_failed', {
+        source: 'unhandledrejection',
+        message,
+        stack: truncatedStack,
+        ...cryptoFault,
+      });
+      try {
+        onCryptoIdbError({ message, stack });
+      } catch {
+        // never break startup
+      }
+    })();
   };
   window.addEventListener('unhandledrejection', handler);
   return () => window.removeEventListener('unhandledrejection', handler);
