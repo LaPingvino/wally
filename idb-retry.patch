@@ -35054,7 +35054,7 @@ index ce952bfc..f1d6312a 100644
      </>
    );
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index 93f0526e..529267f1 100644
+index 93f0526e..0149cc01 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
 @@ -13,36 +13,101 @@ import {
@@ -35278,7 +35278,7 @@ index 93f0526e..529267f1 100644
        return initClient(session);
      }, [])
    );
-@@ -160,8 +305,44 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -160,8 +305,46 @@ export function ClientRoot({ children }: ClientRootProps) {
      useCallback((m) => startClient(m), [])
    );
  
@@ -35304,9 +35304,11 @@ index 93f0526e..529267f1 100644
 +
 +  // Catch IDB query failures fired from background promises (matrix-sdk-crypto's
 +  // internal queries are fire-and-forget so they don't reach loadMatrix's
-+  // try/catch). When one fires we log it and trigger the same auto-repair
-+  // path the pre-flight probe uses. Guard so we only fire once per session
-+  // and respect the same anti-loop sessionStorage marker.
++  // try/catch). The listener gates on a real probe of the live DBs before
++  // calling us — a single transient `UnknownError` is no longer enough to
++  // trigger a wipe. We only get here when the probe confirms damage, so
++  // we go straight to repair. Anti-loop sessionStorage marker still guards
++  // against repeat repairs in the same recovery cycle.
 +  useEffect(() => {
 +    return installCryptoIdbErrorListener(({ message }) => {
 +      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
@@ -35323,7 +35325,7 @@ index 93f0526e..529267f1 100644
    useEffect(() => {
      if (loadState.status === AsyncStatus.Idle) {
        loadMatrix();
-@@ -177,7 +358,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -177,7 +360,7 @@ export function ClientRoot({ children }: ClientRootProps) {
    useSyncState(
      mx,
      useCallback((state) => {
@@ -35332,7 +35334,7 @@ index 93f0526e..529267f1 100644
          setLoading(false);
        }
      }, [])
-@@ -185,18 +366,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -185,18 +368,13 @@ export function ClientRoot({ children }: ClientRootProps) {
  
    return (
      <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -35354,7 +35356,7 @@ index 93f0526e..529267f1 100644
                <Dialog>
                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                    {loadState.status === AsyncStatus.Error && (
-@@ -210,6 +386,30 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -210,6 +388,30 @@ export function ClientRoot({ children }: ClientRootProps) {
                        Retry
                      </Text>
                    </Button>
@@ -35385,7 +35387,7 @@ index 93f0526e..529267f1 100644
                  </Box>
                </Dialog>
              </Box>
-@@ -219,20 +419,16 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -219,20 +421,16 @@ export function ClientRoot({ children }: ClientRootProps) {
            <ClientRootLoading />
          ) : (
            <MatrixClientProvider value={mx}>
@@ -44463,10 +44465,10 @@ index 00000000..e9fc3802
 +}
 diff --git a/src/client/diagnostics.ts b/src/client/diagnostics.ts
 new file mode 100644
-index 00000000..6453f18c
+index 00000000..142b3968
 --- /dev/null
 +++ b/src/client/diagnostics.ts
-@@ -0,0 +1,547 @@
+@@ -0,0 +1,614 @@
 +// Failure-mode event log.
 +//
 +// We have several layers of crash/corruption recovery. Until now, when a
@@ -44503,7 +44505,8 @@ index 00000000..6453f18c
 +  | 'startup_auto_repair'
 +  | 'startup_storage_estimate'
 +  | 'device_keys_snapshot'
-+  | 'device_keys_changed';
++  | 'device_keys_changed'
++  | 'unhandledrejection_clean';
 +
 +export interface FailureEvent {
 +  ts: number;
@@ -44891,6 +44894,11 @@ index 00000000..6453f18c
 + * Expose the failure log on `window.wallyDiag` so you can call
 + * `wallyDiag()` (or `await wallyDiag.json()`) from devtools at any time
 + * to inspect what's been logged — even when the app failed to load.
++ *
++ * Also exposes `wallyDiag.state()` which captures the live
++ * Cache/IDB/localStorage state in one shot — what to grab when crypto
++ * goes haywire so the next investigation has the full picture without
++ * needing to remember three separate snippets.
 + */
 +export function exposeDiagnosticsOnWindow(): void {
 +  // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44901,6 +44909,35 @@ index 00000000..6453f18c
 +  };
 +  fn.json = () => getFailureLog();
 +  fn.clear = () => clearFailureLog();
++  fn.state = async () => {
++    let checkpointBlobs: string[] = [];
++    try {
++      const cache = await caches.open('cinny-crypto-checkpoint');
++      const keys = await cache.keys();
++      checkpointBlobs = keys.map((r) => r.url);
++    } catch (e) {
++      checkpointBlobs = [`<cache error: ${String(e)}>`];
++    }
++    let idbs: { name?: string; version?: number }[] = [];
++    try {
++      idbs = await indexedDB.databases();
++    } catch (e) {
++      idbs = [{ name: `<databases() threw: ${String(e)}>` }];
++    }
++    const cinnyLocalStorage: Record<string, string | null> = {};
++    for (let i = 0; i < localStorage.length; i += 1) {
++      const k = localStorage.key(i);
++      if (k && k.startsWith('cinny_')) cinnyLocalStorage[k] = localStorage.getItem(k);
++    }
++    const probe = await probeCryptoIdbs();
++    return {
++      ts: new Date().toISOString(),
++      checkpointBlobs,
++      idbs,
++      cinnyLocalStorage,
++      probeResult: probe ?? 'clean',
++    };
++  };
 +  w.wallyDiag = fn;
 +}
 +
@@ -44983,8 +45020,18 @@ index 00000000..6453f18c
 + * queries). Even when these don't crash the app, they signal that crypto
 + * is degraded and the user is heading toward the "unverified" state.
 + *
-+ * Calls `onCryptoIdbError` once per page lifetime (rate-limited) so the
-+ * caller can decide whether to prompt for repair.
++ * **Gated by a real probe**: a single transient `UnknownError` is not
++ * enough to trigger repair. Browsers throw these from IDB during quota
++ * churn, racing closes, and momentary OS-level hiccups — and the cost of
++ * a false positive is a full crypto wipe. Before invoking the callback
++ * we run `probeCryptoIdbs()` to confirm the actual DBs are unreadable.
++ * If they probe clean, we log `unhandledrejection_clean` and skip
++ * repair; if they probe failed, we log `startup_idb_probe_failed` with
++ * the confirmed fault and invoke the callback.
++ *
++ * Calls `onCryptoIdbError` at most once per page lifetime (latched after
++ * the first probe completes either way — the synchronous startup probe
++ * on the next reload catches any genuinely-developing corruption).
 + */
 +export function installCryptoIdbErrorListener(
 +  onCryptoIdbError: (info: { message: string; stack?: string }) => void
@@ -45000,16 +45047,38 @@ index 00000000..6453f18c
 +      return;
 +    }
 +    fired = true;
-+    void logFailureEvent('startup_idb_probe_failed', {
-+      source: 'unhandledrejection',
-+      message,
-+      stack: stack?.split('\n').slice(0, 5).join('\n'),
-+    });
-+    try {
-+      onCryptoIdbError({ message, stack });
-+    } catch {
-+      // never break startup
-+    }
++    const truncatedStack = stack?.split('\n').slice(0, 5).join('\n');
++    void (async () => {
++      // Probe the live DBs before declaring corruption. If they're
++      // readable, the rejection was a transient blip and a wipe would
++      // be destructive for no reason.
++      let cryptoFault: { db: string; reason: string } | null = null;
++      try {
++        cryptoFault = await probeCryptoIdbs();
++      } catch (e) {
++        // If the probe itself throws, treat that as confirmation of
++        // damage — better safe than silent.
++        cryptoFault = { db: '<probe>', reason: `probe threw: ${String(e)}` };
++      }
++      if (!cryptoFault) {
++        await logFailureEvent('unhandledrejection_clean', {
++          message,
++          stack: truncatedStack,
++        });
++        return;
++      }
++      await logFailureEvent('startup_idb_probe_failed', {
++        source: 'unhandledrejection',
++        message,
++        stack: truncatedStack,
++        ...cryptoFault,
++      });
++      try {
++        onCryptoIdbError({ message, stack });
++      } catch {
++        // never break startup
++      }
++    })();
 +  };
 +  window.addEventListener('unhandledrejection', handler);
 +  return () => window.removeEventListener('unhandledrejection', handler);
