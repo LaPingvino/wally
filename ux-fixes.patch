@@ -9428,6 +9428,22 @@ index 00000000..8eb87428
 +    </dialog>
 +  );
 +}
+diff --git a/src/app/components/RenderMessageContent.tsx b/src/app/components/RenderMessageContent.tsx
+index 4cfcb7dc..147208a8 100644
+--- a/src/app/components/RenderMessageContent.tsx
++++ b/src/app/components/RenderMessageContent.tsx
+@@ -264,5 +264,10 @@ export function RenderMessageContent({
+     return <MBadEncrypted />;
+   }
+ 
+-  return <UnsupportedContent />;
++  const fallbackContent = getContent<{ body?: unknown }>();
++  return (
++    <UnsupportedContent
++      body={typeof fallbackContent?.body === 'string' ? fallbackContent.body : undefined}
++    />
++  );
+ }
 diff --git a/src/app/components/RoomUnreadProvider.tsx b/src/app/components/RoomUnreadProvider.tsx
 index 43dfd48b..d77e66f2 100644
 --- a/src/app/components/RoomUnreadProvider.tsx
@@ -10740,6 +10756,120 @@ index 8709b942..4977aeb8 100644
 +    </NativeDialog>
    );
  }
+diff --git a/src/app/components/message/MsgTypeRenderers.tsx b/src/app/components/message/MsgTypeRenderers.tsx
+index abbf354d..5f4d576b 100644
+--- a/src/app/components/message/MsgTypeRenderers.tsx
++++ b/src/app/components/message/MsgTypeRenderers.tsx
+@@ -49,18 +49,22 @@ export function RedactedContent({ reason }: RedactedContentProps) {
+   );
+ }
+ 
+-export function UnsupportedContent() {
++type FallbackContentProps = {
++  body?: string;
++};
++
++export function UnsupportedContent({ body }: FallbackContentProps) {
+   return (
+     <Text>
+-      <MessageUnsupportedContent />
++      <MessageUnsupportedContent body={body} />
+     </Text>
+   );
+ }
+ 
+-export function BrokenContent() {
++export function BrokenContent({ body }: FallbackContentProps) {
+   return (
+     <Text>
+-      <MessageBrokenContent />
++      <MessageBrokenContent body={body} />
+     </Text>
+   );
+ }
+@@ -79,7 +83,9 @@ type MTextProps = {
+ export function MText({ edited, content, renderBody, renderUrlsPreview, style }: MTextProps) {
+   const { body, formatted_body: customBody } = content;
+ 
+-  if (typeof body !== 'string') return <BrokenContent />;
++  if (typeof body !== 'string') {
++    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
++  }
+   const trimmedBody = trimReplyFromBody(body);
+   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
+   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
+@@ -118,7 +124,9 @@ export function MEmote({
+ }: MEmoteProps) {
+   const { body, formatted_body: customBody } = content;
+ 
+-  if (typeof body !== 'string') return <BrokenContent />;
++  if (typeof body !== 'string') {
++    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
++  }
+   const trimmedBody = trimReplyFromBody(body);
+   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
+   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
+@@ -151,7 +159,9 @@ type MNoticeProps = {
+ export function MNotice({ edited, content, renderBody, renderUrlsPreview }: MNoticeProps) {
+   const { body, formatted_body: customBody } = content;
+ 
+-  if (typeof body !== 'string') return <BrokenContent />;
++  if (typeof body !== 'string') {
++    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
++  }
+   const trimmedBody = trimReplyFromBody(body);
+   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
+   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
+@@ -193,7 +203,7 @@ export function MImage({ content, renderImageContent, outlined }: MImageProps) {
+   const imgInfo = content?.info;
+   const mxcUrl = content.file?.url ?? content.url;
+   if (typeof mxcUrl !== 'string') {
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+   const height = scaleYDimension(imgInfo?.w || 400, 400, imgInfo?.h || 400);
+ 
+@@ -242,7 +252,7 @@ export function MVideo({ content, renderAsFile, renderVideoContent, outlined }:
+     if (mxcUrl) {
+       return renderAsFile();
+     }
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+ 
+   const height = scaleYDimension(videoInfo.w || 400, 400, videoInfo.h || 400);
+@@ -305,7 +315,7 @@ export function MAudio({ content, renderAsFile, renderAudioContent, outlined }:
+     if (mxcUrl) {
+       return renderAsFile();
+     }
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+ 
+   const filename = content.filename ?? content.body ?? 'Audio';
+@@ -356,7 +366,7 @@ export function MFile({ content, renderFileContent, outlined }: MFileProps) {
+   const mxcUrl = content.file?.url ?? content.url;
+ 
+   if (typeof mxcUrl !== 'string') {
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+ 
+   return (
+@@ -387,9 +397,11 @@ type MLocationProps = {
+ };
+ export function MLocation({ content }: MLocationProps) {
+   const geoUri = content.geo_uri;
+-  if (typeof geoUri !== 'string') return <BrokenContent />;
++  if (typeof geoUri !== 'string') {
++    return <BrokenContent body={typeof content.body === 'string' ? content.body : undefined} />;
++  }
+   const location = parseGeoUri(geoUri);
+-  if (!location) return <BrokenContent />;
++  if (!location) return <BrokenContent body={geoUri} />;
+ 
+   return (
+     <Box direction="Column" alignItems="Start" gap="100">
 diff --git a/src/app/components/message/Reply.tsx b/src/app/components/message/Reply.tsx
 index 57bf2af9..5d474f54 100644
 --- a/src/app/components/message/Reply.tsx
@@ -10879,6 +11009,54 @@ index 478486a4..0c8470a4 100644
          >
            <Icon src={mute ? Icons.VolumeMute : Icons.VolumeHigh} size="50" />
          </IconButton>
+diff --git a/src/app/components/message/content/FallbackContent.tsx b/src/app/components/message/content/FallbackContent.tsx
+index 9edb9678..b6da4f93 100644
+--- a/src/app/components/message/content/FallbackContent.tsx
++++ b/src/app/components/message/content/FallbackContent.tsx
+@@ -17,12 +17,15 @@ export const MessageDeletedContent = as<'div', { children?: never; reason?: stri
+   )
+ );
+ 
+-export const MessageUnsupportedContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+-  <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+-    <Icon size="50" src={Icons.Warning} />
+-    <i>Unsupported message</i>
+-  </Box>
+-));
++export const MessageUnsupportedContent = as<'div', { children?: never; body?: string }>(
++  ({ body, ...props }, ref) => (
++    <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
++      <Icon size="50" src={Icons.Warning} />
++      <i>Unsupported message</i>
++      {body ? `: ${body}` : ' (no body)'}
++    </Box>
++  )
++);
+ 
+ export const MessageFailedContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+   <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+@@ -45,12 +48,15 @@ export const MessageNotDecryptedContent = as<'div', { children?: never }>(({ ...
+   </Box>
+ ));
+ 
+-export const MessageBrokenContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+-  <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+-    <Icon size="50" src={Icons.Warning} />
+-    <i>Broken message</i>
+-  </Box>
+-));
++export const MessageBrokenContent = as<'div', { children?: never; body?: string }>(
++  ({ body, ...props }, ref) => (
++    <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
++      <Icon size="50" src={Icons.Warning} />
++      <i>Broken message</i>
++      {body ? `: ${body}` : ' (no body)'}
++    </Box>
++  )
++);
+ 
+ export const MessageEmptyContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+   <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
 diff --git a/src/app/components/nav/NavItem.tsx b/src/app/components/nav/NavItem.tsx
 index 1ec1257f..83c70393 100644
 --- a/src/app/components/nav/NavItem.tsx
@@ -31851,10 +32029,10 @@ index c02b0e94..6541a9c3 100644
          description: 'Convert room to direct message',
 diff --git a/src/app/hooks/useExtendedProfile.ts b/src/app/hooks/useExtendedProfile.ts
 new file mode 100644
-index 00000000..9ef05fa3
+index 00000000..b2b79c51
 --- /dev/null
 +++ b/src/app/hooks/useExtendedProfile.ts
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,116 @@
 +import { useCallback } from 'react';
 +import z from 'zod';
 +import { useQuery } from '@tanstack/react-query';
@@ -31874,7 +32052,11 @@ index 00000000..9ef05fa3
 +    .array()
 +    .optional()
 +    .catch(undefined),
-+  'us.cloke.msc4175.tz': z.string().optional().catch(undefined),
++  'us.cloke.msc4175.tz': z
++    .string()
++    .transform((s) => s.replace(/^["']|["']$/g, ''))
++    .optional()
++    .catch(undefined),
 +});
 +
 +export type ExtendedProfile = z.infer<typeof extendedProfile>;
@@ -32511,10 +32693,10 @@ index 00000000..4bba79de
 +}
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
-index 00000000..2040a074
+index 00000000..1a5ec07d
 --- /dev/null
 +++ b/src/app/hooks/useNavigateUnread.ts
-@@ -0,0 +1,514 @@
+@@ -0,0 +1,531 @@
 +import React, { useCallback, useMemo } from 'react';
 +import { useAtomValue, useAtom, atom } from 'jotai';
 +import { useNavigate, useLocation } from 'react-router-dom';
@@ -32531,6 +32713,7 @@ index 00000000..2040a074
 +} from '../state/hooks/roomList';
 +import { useMatrixClient } from './useMatrixClient';
 +import { getCanonicalAliasOrRoomId } from '../utils/matrix';
++import { getAccountData } from '../utils/room';
 +import {
 +  getDirectPath,
 +  getDirectRoomPath,
@@ -32589,9 +32772,9 @@ index 00000000..2040a074
 +
 +/** Flat ordered list of space IDs from the user's sidebar config. */
 +function getSidebarSpaceIds(mx: MatrixClient): string[] {
-+  const content = mx
-+    .getAccountData(AccountDataEvent.CinnySpaces)
-+    ?.getContent<{ sidebar?: SidebarItem[] }>();
++  const content = getAccountData(mx, AccountDataEvent.CinnySpaces)?.getContent<{
++    sidebar?: SidebarItem[];
++  }>();
 +  const sidebar = content?.sidebar ?? [];
 +  const ids: string[] = [];
 +  sidebar.forEach((item) => {
@@ -32657,8 +32840,19 @@ index 00000000..2040a074
 +    : location.pathname.startsWith('/home/') || (!selectedSpaceId && !location.pathname.startsWith('/direct/'))
 +    ? 'home'
 +    : 'space';
++  // If the URL space is a subspace (not in the sidebar), fall back to
++  // its sidebar-ancestor as the effective bucket so prev/next still
++  // walks the bucket order coherently. The in-view stepping still uses
++  // whatever roomsOnly the subspace page published.
++  const sidebarSpaceIds = useMemo(() => getSidebarSpaceIds(mx), [mx]);
++  const sidebarSet = useMemo(() => new Set(sidebarSpaceIds), [sidebarSpaceIds]);
++  const effectiveSpaceBucket: string | undefined = useMemo(() => {
++    if (!selectedSpaceId) return undefined;
++    if (sidebarSet.has(selectedSpaceId)) return selectedSpaceId;
++    return findSidebarSpaceForRoom(selectedSpaceId, roomToParents, sidebarSet) ?? selectedSpaceId;
++  }, [selectedSpaceId, sidebarSet, roomToParents]);
 +  const currentBucket: string =
-+    view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : selectedSpaceId ?? HOME_BUCKET;
++    view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : effectiveSpaceBucket ?? HOME_BUCKET;
 +
 +  // ── Get rooms for each view in display order ──
 +  const homeRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
@@ -32702,8 +32896,8 @@ index 00000000..2040a074
 +
 +  // ── Sidebar bucket order: home, direct, then user's sidebar spaces ──
 +  const sidebarBuckets = useMemo(() => {
-+    return [HOME_BUCKET, DIRECT_BUCKET, ...getSidebarSpaceIds(mx)];
-+  }, [mx]);
++    return [HOME_BUCKET, DIRECT_BUCKET, ...sidebarSpaceIds];
++  }, [sidebarSpaceIds]);
 +
 +  // ── Per-bucket FULL room sets (not just unreads). Used by the
 +  //    cross-space jump: when we step out of the current view we land on
@@ -32712,7 +32906,6 @@ index 00000000..2040a074
 +  //    simpler and more predictable than trying to compute "first unread"
 +  //    for buckets whose display order we don't know at hook time.
 +  const allRoomsByBucket = useMemo((): Map<string, string[]> => {
-+    const sidebarSet = new Set(getSidebarSpaceIds(mx));
 +    const homeOrphanSet = new Set(homeRooms);
 +    const directSet = new Set(directRooms);
 +    const buckets = new Map<string, string[]>();
@@ -32756,33 +32949,13 @@ index 00000000..2040a074
 +  }, [
 +    mx,
 +    sidebarBuckets,
++    sidebarSet,
 +    roomToUnread,
 +    roomToParents,
 +    homeRooms,
 +    directRooms,
 +    roomSortOrder,
 +  ]);
-+
-+  /** First room (any read state) in a bucket, in the bucket's sort order. */
-+  const firstRoomInBucket = useCallback(
-+    (bucket: string): string | undefined => {
-+      if (bucket === currentBucket && currentViewRooms.length > 0) return currentViewRooms[0];
-+      const ids = allRoomsByBucket.get(bucket);
-+      return ids && ids.length > 0 ? ids[0] : undefined;
-+    },
-+    [currentBucket, currentViewRooms, allRoomsByBucket]
-+  );
-+
-+  /** Last room (any read state) in a bucket, in the bucket's sort order. */
-+  const lastRoomInBucket = useCallback(
-+    (bucket: string): string | undefined => {
-+      if (bucket === currentBucket && currentViewRooms.length > 0)
-+        return currentViewRooms[currentViewRooms.length - 1];
-+      const ids = allRoomsByBucket.get(bucket);
-+      return ids && ids.length > 0 ? ids[ids.length - 1] : undefined;
-+    },
-+    [currentBucket, currentViewRooms, allRoomsByBucket]
-+  );
 +
 +  /** Does this bucket contain at least one unread room? */
 +  const bucketHasUnread = useCallback(
@@ -32888,13 +33061,18 @@ index 00000000..2040a074
 +      }
 +      const parents = roomToParents.get(roomId);
 +      if (parents && parents.size > 0) {
-+        const spaceId = Array.from(parents)[0];
++        // Prefer a sidebar-ancestor space over the immediate parent.
++        // Subspaces aren't in the sidebar; opening them as their own
++        // bucket leaves currentBucket outside sidebarBuckets and breaks
++        // cross-bucket navigation.
++        const sidebarAncestor = findSidebarSpaceForRoom(roomId, roomToParents, sidebarSet);
++        const spaceId = sidebarAncestor ?? Array.from(parents)[0];
 +        navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
 +        return;
 +      }
 +      navigate(getHomeRoomPath(roomIdOrAlias));
 +    },
-+    [mx, mDirects, roomToParents, navigate]
++    [mx, mDirects, roomToParents, sidebarSet, navigate]
 +  );
 +
 +  const goPrev = useCallback(
@@ -32993,12 +33171,20 @@ index 00000000..2040a074
 +  navigateRoom: (roomId: string) => void
 +): void {
 +  const [pending, setPending] = useAtom(pendingBucketJumpAtom);
-+  // Stable refs so the effect can fire when sortedRoomIds becomes ready
-+  // without retriggering when navigateRoom identity changes.
++  // Guard against firing twice for the same pending tuple — e.g. if
++  // sortedRoomIds or navigateRoom identity churns between when we
++  // schedule navigation and when React commits the cleared pending state.
++  const handledRef = React.useRef<string | null>(null);
 +  React.useEffect(() => {
-+    if (!pending) return;
++    if (!pending) {
++      handledRef.current = null;
++      return;
++    }
 +    if (pending.bucket !== bucket) return;
 +    if (sortedRoomIds.length === 0) return;
++    const key = `${pending.bucket}|${pending.edge}`;
++    if (handledRef.current === key) return;
++    handledRef.current = key;
 +    const target =
 +      pending.edge === 'first' ? sortedRoomIds[0] : sortedRoomIds[sortedRoomIds.length - 1];
 +    setPending(null);
@@ -33020,14 +33206,27 @@ index 00000000..2040a074
 + */
 +export function usePublishCurrentView(bucket: string, rooms: string[]): void {
 +  const setView = useAtom(currentViewRoomsAtom)[1];
++  // Pages recompute rooms each render — same content but new array
++  // reference. Stabilize by content so the effect only refires when
++  // the bucket changes or a room actually moved/joined/left, not on
++  // every sync tick. Without this, every unread update would cascade
++  // re-renders through every useNavigateUnread consumer and rebuild
++  // allRoomsByBucket, which can stall the UI under sync churn.
++  const lastRef = React.useRef<string[]>(rooms);
++  const stableRooms = React.useMemo(() => {
++    const last = lastRef.current;
++    if (last.length === rooms.length && last.every((id, i) => id === rooms[i])) {
++      return last;
++    }
++    lastRef.current = rooms;
++    return rooms;
++  }, [rooms]);
 +  React.useEffect(() => {
-+    setView({ bucket, rooms });
++    setView({ bucket, rooms: stableRooms });
 +    return () => {
 +      setView((prev) => (prev && prev.bucket === bucket ? null : prev));
 +    };
-+    // rooms identity changes per render — that's the point, we want
-+    // every update.
-+  }, [bucket, rooms, setView]);
++  }, [bucket, stableRooms, setView]);
 +}
 diff --git a/src/app/hooks/useParticipantDimensions.ts b/src/app/hooks/useParticipantDimensions.ts
 new file mode 100644
@@ -34640,7 +34839,7 @@ index 00000000..364c9493
 +  );
 +}
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc..294d27d2 100644
+index ce952bfc..f1d6312a 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -34666,7 +34865,7 @@ index ce952bfc..294d27d2 100644
  import {
    getMemberDisplayName,
    getNotificationType,
-@@ -23,18 +23,175 @@ import {
+@@ -23,18 +23,209 @@ import {
  } from '../../utils/room';
  import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
  import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
@@ -34773,7 +34972,38 @@ index ce952bfc..294d27d2 100644
 +    logFailureEvent('startup');
 +    dumpFailureLog();
 +
-+    const doCheckpoint = () => {
++    // Device-key fingerprint tracking — diagnostic for the "checkpoint
++    // restored but device shows unverified" path. If curve25519/ed25519
++    // change across a reload we know crypto identity rotated, which
++    // proves the rust-store round-trip lost the device keys (server then
++    // sees fresh keys under the same device_id, invalidating signatures).
++    const LAST_KEYS_LS = 'cinny_device_keys_last';
++    const snapshotDeviceKeys = async (reason: string) => {
++      try {
++        const crypto = mx.getCrypto();
++        if (!crypto) return;
++        const keys = await crypto.getOwnDeviceKeys();
++        const fingerprint = {
++          curve25519: keys.curve25519,
++          ed25519: keys.ed25519,
++        };
++        const prevRaw = localStorage.getItem(LAST_KEYS_LS);
++        const prev = prevRaw ? (JSON.parse(prevRaw) as typeof fingerprint) : null;
++        if (prev && (prev.curve25519 !== fingerprint.curve25519 || prev.ed25519 !== fingerprint.ed25519)) {
++          logFailureEvent('device_keys_changed', { reason, prev, current: fingerprint });
++        }
++        logFailureEvent('device_keys_snapshot', { reason, ...fingerprint });
++        localStorage.setItem(LAST_KEYS_LS, JSON.stringify(fingerprint));
++      } catch (e) {
++        // best-effort diagnostic
++        console.warn('Device key snapshot failed:', e);
++      }
++    };
++
++    const doCheckpoint = async () => {
++      // Snapshot before checkpoint so the blob's identity is recorded in
++      // the log next to the `checkpoint_written` event.
++      await snapshotDeviceKeys('pre_checkpoint');
 +      checkpointCryptoStores().catch((e) => {
 +        console.warn('Crypto checkpoint failed:', e);
 +      });
@@ -34783,6 +35013,9 @@ index ce952bfc..294d27d2 100644
 +    const onSync = (state: SyncState | null) => {
 +      if (state === SyncState.Syncing && !checkpointedRef.current) {
 +        checkpointedRef.current = true;
++        // Snapshot device keys early — fires once sync is up, which is
++        // the moment we'd see a rotated identity post-recovery.
++        void snapshotDeviceKeys('post_sync');
 +        // Small delay to let crypto settle after first sync.
 +        setTimeout(doCheckpoint, 5_000);
 +      }
@@ -34848,7 +35081,7 @@ index ce952bfc..294d27d2 100644
  
    return null;
  }
-@@ -42,11 +199,13 @@ function SystemEmojiFeature() {
+@@ -42,11 +233,13 @@ function SystemEmojiFeature() {
  function PageZoomFeature() {
    const [pageZoom] = useSetting(settingsAtom, 'pageZoom');
  
@@ -34867,7 +35100,7 @@ index ce952bfc..294d27d2 100644
  
    return null;
  }
-@@ -136,6 +295,8 @@ function MessageNotifications() {
+@@ -136,6 +329,8 @@ function MessageNotifications() {
    const useAuthentication = useMediaAuthentication();
    const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
    const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
@@ -34876,7 +35109,7 @@ index ce952bfc..294d27d2 100644
  
    const navigate = useNavigate();
    const notificationSelected = useInboxNotificationsSelected();
-@@ -146,6 +307,8 @@ function MessageNotifications() {
+@@ -146,6 +341,8 @@ function MessageNotifications() {
        roomName,
        roomAvatar,
        username,
@@ -34885,7 +35118,7 @@ index ce952bfc..294d27d2 100644
      }: {
        roomName: string;
        roomAvatar?: string;
-@@ -161,7 +324,10 @@ function MessageNotifications() {
+@@ -161,7 +358,10 @@ function MessageNotifications() {
        });
  
        noti.onclick = () => {
@@ -34897,7 +35130,7 @@ index ce952bfc..294d27d2 100644
          noti.close();
          notifRef.current = undefined;
        };
-@@ -200,7 +366,7 @@ function MessageNotifications() {
+@@ -200,7 +400,7 @@ function MessageNotifications() {
        const sender = mEvent.getSender();
        const eventId = mEvent.getId();
        if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
@@ -34906,7 +35139,7 @@ index ce952bfc..294d27d2 100644
        const cachedUnreadInfo = unreadCacheRef.current.get(room.roomId);
        unreadCacheRef.current.set(room.roomId, unreadInfo);
  
-@@ -231,8 +397,63 @@ function MessageNotifications() {
+@@ -231,8 +431,63 @@ function MessageNotifications() {
        }
      };
      mx.on(RoomEvent.Timeline, handleTimelineEvent);
@@ -34970,7 +35203,7 @@ index ce952bfc..294d27d2 100644
      };
    }, [
      mx,
-@@ -243,6 +464,7 @@ function MessageNotifications() {
+@@ -243,6 +498,7 @@ function MessageNotifications() {
      notify,
      selectedRoomId,
      useAuthentication,
@@ -34978,7 +35211,7 @@ index ce952bfc..294d27d2 100644
    ]);
  
    return (
-@@ -257,14 +479,23 @@ type ClientNonUIFeaturesProps = {
+@@ -257,14 +513,23 @@ type ClientNonUIFeaturesProps = {
    children: ReactNode;
  };
  
@@ -35003,10 +35236,10 @@ index ce952bfc..294d27d2 100644
      </>
    );
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index 93f0526e..e6154863 100644
+index 93f0526e..0149cc01 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
-@@ -13,29 +13,64 @@ import {
+@@ -13,36 +13,101 @@ import {
    Spinner,
    Text,
  } from 'folds';
@@ -35032,6 +35265,7 @@ index 93f0526e..e6154863 100644
 +  exposeDiagnosticsOnWindow,
 +  installCryptoIdbErrorListener,
 +  logFailureEvent,
++  requestPersistentStorage,
 +  runStartupIntegrityCheck,
 +  startHeartbeat,
 +} from '../../../client/diagnostics';
@@ -35074,8 +35308,45 @@ index 93f0526e..e6154863 100644
 +}
  
  function ClientRootLoading() {
++  // After auto-repair (`repairIDBAndReload`), sessionStorage flags which
++  // path was taken. Surface that here instead of the generic "Heating up"
++  // so the user knows the splash represents recovery work, not a cold start.
++  let recoveryStage: string | null = null;
++  try {
++    recoveryStage = sessionStorage.getItem('cinny_recovering_from_crash');
++  } catch {
++    // ignore — fall through to default copy
++  }
++
++  let label = 'Heating up';
++  let detail: string | null = null;
++  if (recoveryStage === 'checkpoint') {
++    label = 'Recovering from previous crash…';
++    detail = 'Restoring crypto state from checkpoint. Please stand by.';
++  } else if (recoveryStage === 'wipe') {
++    label = 'Recovering from previous crash…';
++    detail =
++      'Local cache was reset. After sync, you may see a red shield — re-verify with your recovery key or another signed-in device to clear it.';
++  } else if (recoveryStage === 'pending') {
++    label = 'Recovering from previous crash…';
++    detail = 'Please stand by.';
++  }
++
    return (
-@@ -103,7 +138,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+     <SplashScreen>
+       <Box direction="Column" grow="Yes" alignItems="Center" justifyContent="Center" gap="400">
+         <Spinner variant="Secondary" size="600" />
+-        <Text>Heating up</Text>
++        <Text>{label}</Text>
++        {detail && (
++          <Text size="T200" priority="300" align="Center">
++            {detail}
++          </Text>
++        )}
+       </Box>
+     </SplashScreen>
+   );
+@@ -103,7 +168,22 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                        logoutClient(mx);
                        return;
                      }
@@ -35099,7 +35370,7 @@ index 93f0526e..e6154863 100644
                    }}
                    size="300"
                    radii="300"
-@@ -128,8 +178,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
+@@ -128,8 +208,16 @@ const useLogoutListener = (mx?: MatrixClient) => {
      const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
        mx?.stopClient();
        await mx?.clearStores();
@@ -35118,7 +35389,7 @@ index 93f0526e..e6154863 100644
      };
  
      mx?.on(HttpApiEvent.SessionLoggedOut, handleLogout);
-@@ -146,12 +204,69 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -146,12 +234,69 @@ export function ClientRoot({ children }: ClientRootProps) {
    const [loading, setLoading] = useState(true);
    const { baseUrl, userId } = getFallbackSession() ?? {};
  
@@ -35189,7 +35460,7 @@ index 93f0526e..e6154863 100644
        return initClient(session);
      }, [])
    );
-@@ -160,8 +275,41 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -160,8 +305,46 @@ export function ClientRoot({ children }: ClientRootProps) {
      useCallback((m) => startClient(m), [])
    );
  
@@ -35206,15 +35477,20 @@ index 93f0526e..e6154863 100644
  
 +  // Heartbeat lets us detect unclean shutdowns (Chromebook crashes etc.)
 +  // on the next page load. Idempotent — safe to call repeatedly.
++  // Also request persistent storage so the browser doesn't evict our
++  // checkpoint blobs under storage pressure.
 +  useEffect(() => {
 +    startHeartbeat();
++    void requestPersistentStorage();
 +  }, []);
 +
 +  // Catch IDB query failures fired from background promises (matrix-sdk-crypto's
 +  // internal queries are fire-and-forget so they don't reach loadMatrix's
-+  // try/catch). When one fires we log it and trigger the same auto-repair
-+  // path the pre-flight probe uses. Guard so we only fire once per session
-+  // and respect the same anti-loop sessionStorage marker.
++  // try/catch). The listener gates on a real probe of the live DBs before
++  // calling us — a single transient `UnknownError` is no longer enough to
++  // trigger a wipe. We only get here when the probe confirms damage, so
++  // we go straight to repair. Anti-loop sessionStorage marker still guards
++  // against repeat repairs in the same recovery cycle.
 +  useEffect(() => {
 +    return installCryptoIdbErrorListener(({ message }) => {
 +      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
@@ -35231,7 +35507,7 @@ index 93f0526e..e6154863 100644
    useEffect(() => {
      if (loadState.status === AsyncStatus.Idle) {
        loadMatrix();
-@@ -177,7 +325,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -177,7 +360,7 @@ export function ClientRoot({ children }: ClientRootProps) {
    useSyncState(
      mx,
      useCallback((state) => {
@@ -35240,7 +35516,7 @@ index 93f0526e..e6154863 100644
          setLoading(false);
        }
      }, [])
-@@ -185,18 +333,13 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -185,18 +368,13 @@ export function ClientRoot({ children }: ClientRootProps) {
  
    return (
      <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
@@ -35262,7 +35538,7 @@ index 93f0526e..e6154863 100644
                <Dialog>
                  <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                    {loadState.status === AsyncStatus.Error && (
-@@ -210,6 +353,30 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -210,6 +388,30 @@ export function ClientRoot({ children }: ClientRootProps) {
                        Retry
                      </Text>
                    </Button>
@@ -35293,7 +35569,7 @@ index 93f0526e..e6154863 100644
                  </Box>
                </Dialog>
              </Box>
-@@ -219,20 +386,16 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -219,20 +421,16 @@ export function ClientRoot({ children }: ClientRootProps) {
            <ClientRootLoading />
          ) : (
            <MatrixClientProvider value={mx}>
@@ -37100,13 +37376,13 @@ index 00000000..489c034f
 +  });
 +});
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf109..e80bb9d0 100644
+index 04edf109..181d6fdf 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -1,5 +1,5 @@
 -import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
 -import { useAtom, useAtomValue } from 'jotai';
-+import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
++import React, { MouseEventHandler, forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 +import { useAtom, useAtomValue, useSetAtom } from 'jotai';
  import {
    Avatar,
@@ -37200,7 +37476,7 @@ index 04edf109..e80bb9d0 100644
  export function Direct() {
    const mx = useMatrixClient();
    useNavToActivePathMapper('direct');
-@@ -182,20 +227,52 @@ export function Direct() {
+@@ -182,20 +227,66 @@ export function Direct() {
    const selectedRoomId = useSelectedRoom();
    const noRoomToDisplay = directs.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
@@ -37240,8 +37516,22 @@ index 04edf109..e80bb9d0 100644
 +  });
 +
 +  const { navigateRoom } = useRoomNavigate();
-+  usePublishCurrentView(NAV_DIRECT_BUCKET, sortedDirects);
-+  usePendingBucketJump(NAV_DIRECT_BUCKET, sortedDirects, navigateRoom);
++  // Direct-bound navigator so a cross-bucket jump into Direct stays in
++  // Direct (the generic navigateRoom would re-pick a parent space).
++  const navigateInBucket = useCallback(
++    (roomId: string) => navigate(getDirectRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
++    [navigate, mx]
++  );
++  // Prepend favorites so prev/next can reach unread favorite DMs (they
++  // render in a separate section above sortedDirects). Without this,
++  // bucketHasUnread sees them but the visible list doesn't, causing
++  // cross-bucket loops.
++  const navigableDirects = useMemo(() => {
++    if (favoriteRoomIds.length === 0) return sortedDirects;
++    return [...favoriteRoomIds, ...sortedDirects];
++  }, [favoriteRoomIds, sortedDirects]);
++  usePublishCurrentView(NAV_DIRECT_BUCKET, navigableDirects);
++  usePendingBucketJump(NAV_DIRECT_BUCKET, navigableDirects, navigateInBucket);
 +
 +  const setSearchModal = useSetAtom(searchModalAtom);
 +  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
@@ -37255,7 +37545,7 @@ index 04edf109..e80bb9d0 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -228,6 +305,37 @@ export function Direct() {
+@@ -228,6 +319,37 @@ export function Direct() {
                  </NavButton>
                </NavItem>
              </NavCategory>
@@ -37293,7 +37583,7 @@ index 04edf109..e80bb9d0 100644
              <NavCategory>
                <NavCategoryHeader>
                  <RoomNavCategoryButton
-@@ -238,43 +346,52 @@ export function Direct() {
+@@ -238,43 +360,52 @@ export function Direct() {
                    Chats
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -37729,12 +38019,12 @@ index 00000000..a411b8a6
 +export * from './Favorites';
 +export * from './RoomProvider';
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index d87db963..e4bbd5f3 100644
+index d87db963..e4e51bea 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -1,4 +1,4 @@
 -import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
-+import React, { MouseEventHandler, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
++import React, { MouseEventHandler, forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react';
  import { useNavigate } from 'react-router-dom';
  import {
    Avatar,
@@ -37833,7 +38123,7 @@ index d87db963..e4bbd5f3 100644
  export function Home() {
    const mx = useMatrixClient();
    useNavToActivePathMapper('home');
-@@ -208,24 +253,54 @@ export function Home() {
+@@ -208,24 +253,69 @@ export function Home() {
    const searchSelected = useHomeSearchSelected();
    const noRoomToDisplay = rooms.length === 0;
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
@@ -37878,9 +38168,24 @@ index d87db963..e4bbd5f3 100644
 +
 +  const { navigateRoom } = useRoomNavigate();
 +  // Publish the displayed list to useNavigateUnread + drain any
-+  // pending cross-bucket jump.
-+  usePublishCurrentView(NAV_HOME_BUCKET, sortedRooms);
-+  usePendingBucketJump(NAV_HOME_BUCKET, sortedRooms, navigateRoom);
++  // pending cross-bucket jump. Use a Home-bound navigator so the jump
++  // honours the bucket the user clicked towards (otherwise navigateRoom
++  // would re-pick a parent space and could land us in a different bucket).
++  const navigateInBucket = useCallback(
++    (roomId: string) => navigate(getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))),
++    [navigate, mx]
++  );
++  // Favorites are rendered above the main list as a separate section
++  // and are filtered out of sortedRooms. Include them at the front of
++  // the published view so prev/next can step to unread favorites
++  // (otherwise bucketHasUnread sees them but the visible list doesn't,
++  // causing a cross-bucket jump loop).
++  const navigableRooms = useMemo(() => {
++    if (favoriteRoomIds.length === 0) return sortedRooms;
++    return [...favoriteRoomIds, ...sortedRooms];
++  }, [favoriteRoomIds, sortedRooms]);
++  usePublishCurrentView(NAV_HOME_BUCKET, navigableRooms);
++  usePendingBucketJump(NAV_HOME_BUCKET, navigableRooms, navigateInBucket);
 +
 +  const setSearchModal = useSetAtom(searchModalAtom);
 +  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
@@ -37894,7 +38199,7 @@ index d87db963..e4bbd5f3 100644
    });
  
    const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
-@@ -312,6 +387,35 @@ export function Home() {
+@@ -312,6 +402,35 @@ export function Home() {
                  </NavLink>
                </NavItem>
              </NavCategory>
@@ -37930,7 +38235,7 @@ index d87db963..e4bbd5f3 100644
              <NavCategory>
                <NavCategoryHeader>
                  <RoomNavCategoryButton
-@@ -322,41 +426,50 @@ export function Home() {
+@@ -322,41 +441,50 @@ export function Home() {
                    Rooms
                  </RoomNavCategoryButton>
                </NavCategoryHeader>
@@ -39664,10 +39969,10 @@ index d44cfaa2..063a8235 100644
  export * from './SearchTab';
 +export * from './ActiveCallTab';
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 2a7c6199..5c092d22 100644
+index 2a7c6199..988c3d46 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
-@@ -2,11 +2,12 @@ import React, {
+@@ -2,11 +2,13 @@ import React, {
    MouseEventHandler,
    forwardRef,
    useCallback,
@@ -39677,11 +39982,12 @@ index 2a7c6199..5c092d22 100644
    useState,
  } from 'react';
 -import { useAtom, useAtomValue } from 'jotai';
++import { useNavigate } from 'react-router-dom';
 +import { useAtom, useAtomValue, useSetAtom } from 'jotai';
  import {
    Avatar,
    Box,
-@@ -53,8 +54,10 @@ import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+@@ -53,8 +55,10 @@ import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
  import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
  import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
  import { useRoomName } from '../../../hooks/useRoomMeta';
@@ -39693,7 +39999,7 @@ index 2a7c6199..5c092d22 100644
  import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
  import { usePowerLevels } from '../../../hooks/usePowerLevels';
  import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
-@@ -76,8 +79,13 @@ import {
+@@ -76,8 +80,13 @@ import {
    getRoomNotificationMode,
    useRoomsNotificationPreferencesContext,
  } from '../../../hooks/useRoomsNotificationPreferences';
@@ -39707,7 +40013,7 @@ index 2a7c6199..5c092d22 100644
  import { useRoomCreators } from '../../../hooks/useRoomCreators';
  import { useRoomPermissions } from '../../../hooks/useRoomPermissions';
  import { ContainerColor } from '../../../styles/ContainerColor.css';
-@@ -94,6 +102,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
+@@ -94,6 +103,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
    const mx = useMatrixClient();
    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
    const [developerTools] = useSetting(settingsAtom, 'developerTools');
@@ -39715,7 +40021,7 @@ index 2a7c6199..5c092d22 100644
    const roomToParents = useAtomValue(roomToParentsAtom);
    const powerLevels = usePowerLevels(room);
    const creators = useRoomCreators(room);
-@@ -150,6 +159,47 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
+@@ -150,6 +160,47 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
              }}
            />
          )}
@@ -39763,7 +40069,7 @@ index 2a7c6199..5c092d22 100644
          <MenuItem
            onClick={handleMarkAsRead}
            size="300"
-@@ -395,6 +445,8 @@ export function Space() {
+@@ -395,6 +446,8 @@ export function Space() {
  
    const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
  
@@ -39772,7 +40078,7 @@ index 2a7c6199..5c092d22 100644
    const getRoom = useCallback(
      (rId: string): Room | undefined => {
        if (allJoinedRooms.has(rId)) {
-@@ -405,6 +457,31 @@ export function Space() {
+@@ -405,6 +458,31 @@ export function Space() {
      [mx, allJoinedRooms]
    );
  
@@ -39804,7 +40110,7 @@ index 2a7c6199..5c092d22 100644
    const hierarchy = useSpaceJoinedHierarchy(
      space.roomId,
      getRoom,
-@@ -419,26 +496,126 @@ export function Space() {
+@@ -419,26 +497,134 @@ export function Space() {
        },
        [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
      ),
@@ -39903,10 +40209,18 @@ index 2a7c6199..5c092d22 100644
 +  const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
 +
 +  const { navigateRoom } = useRoomNavigate();
++  const navigate = useNavigate();
++  // Space-bound navigator so a cross-bucket jump into THIS space lands
++  // in this space's URL, not whatever orphan parent navigateRoom would
++  // pick (which can route to a different sidebar bucket entirely).
++  const navigateInBucket = useCallback(
++    (roomId: string) => navigate(getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId))),
++    [navigate, mx, spaceIdOrAlias]
++  );
 +  // Publish the displayed list to useNavigateUnread + drain any
 +  // pending cross-bucket jump.
 +  usePublishCurrentView(space.roomId, roomsOnly);
-+  usePendingBucketJump(space.roomId, roomsOnly, navigateRoom);
++  usePendingBucketJump(space.roomId, roomsOnly, navigateInBucket);
 +
 +  const setSearchModal = useSetAtom(searchModalAtom);
 +  const setSearchInitialChar = useSetAtom(searchModalInitialCharAtom);
@@ -39937,7 +40251,7 @@ index 2a7c6199..5c092d22 100644
    return (
      <PageNav>
        <SpaceHeader />
-@@ -484,57 +661,96 @@ export function Space() {
+@@ -484,57 +670,96 @@ export function Space() {
                </NavLink>
              </NavItem>
            </NavCategory>
@@ -44333,10 +44647,10 @@ index 00000000..e9fc3802
 +}
 diff --git a/src/client/diagnostics.ts b/src/client/diagnostics.ts
 new file mode 100644
-index 00000000..b64205c1
+index 00000000..142b3968
 --- /dev/null
 +++ b/src/client/diagnostics.ts
-@@ -0,0 +1,518 @@
+@@ -0,0 +1,614 @@
 +// Failure-mode event log.
 +//
 +// We have several layers of crash/corruption recovery. Until now, when a
@@ -44371,7 +44685,10 @@ index 00000000..b64205c1
 +  | 'unclean_shutdown_detected'
 +  | 'startup_idb_probe_failed'
 +  | 'startup_auto_repair'
-+  | 'startup_storage_estimate';
++  | 'startup_storage_estimate'
++  | 'device_keys_snapshot'
++  | 'device_keys_changed'
++  | 'unhandledrejection_clean';
 +
 +export interface FailureEvent {
 +  ts: number;
@@ -44525,6 +44842,33 @@ index 00000000..b64205c1
 +    return JSON.parse(raw);
 +  } catch {
 +    return null;
++  }
++}
++
++/**
++ * Ask the browser for persistent storage so it doesn't evict our
++ * checkpoint blobs (Cache API) under storage pressure. Without this the
++ * Chromebook will quietly garbage-collect our crypto checkpoints before
++ * we need them, leading to checkpoint_missing on every recovery.
++ *
++ * Best-effort: not all browsers grant this, and not all browsers count
++ * the prompt as user-initiated. Logs a diagnostic event so we can see
++ * whether it succeeded.
++ */
++export async function requestPersistentStorage(): Promise<void> {
++  if (!navigator.storage || !navigator.storage.persist) return;
++  try {
++    const already = await navigator.storage.persisted();
++    if (already) {
++      void logFailureEvent('startup_storage_estimate', { persisted: 'already' });
++      return;
++    }
++    const granted = await navigator.storage.persist();
++    void logFailureEvent('startup_storage_estimate', {
++      persisted: granted ? 'granted' : 'denied',
++    });
++  } catch {
++    // never break startup
 +  }
 +}
 +
@@ -44732,6 +45076,11 @@ index 00000000..b64205c1
 + * Expose the failure log on `window.wallyDiag` so you can call
 + * `wallyDiag()` (or `await wallyDiag.json()`) from devtools at any time
 + * to inspect what's been logged — even when the app failed to load.
++ *
++ * Also exposes `wallyDiag.state()` which captures the live
++ * Cache/IDB/localStorage state in one shot — what to grab when crypto
++ * goes haywire so the next investigation has the full picture without
++ * needing to remember three separate snippets.
 + */
 +export function exposeDiagnosticsOnWindow(): void {
 +  // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44742,6 +45091,35 @@ index 00000000..b64205c1
 +  };
 +  fn.json = () => getFailureLog();
 +  fn.clear = () => clearFailureLog();
++  fn.state = async () => {
++    let checkpointBlobs: string[] = [];
++    try {
++      const cache = await caches.open('cinny-crypto-checkpoint');
++      const keys = await cache.keys();
++      checkpointBlobs = keys.map((r) => r.url);
++    } catch (e) {
++      checkpointBlobs = [`<cache error: ${String(e)}>`];
++    }
++    let idbs: { name?: string; version?: number }[] = [];
++    try {
++      idbs = await indexedDB.databases();
++    } catch (e) {
++      idbs = [{ name: `<databases() threw: ${String(e)}>` }];
++    }
++    const cinnyLocalStorage: Record<string, string | null> = {};
++    for (let i = 0; i < localStorage.length; i += 1) {
++      const k = localStorage.key(i);
++      if (k && k.startsWith('cinny_')) cinnyLocalStorage[k] = localStorage.getItem(k);
++    }
++    const probe = await probeCryptoIdbs();
++    return {
++      ts: new Date().toISOString(),
++      checkpointBlobs,
++      idbs,
++      cinnyLocalStorage,
++      probeResult: probe ?? 'clean',
++    };
++  };
 +  w.wallyDiag = fn;
 +}
 +
@@ -44824,8 +45202,18 @@ index 00000000..b64205c1
 + * queries). Even when these don't crash the app, they signal that crypto
 + * is degraded and the user is heading toward the "unverified" state.
 + *
-+ * Calls `onCryptoIdbError` once per page lifetime (rate-limited) so the
-+ * caller can decide whether to prompt for repair.
++ * **Gated by a real probe**: a single transient `UnknownError` is not
++ * enough to trigger repair. Browsers throw these from IDB during quota
++ * churn, racing closes, and momentary OS-level hiccups — and the cost of
++ * a false positive is a full crypto wipe. Before invoking the callback
++ * we run `probeCryptoIdbs()` to confirm the actual DBs are unreadable.
++ * If they probe clean, we log `unhandledrejection_clean` and skip
++ * repair; if they probe failed, we log `startup_idb_probe_failed` with
++ * the confirmed fault and invoke the callback.
++ *
++ * Calls `onCryptoIdbError` at most once per page lifetime (latched after
++ * the first probe completes either way — the synchronous startup probe
++ * on the next reload catches any genuinely-developing corruption).
 + */
 +export function installCryptoIdbErrorListener(
 +  onCryptoIdbError: (info: { message: string; stack?: string }) => void
@@ -44841,22 +45229,44 @@ index 00000000..b64205c1
 +      return;
 +    }
 +    fired = true;
-+    void logFailureEvent('startup_idb_probe_failed', {
-+      source: 'unhandledrejection',
-+      message,
-+      stack: stack?.split('\n').slice(0, 5).join('\n'),
-+    });
-+    try {
-+      onCryptoIdbError({ message, stack });
-+    } catch {
-+      // never break startup
-+    }
++    const truncatedStack = stack?.split('\n').slice(0, 5).join('\n');
++    void (async () => {
++      // Probe the live DBs before declaring corruption. If they're
++      // readable, the rejection was a transient blip and a wipe would
++      // be destructive for no reason.
++      let cryptoFault: { db: string; reason: string } | null = null;
++      try {
++        cryptoFault = await probeCryptoIdbs();
++      } catch (e) {
++        // If the probe itself throws, treat that as confirmation of
++        // damage — better safe than silent.
++        cryptoFault = { db: '<probe>', reason: `probe threw: ${String(e)}` };
++      }
++      if (!cryptoFault) {
++        await logFailureEvent('unhandledrejection_clean', {
++          message,
++          stack: truncatedStack,
++        });
++        return;
++      }
++      await logFailureEvent('startup_idb_probe_failed', {
++        source: 'unhandledrejection',
++        message,
++        stack: truncatedStack,
++        ...cryptoFault,
++      });
++      try {
++        onCryptoIdbError({ message, stack });
++      } catch {
++        // never break startup
++      }
++    })();
 +  };
 +  window.addEventListener('unhandledrejection', handler);
 +  return () => window.removeEventListener('unhandledrejection', handler);
 +}
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..7e873cf5 100644
+index 498d4f75..d68b6934 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,38 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
@@ -45026,7 +45436,7 @@ index 498d4f75..7e873cf5 100644
    const dbs = await window.indexedDB.databases();
  
    dbs.forEach((idbInfo) => {
-@@ -79,3 +175,514 @@ export const clearLoginData = async () => {
+@@ -79,3 +175,570 @@ export const clearLoginData = async () => {
    window.localStorage.clear();
    window.location.reload();
  };
@@ -45125,15 +45535,38 @@ index 498d4f75..7e873cf5 100644
 +    await restoreSessionFromCache();
 +  }
 +
++  // Surface a banner on the next page load so the user knows what's happening
++  // instead of staring at a generic splash. Cleared by ClientRoot once sync
++  // completes. `checkpoint` vs `wipe` distinguishes the two recovery paths —
++  // the wipe path is the one where E2EE may need re-verification.
++  try {
++    sessionStorage.setItem(
++      'cinny_recovering_from_crash',
++      'pending'
++    );
++  } catch {
++    // ignore — banner is best-effort
++  }
++
 +  // Try restoring from checkpoint before nuking everything.
 +  const restored = await restoreFromCheckpoint();
 +  if (restored) {
++    try {
++      sessionStorage.setItem('cinny_recovering_from_crash', 'checkpoint');
++    } catch {
++      // ignore
++    }
 +    window.location.reload();
 +    return;
 +  }
 +
 +  // No checkpoint available — full wipe.
 +  await logFailureEvent('idb_wiped');
++  try {
++    sessionStorage.setItem('cinny_recovering_from_crash', 'wipe');
++  } catch {
++    // ignore
++  }
 +  const dbs = await window.indexedDB.databases();
 +  dbs.forEach(({ name }) => {
 +    if (name) window.indexedDB.deleteDatabase(name);
@@ -45502,11 +45935,44 @@ index 498d4f75..7e873cf5 100644
 +};
 +
 +/**
++ * List every checkpoint blob currently in the Cache API and return their
++ * DB names. Robust against `indexedDB.databases()` not listing names we
++ * have blobs for (post-crash, the live DB may be gone but the blob is
++ * still in cache — we want to restore it anyway).
++ */
++async function listCheckpointBlobNames(): Promise<string[]> {
++  try {
++    const cache = await caches.open(CHECKPOINT_CACHE);
++    const reqs = await cache.keys();
++    return reqs
++      .map((r) => {
++        try {
++          const u = new URL(r.url);
++          // We store blobs at `/${dbName}` — strip the leading slash.
++          return decodeURIComponent(u.pathname).replace(/^\//, '');
++        } catch {
++          return '';
++        }
++      })
++      .filter((n) => n.length > 0);
++  } catch {
++    return [];
++  }
++}
++
++/**
 + * Restore crypto databases from their Cache-API checkpoints.
 + * Returns true if at least one DB was restored.
 + */
 +async function restoreFromCheckpoint(): Promise<boolean> {
-+  const dbNames = await getCryptoDbNames();
++  // Source the names from the Cache API itself, not from the live IDB
++  // list. The live DBs may have just been wiped/damaged but the blobs
++  // survive — and we want to restore every blob we've got.
++  const cacheNames = await listCheckpointBlobNames();
++  // Union with current crypto DB names as a belt-and-braces safety net
++  // (covers a future case where the cache key format changes).
++  const fromIdb = await getCryptoDbNames();
++  const dbNames = Array.from(new Set([...cacheNames, ...fromIdb]));
 +  if (dbNames.length === 0) {
 +    logFailureEvent('checkpoint_missing', { reason: 'no_user_id' });
 +    return false;
