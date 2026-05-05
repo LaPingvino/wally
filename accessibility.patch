@@ -633,7 +633,7 @@ index a5456385..f8fd4391 100644
      direction="Column"
      className={classNames(ContainerColor({ variant: 'Surface' }), className)}
 diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
-index cbcd626a..85969b56 100644
+index 1ee72d4a..eff5715b 100644
 --- a/src/app/components/room-avatar/RoomAvatar.tsx
 +++ b/src/app/components/room-avatar/RoomAvatar.tsx
 @@ -23,6 +23,8 @@ export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps
@@ -645,6 +645,22 @@ index cbcd626a..85969b56 100644
        >
          {renderFallback()}
        </AvatarFallback>
+diff --git a/src/app/components/room-intro/RoomIntro.tsx b/src/app/components/room-intro/RoomIntro.tsx
+index ce550992..57aceaf0 100644
+--- a/src/app/components/room-intro/RoomIntro.tsx
++++ b/src/app/components/room-intro/RoomIntro.tsx
+@@ -30,8 +30,9 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) =>
+   const [invitePrompt, setInvitePrompt] = useState(false);
+ 
+   const createEvent = getStateEvent(room, StateEvent.RoomCreate);
+-  const avatarMxc = useRoomAvatar(room, mDirects.has(room.roomId));
+-  const name = useRoomName(room);
++  const isDirect = mDirects.has(room.roomId);
++  const avatarMxc = useRoomAvatar(room, isDirect);
++  const name = useRoomName(room, isDirect);
+   const topic = useRoomTopic(room);
+   const avatarHttpUrl = avatarMxc ? mxcUrlToHttp(mx, avatarMxc, useAuthentication) : undefined;
+ 
 diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
 new file mode 100644
 index 00000000..2e94e912
@@ -1010,6 +1026,44 @@ index 7de59acd..bfd6dd96 100644
          {...props}
          ref={ref}
        >
+diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
+index 6287bedd..c59d636f 100644
+--- a/src/app/features/room-nav/RoomNavItem.tsx
++++ b/src/app/features/room-nav/RoomNavItem.tsx
+@@ -287,14 +287,31 @@ export function RoomNavItem({
+ 
+   const powerLevels = usePowerLevels(room);
+   const creators = useRoomCreators(room);
+-  const roomName = useRoomName(room);
++  const roomName = useRoomName(room, direct);
+ 
+   const permissions = useRoomPermissions(creators, powerLevels);
+   const canJoinCall = permissions.event(EventType.GroupCallMemberPrefix, mx.getSafeUserId());
+ 
+   const { navigateRoom } = useRoomNavigate();
+   const navigate = useNavigate();
+-  const ariaLabel = roomName;
++  const ariaLabel = [
++    roomName,
++    room.isCallRoom()
++      ? [
++          'Call Room',
++          isActiveCall && 'Currently in Call',
++          callMemberships.length && `${callMemberships.length} in Call`,
++        ]
++      : direct
++        ? 'Direct Message'
++        : room.getJoinRule() === JoinRule.Public
++          ? 'Public Room'
++          : 'Group Room',
++    unread?.total && `${unread.total} Messages`,
++  ]
++    .flat()
++    .filter(Boolean)
++    .join(', ');
+ 
+   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
+     evt.preventDefault();
 diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
 index d9205076..22ea00a6 100644
 --- a/src/app/features/room/MembersDrawer.tsx
@@ -1138,6 +1192,83 @@ index 5a96e6ad..1bdbc67e 100644
            className={classNames(css.RoomViewFollowing({ clickable: names.length > 0 }), className)}
            alignItems="Center"
            justifyContent="End"
+diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
+index d97c4651..dabac747 100644
+--- a/src/app/features/room/RoomViewHeader.tsx
++++ b/src/app/features/room/RoomViewHeader.tsx
+@@ -1,4 +1,4 @@
+-import React, { MouseEventHandler, forwardRef, useState } from 'react';
++import React, { MouseEventHandler, forwardRef, useCallback, useState } from 'react';
+ import FocusTrap from 'focus-trap-react';
+ import {
+   Box,
+@@ -408,9 +408,9 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
+ 
+   const pinnedEvents = useRoomPinnedEvents(room);
+   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
+-  const name = useRoomName(room);
++  const name = useRoomName(room, direct);
+   const topic = useRoomTopic(room);
+-  const avatarMxc = useRoomAvatar(room);
++  const avatarMxc = useRoomAvatar(room, direct);
+   const avatarUrl = avatarMxc
+     ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 96, 96, 'crop') ?? undefined
+     : undefined;
+@@ -515,6 +515,45 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
+     setPinMenuAnchor(evt.currentTarget.getBoundingClientRect());
+   };
+ 
++  const handleToolbarKeyDown = useCallback((evt: React.KeyboardEvent<HTMLElement>) => {
++    const isLeft = isKeyHotkey('arrowleft', evt as unknown as KeyboardEvent);
++    const isRight = isKeyHotkey('arrowright', evt as unknown as KeyboardEvent);
++    const isHome = isKeyHotkey('home', evt as unknown as KeyboardEvent);
++    const isEnd = isKeyHotkey('end', evt as unknown as KeyboardEvent);
++    if (!isLeft && !isRight && !isHome && !isEnd) return;
++    const toolbar = evt.currentTarget;
++    const buttons = Array.from(
++      toolbar.querySelectorAll<HTMLElement>('button:not([disabled])')
++    );
++    if (buttons.length === 0) return;
++    evt.preventDefault();
++    const focused = document.activeElement as HTMLElement;
++    const currentIdx = buttons.indexOf(focused);
++    let nextIdx: number;
++    if (isHome) nextIdx = 0;
++    else if (isEnd) nextIdx = buttons.length - 1;
++    else if (isLeft) nextIdx = currentIdx <= 0 ? buttons.length - 1 : currentIdx - 1;
++    else nextIdx = currentIdx >= buttons.length - 1 ? 0 : currentIdx + 1;
++    buttons[nextIdx].focus();
++  }, []);
++
++  const handleHeaderKeyDown = useCallback(
++    (evt: KeyboardEvent) => {
++      if (isKeyHotkey('alt+shift+t', evt)) {
++        evt.preventDefault();
++        onToggleThreadsDrawer?.();
++      } else if (isKeyHotkey('alt+f', evt)) {
++        evt.preventDefault();
++        handleSearchClick();
++      } else if (isKeyHotkey('alt+shift+c', evt) && (isActiveCall || room.isCallRoom())) {
++        evt.preventDefault();
++        toggleChat();
++      }
++    },
++    [onToggleThreadsDrawer, handleSearchClick, isActiveCall, room, toggleChat]
++  );
++  useKeyDown(window, handleHeaderKeyDown);
++
+   const openSettings = useOpenRoomSettings();
+   const parentSpace = useSpaceOptionally();
+   const handleMemberToggle = () => {
+@@ -599,7 +638,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
+           </Box>
+         </Box>
+ 
+-        <Box shrink="No">
++        <Box id="cinny-room-header-toolbar" data-section-label="Room actions" role="toolbar" aria-label="Room actions" aria-orientation="horizontal" shrink="No" onKeyDown={handleToolbarKeyDown}>
+           {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
+               Wobble here (left side of group) is less noticeable than at the right. */}
+ 
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
 index 8b109bba..4c604a88 100644
 --- a/src/app/features/room/message/Message.tsx
@@ -1426,10 +1557,10 @@ index 6ec13f67..c57844a4 100644
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index e0df06df..a8787929 100644
+index 9cf01c5f..965d7c14 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
-@@ -91,6 +91,9 @@ export function SystemNotification() {
+@@ -238,6 +238,9 @@ export function SystemNotification() {
      settingsAtom,
      'isNotificationSounds'
    );
@@ -1439,7 +1570,7 @@ index e0df06df..a8787929 100644
  
    const requestNotificationPermission = () => {
      window.Notification.requestPermission();
-@@ -141,9 +144,14 @@ export function SystemNotification() {
+@@ -288,9 +291,14 @@ export function SystemNotification() {
        >
          <SettingTile
            title="Notification Sound"
@@ -1907,10 +2038,10 @@ index 00000000..14e637c7
 +  };
 +};
 diff --git a/src/app/hooks/useRoomMeta.ts b/src/app/hooks/useRoomMeta.ts
-index 086c3a56..9f475863 100644
+index 086c3a56..43dcf758 100644
 --- a/src/app/hooks/useRoomMeta.ts
 +++ b/src/app/hooks/useRoomMeta.ts
-@@ -1,11 +1,30 @@
+@@ -1,11 +1,39 @@
  import { useEffect, useState } from 'react';
  import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
 -import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
@@ -1925,15 +2056,24 @@ index 086c3a56..9f475863 100644
 +  useEffect(() => {
 +    if (!dm) return;
 +    let cancelled = false;
-+    room.loadMembersIfNeeded().then(() => {
-+      if (!cancelled) setMemberTick((t) => t + 1);
-+    });
-+    const onMember = () => { if (!cancelled) setMemberTick((t) => t + 1); };
++    let rafId: number | null = null;
++    // Debounce via rAF: many member events may fire in one batch (e.g. large group
++    // incorrectly marked as DM), so coalesce into a single setState per frame.
++    const onMember = () => {
++      if (cancelled) return;
++      if (rafId !== null) cancelAnimationFrame(rafId);
++      rafId = requestAnimationFrame(() => {
++        rafId = null;
++        if (!cancelled) setMemberTick((t) => t + 1);
++      });
++    };
++    room.loadMembersIfNeeded().then(() => { onMember(); });
 +    room.on(RoomMemberEvent.Membership, onMember);
 +    room.on(RoomMemberEvent.Name, onMember);
 +    room.on(RoomMemberEvent.AvatarUrl, onMember);
 +    return () => {
 +      cancelled = true;
++      if (rafId !== null) cancelAnimationFrame(rafId);
 +      room.off(RoomMemberEvent.Membership, onMember);
 +      room.off(RoomMemberEvent.Name, onMember);
 +      room.off(RoomMemberEvent.AvatarUrl, onMember);
@@ -1942,8 +2082,82 @@ index 086c3a56..9f475863 100644
  
    if (dm) {
      return room.getAvatarFallbackMember()?.getMxcAvatarUrl();
+@@ -16,20 +44,68 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
+   return avatarMxc;
+ };
+ 
+-export const useRoomName = (room: Room): string => {
+-  const [name, setName] = useState(room.name);
++/** Get the display name for a DM room directly from loaded members, bypassing room.name. */
++const getDmName = (room: Room): string => {
++  // For 2-person DMs getAvatarFallbackMember() gives the other member directly.
++  const fallbackMember = room.getAvatarFallbackMember();
++  if (fallbackMember) return fallbackMember.name;
++
++  // Group DMs: compute name from other joined/invited members (room.name won't be recalculated).
++  const others = room
++    .getMembers()
++    .filter((m) => m.userId !== room.myUserId && (m.membership === 'join' || m.membership === 'invite'));
++
++  if (others.length === 0) return room.name;
++  if (others.length === 1) return others[0].name;
++  if (others.length === 2) return `${others[0].name} and ${others[1].name}`;
++  return `${others[0].name} and ${others.length - 1} others`;
++};
++
++export const useRoomName = (room: Room, dm?: boolean): string => {
++  const [name, setName] = useState(() => (dm ? getDmName(room) : room.name));
+ 
+   useEffect(() => {
+-    setName(room.name);
++    if (dm) {
++      setName(getDmName(room));
++    } else {
++      setName(room.name);
++    }
+ 
+     const handleRoomNameChange: RoomEventHandlerMap[RoomEvent.Name] = () => {
+-      setName(room.name);
++      setName(dm ? getDmName(room) : room.name);
+     };
+     room.on(RoomEvent.Name, handleRoomNameChange);
+     return () => {
+       room.removeListener(RoomEvent.Name, handleRoomNameChange);
+     };
+-  }, [room]);
++  }, [room, dm]);
++
++  // For DMs: members are lazy-loaded. After load, read name directly from the
++  // member object since room.name may not be recalculated by the SDK.
++  useEffect(() => {
++    if (!dm) return;
++    let cancelled = false;
++    let rafId: number | null = null;
++    // Debounce via rAF: many member events may fire in one batch (e.g. large group
++    // incorrectly marked as DM), so coalesce into a single getDmName call per frame.
++    const onMember = () => {
++      if (cancelled) return;
++      if (rafId !== null) cancelAnimationFrame(rafId);
++      rafId = requestAnimationFrame(() => {
++        rafId = null;
++        if (!cancelled) setName(getDmName(room));
++      });
++    };
++    room.loadMembersIfNeeded().then(() => { onMember(); });
++    room.on(RoomMemberEvent.Name, onMember);
++    room.on(RoomMemberEvent.Membership, onMember);
++    return () => {
++      cancelled = true;
++      if (rafId !== null) cancelAnimationFrame(rafId);
++      room.off(RoomMemberEvent.Name, onMember);
++      room.off(RoomMemberEvent.Membership, onMember);
++    };
++  }, [room, dm]);
+ 
+   return name;
+ };
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index 23bd48e6..65fe2158 100644
+index 23bd48e6..164dd1f0 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -1955,7 +2169,16 @@ index 23bd48e6..65fe2158 100644
  import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
  import LogoSVG from '../../../../public/res/svg/cinny.svg';
  import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
-@@ -238,8 +238,49 @@ function MessageNotifications() {
+@@ -23,6 +23,8 @@ import {
+ } from '../../utils/room';
+ import { NotificationType, UnreadInfo } from '../../../types/matrix/room';
+ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
++import { playReactionSound, playTypingSound } from '../../utils/sounds';
++import { announce } from '../../utils/announce';
+ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+@@ -238,8 +240,49 @@ function MessageNotifications() {
        }
      };
      mx.on(RoomEvent.Timeline, handleTimelineEvent);
@@ -2063,6 +2286,23 @@ index 168bda38..2c685167 100644
        <SidebarContent
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
+diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
+index faa844ee..3d5a0eee 100644
+--- a/src/app/pages/client/call/PersistentCallContainer.tsx
++++ b/src/app/pages/client/call/PersistentCallContainer.tsx
+@@ -287,9 +287,9 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
+           style={{
+             position: 'relative',
+             zIndex: 0,
+-            display: isMobile && isChatOpen ? 'none' : 'flex',
+-            width: isMobile && isChatOpen ? '0%' : '100%',
+-            height: isMobile && isChatOpen ? '0%' : '100%',
++            display: activeCallRoomId && !(isMobile && isChatOpen) ? 'flex' : 'none',
++            width: '100%',
++            height: '100%',
+           }}
+         >
+           <Box grow="Yes" style={{ position: 'relative' }}>
 diff --git a/src/app/pages/client/explore/Explore.tsx b/src/app/pages/client/explore/Explore.tsx
 index dae83166..e8910595 100644
 --- a/src/app/pages/client/explore/Explore.tsx

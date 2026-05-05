@@ -108,7 +108,7 @@ index 3943f42d..8b3da2db 100644
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index b3ec2eb4..edc59b56 100644
+index b3ec2eb4..4bccc3d1 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
 @@ -3,6 +3,34 @@ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
@@ -130,7 +130,7 @@ index b3ec2eb4..edc59b56 100644
 +  { name: 'idb-retry', desc: 'Automatic retry when IndexedDB fails on startup', status: 'partial' },
 +  { name: 'issue-widget', desc: 'Issue tracker as an embeddable Matrix Widget API widget', status: 'full' },
 +  { name: 'ux-fixes', desc: 'Room sort options, inbox unread view, and navigation improvements', status: 'partial' },
-+  { name: 'navigate-unread', desc: 'Cross-bucket unread navigation, prev/next-unread shortcuts, sidebar-anchor handling for subspaces', status: 'branch' },
++  { name: 'navigate-unread', desc: 'Cross-bucket unread navigation, prev/next-unread shortcuts, sidebar-anchor handling for subspaces', status: 'partial' },
 +  { name: 'widgets-support', desc: 'Generic widget drawer for room widgets via the Matrix Widget API', status: 'branch' },
 +  { name: 'themes', desc: 'Ash (dark neutral grey) and Sepia (warm parchment) themes', status: 'full' },
 +  { name: 'per-msg-profiles', desc: 'Per-message profiles (MSC4144): send messages as a persona, display sender personas inline', status: 'branch' },

@@ -1,0 +1,929 @@
+diff --git a/src/app/features/room/PersonaPicker.tsx b/src/app/features/room/PersonaPicker.tsx
+new file mode 100644
+index 00000000..d36b07e8
+--- /dev/null
++++ b/src/app/features/room/PersonaPicker.tsx
+@@ -0,0 +1,318 @@
++import React, { KeyboardEventHandler, useRef, useState } from 'react';
++import { useAtom } from 'jotai';
++import FocusTrap from 'focus-trap-react';
++import {
++  Box,
++  Icon,
++  IconButton,
++  Icons,
++  Input,
++  Menu,
++  MenuItem,
++  PopOut,
++  RectCords,
++  Text,
++  config,
++} from 'folds';
++import { activePersonaAtom, savedPersonasAtom, Persona } from '../../state/personas';
++import { stopPropagation } from '../../utils/keyboard';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++
++function PersonaForm({
++  initial,
++  onSave,
++  onCancel,
++}: {
++  initial?: Persona;
++  onSave: (p: Persona) => void;
++  onCancel: () => void;
++}) {
++  const mx = useMatrixClient();
++  const [name, setName] = useState(initial?.displayname ?? '');
++  const [avatar, setAvatar] = useState(initial?.avatar_url ?? '');
++  const [pronouns, setPronouns] = useState(initial?.pronouns ?? '');
++  const [uploading, setUploading] = useState(false);
++  const fileInputRef = useRef<HTMLInputElement>(null);
++
++  const uploadAndSetMxc = async (blob: Blob, filename: string) => {
++    setUploading(true);
++    try {
++      const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
++      if (result.content_uri) setAvatar(result.content_uri);
++    } catch {
++      // leave avatar unchanged on error
++    } finally {
++      setUploading(false);
++    }
++  };
++
++  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    if (!file) return;
++    e.target.value = '';
++    uploadAndSetMxc(file, file.name);
++  };
++
++  // On blur of the URL field, convert https:// to mxc:// by fetching + uploading
++  const handleAvatarBlur = async () => {
++    const url = avatar.trim();
++    if (!url.startsWith('https://') && !url.startsWith('http://')) return;
++    setUploading(true);
++    try {
++      const resp = await fetch(url);
++      const blob = await resp.blob();
++      const filename = url.split('/').pop()?.split('?')[0] ?? 'avatar';
++      const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
++      if (result.content_uri) setAvatar(result.content_uri);
++    } catch {
++      // leave as-is if fetch/upload fails
++    } finally {
++      setUploading(false);
++    }
++  };
++
++  const save = () => {
++    const displayname = name.trim();
++    if (!displayname) return;
++    onSave({ displayname, avatar_url: avatar.trim() || undefined, pronouns: pronouns.trim() || undefined });
++  };
++
++  const onKeyDown: KeyboardEventHandler = (e) => {
++    if (e.key === 'Enter') save();
++    if (e.key === 'Escape') onCancel();
++  };
++
++  return (
++    <Box direction="Column" gap="200" style={{ padding: config.space.S100 }}>
++      <input
++        ref={fileInputRef}
++        type="file"
++        accept="image/*"
++        style={{ display: 'none' }}
++        onChange={handleFileChange}
++      />
++      <Input
++        size="300"
++        placeholder="Display name"
++        value={name}
++        onChange={(e) => setName((e.target as HTMLInputElement).value)}
++        onKeyDown={onKeyDown}
++        // eslint-disable-next-line jsx-a11y/no-autofocus
++        autoFocus
++      />
++      <Box gap="200" alignItems="Center">
++        <Input
++          style={{ flexGrow: 1 }}
++          size="300"
++          placeholder={uploading ? 'Uploading…' : 'Avatar URL (mxc://, optional)'}
++          value={uploading ? '' : avatar}
++          readOnly={uploading}
++          onChange={(e) => setAvatar((e.target as HTMLInputElement).value)}
++          onBlur={handleAvatarBlur}
++          onKeyDown={onKeyDown}
++        />
++        <IconButton
++          size="300"
++          variant="SurfaceVariant"
++          radii="300"
++          onClick={() => fileInputRef.current?.click()}
++          aria-label="Upload avatar image"
++          title="Upload image"
++          disabled={uploading}
++        >
++          <Icon src={Icons.Attachment} size="100" />
++        </IconButton>
++      </Box>
++      <Input
++        size="300"
++        placeholder="Pronouns (optional, e.g. they/them)"
++        value={pronouns}
++        onChange={(e) => setPronouns((e.target as HTMLInputElement).value)}
++        onKeyDown={onKeyDown}
++      />
++      <Box gap="200">
++        <IconButton size="300" variant="Primary" radii="300" onClick={save} aria-label="Save" disabled={uploading}>
++          <Icon src={Icons.Check} />
++        </IconButton>
++        <IconButton size="300" variant="Surface" radii="300" onClick={onCancel} aria-label="Cancel">
++          <Icon src={Icons.Cross} />
++        </IconButton>
++      </Box>
++    </Box>
++  );
++}
++
++export function PersonaPicker() {
++  const [activePersona, setActivePersona] = useAtom(activePersonaAtom);
++  const [savedPersonas, setSavedPersonas] = useAtom(savedPersonasAtom);
++  const [menuCords, setMenuCords] = useState<RectCords>();
++  const [editIdx, setEditIdx] = useState<number | null>(null);
++  const [addMode, setAddMode] = useState(false);
++
++  const openMenu = (evt: React.MouseEvent<HTMLButtonElement>) => {
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++  const closeMenu = () => {
++    setMenuCords(undefined);
++    setAddMode(false);
++    setEditIdx(null);
++  };
++
++  const activate = (p: Persona) => {
++    setActivePersona(p);
++    closeMenu();
++  };
++  const deactivate = () => {
++    setActivePersona(null);
++    closeMenu();
++  };
++
++  const handleSaveNew = (p: Persona) => {
++    // Add to saved list (avoid exact duplicates)
++    if (!savedPersonas.some((s) => s.displayname === p.displayname)) {
++      setSavedPersonas([...savedPersonas, p]);
++    }
++    setActivePersona(p);
++    setAddMode(false);
++    closeMenu();
++  };
++
++  const handleSaveEdit = (idx: number, p: Persona) => {
++    const updated = savedPersonas.map((s, i) => (i === idx ? p : s));
++    setSavedPersonas(updated);
++    // Update active persona if we just edited the active one
++    if (activePersona?.displayname === savedPersonas[idx].displayname) {
++      setActivePersona(p);
++    }
++    setEditIdx(null);
++  };
++
++  const deletePersona = (idx: number) => {
++    const p = savedPersonas[idx];
++    setSavedPersonas(savedPersonas.filter((_, i) => i !== idx));
++    if (activePersona?.displayname === p.displayname) setActivePersona(null);
++  };
++
++  const isActive = !!activePersona;
++
++  return (
++    <>
++      <IconButton
++        aria-label={isActive ? `Persona: ${activePersona.displayname}` : 'Set persona'}
++        aria-pressed={isActive}
++        variant="SurfaceVariant"
++        size="300"
++        radii="300"
++        onClick={openMenu}
++      >
++        <Icon src={Icons.User} filled={isActive} />
++      </IconButton>
++      <PopOut
++        anchor={menuCords}
++        offset={8}
++        position="Top"
++        align="End"
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: closeMenu,
++              clickOutsideDeactivates: true,
++              escapeDeactivates: stopPropagation,
++            }}
++          >
++            <Menu style={{ minWidth: '220px', maxWidth: '300px' }}>
++              <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++                {/* Default profile */}
++                <MenuItem
++                  size="300"
++                  variant={!activePersona ? 'Primary' : 'Surface'}
++                  radii="300"
++                  onClick={deactivate}
++                  before={!activePersona ? <Icon size="100" src={Icons.Check} /> : undefined}
++                >
++                  <Text size="T300">Default (your profile)</Text>
++                </MenuItem>
++
++                {/* Saved personas */}
++                {savedPersonas.map((p, i) =>
++                  editIdx === i ? (
++                    // eslint-disable-next-line react/no-array-index-key
++                    <PersonaForm
++                      key={i}
++                      initial={p}
++                      onSave={(edited) => handleSaveEdit(i, edited)}
++                      onCancel={() => setEditIdx(null)}
++                    />
++                  ) : (
++                    // eslint-disable-next-line react/no-array-index-key
++                    <Box key={i} gap="100" alignItems="Center">
++                      <MenuItem
++                        style={{ flexGrow: 1, minWidth: 0 }}
++                        size="300"
++                        variant={activePersona?.displayname === p.displayname ? 'Primary' : 'Surface'}
++                        radii="300"
++                        onClick={() => activate(p)}
++                        before={
++                          activePersona?.displayname === p.displayname ? (
++                            <Icon size="100" src={Icons.Check} />
++                          ) : undefined
++                        }
++                      >
++                        <Text size="T300" truncate>
++                          {p.displayname}
++                        </Text>
++                      </MenuItem>
++                      <IconButton
++                        size="300"
++                        variant="SurfaceVariant"
++                        radii="300"
++                        onClick={() => {
++                          setEditIdx(i);
++                          setAddMode(false);
++                        }}
++                        aria-label={`Edit ${p.displayname}`}
++                      >
++                        <Icon size="100" src={Icons.Pencil} />
++                      </IconButton>
++                      <IconButton
++                        size="300"
++                        variant="SurfaceVariant"
++                        radii="300"
++                        onClick={() => deletePersona(i)}
++                        aria-label={`Delete ${p.displayname}`}
++                      >
++                        <Icon size="100" src={Icons.Delete} />
++                      </IconButton>
++                    </Box>
++                  )
++                )}
++
++                {/* Add new persona */}
++                {addMode ? (
++                  <PersonaForm
++                    onSave={handleSaveNew}
++                    onCancel={() => setAddMode(false)}
++                  />
++                ) : (
++                  <MenuItem
++                    size="300"
++                    variant="Surface"
++                    radii="300"
++                    onClick={() => {
++                      setAddMode(true);
++                      setEditIdx(null);
++                    }}
++                    before={<Icon size="100" src={Icons.Plus} />}
++                  >
++                    <Text size="T300">Add persona...</Text>
++                  </MenuItem>
++                )}
++              </Box>
++            </Menu>
++          </FocusTrap>
++        }
++      />
++    </>
++  );
++}
+diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
+index 4376cc90..87382e89 100644
+--- a/src/app/features/room/RoomInput.tsx
++++ b/src/app/features/room/RoomInput.tsx
+@@ -9,6 +9,8 @@ import React, {
+ } from 'react';
+ import { useAtom, useAtomValue } from 'jotai';
+ import { isKeyHotkey } from 'is-hotkey';
++import { activePersonaAtom, personaId, PER_MSG_PROFILE_UNSTABLE } from '../../state/personas';
++import { PersonaPicker } from './PersonaPicker';
+ import { EventType, IContent, MsgType, RelationType, Room } from 'matrix-js-sdk';
+ import { ReactEditor } from 'slate-react';
+ import { Transforms, Editor } from 'slate';
+@@ -133,6 +135,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
+     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+     const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
++    const [perMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
+     const direct = useIsDirectRoom();
+     const commands = useCommands(mx, room);
+     const emojiBtnRef = useRef<HTMLButtonElement>(null);
+@@ -177,6 +180,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+       useState<AutocompleteQuery<AutocompletePrefix>>();
+ 
+     const sendTypingStatus = useTypingStatusUpdater(mx, roomId);
++    const activePersona = useAtomValue(activePersonaAtom);
+ 
+     const handleFiles = useCallback(
+       async (files: File[]) => {
+@@ -306,7 +310,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+       });
+       handleCancelUpload(uploads);
+       const contents = fulfilledPromiseSettledResult(await Promise.allSettled(contentsPromises));
+-      contents.forEach((content) => mx.sendMessage(roomId, content as any));
++      contents.forEach((content) => {
++        const c = content as Record<string, unknown>;
++        if (activePersona && perMessageProfiles) {
++          c[PER_MSG_PROFILE_UNSTABLE] = {
++            id: personaId(activePersona),
++            displayname: activePersona.displayname,
++            ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
++            ...(activePersona.pronouns ? { pronouns: activePersona.pronouns } : {}),
++          };
++        }
++        mx.sendMessage(roomId, c as any);
++      });
+     };
+ 
+     const submit = useCallback(() => {
+@@ -397,12 +412,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+           content['m.relates_to'].is_falling_back = false;
+         }
+       }
++      if (activePersona && perMessageProfiles) {
++        // Send unstable Beeper key (MSC4144 not yet merged into spec).
++        content[PER_MSG_PROFILE_UNSTABLE] = {
++          id: personaId(activePersona),
++          displayname: activePersona.displayname,
++          ...(activePersona.avatar_url ? { avatar_url: activePersona.avatar_url } : {}),
++          ...(activePersona.pronouns ? { pronouns: activePersona.pronouns } : {}),
++        };
++      }
+       mx.sendMessage(roomId, content as any);
+       resetEditor(editor);
+       resetEditorHistory(editor);
+       setReplyDraft(undefined);
+       sendTypingStatus(false);
+-    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
++    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands, activePersona]);
+ 
+     const handleKeyDown: KeyboardEventHandler = useCallback(
+       (evt) => {
+@@ -702,7 +726,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+                   </PopOut>
+                 )}
+               </UseStateProvider>
+-              <IconButton onClick={submit} variant="SurfaceVariant" size="300" radii="300">
++              {perMessageProfiles && <PersonaPicker />}
++              <IconButton onClick={submit} aria-label="Send message" variant="SurfaceVariant" size="300" radii="300">
+                 <Icon src={Icons.Send} />
+               </IconButton>
+             </>
+diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
+index 1362cbcc..32efdae8 100644
+--- a/src/app/features/room/RoomTimeline.tsx
++++ b/src/app/features/room/RoomTimeline.tsx
+@@ -86,6 +86,7 @@ import {
+ } from '../../utils/room';
+ import { useSetting } from '../../state/hooks/settings';
+ import { MessageLayout, settingsAtom } from '../../state/settings';
++import { getPerMsgProfile } from '../../state/personas';
+ import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
+ import { Reactions, Message, Event, EncryptedContent } from './message';
+ import { useMemberEventParser } from '../../hooks/useMemberEventParser';
+@@ -1874,12 +1875,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+       dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
+     }
+ 
++    const prevProfile = prevEvent
++      ? getPerMsgProfile(prevEvent.getContent() as Record<string, unknown>)
++      : undefined;
++    const currProfile = getPerMsgProfile(mEvent.getContent() as Record<string, unknown>);
++    // Two messages group only if they share the same per-message profile identity.
++    // Identity = profile id (if present) or undefined (= sender's account profile).
++    const sameProfile = prevProfile?.id === currProfile?.id;
++
+     const collapsed =
+       isPrevRendered &&
+       !dayDivider &&
+       (!newDivider || eventSender === mx.getUserId()) &&
+       prevEvent !== undefined &&
+       prevEvent.getSender() === eventSender &&
++      sameProfile &&
+       prevEvent.getType() === mEvent.getType() &&
+       minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
+ 
+diff --git a/src/app/features/room/RoomView.tsx b/src/app/features/room/RoomView.tsx
+index a4f0d7af..b2f29f9f 100644
+--- a/src/app/features/room/RoomView.tsx
++++ b/src/app/features/room/RoomView.tsx
+@@ -1,6 +1,8 @@
+-import React, { useCallback, useRef } from 'react';
++import React, { useCallback, useEffect, useRef } from 'react';
++import { Transforms } from 'slate';
+ import { Box, Text, config } from 'folds';
+-import { EventType } from 'matrix-js-sdk';
++import { EventType, JoinRule, Room } from 'matrix-js-sdk';
++import { MatrixRTCSession } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
+ import { ReactEditor } from 'slate-react';
+ import { isKeyHotkey } from 'is-hotkey';
+ import { useStateEvent } from '../../hooks/useStateEvent';
+@@ -14,14 +16,22 @@ import { RoomViewTyping } from './RoomViewTyping';
+ import { RoomTombstone } from './RoomTombstone';
+ import { RoomInput } from './RoomInput';
+ import { RoomViewFollowing, RoomViewFollowingPlaceholder } from './RoomViewFollowing';
++import * as followingCss from './RoomViewFollowing.css';
+ import { Page } from '../../components/page';
++import { useAtomValue, useSetAtom } from 'jotai';
++import { activePersonaAtom } from '../../state/personas';
+ import { useKeyDown } from '../../hooks/useKeyDown';
+ import { editableActiveElement } from '../../utils/dom';
++import { searchModalAtom } from '../../state/searchModal';
+ import { settingsAtom } from '../../state/settings';
+ import { useSetting } from '../../state/hooks/settings';
+ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
+ import { useRoomCreators } from '../../hooks/useRoomCreators';
+-import { useRoom } from '../../hooks/useRoom';
++import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
++import { useRoomUnread } from '../../state/hooks/unread';
++import { roomToUnreadAtom } from '../../state/room/roomToUnread';
++import { announce } from '../../utils/announce';
++import { playReactionSound, playReplyToMeSound } from '../../utils/sounds';
+ 
+ const FN_KEYS_REGEX = /^F\d+$/;
+ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
+@@ -51,6 +61,9 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
+     return false;
+   }
+ 
++  const active = document.activeElement;
++  if (active && active.closest('[role="log"], [role="listbox"]')) return false;
++
+   return true;
+ };
+ 
+@@ -59,6 +72,8 @@ export function RoomView({ eventId }: { eventId?: string }) {
+   const roomViewRef = useRef<HTMLDivElement>(null);
+ 
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
++  const [perMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
++  const activePersona = useAtomValue(activePersonaAtom);
+ 
+   const room = useRoom();
+   const { roomId } = room;
+@@ -69,10 +84,32 @@ export function RoomView({ eventId }: { eventId?: string }) {
+   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
+   const powerLevels = usePowerLevelsContext();
+   const creators = useRoomCreators(room);
++  const direct = useIsDirectRoom();
++  const unread = useRoomUnread(roomId, roomToUnreadAtom);
++
++  useEffect(() => {
++    const roomType = room.isCallRoom()
++      ? 'Call Room'
++      : direct
++        ? 'Direct Message'
++        : room.getJoinRule() === JoinRule.Public
++          ? 'Public Room'
++          : 'Group Room';
++    const parts: string[] = [room.name, roomType];
++    if (unread?.total) parts.push(`${unread.total} unread messages`);
++    const callMemberCount = MatrixRTCSession.callMembershipsForRoom(room).length;
++    if (callMemberCount > 0)
++      parts.push(`${callMemberCount} member${callMemberCount === 1 ? '' : 's'} in call`);
++    announce(parts.join(', '));
++    setTimeout(() => document.getElementById('cinny-timeline')?.focus(), 100);
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [roomId]);
+ 
+   const permissions = useRoomPermissions(creators, powerLevels);
+   const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
+ 
++  const setSearchModal = useSetAtom(searchModalAtom);
++
+   useKeyDown(
+     window,
+     useCallback(
+@@ -84,57 +121,172 @@ export function RoomView({ eventId }: { eventId?: string }) {
+         }
+         if (shouldFocusMessageField(evt) || isKeyHotkey('mod+v', evt)) {
+           ReactEditor.focus(editor);
++          // Also insert the typed character so it isn't swallowed
++          if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
++            Transforms.insertText(editor, evt.key);
++          }
+         }
+       },
+       [editor]
+     )
+   );
+ 
++  useKeyDown(
++    window,
++    useCallback(
++      (evt) => {
++        const active = document.activeElement;
++        if (!active?.closest('[role="log"]')) return;
++        // Don't intercept keys while typing in the message editor or any other contenteditable
++        if ((active as HTMLElement)?.isContentEditable) return;
++        const noMod = !evt.ctrlKey && !evt.altKey && !evt.metaKey && !evt.shiftKey;
++
++        if (evt.key === 'Escape' && noMod) {
++          evt.preventDefault();
++          ReactEditor.focus(editor);
++          return;
++        }
++
++        if (evt.key === '/' && noMod) {
++          evt.preventDefault();
++          setSearchModal(true);
++          return;
++        }
++
++        if ((evt.key === 'ArrowDown' || evt.key === 'ArrowUp') && noMod) {
++          const scrollEl = document.getElementById('cinny-timeline');
++          if (!scrollEl) return;
++          const messages = Array.from(
++            scrollEl.querySelectorAll('[data-timeline-message]')
++          ) as HTMLElement[];
++          if (messages.length === 0) return;
++          evt.preventDefault();
++          const currentIdx = messages.findIndex(
++            (m) => m === active || m.contains(active as Node)
++          );
++          let next: HTMLElement | undefined;
++          if (currentIdx < 0) {
++            next = messages[messages.length - 1];
++          } else if (evt.key === 'ArrowDown') {
++            next = messages[Math.min(currentIdx + 1, messages.length - 1)];
++          } else {
++            next = messages[Math.max(currentIdx - 1, 0)];
++          }
++          if (next && next !== active) {
++            next.focus({ preventScroll: true });
++            next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
++            // Announce message content for screen readers
++            const evtId = next.getAttribute('data-event-id');
++            if (evtId) {
++              const mxEvent = room.findEventById(evtId);
++              if (mxEvent) {
++                const sender = room.getMember(mxEvent.getSender() ?? '')?.name ?? mxEvent.getSender() ?? '';
++                const content = mxEvent.getContent() as Record<string, unknown>;
++                const body = (content.body as string | undefined) ?? '';
++                const replyRel = (content['m.relates_to'] as Record<string, unknown> | undefined)?.['m.in_reply_to'] as Record<string, unknown> | undefined;
++                const replyId = replyRel?.event_id as string | undefined;
++                const ts = mxEvent.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
++                const parts: string[] = [sender, body];
++                // Reactions on this message
++                const relations = room.getUnfilteredTimelineSet()
++                  .getRelationsForEvent?.(evtId, 'm.annotation', 'm.reaction');
++                if (relations && relations.getRelations().length > 0) {
++                  playReactionSound();
++                  parts.push('has reactions');
++                }
++                if (replyId) {
++                  const replyEvt = room.findEventById(replyId);
++                  if (replyEvt) {
++                    const replySender = room.getMember(replyEvt.getSender() ?? '')?.name ?? replyEvt.getSender() ?? '';
++                    const replyBody = (replyEvt.getContent().body as string | undefined) ?? '';
++                    if (replyBody) parts.push(`In reply to ${replySender}: ${replyBody.slice(0, 80)}`);
++                    // Reply to my own message
++                    if (replyEvt.getSender() === mx.getUserId()) {
++                      playReplyToMeSound();
++                    }
++                  }
++                }
++                if (ts) parts.push(ts);
++                announce(parts.filter(Boolean).join('. '));
++              }
++            }
++          }
++          return;
++        }
++
++        if ((evt.key === 'PageDown' || evt.key === 'PageUp') && noMod) {
++          const scrollEl = document.getElementById('cinny-timeline');
++          if (!scrollEl) return;
++          evt.preventDefault();
++          scrollEl.scrollBy({
++            top: evt.key === 'PageDown' ? scrollEl.clientHeight * 0.9 : -scrollEl.clientHeight * 0.9,
++            behavior: 'smooth',
++          });
++        }
++      },
++      [setSearchModal, room]
++    )
++  );
++
+   return (
+-    <Page ref={roomViewRef}>
+-      <Box grow="Yes" direction="Column">
+-        <RoomTimeline
+-          key={roomId}
+-          room={room}
+-          eventId={eventId}
+-          roomInputRef={roomInputRef}
+-          editor={editor}
+-        />
+-        <RoomViewTyping room={room} />
+-      </Box>
+-      <Box shrink="No" direction="Column">
+-        <div style={{ padding: `0 ${config.space.S400}` }}>
+-          {tombstoneEvent ? (
+-            <RoomTombstone
+-              roomId={roomId}
+-              body={tombstoneEvent.getContent().body}
+-              replacementRoomId={tombstoneEvent.getContent().replacement_room}
+-            />
+-          ) : (
+-            <>
+-              {canMessage && (
+-                <RoomInput
+-                  room={room}
+-                  editor={editor}
+-                  roomId={roomId}
+-                  fileDropContainerRef={roomViewRef}
+-                  ref={roomInputRef}
+-                />
+-              )}
+-              {!canMessage && (
+-                <RoomInputPlaceholder
+-                  style={{ padding: config.space.S200 }}
+-                  alignItems="Center"
+-                  justifyContent="Center"
+-                >
+-                  <Text align="Center">You do not have permission to post in this room</Text>
+-                </RoomInputPlaceholder>
+-              )}
+-            </>
+-          )}
+-        </div>
+-        {hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />}
+-      </Box>
+-    </Page>
++    <Page
++      ref={roomViewRef}
++    >
++        <Box grow="Yes" direction="Column">
++          <RoomTimeline
++            key={roomId}
++            room={room}
++            eventId={eventId}
++            roomInputRef={roomInputRef}
++            editor={editor}
++          />
++          <RoomViewTyping room={room} />
++        </Box>
++        <Box shrink="No" direction="Column">
++          <div style={{ padding: `0 ${config.space.S400}` }}>
++            {tombstoneEvent ? (
++              <RoomTombstone
++                roomId={roomId}
++                body={tombstoneEvent.getContent().body}
++                replacementRoomId={tombstoneEvent.getContent().replacement_room}
++              />
++            ) : (
++              <>
++                {canMessage && (
++                  <RoomInput
++                    room={room}
++                    editor={editor}
++                    roomId={roomId}
++                    fileDropContainerRef={roomViewRef}
++                    ref={roomInputRef}
++                  />
++                )}
++                {!canMessage && (
++                  <RoomInputPlaceholder
++                    style={{ padding: config.space.S200 }}
++                    alignItems="Center"
++                    justifyContent="Center"
++                  >
++                    <Text align="Center">You do not have permission to post in this room</Text>
++                  </RoomInputPlaceholder>
++                )}
++              </>
++            )}
++          </div>
++          {perMessageProfiles && activePersona ? (
++            <Box
++              className={followingCss.RoomViewFollowing({ clickable: false })}
++              alignItems="Center"
++              gap="200"
++            >
++              <Text size="T300" truncate>
++                {'Sending as '}
++                <b>{activePersona.displayname}</b>
++                {'…'}
++              </Text>
++            </Box>
++          ) : hideActivity ? <RoomViewFollowingPlaceholder /> : <RoomViewFollowing room={room} />}
++        </Box>
++      </Page>
+   );
+ }
+diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
+index d7280df5..60b757c6 100644
+--- a/src/app/features/room/message/Message.tsx
++++ b/src/app/features/room/message/Message.tsx
+@@ -53,12 +53,11 @@ import {
+   getMemberDisplayName,
+ } from '../../../utils/room';
+ import {
+-  getCanonicalAliasOrRoomId,
+   getMxIdLocalPart,
+-  isRoomAlias,
+   mxcUrlToHttp,
+ } from '../../../utils/matrix';
+ import { MessageLayout, MessageSpacing } from '../../../state/settings';
++import { getPerMsgProfile } from '../../../state/personas';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+ import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
+ import * as css from './styles.css';
+@@ -337,8 +336,6 @@ export const MessageCopyLinkItem = as<
+     onClose?: () => void;
+   }
+ >(({ room, mEvent, onClose, ...props }, ref) => {
+-  const mx = useMatrixClient();
+-
+   const handleCopy = () => {
+     const eventId = mEvent.getId();
+     if (!eventId) return;
+@@ -741,9 +738,15 @@ export const Message = as<'div', MessageProps>(
+     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
+     const optionsVisible = !!menuAnchor || !!emojiBoardAnchor;
+ 
++    const perMsgProfile = getPerMsgProfile(mEvent.getContent() as Record<string, unknown>);
+     const senderDisplayName =
+-      getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+-    const senderAvatarMxc = getMemberAvatarMxc(room, senderId);
++      perMsgProfile?.displayname ||
++      (getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId);
++    // avatar_url: empty string means "no avatar"; undefined means fall back to member
++    const senderAvatarMxc =
++      perMsgProfile !== undefined
++        ? perMsgProfile.avatar_url || undefined
++        : getMemberAvatarMxc(room, senderId);
+ 
+     const tagColor = memberPowerTag?.color
+       ? accessibleTagColors?.get(memberPowerTag.color)
+@@ -776,7 +779,18 @@ export const Message = as<'div', MessageProps>(
+               truncate
+             >
+               <UsernameBold>{senderDisplayName}</UsernameBold>
+-              <InlinePronouns userId={senderId} />
++              {perMsgProfile?.pronouns ? (
++                <span style={{ opacity: 0.6, fontWeight: 'normal', fontSize: '0.85em' }}>
++                  {' '}({perMsgProfile.pronouns})
++                </span>
++              ) : (
++                <InlinePronouns userId={senderId} />
++              )}
++              {perMsgProfile && (
++                <span style={{ opacity: 0.5, fontWeight: 'normal', fontSize: '0.8em' }}>
++                  {' '}via {senderId}
++                </span>
++              )}
+             </Text>
+           </Username>
+           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
+diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
+index c63b43ef..0a031751 100644
+--- a/src/app/features/settings/developer-tools/DevelopTools.tsx
++++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
+@@ -50,6 +50,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+   const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
+   const [multiAccount, setMultiAccount] = useSetting(settingsAtom, 'multiAccount');
++  const [perMessageProfiles, setPerMessageProfiles] = useSetting(settingsAtom, 'perMessageProfiles');
+   const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
+   const [globalExpand, setGlobalExpand] = useState(false);
+   const [profileExpand, setProfileExpand] = useState(false);
+@@ -164,6 +165,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+                           />
+                         }
+                       />
++                      <SettingTile
++                        title="Per-Message Profiles (Personas)"
++                        description="Send messages under a named persona (MSC4144). The real sender is always visible as 'via @user:server'."
++                        after={
++                          <Switch
++                            variant="Primary"
++                            value={perMessageProfiles}
++                            onChange={setPerMessageProfiles}
++                          />
++                        }
++                      />
+                     </SequenceCard>
+                   </Box>
+                   <Box direction="Column" gap="100">
+diff --git a/src/app/state/personas.ts b/src/app/state/personas.ts
+new file mode 100644
+index 00000000..874eaff7
+--- /dev/null
++++ b/src/app/state/personas.ts
+@@ -0,0 +1,59 @@
++import { atom } from 'jotai';
++
++export type Persona = {
++  displayname: string;
++  avatar_url?: string;
++  pronouns?: string;
++};
++
++// MSC4144 not yet merged — send unstable Beeper key only; read both for forward-compat
++export const PER_MSG_PROFILE_KEY = 'm.per_message_profile';
++export const PER_MSG_PROFILE_UNSTABLE = 'com.beeper.per_message_profile';
++
++/** Derive a stable grouping id from a persona's displayname. */
++export function personaId(p: Persona): string {
++  return p.displayname;
++}
++
++/** Read per-message profile from event content (stable key preferred). */
++export function getPerMsgProfile(
++  content: Record<string, unknown>
++): { id?: string; displayname?: string; avatar_url?: string; pronouns?: string } | undefined {
++  return (content[PER_MSG_PROFILE_KEY] ??
++    content[PER_MSG_PROFILE_UNSTABLE]) as
++    | { id?: string; displayname?: string; avatar_url?: string; pronouns?: string }
++    | undefined;
++}
++
++function load<T>(key: string, fallback: T): T {
++  try {
++    const raw = localStorage.getItem(key);
++    return raw ? (JSON.parse(raw) as T) : fallback;
++  } catch {
++    return fallback;
++  }
++}
++
++const STORAGE_ACTIVE = 'wally_active_persona';
++const STORAGE_SAVED = 'wally_saved_personas';
++
++const baseActive = atom<Persona | null>(load<Persona | null>(STORAGE_ACTIVE, null));
++/** Currently active persona (null = use account profile). Persisted to localStorage. */
++export const activePersonaAtom = atom(
++  (get) => get(baseActive),
++  (_get, set, next: Persona | null) => {
++    set(baseActive, next);
++    if (next) localStorage.setItem(STORAGE_ACTIVE, JSON.stringify(next));
++    else localStorage.removeItem(STORAGE_ACTIVE);
++  }
++);
++
++const baseSaved = atom<Persona[]>(load<Persona[]>(STORAGE_SAVED, []));
++/** All saved personas for quick selection. Persisted to localStorage. */
++export const savedPersonasAtom = atom(
++  (get) => get(baseSaved),
++  (_get, set, next: Persona[]) => {
++    set(baseSaved, next);
++    localStorage.setItem(STORAGE_SAVED, JSON.stringify(next));
++  }
++);
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 19e58c43..74b9153c 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -63,6 +63,7 @@ export interface Settings {
+   issueTracker: boolean;
+   multiAccount: boolean;
+   roomSortOrder: 'activity' | 'az' | 'unread' | 'admin';
++  perMessageProfiles: boolean;
+ }
+ 
+ const defaultSettings: Settings = {
+@@ -106,6 +107,7 @@ const defaultSettings: Settings = {
+   issueTracker: false,
+   multiAccount: false,
+   roomSortOrder: 'activity',
++  perMessageProfiles: false,
+ };
+ 
+ export const getSettings = () => {

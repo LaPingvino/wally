@@ -1,0 +1,34 @@
+643138c2  widgets-support: breakout panel, display names, screenshare tiles, ARIA, video preview, defaults off
+15616690  widgets-support: a11y labels, federated SFU resolution, pre-join media state, in-room ding sound
+7f56c7b6  widgets-support: fix breakout panel styling — use folds Menu component
+5010e262  widgets-support: fix breakout panel showing error and empty state simultaneously
+9e4f2120  widgets-support: fix local screenshare tile not appearing in video grid
+688de76c  widgets-support: fix breakout panel double /guest/ in URLs
+76925e63  widgets-support: auto-rejoin call on page refresh with last mic/video settings
+9a496e94  widgets-support: fix breakout create button + widen panel
+85b49f95  widgets-support: breakout room join for Matrix users + return to main
+5b56df4c  widgets-support: read breakouts from room state events, join/return for Matrix users
+aa7878de  widgets-support: make breakout topic input fill available width
+7f177903  widgets-support: skip pre-join lobby when returning from breakout to main
+00155be4  widgets-support: video tiles show Matrix display names, guest names in member list
+48ed4634  widgets-support: grid layouts (equal/spotlight), click-to-pin, active speaker tracking, Matrix display names
+e6606490  widgets-support: fix lobby media state flash — init LK state from pre-join values
+6515bc50  widgets-support: horizontal/vertical sidebar toggle, bottom default on mobile
+f819c810  widgets-support: portrait/landscape tile toggle + mobile defaults portrait
+73fcb0d2  widgets-support: mic indicator on tiles, PiP self-view in spotlight, bigger pre-join preview
+9b085b21  widgets-support: fix icon conflicts, portrait 3:4 ratio, toolbar wrap, lobby aspect preview
+58d3a81c  widgets-support: fix portrait tiles overflowing — constrain to grid cell height
+4bd0e4e1  widgets-support: auto-detect tile aspect, auto-fill grid, toggleable PiP self-view
+f33e642e  widgets-support: fix single-tile sizing, no PiP when alone, smarter grid columns
+ec7eb476  widgets-support: fix grid sizing — equal columns, no PiP alone, touch reload banner
+410ccdd5  widgets-support: predefined grid layouts, pagination (9/page), layout indicator badge
+5344d7e1  widgets-support: click tile in grid auto-switches to spotlight mode
+d2dfd8a3  widgets-support: E2EE calls — MatrixRTCSession key bridge + LiveKit encryption
+d9fcf675  widgets-support: smarter call layouts — spotlight fallback, narrow-screen stacking, PiP toggle in spotlight
+d81e06e2  widgets-support: extract pickLayout and MAX_TILES_PER_PAGE into layout.ts
+6f67eae6  widgets-support: add useParticipantDimensions hook
+8ece83c0  widgets-support: introduce layout packer (behind debug overlay, not yet rendering)
+7d1b4620  widgets-support: switch equal-grid rendering to packer output
+d0da1b4b  widgets-support: apply packer to spotlight sidebar, tidy flex sizing, fix PiP heights
+3be71046  widgets-support: add 5%% hysteresis to packer shape choice
+a8f1e97d  widgets-support: packer maxCols option — force single column on narrow panels

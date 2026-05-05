@@ -1,0 +1,153 @@
+diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
+index 67c047cc..98d6d113 100644
+--- a/src/app/features/call/CallView.tsx
++++ b/src/app/features/call/CallView.tsx
+@@ -81,12 +81,25 @@ export function CallView({ room }: { room: Room }) {
+   const callIsCurrentAndReady = isActiveCallRoom && isActiveCallReady;
+   const callMembers = useCallMembers(mx, room.roomId);
+ 
+-  const getName = (userId: string) =>
+-    getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
++  /** Resolve display name for a call membership, including guests */
++  const getMemberName = useCallback((m: typeof callMembers[number]) => {
++    const isGuest = m.deviceId?.startsWith('GUEST_') ?? false;
++    console.log('[WallyCall:member]', { sender: m.sender, deviceId: m.deviceId, isGuest, membershipID: m.membershipID });
++    if (isGuest) {
++      // Read display_name from the call.member state event content
++      const allEvents = room.currentState.getStateEvents(EventType.GroupCallMemberPrefix);
++      for (const evt of allEvents) {
++        const c = evt.getContent<{ device_id?: string; display_name?: string }>();
++        if (c.device_id === m.deviceId && c.display_name) {
++          return `${c.display_name} (Guest)`;
++        }
++      }
++      return `Guest (${m.deviceId?.slice(6, 14) ?? '?'})`;
++    }
++    return getMemberDisplayName(room, m.sender ?? '') ?? getMxIdLocalPart(m.sender ?? '');
++  }, [room]);
+ 
+-  const memberDisplayNames = callMembers.map((callMembership) =>
+-    getName(callMembership.sender ?? '')
+-  );
++  const memberDisplayNames = callMembers.map(getMemberName);
+ 
+   const { navigateRoom } = useRoomNavigate();
+   const screenSize = useScreenSizeContext();
+diff --git a/src/app/features/call/CallViewUser.tsx b/src/app/features/call/CallViewUser.tsx
+index 776fead6..31b2abec 100644
+--- a/src/app/features/call/CallViewUser.tsx
++++ b/src/app/features/call/CallViewUser.tsx
+@@ -1,7 +1,7 @@
+ import { as, Avatar, Box, Icon, Icons, Text } from 'folds';
+-import React from 'react';
++import React, { useEffect, useState } from 'react';
+ import classNames from 'classnames';
+-import { Room } from 'matrix-js-sdk';
++import { EventType, Room, RoomStateEvent } from 'matrix-js-sdk';
+ import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
+ import { UserAvatar } from '../../components/user-avatar';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+@@ -39,11 +39,38 @@ export function CallViewUser({ room, callMembership }: CallViewUserProps) {
+   const openProfile = useOpenUserRoomProfile();
+   const space = useSpaceOptionally();
+   const userId = callMembership.sender ?? '';
+-  const avatarMxcUrl = getMemberAvatarMxc(room, userId);
++
++  // Guests have device_id starting with GUEST_ and display_name in the event content.
++  // Re-render when state events change so we pick up display_name after it syncs.
++  const isGuest = callMembership.deviceId?.startsWith('GUEST_') ?? false;
++  const [, setStateVersion] = useState(0);
++  useEffect(() => {
++    if (!isGuest) return;
++    const onState = () => setStateVersion((v) => v + 1);
++    room.on(RoomStateEvent.Events, onState);
++    return () => { room.off(RoomStateEvent.Events, onState); };
++  }, [room, isGuest]);
++
++  let guestDisplayName: string | undefined;
++  if (isGuest) {
++    const allCallMembers = room.currentState.getStateEvents(EventType.GroupCallMemberPrefix);
++    for (const evt of allCallMembers) {
++      const content = evt.getContent<{ device_id?: string; display_name?: string }>();
++      if (content.device_id === callMembership.deviceId && content.display_name) {
++        guestDisplayName = content.display_name;
++        break;
++      }
++    }
++  }
++
++  console.log('[WallyCall:CallViewUser]', { userId, isGuest, deviceId: callMembership.deviceId, guestDisplayName });
++  const avatarMxcUrl = isGuest ? undefined : getMemberAvatarMxc(room, userId);
+   const avatarUrl = avatarMxcUrl
+     ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
+     : undefined;
+-  const getName = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
++  const getName = isGuest && guestDisplayName
++    ? `${guestDisplayName} (Guest)`
++    : (getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId));
+ 
+   const handleUserClick: React.MouseEventHandler<HTMLButtonElement> = (evt) => {
+     openProfile(room.roomId, space?.roomId, userId, evt.currentTarget.getBoundingClientRect());
+diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
+index 402c1d09..2efbb0ad 100644
+--- a/src/app/features/issues/IssueBoard.tsx
++++ b/src/app/features/issues/IssueBoard.tsx
+@@ -1573,7 +1573,6 @@ export function IssueBoard({ room }: IssueBoardProps) {
+   }, [canWriteIssues, openEdit]);
+ 
+   const handleSaveIssue = useCallback(async (content: IssueContent) => {
+-    const isNew = editing === 'new';
+     const entry = editing !== 'new' && editing !== null ? editing : null;
+     const stateKey = entry ? entry.event.getStateKey()! : generateId();
+     await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, content, stateKey);
+diff --git a/src/app/features/room-nav/RoomNavUser.tsx b/src/app/features/room-nav/RoomNavUser.tsx
+index 96795647..f34b7111 100644
+--- a/src/app/features/room-nav/RoomNavUser.tsx
++++ b/src/app/features/room-nav/RoomNavUser.tsx
+@@ -1,6 +1,6 @@
+ import { Avatar, Box, Icon, Icons, Text } from 'folds';
+-import React from 'react';
+-import { Room } from 'matrix-js-sdk';
++import React, { useEffect, useState } from 'react';
++import { EventType, Room, RoomStateEvent } from 'matrix-js-sdk';
+ import { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
+ import { NavButton, NavItem, NavItemContent } from '../../components/nav';
+ import { UserAvatar } from '../../components/user-avatar';
+@@ -24,11 +24,35 @@ export function RoomNavUser({ room, callMembership }: RoomNavUserProps) {
+   const { isActiveCallReady, activeCallRoomId } = useCallState();
+   const isActiveCall = isActiveCallReady && activeCallRoomId === room.roomId;
+   const userId = callMembership.sender ?? '';
+-  const avatarMxcUrl = getMemberAvatarMxc(room, userId);
++  const isGuest = callMembership.deviceId?.startsWith('GUEST_') ?? false;
++
++  // Re-render when state events update (guest display_name may arrive late)
++  const [, setVer] = useState(0);
++  useEffect(() => {
++    if (!isGuest) return;
++    const onState = () => setVer((v) => v + 1);
++    room.on(RoomStateEvent.Events, onState);
++    return () => { room.off(RoomStateEvent.Events, onState); };
++  }, [room, isGuest]);
++
++  let guestName: string | undefined;
++  if (isGuest) {
++    for (const evt of room.currentState.getStateEvents(EventType.GroupCallMemberPrefix)) {
++      const c = evt.getContent<{ device_id?: string; display_name?: string }>();
++      if (c.device_id === callMembership.deviceId && c.display_name) {
++        guestName = c.display_name;
++        break;
++      }
++    }
++  }
++
++  const avatarMxcUrl = isGuest ? undefined : getMemberAvatarMxc(room, userId);
+   const avatarUrl = avatarMxcUrl
+     ? mx.mxcUrlToHttp(avatarMxcUrl, 32, 32, 'crop', undefined, false, useAuthentication)
+     : undefined;
+-  const getName = getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId);
++  const getName = isGuest
++    ? (guestName ? `${guestName} (Guest)` : `Guest (${callMembership.deviceId?.slice(6, 14) ?? '?'})`)
++    : (getMemberDisplayName(room, userId) ?? getMxIdLocalPart(userId));
+   const isCallParticipant = isActiveCall && userId !== mx.getUserId();
+ 
+   const handleNavUserClick: React.MouseEventHandler<HTMLButtonElement> = (evt) => {

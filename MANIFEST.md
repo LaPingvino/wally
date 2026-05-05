@@ -24,18 +24,18 @@ patch. The `.patch` ships the cleanly-applicable subset; the
 matching `.skipped` file lists the commits that were dropped, so
 you can apply those manually from the per-family branch.
 
-- `accessibility.patch` — partial (31/54 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account; see `accessibility.skipped`
+- `accessibility.patch` — partial (41/54 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account; see `accessibility.skipped`
 - `idb-retry.patch` — partial (4/17 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (21/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
+- `ux-fixes.patch` — partial (34/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/7 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
+- `widgets-support.patch` — partial (9/43 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `widgets-support.skipped`
+- `per-msg-profiles.patch` — partial (1/1 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, widgets-support; see `per-msg-profiles.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
 
 These families couldn't apply even partially on top of the resolved
 set; fetch the per-family branch on Codeberg:
 
-- `widgets-support` — `git fetch codeberg widgets-support`
-- `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `markdown-parser` — `git fetch codeberg markdown-parser`
 
-_Generated 2026-05-05T21:35:57Z_
+_Generated 2026-05-05T21:49:00Z_

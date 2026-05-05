@@ -1,5 +1,5 @@
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
-index 7ed76e62..a6ddb59f 100644
+index 965e2da0..6da3ca07 100644
 --- a/src/app/hooks/useNavigateUnread.ts
 +++ b/src/app/hooks/useNavigateUnread.ts
 @@ -8,6 +8,7 @@ import { mDirectAtom } from '../state/mDirectList';
@@ -10,7 +10,7 @@ index 7ed76e62..a6ddb59f 100644
  import {
    getDirectRoomPath,
    getHomeRoomPath,
-@@ -39,9 +40,9 @@ type SidebarItem = string | { id: string; content: string[] };
+@@ -48,9 +49,9 @@ type SidebarItem = string | { id: string; content: string[] };
  
  /** Flat ordered list of space IDs from the user's sidebar config. */
  function getSidebarSpaceIds(mx: MatrixClient): string[] {

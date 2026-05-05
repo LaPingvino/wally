@@ -1,8 +1,8 @@
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index 65fe2158..5bf8709c 100644
+index 164dd1f0..9708f1a1 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
-@@ -26,6 +26,73 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+@@ -28,6 +28,73 @@ import { announce } from '../../utils/announce';
  import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -76,7 +76,7 @@ index 65fe2158..5bf8709c 100644
  
  function SystemEmojiFeature() {
    const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-@@ -308,6 +375,7 @@ type ClientNonUIFeaturesProps = {
+@@ -310,6 +377,7 @@ type ClientNonUIFeaturesProps = {
  export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
    return (
      <>
