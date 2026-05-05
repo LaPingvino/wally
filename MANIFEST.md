@@ -15,6 +15,7 @@ stack at `codeberg.org/lapingvino/cinny` (branch `main`).
 - `branding.patch` — independent (applies to vanilla cinny)
 - `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, branding
 - `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker
+- `per-msg-profiles.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, widgets-support
 
 ## Partial patches
 
@@ -29,7 +30,6 @@ you can apply those manually from the per-family branch.
 - `ux-fixes.patch` — partial (34/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/7 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `widgets-support.patch` — partial (9/43 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `widgets-support.skipped`
-- `per-msg-profiles.patch` — partial (1/1 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, widgets-support; see `per-msg-profiles.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
 
@@ -38,4 +38,4 @@ set; fetch the per-family branch on Codeberg:
 
 - `markdown-parser` — `git fetch codeberg markdown-parser`
 
-_Generated 2026-05-05T21:49:00Z_
+_Generated 2026-05-05T21:59:01Z_
