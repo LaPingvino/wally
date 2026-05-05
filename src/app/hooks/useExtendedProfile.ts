@@ -17,7 +17,11 @@ const extendedProfile = z.looseObject({
     .array()
     .optional()
     .catch(undefined),
-  'us.cloke.msc4175.tz': z.string().optional().catch(undefined),
+  'us.cloke.msc4175.tz': z
+    .string()
+    .transform((s) => s.replace(/^["']|["']$/g, ''))
+    .optional()
+    .catch(undefined),
 });
 
 export type ExtendedProfile = z.infer<typeof extendedProfile>;
