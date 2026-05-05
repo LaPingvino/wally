@@ -1,8 +1,8 @@
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index db6ade689..a391cec55 100644
+index a0129caac..64ae01046 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
-@@ -29,6 +29,73 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+@@ -27,6 +27,73 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
  import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -76,7 +76,7 @@ index db6ade689..a391cec55 100644
  
  function SystemEmojiFeature() {
    const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-@@ -316,6 +383,7 @@ function BackgroundBackfillFeature() {
+@@ -314,6 +381,7 @@ function BackgroundBackfillFeature() {
  export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
    return (
      <>

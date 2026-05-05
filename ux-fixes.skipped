@@ -1,3 +1,6 @@
+c106775d  ux-fixes: UX fixes (room sort, inbox unread, navigation)
+ac5c16c3  ux-fixes: within-room mention navigation (Jump to Last Mention + Prev/Next @ chips)
+2e491b91  ux-fixes: mention search paginates back to session boundary (24h / prev session start)
 1a11ed7f  ux-fixes: prefix-based persona switching with sticky mode, multi-prefix, PluralKit import/export
 2dda77c8  ux-fixes: policy server send error feedback; fix mobile keyboard dismiss on autocomplete
 866ce336  ux-fixes: fix persona editor on mobile (Dialog overlay), prefix matching, HTTPS avatar import
@@ -8,6 +11,8 @@ fa4f463d  ux-fixes: import overwrites existing personas by displayname
 66933d3e  ux-fixes: configurable caption position (before/after files), sequential file sends, grey out underline in markdown mode
 a805fc15  ux-fixes: reset editor before awaits in async submit so emoji picker closes immediately on send
 64d9c310  ux-fixes: ghost device warning — show stale-device count + cost in encrypted rooms
+78addd35  ux-fixes: fix sidebar CPU hotspot — replace millify, memoize badge, defer unread
+f2697585  ux-fixes: revert useDeferredValue — too aggressive, hid initial badge counts
 e282d9a6  ux-fixes: inline × on mention pills, remove field trash button
 dce9565d  ux-fixes: fix void element detection for mobile backspace/delete
 7ce6e14f  ux-fixes: larger × button on mention pills (16px tap target)
@@ -15,7 +20,15 @@ ea3703e6  ux-fixes: don't steal editor focus on room entry
 aa72c393  ux-fixes: keep timeline focus for a11y, redirect typing to editor
 e250e43d  ux-fixes: prevent first character duplication on type-to-focus
 14092b50  ux-fixes: fix Alt shortcuts broken by preventDefault on type-to-focus
+363c5bf1  ux-fixes: fix Alt+key shortcuts on Linux/ChromeOS via evt.code fallback
 5c8964be  ux-fixes: revert timeline focus — Chrome/ChromeOS eats Alt shortcuts
+465f30aa  ux-fixes: command palette — type / in Ctrl+K to search actions
+2e46aade  ux-fixes: context-aware command palette with call/room/unread actions
+86e1dc5d  ux-fixes: fix useCallState crash outside CallProvider
+78105482  ux-fixes: Wally Conference bot detection + guest link UI
+668a98b8  ux-fixes: guest join page at /call/guest/:roomId
+e6d86235  ux-fixes: fix guest link URL to use /guest/:roomId format
+a16ae3bd  ux-fixes: fix guest link — endpoint is full base path, just append roomId
 f6eb877b  ux-fixes: call debug observability — WallyCall debug logger + 22 instrumentation points
 ad8351a6  ux-fixes: pass rtcFoci from AutoDiscoveryInfo to EC widget data
 5113fe9b  ux-fixes: prev/next unread stays in the current space first
