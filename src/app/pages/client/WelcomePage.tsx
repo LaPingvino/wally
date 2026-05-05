@@ -3,21 +3,33 @@ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
 import { Page, PageHero, PageHeroSection } from '../../components/page';
 import CinnySVG from '../../../../public/res/svg/cinny.svg';
 
-const PATCHES: Array<{ name: string; desc: string }> = [
-  { name: "emoji-font", desc: "Custom emoji font with Bah\u00e1'\u00ed symbols" },
-  { name: "element-call", desc: "Voice and video calling via Element Call, with configurable ringtone and auto-join settings" },
-  { name: "pronouns", desc: "Pronouns, timezone, and extended profile fields" },
-  { name: "accessibility", desc: "ARIA roles, keyboard shortcuts, notification sounds, and screen-reader labels on all login forms" },
-  { name: "issue-tracker", desc: "Schema-driven issue board stored in Matrix room state" },
-  { name: "multi-account", desc: "Multiple Matrix accounts open simultaneously" },
-  { name: "threads", desc: "Thread panel for viewing and replying to threads" },
-  { name: "idb-retry", desc: "Automatic retry when IndexedDB fails on startup" },
-  { name: "issue-widget", desc: "Issue tracker as an embeddable Matrix Widget API widget" },
-  { name: "ux-fixes", desc: "Room sort options, inbox unread view, and navigation improvements" },
-  { name: "widgets-support", desc: "Generic widget drawer for room widgets via the Matrix Widget API" },
-  { name: "themes", desc: "Ash (dark neutral grey) and Sepia (warm parchment) themes" },
-  { name: "per-msg-profiles", desc: "Per-message profiles (MSC4144): send messages as a persona, display sender personas inline" },
+// Sync the entries here with PATCH_DEFS in cinny-web-git/push-to-codeberg.sh.
+// Status reflects the latest audit: "full" applies cleanly to vanilla cinny
+// (or to the listed dep chain), "partial" ships the cleanly-applicable subset
+// of a coupled family, "branch" means no isolated patch is producible \u2014 fetch
+// the per-family Codeberg branch instead.
+const PATCHES: Array<{ name: string; desc: string; status: 'full' | 'partial' | 'branch' }> = [
+  { name: 'emoji-font', desc: "Custom emoji font with Bah\u00e1'\u00ed symbols", status: 'full' },
+  { name: 'pronouns', desc: 'Pronouns, timezone, and extended profile fields', status: 'full' },
+  { name: 'accessibility', desc: 'ARIA roles, keyboard shortcuts, notification sounds, and screen-reader labels on all login forms', status: 'partial' },
+  { name: 'issue-tracker', desc: 'Schema-driven issue board stored in Matrix room state', status: 'full' },
+  { name: 'multi-account', desc: 'Multiple Matrix accounts open simultaneously', status: 'full' },
+  { name: 'threads', desc: 'Thread panel for viewing and replying to threads', status: 'full' },
+  { name: 'idb-retry', desc: 'Automatic retry when IndexedDB fails on startup', status: 'partial' },
+  { name: 'issue-widget', desc: 'Issue tracker as an embeddable Matrix Widget API widget', status: 'full' },
+  { name: 'ux-fixes', desc: 'Room sort options, inbox unread view, and navigation improvements', status: 'partial' },
+  { name: 'navigate-unread', desc: 'Cross-bucket unread navigation, prev/next-unread shortcuts, sidebar-anchor handling for subspaces', status: 'branch' },
+  { name: 'widgets-support', desc: 'Generic widget drawer for room widgets via the Matrix Widget API', status: 'branch' },
+  { name: 'themes', desc: 'Ash (dark neutral grey) and Sepia (warm parchment) themes', status: 'full' },
+  { name: 'per-msg-profiles', desc: 'Per-message profiles (MSC4144): send messages as a persona, display sender personas inline', status: 'branch' },
+  { name: 'markdown-parser', desc: 'markdown-it-based parser with spoilers, underline, GFM tables and autolinks', status: 'branch' },
 ];
+
+const STATUS_BADGE: Record<'full' | 'partial' | 'branch', string> = {
+  full: 'patch',
+  partial: 'partial patch',
+  branch: 'branch only',
+};
 
 export function WelcomePage() {
   return (
@@ -81,7 +93,7 @@ export function WelcomePage() {
                   gap="100"
                   style={{ margin: 0, paddingLeft: config.space.S400 }}
                 >
-                  {PATCHES.map(({ name, desc }) => (
+                  {PATCHES.map(({ name, desc, status }) => (
                     <li key={name}>
                       <Text size="T300">
                         <a
@@ -91,6 +103,16 @@ export function WelcomePage() {
                         >
                           {name}
                         </a>
+                        <span
+                          aria-label={`status: ${STATUS_BADGE[status]}`}
+                          style={{
+                            marginLeft: '0.4em',
+                            opacity: 0.6,
+                            fontSize: '0.85em',
+                          }}
+                        >
+                          ({STATUS_BADGE[status]})
+                        </span>
                         {' \u2014 '}
                         {desc}
                       </Text>
