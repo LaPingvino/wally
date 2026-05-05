@@ -11,10 +11,11 @@ stack at `codeberg.org/lapingvino/cinny` (branch `main`).
 - `pronouns.patch` — independent (applies to vanilla cinny)
 - `threads.patch` — independent (applies to vanilla cinny)
 - `issue-widget.patch` — independent (applies to vanilla cinny)
+- `a11y.patch` — independent (applies to vanilla cinny)
 - `themes.patch` — independent (applies to vanilla cinny)
 - `branding.patch` — independent (applies to vanilla cinny)
-- `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, branding
-- `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker
+- `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, a11y, themes, branding
+- `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, a11y, themes, branding, issue-tracker
 
 ## Mutually coupled (no isolated patch available)
 
@@ -29,4 +30,4 @@ isolated; fetch the per-family branch on Codeberg instead:
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `markdown-parser` — `git fetch codeberg markdown-parser`
 
-_Generated 2026-05-05T17:20:14Z_
+_Generated 2026-05-05T17:25:36Z_
