@@ -29,4 +29,4 @@ isolated; fetch the per-family branch on Codeberg instead:
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `markdown-parser` — `git fetch codeberg markdown-parser`
 
-_Generated 2026-05-05T17:15:57Z_
+_Generated 2026-05-05T17:20:14Z_
