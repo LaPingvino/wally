@@ -1,0 +1,300 @@
+diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
+index 23bd48e6..eb137be8 100644
+--- a/src/app/pages/client/ClientNonUIFeatures.tsx
++++ b/src/app/pages/client/ClientNonUIFeatures.tsx
+@@ -26,6 +26,73 @@ import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
+ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { SyncState } from 'matrix-js-sdk';
++import { repairIDBAndReload, backupSessionToCache } from '../../../client/initMatrix';
++
++/**
++ * Monitors session health after tab suspension (common on Chromebooks).
++ *
++ * When a Chromebook discards a tab to save memory, IndexedDB connections become
++ * invalid. The SDK can't sync or persist data, but the error surfaces only as
++ * an opaque UnknownError — there's no specific "IDB died" event to catch.
++ *
++ * This component listens for `visibilitychange` and, when the tab wakes up:
++ *  1. Probes IndexedDB with a quick open/close.
++ *  2. If IDB is broken → auto-repairs (wipes IDB, preserves localStorage creds, reloads).
++ *  3. If IDB is fine but sync is stuck → calls retryImmediately() to nudge reconnection.
++ */
++function SessionHealthMonitor() {
++  const mx = useMatrixClient();
++  const hiddenSinceRef = useRef<number | null>(null);
++
++  useEffect(() => {
++    const handleVisibilityChange = () => {
++      if (document.hidden) {
++        hiddenSinceRef.current = Date.now();
++        return;
++      }
++
++      // Tab is visible again. Only run health check if we were hidden > 5 seconds
++      // (short hides like alt-tabbing away briefly don't need recovery).
++      const hiddenMs = hiddenSinceRef.current ? Date.now() - hiddenSinceRef.current : 0;
++      hiddenSinceRef.current = null;
++      if (hiddenMs < 5_000) return;
++
++      // 1. Probe IndexedDB health — a broken connection means the OS discarded our tab.
++      const probeDb = `idb-health-${Date.now()}`;
++      try {
++        const req = indexedDB.open(probeDb);
++        req.onsuccess = () => {
++          // IDB works — clean up probe and check sync instead.
++          req.result.close();
++          indexedDB.deleteDatabase(probeDb);
++
++          // Keep the Cache API session backup fresh while healthy.
++          backupSessionToCache();
++
++          // 2. If sync hasn't produced an event recently, nudge reconnection.
++          const syncState = mx.getSyncState();
++          if (syncState === SyncState.Error || syncState === SyncState.Stopped) {
++            mx.retryImmediately();
++          }
++        };
++        req.onerror = () => {
++          // IDB is broken — auto-repair.
++          indexedDB.deleteDatabase(probeDb);
++          repairIDBAndReload();
++        };
++      } catch {
++        // indexedDB.open() threw — critically broken.
++        repairIDBAndReload();
++      }
++    };
++
++    document.addEventListener('visibilitychange', handleVisibilityChange);
++    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
++  }, [mx]);
++
++  return null;
++}
+ 
+ function SystemEmojiFeature() {
+   const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
+@@ -267,6 +334,7 @@ type ClientNonUIFeaturesProps = {
+ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
+   return (
+     <>
++      <SessionHealthMonitor />
+       <SystemEmojiFeature />
+       <PageZoomFeature />
+       <FaviconUpdater />
+diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
+index 068dcc69..b61174da 100644
+--- a/src/app/pages/client/ClientRoot.tsx
++++ b/src/app/pages/client/ClientRoot.tsx
+@@ -24,6 +24,7 @@ import React, { MouseEventHandler, ReactNode, useCallback, useEffect, useState }
+ import {
+   clearCacheAndReload,
+   clearLoginData,
++  repairIDBAndReload,
+   initClient,
+   logoutClient,
+   startClient,
+@@ -256,15 +257,30 @@ export function ClientRoot({ children }: ClientRootProps) {
+                       Retry
+                     </Text>
+                   </Button>
+-                  <Button
+-                    variant="Secondary"
+-                    fill="Soft"
+-                    onClick={mx ? () => clearCacheAndReload(mx) : clearLoginData}
+-                  >
+-                    <Text as="span" size="B400">
+-                      Clear Cache
+-                    </Text>
+-                  </Button>
++                  {mx ? (
++                    <Button
++                      variant="Secondary"
++                      fill="Soft"
++                      onClick={() => clearCacheAndReload(mx)}
++                    >
++                      <Text as="span" size="B400">
++                        Clear Cache and Reload
++                      </Text>
++                    </Button>
++                  ) : (
++                    <>
++                      <Button variant="Secondary" fill="Soft" onClick={repairIDBAndReload}>
++                        <Text as="span" size="B400">
++                          Repair (keep session)
++                        </Text>
++                      </Button>
++                      <Button variant="Critical" fill="Soft" onClick={clearLoginData}>
++                        <Text as="span" size="B400">
++                          Clear All Data (logout)
++                        </Text>
++                      </Button>
++                    </>
++                  )}
+                 </Box>
+               </Dialog>
+             </Box>
+diff --git a/src/app/utils/featureCheck.ts b/src/app/utils/featureCheck.ts
+index a9474c31..0d887b71 100644
+--- a/src/app/utils/featureCheck.ts
++++ b/src/app/utils/featureCheck.ts
+@@ -1,21 +1,29 @@
+-export const checkIndexedDBSupport = async (): Promise<boolean> => {
+-  const ts = new Date().getTime();
+-  const dbName = `checkIndexedDBSupport-${ts}`;
+-  return new Promise((resolve) => {
+-    let db;
++const attemptIndexedDBOpen = (): Promise<boolean> =>
++  new Promise((resolve) => {
++    const dbName = `checkIndexedDBSupport-${Date.now()}`;
++    let req: IDBOpenDBRequest;
+     try {
+-      db = indexedDB.open(dbName);
++      req = indexedDB.open(dbName);
+     } catch {
+       resolve(false);
+       return;
+     }
+-    db.onsuccess = () => {
++    req.onsuccess = () => {
+       resolve(true);
+       indexedDB.deleteDatabase(dbName);
+     };
+-    db.onerror = () => {
++    req.onerror = () => {
+       resolve(false);
+       indexedDB.deleteDatabase(dbName);
+     };
+   });
++
++// Retry up to 3 times with 500ms gaps — browsers can briefly block IndexedDB
++// immediately after clearing site data (e.g. clear-cookies in private mode).
++export const checkIndexedDBSupport = async (): Promise<boolean> => {
++  for (let i = 0; i < 3; i++) {
++    if (i > 0) await new Promise((r) => setTimeout(r, 500));
++    if (await attemptIndexedDBOpen()) return true;
++  }
++  return false;
+ };
+diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
+index c07be2fb..d16e5eb6 100644
+--- a/src/client/initMatrix.ts
++++ b/src/client/initMatrix.ts
+@@ -78,6 +78,7 @@ export const logoutClient = async (mx: MatrixClient) => {
+   const isSecondary =
+     window.location.pathname.startsWith('/account/') || slot !== null;
+ 
++  await clearSessionBackup();
+   pushSessionToSW();
+   mx.stopClient();
+   try {
+@@ -103,6 +104,7 @@ export const logoutClient = async (mx: MatrixClient) => {
+ };
+ 
+ export const clearLoginData = async () => {
++  await clearSessionBackup();
+   const dbs = await window.indexedDB.databases();
+ 
+   dbs.forEach((idbInfo) => {
+@@ -115,3 +117,99 @@ export const clearLoginData = async () => {
+   window.localStorage.clear();
+   window.location.reload();
+ };
++
++// ---------------------------------------------------------------------------
++// Session backup via Cache API — independent of both localStorage and IDB.
++// If the OS discards the tab and wipes localStorage (Chromebooks), we can
++// restore credentials from this backup without requiring a re-login.
++// ---------------------------------------------------------------------------
++const SESSION_BACKUP_CACHE = 'cinny-session-backup';
++const SESSION_BACKUP_KEY = '/_session';
++
++const SESSION_LS_KEYS = [
++  'cinny_access_token',
++  'cinny_device_id',
++  'cinny_user_id',
++  'cinny_hs_base_url',
++] as const;
++
++const SECONDARY_SESSIONS_KEY = 'cinny_sessions';
++
++/**
++ * Snapshot current localStorage session credentials into the Cache API.
++ * Call this periodically (e.g. on each visibility-change health check)
++ * so the backup stays current.
++ */
++export const backupSessionToCache = async (): Promise<void> => {
++  try {
++    const data: Record<string, string | null> = {};
++    for (const key of SESSION_LS_KEYS) {
++      data[key] = localStorage.getItem(key);
++    }
++    // Also back up secondary accounts if present.
++    data[SECONDARY_SESSIONS_KEY] = localStorage.getItem(SECONDARY_SESSIONS_KEY);
++
++    // Only back up if we actually have a session.
++    if (!data.cinny_access_token || !data.cinny_user_id) return;
++
++    const cache = await caches.open(SESSION_BACKUP_CACHE);
++    await cache.put(SESSION_BACKUP_KEY, new Response(JSON.stringify(data)));
++  } catch {
++    // Cache API unavailable (private browsing, etc.) — silently skip.
++  }
++};
++
++/**
++ * Restore session credentials from Cache API backup into localStorage.
++ * Returns true if credentials were successfully restored.
++ */
++export const restoreSessionFromCache = async (): Promise<boolean> => {
++  try {
++    const cache = await caches.open(SESSION_BACKUP_CACHE);
++    const resp = await cache.match(SESSION_BACKUP_KEY);
++    if (!resp) return false;
++
++    const data = await resp.json();
++    if (!data.cinny_access_token || !data.cinny_user_id) return false;
++
++    for (const key of SESSION_LS_KEYS) {
++      const val = data[key];
++      if (val) localStorage.setItem(key, val);
++    }
++    if (data[SECONDARY_SESSIONS_KEY]) {
++      localStorage.setItem(SECONDARY_SESSIONS_KEY, data[SECONDARY_SESSIONS_KEY]);
++    }
++    return true;
++  } catch {
++    return false;
++  }
++};
++
++/** Remove the Cache API backup (on explicit logout). */
++export const clearSessionBackup = async (): Promise<void> => {
++  try {
++    await caches.delete(SESSION_BACKUP_CACHE);
++  } catch {
++    // ignore
++  }
++};
++
++/**
++ * Delete all IndexedDB databases (removing corrupted data) while preserving
++ * localStorage session credentials. The page reloads and the SDK reinitialises
++ * fresh — the user stays logged in.
++ *
++ * If localStorage was also wiped (aggressive Chromebook tab discard), attempts
++ * to restore credentials from the Cache API backup first.
++ */
++export const repairIDBAndReload = async () => {
++  // If localStorage creds are gone, try restoring from Cache API backup.
++  if (!localStorage.getItem('cinny_access_token')) {
++    await restoreSessionFromCache();
++  }
++  const dbs = await window.indexedDB.databases();
++  dbs.forEach(({ name }) => {
++    if (name) window.indexedDB.deleteDatabase(name);
++  });
++  window.location.reload();
++};
