@@ -21,12 +21,12 @@ stack at `codeberg.org/lapingvino/cinny` (branch `main`).
 These families' commits depend on each other and cannot be cleanly
 isolated; fetch the per-family branch on Codeberg instead:
 
-- `element-call` — `git fetch codeberg element-call`
 - `accessibility` — `git fetch codeberg accessibility`
 - `idb-retry` — `git fetch codeberg idb-retry`
 - `ux-fixes` — `git fetch codeberg ux-fixes`
+- `navigate-unread` — `git fetch codeberg navigate-unread`
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `markdown-parser` — `git fetch codeberg markdown-parser`
 
-_Generated 2026-05-05T16:42:00Z_
+_Generated 2026-05-05T17:15:57Z_
