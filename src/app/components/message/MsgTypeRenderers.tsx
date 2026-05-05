@@ -49,18 +49,22 @@ export function RedactedContent({ reason }: RedactedContentProps) {
   );
 }
 
-export function UnsupportedContent() {
+type FallbackContentProps = {
+  body?: string;
+};
+
+export function UnsupportedContent({ body }: FallbackContentProps) {
   return (
     <Text>
-      <MessageUnsupportedContent />
+      <MessageUnsupportedContent body={body} />
     </Text>
   );
 }
 
-export function BrokenContent() {
+export function BrokenContent({ body }: FallbackContentProps) {
   return (
     <Text>
-      <MessageBrokenContent />
+      <MessageBrokenContent body={body} />
     </Text>
   );
 }
@@ -79,7 +83,9 @@ type MTextProps = {
 export function MText({ edited, content, renderBody, renderUrlsPreview, style }: MTextProps) {
   const { body, formatted_body: customBody } = content;
 
-  if (typeof body !== 'string') return <BrokenContent />;
+  if (typeof body !== 'string') {
+    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
+  }
   const trimmedBody = trimReplyFromBody(body);
   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
@@ -118,7 +124,9 @@ export function MEmote({
 }: MEmoteProps) {
   const { body, formatted_body: customBody } = content;
 
-  if (typeof body !== 'string') return <BrokenContent />;
+  if (typeof body !== 'string') {
+    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
+  }
   const trimmedBody = trimReplyFromBody(body);
   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
@@ -151,7 +159,9 @@ type MNoticeProps = {
 export function MNotice({ edited, content, renderBody, renderUrlsPreview }: MNoticeProps) {
   const { body, formatted_body: customBody } = content;
 
-  if (typeof body !== 'string') return <BrokenContent />;
+  if (typeof body !== 'string') {
+    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
+  }
   const trimmedBody = trimReplyFromBody(body);
   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
@@ -193,7 +203,7 @@ export function MImage({ content, renderImageContent, outlined }: MImageProps) {
   const imgInfo = content?.info;
   const mxcUrl = content.file?.url ?? content.url;
   if (typeof mxcUrl !== 'string') {
-    return <BrokenContent />;
+    return <BrokenContent body={content.body ?? content.filename} />;
   }
   const height = scaleYDimension(imgInfo?.w || 400, 400, imgInfo?.h || 400);
 
@@ -242,7 +252,7 @@ export function MVideo({ content, renderAsFile, renderVideoContent, outlined }: 
     if (mxcUrl) {
       return renderAsFile();
     }
-    return <BrokenContent />;
+    return <BrokenContent body={content.body ?? content.filename} />;
   }
 
   const height = scaleYDimension(videoInfo.w || 400, 400, videoInfo.h || 400);
@@ -305,7 +315,7 @@ export function MAudio({ content, renderAsFile, renderAudioContent, outlined }: 
     if (mxcUrl) {
       return renderAsFile();
     }
-    return <BrokenContent />;
+    return <BrokenContent body={content.body ?? content.filename} />;
   }
 
   const filename = content.filename ?? content.body ?? 'Audio';
@@ -356,7 +366,7 @@ export function MFile({ content, renderFileContent, outlined }: MFileProps) {
   const mxcUrl = content.file?.url ?? content.url;
 
   if (typeof mxcUrl !== 'string') {
-    return <BrokenContent />;
+    return <BrokenContent body={content.body ?? content.filename} />;
   }
 
   return (
@@ -387,9 +397,11 @@ type MLocationProps = {
 };
 export function MLocation({ content }: MLocationProps) {
   const geoUri = content.geo_uri;
-  if (typeof geoUri !== 'string') return <BrokenContent />;
+  if (typeof geoUri !== 'string') {
+    return <BrokenContent body={typeof content.body === 'string' ? content.body : undefined} />;
+  }
   const location = parseGeoUri(geoUri);
-  if (!location) return <BrokenContent />;
+  if (!location) return <BrokenContent body={geoUri} />;
 
   return (
     <Box direction="Column" alignItems="Start" gap="100">

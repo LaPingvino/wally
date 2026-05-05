@@ -264,5 +264,10 @@ export function RenderMessageContent({
     return <MBadEncrypted />;
   }
 
-  return <UnsupportedContent />;
+  const fallbackContent = getContent<{ body?: unknown }>();
+  return (
+    <UnsupportedContent
+      body={typeof fallbackContent?.body === 'string' ? fallbackContent.body : undefined}
+    />
+  );
 }
