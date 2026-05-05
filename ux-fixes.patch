@@ -1,5 +1,5 @@
 diff --git a/index.html b/index.html
-index de257ced..1839958e 100644
+index de257cedf..1839958e0 100644
 --- a/index.html
 +++ b/index.html
 @@ -3,7 +3,7 @@
@@ -12,7 +12,7 @@ index de257ced..1839958e 100644
      <meta name="name" content="Wally" />
      <meta name="author" content="Ajay Bura" />
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
-index 34df387d..faea05b3 100644
+index 34df387d3..faea05b39 100644
 --- a/src/app/components/GlobalKeyboardShortcuts.tsx
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
 @@ -26,7 +26,7 @@ import { useSetSetting } from '../state/hooks/settings';
@@ -71,7 +71,7 @@ index 34df387d..faea05b3 100644
    useKeyDown(window, handleStartCallKeyDown);
    useKeyDown(window, handlePeopleDrawerKeyDown);
 diff --git a/src/app/components/RenderMessageContent.tsx b/src/app/components/RenderMessageContent.tsx
-index 4cfcb7dc..147208a8 100644
+index 4cfcb7dc1..147208a8d 100644
 --- a/src/app/components/RenderMessageContent.tsx
 +++ b/src/app/components/RenderMessageContent.tsx
 @@ -264,5 +264,10 @@ export function RenderMessageContent({
@@ -87,7 +87,7 @@ index 4cfcb7dc..147208a8 100644
 +  );
  }
 diff --git a/src/app/components/RoomUnreadProvider.tsx b/src/app/components/RoomUnreadProvider.tsx
-index 43dfd48b..d77e66f2 100644
+index 43dfd48b8..d77e66f2a 100644
 --- a/src/app/components/RoomUnreadProvider.tsx
 +++ b/src/app/components/RoomUnreadProvider.tsx
 @@ -9,7 +9,6 @@ type RoomUnreadProviderProps = {
@@ -106,7 +106,7 @@ index 43dfd48b..d77e66f2 100644
    return children(unread);
  }
 diff --git a/src/app/components/editor/Editor.tsx b/src/app/components/editor/Editor.tsx
-index f7655fea..efb129fe 100644
+index f7655fea3..efb129fe5 100644
 --- a/src/app/components/editor/Editor.tsx
 +++ b/src/app/components/editor/Editor.tsx
 @@ -67,6 +67,7 @@ type CustomEditorProps = {
@@ -139,7 +139,7 @@ index f7655fea..efb129fe 100644
  
      const renderPlaceholder = useCallback(
 diff --git a/src/app/components/editor/keyboard.ts b/src/app/components/editor/keyboard.ts
-index 19c05bac..8e30e7c3 100644
+index 19c05bac7..8e30e7c3b 100644
 --- a/src/app/components/editor/keyboard.ts
 +++ b/src/app/components/editor/keyboard.ts
 @@ -4,6 +4,30 @@ import { Editor, Element as SlateElement, Range, Transforms } from 'slate';
@@ -201,7 +201,7 @@ index 19c05bac..8e30e7c3 100644
          }
          return false;
 diff --git a/src/app/components/editor/utils.ts b/src/app/components/editor/utils.ts
-index 90c549c8..85c0125a 100644
+index 90c549c84..85c0125a4 100644
 --- a/src/app/components/editor/utils.ts
 +++ b/src/app/components/editor/utils.ts
 @@ -249,7 +249,11 @@ export const getPrevWorldRange = (editor: Editor): BaseRange | undefined => {
@@ -219,7 +219,7 @@ index 90c549c8..85c0125a 100644
  export const isEmptyEditor = (editor: Editor): boolean => {
 diff --git a/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
 new file mode 100644
-index 00000000..05ce4573
+index 000000000..05ce4573e
 --- /dev/null
 +++ b/src/app/components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx
 @@ -0,0 +1,340 @@
@@ -564,7 +564,7 @@ index 00000000..05ce4573
 +  );
 +}
 diff --git a/src/app/components/message/MsgTypeRenderers.tsx b/src/app/components/message/MsgTypeRenderers.tsx
-index abbf354d..5f4d576b 100644
+index abbf354de..5f4d576b8 100644
 --- a/src/app/components/message/MsgTypeRenderers.tsx
 +++ b/src/app/components/message/MsgTypeRenderers.tsx
 @@ -49,18 +49,22 @@ export function RedactedContent({ reason }: RedactedContentProps) {
@@ -678,7 +678,7 @@ index abbf354d..5f4d576b 100644
    return (
      <Box direction="Column" alignItems="Start" gap="100">
 diff --git a/src/app/components/message/Reply.tsx b/src/app/components/message/Reply.tsx
-index 91ef8aa9..5d474f54 100644
+index 91ef8aa9d..5d474f54e 100644
 --- a/src/app/components/message/Reply.tsx
 +++ b/src/app/components/message/Reply.tsx
 @@ -12,6 +12,29 @@ import { scaleSystemEmoji } from '../../plugins/react-custom-html-parser';
@@ -757,7 +757,7 @@ index 91ef8aa9..5d474f54 100644
              )
            }
 diff --git a/src/app/components/message/content/FallbackContent.tsx b/src/app/components/message/content/FallbackContent.tsx
-index 9edb9678..b6da4f93 100644
+index 9edb96784..b6da4f932 100644
 --- a/src/app/components/message/content/FallbackContent.tsx
 +++ b/src/app/components/message/content/FallbackContent.tsx
 @@ -17,12 +17,15 @@ export const MessageDeletedContent = as<'div', { children?: never; reason?: stri
@@ -805,7 +805,7 @@ index 9edb9678..b6da4f93 100644
  export const MessageEmptyContent = as<'div', { children?: never }>(({ ...props }, ref) => (
    <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
 diff --git a/src/app/components/url-preview/UrlPreviewCard.tsx b/src/app/components/url-preview/UrlPreviewCard.tsx
-index ee8967af..658bdcfa 100644
+index ee8967af7..658bdcfa7 100644
 --- a/src/app/components/url-preview/UrlPreviewCard.tsx
 +++ b/src/app/components/url-preview/UrlPreviewCard.tsx
 @@ -28,7 +28,9 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
@@ -820,7 +820,7 @@ index ee8967af..658bdcfa 100644
  
      if (previewStatus.status === AsyncStatus.Error) return null;
 diff --git a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
-index 028cd560..3e7c53f1 100644
+index 028cd560e..3e7c53f1f 100644
 --- a/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
 +++ b/src/app/features/join-before-navigate/JoinBeforeNavigate.tsx
 @@ -1,13 +1,22 @@
@@ -945,7 +945,7 @@ index 028cd560..3e7c53f1 100644
        </PageHeader>
        <Box grow="Yes">
 diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
-index c59d636f..2c5dbf26 100644
+index c59d636f9..2c5dbf262 100644
 --- a/src/app/features/room-nav/RoomNavItem.tsx
 +++ b/src/app/features/room-nav/RoomNavItem.tsx
 @@ -104,6 +104,16 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
@@ -983,7 +983,7 @@ index c59d636f..2c5dbf26 100644
          <Line variant="Surface" size="300" />
          <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index 4da9a96f..4376cc90 100644
+index 4da9a96f7..4376cc90c 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -229,6 +229,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
@@ -1013,7 +1013,7 @@ index 4da9a96f..4376cc90 100644
            onKeyUp={handleKeyUp}
            onPaste={handlePaste}
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 8b098e8d..1362cbcc 100644
+index 8b098e8dc..1362cbccf 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -29,7 +29,7 @@ import { ReactEditor } from 'slate-react';
@@ -1301,7 +1301,7 @@ index 8b098e8d..1362cbcc 100644
        )}
        <Scroll ref={scrollRef} visibility="Hover" id="cinny-timeline" tabIndex={0} role="log" aria-label="Message timeline" aria-live="polite">
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index dabac747..8e743fc7 100644
+index dabac747a..8e743fc75 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -23,7 +23,7 @@ import {
@@ -1533,7 +1533,7 @@ index dabac747..8e743fc7 100644
                Unified: "Start Call" before a call, "Show/Hide Call" toggle once active. */}
            {(canCall || isActiveCall || room.isCallRoom()) && !isIssueBoard && (
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 4c604a88..d7280df5 100644
+index 4c604a88f..d7280df54 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -735,11 +735,11 @@ export const Message = as<'div', MessageProps>(
@@ -1587,7 +1587,7 @@ index 4c604a88..d7280df5 100644
                <Box gap="100">
                  {canSendReaction && (
 diff --git a/src/app/features/room/message/MessageEditor.tsx b/src/app/features/room/message/MessageEditor.tsx
-index 9a7567aa..adbf55ef 100644
+index 9a7567aac..adbf55ef2 100644
 --- a/src/app/features/room/message/MessageEditor.tsx
 +++ b/src/app/features/room/message/MessageEditor.tsx
 @@ -258,6 +258,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
@@ -1599,7 +1599,7 @@ index 9a7567aa..adbf55ef 100644
            onKeyUp={handleKeyUp}
            bottom={
 diff --git a/src/app/features/room/message/styles.css.ts b/src/app/features/room/message/styles.css.ts
-index 4be501bd..abc8a528 100644
+index 4be501bdc..abc8a5288 100644
 --- a/src/app/features/room/message/styles.css.ts
 +++ b/src/app/features/room/message/styles.css.ts
 @@ -4,6 +4,20 @@ import { DefaultReset, config, toRem } from 'folds';
@@ -1624,7 +1624,7 @@ index 4be501bd..abc8a528 100644
    paddingTop: 0,
  });
 diff --git a/src/app/features/search/Search.tsx b/src/app/features/search/Search.tsx
-index bc7ec0b1..5edc61a6 100644
+index bc7ec0b12..5edc61a69 100644
 --- a/src/app/features/search/Search.tsx
 +++ b/src/app/features/search/Search.tsx
 @@ -59,6 +59,13 @@ import { useKeyDown } from '../../hooks/useKeyDown';
@@ -1909,7 +1909,7 @@ index bc7ec0b1..5edc61a6 100644
              </Box>
            </Modal>
 diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
-index 71f5773f..6fb3806d 100644
+index 71f5773f3..6fb3806d2 100644
 --- a/src/app/features/settings/account/Profile.tsx
 +++ b/src/app/features/settings/account/Profile.tsx
 @@ -164,6 +164,30 @@ export function Profile() {
@@ -1945,7 +1945,7 @@ index 71f5773f..6fb3806d 100644
      )
 diff --git a/src/app/features/settings/keyboard-shortcuts/KeyboardShortcuts.tsx b/src/app/features/settings/keyboard-shortcuts/KeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..64037f60
+index 000000000..64037f607
 --- /dev/null
 +++ b/src/app/features/settings/keyboard-shortcuts/KeyboardShortcuts.tsx
 @@ -0,0 +1,331 @@
@@ -2282,7 +2282,7 @@ index 00000000..64037f60
 +}
 diff --git a/src/app/hooks/router/useFavoritesSelected.ts b/src/app/hooks/router/useFavoritesSelected.ts
 new file mode 100644
-index 00000000..6aaac607
+index 000000000..6aaac607f
 --- /dev/null
 +++ b/src/app/hooks/router/useFavoritesSelected.ts
 @@ -0,0 +1,7 @@
@@ -2294,7 +2294,7 @@ index 00000000..6aaac607
 +  return !!match;
 +};
 diff --git a/src/app/hooks/router/useInbox.ts b/src/app/hooks/router/useInbox.ts
-index de8d3d69..08381e8d 100644
+index de8d3d69f..08381e8dd 100644
 --- a/src/app/hooks/router/useInbox.ts
 +++ b/src/app/hooks/router/useInbox.ts
 @@ -3,6 +3,7 @@ import {
@@ -2321,7 +2321,7 @@ index de8d3d69..08381e8d 100644
 +};
 +
 diff --git a/src/app/hooks/useCommands.ts b/src/app/hooks/useCommands.ts
-index c02b0e94..6541a9c3 100644
+index c02b0e94e..6541a9c36 100644
 --- a/src/app/hooks/useCommands.ts
 +++ b/src/app/hooks/useCommands.ts
 @@ -152,7 +152,9 @@ export enum Command {
@@ -2395,7 +2395,7 @@ index c02b0e94..6541a9c3 100644
          description: 'Convert room to direct message',
 diff --git a/src/app/hooks/useFavoriteRooms.ts b/src/app/hooks/useFavoriteRooms.ts
 new file mode 100644
-index 00000000..b0b2195b
+index 000000000..b0b2195b8
 --- /dev/null
 +++ b/src/app/hooks/useFavoriteRooms.ts
 @@ -0,0 +1,15 @@
@@ -2416,7 +2416,7 @@ index 00000000..b0b2195b
 +}
 diff --git a/src/app/hooks/useGlobalKeyboardShortcuts.ts b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 new file mode 100644
-index 00000000..4ffb2d25
+index 000000000..4ffb2d25b
 --- /dev/null
 +++ b/src/app/hooks/useGlobalKeyboardShortcuts.ts
 @@ -0,0 +1,157 @@
@@ -2578,7 +2578,7 @@ index 00000000..4ffb2d25
 +  return { shortcuts };
 +};
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
-index 7ed76e62..965e2da0 100644
+index 7ed76e62c..965e2da01 100644
 --- a/src/app/hooks/useNavigateUnread.ts
 +++ b/src/app/hooks/useNavigateUnread.ts
 @@ -35,6 +35,15 @@ const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
@@ -2603,7 +2603,7 @@ index 7ed76e62..965e2da0 100644
  }
 +
 diff --git a/src/app/hooks/useSpaceHierarchy.ts b/src/app/hooks/useSpaceHierarchy.ts
-index ad34e3f4..ad768ea8 100644
+index ad34e3f45..ad768ea8f 100644
 --- a/src/app/hooks/useSpaceHierarchy.ts
 +++ b/src/app/hooks/useSpaceHierarchy.ts
 @@ -8,7 +8,7 @@ import { roomToParentsAtom } from '../state/room/roomToParents';
@@ -2642,7 +2642,7 @@ index ad34e3f4..ad768ea8 100644
    );
 diff --git a/src/app/hooks/useWallyConference.ts b/src/app/hooks/useWallyConference.ts
 new file mode 100644
-index 00000000..85b5f7ba
+index 000000000..85b5f7baf
 --- /dev/null
 +++ b/src/app/hooks/useWallyConference.ts
 @@ -0,0 +1,26 @@
@@ -2674,7 +2674,7 @@ index 00000000..85b5f7ba
 +};
 diff --git a/src/app/pages/GuestJoin.tsx b/src/app/pages/GuestJoin.tsx
 new file mode 100644
-index 00000000..3e00ec79
+index 000000000..3e00ec79c
 --- /dev/null
 +++ b/src/app/pages/GuestJoin.tsx
 @@ -0,0 +1,201 @@
@@ -2880,7 +2880,7 @@ index 00000000..3e00ec79
 +  );
 +}
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index 53feabaf..e988def7 100644
+index 53feabaf8..e988def7d 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
 @@ -13,6 +13,9 @@ import { AuthLayout, Login, Register, ResetPassword } from './auth';
@@ -2978,7 +2978,7 @@ index 53feabaf..e988def7 100644
            <Route path={_INVITES_PATH} element={<Invites />} />
          </Route>
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index b61174da..f7640397 100644
+index b61174da8..f7640397d 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
 @@ -29,6 +29,7 @@ import {
@@ -3016,7 +3016,7 @@ index b61174da..f7640397 100644
          {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
            <SplashScreen>
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index 2c685167..ffaa4f53 100644
+index 2c685167f..ffaa4f530 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -9,6 +9,7 @@ import {
@@ -3037,7 +3037,7 @@ index 2c685167..ffaa4f53 100644
              <SidebarStackSeparator />
 diff --git a/src/app/pages/client/VersionCheck.tsx b/src/app/pages/client/VersionCheck.tsx
 new file mode 100644
-index 00000000..2d4a65bb
+index 000000000..2d4a65bb3
 --- /dev/null
 +++ b/src/app/pages/client/VersionCheck.tsx
 @@ -0,0 +1,108 @@
@@ -3150,7 +3150,7 @@ index 00000000..2d4a65bb
 +  );
 +}
 diff --git a/src/app/pages/client/call/CallProvider.tsx b/src/app/pages/client/call/CallProvider.tsx
-index e7ac38d9..55bf1e54 100644
+index e7ac38d99..55bf1e546 100644
 --- a/src/app/pages/client/call/CallProvider.tsx
 +++ b/src/app/pages/client/call/CallProvider.tsx
 @@ -451,3 +451,8 @@ export function useCallState(): CallContextState {
@@ -3163,7 +3163,7 @@ index e7ac38d9..55bf1e54 100644
 +  return useContext(CallContext);
 +}
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 20068745..2af74d87 100644
+index 20068745b..2af74d87e 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
 @@ -1,5 +1,5 @@
@@ -3360,7 +3360,7 @@ index 20068745..2af74d87 100644
                  <RoomNavCategoryButton
 diff --git a/src/app/pages/client/favorites/Favorites.tsx b/src/app/pages/client/favorites/Favorites.tsx
 new file mode 100644
-index 00000000..f0c4788f
+index 000000000..f0c4788ff
 --- /dev/null
 +++ b/src/app/pages/client/favorites/Favorites.tsx
 @@ -0,0 +1,223 @@
@@ -3589,7 +3589,7 @@ index 00000000..f0c4788f
 +}
 diff --git a/src/app/pages/client/favorites/RoomProvider.tsx b/src/app/pages/client/favorites/RoomProvider.tsx
 new file mode 100644
-index 00000000..d2c55228
+index 000000000..d2c55228e
 --- /dev/null
 +++ b/src/app/pages/client/favorites/RoomProvider.tsx
 @@ -0,0 +1,35 @@
@@ -3630,14 +3630,14 @@ index 00000000..d2c55228
 +}
 diff --git a/src/app/pages/client/favorites/index.ts b/src/app/pages/client/favorites/index.ts
 new file mode 100644
-index 00000000..a411b8a6
+index 000000000..a411b8a62
 --- /dev/null
 +++ b/src/app/pages/client/favorites/index.ts
 @@ -0,0 +1,2 @@
 +export * from './Favorites';
 +export * from './RoomProvider';
 diff --git a/src/app/pages/client/home/Home.tsx b/src/app/pages/client/home/Home.tsx
-index ffd300b2..aa6767dc 100644
+index ffd300b2d..aa6767dc0 100644
 --- a/src/app/pages/client/home/Home.tsx
 +++ b/src/app/pages/client/home/Home.tsx
 @@ -1,4 +1,4 @@
@@ -3834,7 +3834,7 @@ index ffd300b2..aa6767dc 100644
                <NavCategoryHeader>
                  <RoomNavCategoryButton
 diff --git a/src/app/pages/client/inbox/Inbox.tsx b/src/app/pages/client/inbox/Inbox.tsx
-index 67d6021a..9b7c21a8 100644
+index 67d6021a3..9b7c21a81 100644
 --- a/src/app/pages/client/inbox/Inbox.tsx
 +++ b/src/app/pages/client/inbox/Inbox.tsx
 @@ -1,16 +1,36 @@
@@ -3924,7 +3924,7 @@ index 67d6021a..9b7c21a8 100644
                  </NavItemContent>
                </NavLink>
 diff --git a/src/app/pages/client/inbox/Invites.tsx b/src/app/pages/client/inbox/Invites.tsx
-index 20518e56..3b93142a 100644
+index 20518e568..3b93142a4 100644
 --- a/src/app/pages/client/inbox/Invites.tsx
 +++ b/src/app/pages/client/inbox/Invites.tsx
 @@ -429,7 +429,22 @@ function KnownInvites({
@@ -3988,7 +3988,7 @@ index 20518e56..3b93142a 100644
              </Text>
            </Box>
 diff --git a/src/app/pages/client/inbox/Notifications.tsx b/src/app/pages/client/inbox/Notifications.tsx
-index 9592224f..4943987b 100644
+index 9592224f8..4943987b9 100644
 --- a/src/app/pages/client/inbox/Notifications.tsx
 +++ b/src/app/pages/client/inbox/Notifications.tsx
 @@ -13,7 +13,7 @@ import {
@@ -4091,7 +4091,7 @@ index 9592224f..4943987b 100644
            </PageContent>
 diff --git a/src/app/pages/client/inbox/Unread.tsx b/src/app/pages/client/inbox/Unread.tsx
 new file mode 100644
-index 00000000..7f7b0e64
+index 000000000..7f7b0e64c
 --- /dev/null
 +++ b/src/app/pages/client/inbox/Unread.tsx
 @@ -0,0 +1,341 @@
@@ -4437,7 +4437,7 @@ index 00000000..7f7b0e64
 +  );
 +}
 diff --git a/src/app/pages/client/inbox/index.ts b/src/app/pages/client/inbox/index.ts
-index c8036b47..325a2e97 100644
+index c8036b471..325a2e97a 100644
 --- a/src/app/pages/client/inbox/index.ts
 +++ b/src/app/pages/client/inbox/index.ts
 @@ -1,3 +1,4 @@
@@ -4447,7 +4447,7 @@ index c8036b47..325a2e97 100644
 +export * from './Unread';
 diff --git a/src/app/pages/client/sidebar/FavoritesTab.tsx b/src/app/pages/client/sidebar/FavoritesTab.tsx
 new file mode 100644
-index 00000000..6863568d
+index 000000000..6863568d2
 --- /dev/null
 +++ b/src/app/pages/client/sidebar/FavoritesTab.tsx
 @@ -0,0 +1,49 @@
@@ -4501,7 +4501,7 @@ index 00000000..6863568d
 +  );
 +}
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index 17cd71d5..97af3ee5 100644
+index 17cd71d5a..97af3ee5a 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
 +++ b/src/app/pages/client/sidebar/HomeTab.tsx
 @@ -1,6 +1,6 @@
@@ -4559,7 +4559,7 @@ index 17cd71d5..97af3ee5 100644
            onClick={handleMarkAsRead}
            size="300"
 diff --git a/src/app/pages/client/sidebar/InboxTab.tsx b/src/app/pages/client/sidebar/InboxTab.tsx
-index 5d13a9ab..b5f041b7 100644
+index 5d13a9ab6..b5f041b78 100644
 --- a/src/app/pages/client/sidebar/InboxTab.tsx
 +++ b/src/app/pages/client/sidebar/InboxTab.tsx
 @@ -9,10 +9,14 @@ import {
@@ -4624,7 +4624,7 @@ index 5d13a9ab..b5f041b7 100644
    );
  }
 diff --git a/src/app/pages/client/sidebar/index.ts b/src/app/pages/client/sidebar/index.ts
-index d44cfaa2..74461908 100644
+index d44cfaa26..744619082 100644
 --- a/src/app/pages/client/sidebar/index.ts
 +++ b/src/app/pages/client/sidebar/index.ts
 @@ -1,5 +1,6 @@
@@ -4635,7 +4635,7 @@ index d44cfaa2..74461908 100644
  export * from './InboxTab';
  export * from './ExploreTab';
 diff --git a/src/app/pages/client/space/Space.tsx b/src/app/pages/client/space/Space.tsx
-index 8a557865..5aab8397 100644
+index 8a5578651..5aab83978 100644
 --- a/src/app/pages/client/space/Space.tsx
 +++ b/src/app/pages/client/space/Space.tsx
 @@ -7,7 +7,7 @@ import React, {
@@ -4857,7 +4857,7 @@ index 8a557865..5aab8397 100644
              style={{
                height: virtualizer.getTotalSize(),
 diff --git a/src/app/pages/pathUtils.ts b/src/app/pages/pathUtils.ts
-index 817d21d1..9e8ecdf0 100644
+index 817d21d1f..9e8ecdf02 100644
 --- a/src/app/pages/pathUtils.ts
 +++ b/src/app/pages/pathUtils.ts
 @@ -14,6 +14,7 @@ import {
@@ -4893,7 +4893,7 @@ index 817d21d1..9e8ecdf0 100644
 +  return generatePath(FAVORITES_ROOM_PATH, params);
 +};
 diff --git a/src/app/pages/paths.ts b/src/app/pages/paths.ts
-index 9cf4bfb9..5eddc89e 100644
+index 9cf4bfb96..5eddc89e0 100644
 --- a/src/app/pages/paths.ts
 +++ b/src/app/pages/paths.ts
 @@ -78,13 +78,23 @@ export const CREATE_PATH = '/create';
@@ -4921,7 +4921,7 @@ index 9cf4bfb9..5eddc89e 100644
 +};
 +export const GUEST_JOIN_PATH = '/call/guest/:roomId/';
 diff --git a/src/app/plugins/millify.ts b/src/app/plugins/millify.ts
-index d8608dee..cc5539ae 100644
+index d8608deee..cc5539aea 100644
 --- a/src/app/plugins/millify.ts
 +++ b/src/app/plugins/millify.ts
 @@ -1,9 +1,14 @@
@@ -4950,7 +4950,7 @@ index d8608dee..cc5539ae 100644
 +};
 diff --git a/src/app/state/keyboardShortcutsHelp.ts b/src/app/state/keyboardShortcutsHelp.ts
 new file mode 100644
-index 00000000..8612faaa
+index 000000000..8612faaaf
 --- /dev/null
 +++ b/src/app/state/keyboardShortcutsHelp.ts
 @@ -0,0 +1,11 @@
@@ -4966,7 +4966,7 @@ index 00000000..8612faaa
 +  {}
 +);
 diff --git a/src/app/state/room-list/utils.ts b/src/app/state/room-list/utils.ts
-index 1ca7e7de..b1c9e145 100644
+index 1ca7e7de1..b1c9e145c 100644
 --- a/src/app/state/room-list/utils.ts
 +++ b/src/app/state/room-list/utils.ts
 @@ -1,5 +1,5 @@
@@ -5019,7 +5019,7 @@ index 1ca7e7de..b1c9e145 100644
        mx.removeListener(RoomEvent.MyMembership, handleMembershipChange);
        mx.removeListener(ClientEvent.DeleteRoom, handleDeleteRoom);
 diff --git a/src/app/state/room/roomToUnread.ts b/src/app/state/room/roomToUnread.ts
-index f7ef1b79..2320c1b1 100644
+index f7ef1b797..2320c1b19 100644
 --- a/src/app/state/room/roomToUnread.ts
 +++ b/src/app/state/room/roomToUnread.ts
 @@ -9,7 +9,7 @@ import {
@@ -5139,7 +5139,7 @@ index f7ef1b79..2320c1b1 100644
        }
      };
 diff --git a/src/app/state/searchModal.ts b/src/app/state/searchModal.ts
-index 3893e5e3..a7b0671c 100644
+index 3893e5e30..a7b0671c6 100644
 --- a/src/app/state/searchModal.ts
 +++ b/src/app/state/searchModal.ts
 @@ -1,3 +1,5 @@
@@ -5149,7 +5149,7 @@ index 3893e5e3..a7b0671c 100644
 +// Set this to a non-empty string before setting searchModalAtom=true to pre-populate the search input.
 +export const searchModalInitialCharAtom = atom<string>('');
 diff --git a/src/app/state/sessions.ts b/src/app/state/sessions.ts
-index 956b00bd..903c6b54 100644
+index 956b00bd7..903c6b542 100644
 --- a/src/app/state/sessions.ts
 +++ b/src/app/state/sessions.ts
 @@ -118,6 +118,26 @@ export const getSessionForSlot = (slot: number): Session | undefined => {
@@ -5180,7 +5180,7 @@ index 956b00bd..903c6b54 100644
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index df3ec9b8..19e58c43 100644
+index df3ec9b85..19e58c433 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -62,6 +62,7 @@ export interface Settings {
@@ -5200,7 +5200,7 @@ index df3ec9b8..19e58c43 100644
  
  export const getSettings = () => {
 diff --git a/src/app/state/typingMembers.ts b/src/app/state/typingMembers.ts
-index e94ba972..3c08e595 100644
+index e94ba9726..3c08e5954 100644
 --- a/src/app/state/typingMembers.ts
 +++ b/src/app/state/typingMembers.ts
 @@ -1,4 +1,3 @@
@@ -5387,7 +5387,7 @@ index e94ba972..3c08e595 100644
    }, [mx, setTypingMembers, hideActivity]);
  };
 diff --git a/src/app/utils/sort.ts b/src/app/utils/sort.ts
-index 512c1998..b0534729 100644
+index 512c19989..b05347291 100644
 --- a/src/app/utils/sort.ts
 +++ b/src/app/utils/sort.ts
 @@ -44,6 +44,22 @@ export const factoryRoomIdByUnreadCount =
@@ -5414,7 +5414,7 @@ index 512c1998..b0534729 100644
    if (!a && !b) {
      return 0;
 diff --git a/src/index.css b/src/index.css
-index 4a0c45f0..3f59c614 100644
+index 4a0c45f08..3f59c6146 100644
 --- a/src/index.css
 +++ b/src/index.css
 @@ -46,6 +46,7 @@
@@ -5437,7 +5437,7 @@ index 4a0c45f0..3f59c614 100644
  
  *,
 diff --git a/src/types/matrix/room.ts b/src/types/matrix/room.ts
-index c73c0f0b..566acb27 100644
+index c73c0f0b5..566acb27d 100644
 --- a/src/types/matrix/room.ts
 +++ b/src/types/matrix/room.ts
 @@ -40,6 +40,8 @@ export enum StateEvent {

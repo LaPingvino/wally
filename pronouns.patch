@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index 8e7b37b4..4c8f899c 100644
+index 8e7b37b43..4c8f899c2 100644
 --- a/package.json
 +++ b/package.json
 @@ -116,7 +116,8 @@
@@ -13,7 +13,7 @@ index 8e7b37b4..4c8f899c 100644
    "devDependencies": {
      "@element-hq/element-call-embedded": "0.16.3",
 diff --git a/src/app/components/AccountDataEditor.tsx b/src/app/components/AccountDataEditor.tsx
-index 2dbaf1f1..ef8d01a1 100644
+index 2dbaf1f1f..ef8d01a14 100644
 --- a/src/app/components/AccountDataEditor.tsx
 +++ b/src/app/components/AccountDataEditor.tsx
 @@ -27,6 +27,7 @@ import { useTextAreaCodeEditor } from '../hooks/useTextAreaCodeEditor';
@@ -146,7 +146,7 @@ index 2dbaf1f1..ef8d01a1 100644
        </Box>
 diff --git a/src/app/components/CollapsibleCard.tsx b/src/app/components/CollapsibleCard.tsx
 new file mode 100644
-index 00000000..95c02964
+index 000000000..95c029645
 --- /dev/null
 +++ b/src/app/components/CollapsibleCard.tsx
 @@ -0,0 +1,54 @@
@@ -205,7 +205,7 @@ index 00000000..95c02964
 +  );
 +}
 diff --git a/src/app/components/user-profile/UserChips.tsx b/src/app/components/user-profile/UserChips.tsx
-index 82880634..4d906e6f 100644
+index 828806342..4d906e6ff 100644
 --- a/src/app/components/user-profile/UserChips.tsx
 +++ b/src/app/components/user-profile/UserChips.tsx
 @@ -1,4 +1,4 @@
@@ -484,7 +484,7 @@ index 82880634..4d906e6f 100644
    );
  }
 diff --git a/src/app/components/user-profile/UserHero.tsx b/src/app/components/user-profile/UserHero.tsx
-index 0e7fb748..54e40402 100644
+index 0e7fb7485..54e40402d 100644
 --- a/src/app/components/user-profile/UserHero.tsx
 +++ b/src/app/components/user-profile/UserHero.tsx
 @@ -21,6 +21,7 @@ import { UserPresence } from '../../hooks/useUserPresence';
@@ -521,7 +521,7 @@ index 0e7fb748..54e40402 100644
        </Box>
      </Box>
 diff --git a/src/app/components/user-profile/UserRoomProfile.tsx b/src/app/components/user-profile/UserRoomProfile.tsx
-index 78d201ec..cb54083e 100644
+index 78d201ec6..cb54083e1 100644
 --- a/src/app/components/user-profile/UserRoomProfile.tsx
 +++ b/src/app/components/user-profile/UserRoomProfile.tsx
 @@ -1,5 +1,5 @@
@@ -595,7 +595,7 @@ index 78d201ec..cb54083e 100644
          </Box>
          {ignored && <IgnoredUserAlert />}
 diff --git a/src/app/features/common-settings/developer-tools/DevelopTools.tsx b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
-index 29b6aa51..4125f6d2 100644
+index 29b6aa51c..4125f6d2b 100644
 --- a/src/app/features/common-settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/common-settings/developer-tools/DevelopTools.tsx
 @@ -30,6 +30,7 @@ import {
@@ -975,7 +975,7 @@ index 29b6aa51..4125f6d2 100644
                )}
              </Box>
 diff --git a/src/app/features/common-settings/general/RoomAddress.tsx b/src/app/features/common-settings/general/RoomAddress.tsx
-index 767a967e..1a618a68 100644
+index 767a967ee..1a618a68e 100644
 --- a/src/app/features/common-settings/general/RoomAddress.tsx
 +++ b/src/app/features/common-settings/general/RoomAddress.tsx
 @@ -7,8 +7,6 @@ import {
@@ -1093,7 +1093,7 @@ index 767a967e..1a618a68 100644
    );
  }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 2d87e9bd..8b109bba 100644
+index 2d87e9bde..8b109bbab 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -79,6 +79,19 @@ import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
@@ -1125,7 +1125,7 @@ index 2d87e9bd..8b109bba 100644
            </Username>
            {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
 diff --git a/src/app/features/settings/Settings.tsx b/src/app/features/settings/Settings.tsx
-index 5e1a20f4..fc8e1a7f 100644
+index 5e1a20f4a..fc8e1a7ff 100644
 --- a/src/app/features/settings/Settings.tsx
 +++ b/src/app/features/settings/Settings.tsx
 @@ -21,10 +21,9 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -1161,7 +1161,7 @@ index 5e1a20f4..fc8e1a7f 100644
                  </Avatar>
                  <Text size="H4" truncate>
 diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
-index e982a799..71f5773f 100644
+index e982a7992..71f5773f3 100644
 --- a/src/app/features/settings/account/Profile.tsx
 +++ b/src/app/features/settings/account/Profile.tsx
 @@ -1,324 +1,283 @@
@@ -1731,7 +1731,7 @@ index e982a799..71f5773f 100644
    );
 diff --git a/src/app/features/settings/account/fields/ProfileAvatar.tsx b/src/app/features/settings/account/fields/ProfileAvatar.tsx
 new file mode 100644
-index 00000000..8c5dfdb8
+index 000000000..8c5dfdb8f
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileAvatar.tsx
 @@ -0,0 +1,118 @@
@@ -1855,7 +1855,7 @@ index 00000000..8c5dfdb8
 +}
 diff --git a/src/app/features/settings/account/fields/ProfileFieldContext.tsx b/src/app/features/settings/account/fields/ProfileFieldContext.tsx
 new file mode 100644
-index 00000000..18f78627
+index 000000000..18f786271
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileFieldContext.tsx
 @@ -0,0 +1,127 @@
@@ -1988,7 +1988,7 @@ index 00000000..18f78627
 +}
 diff --git a/src/app/features/settings/account/fields/ProfilePronouns.tsx b/src/app/features/settings/account/fields/ProfilePronouns.tsx
 new file mode 100644
-index 00000000..5698a4d4
+index 000000000..5698a4d4d
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfilePronouns.tsx
 @@ -0,0 +1,127 @@
@@ -2121,7 +2121,7 @@ index 00000000..5698a4d4
 +}
 diff --git a/src/app/features/settings/account/fields/ProfileTextField.tsx b/src/app/features/settings/account/fields/ProfileTextField.tsx
 new file mode 100644
-index 00000000..407507ad
+index 000000000..407507ad4
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileTextField.tsx
 @@ -0,0 +1,64 @@
@@ -2191,7 +2191,7 @@ index 00000000..407507ad
 +}
 diff --git a/src/app/features/settings/account/fields/ProfileTimezone.tsx b/src/app/features/settings/account/fields/ProfileTimezone.tsx
 new file mode 100644
-index 00000000..c5cc90b7
+index 000000000..c5cc90b72
 --- /dev/null
 +++ b/src/app/features/settings/account/fields/ProfileTimezone.tsx
 @@ -0,0 +1,160 @@
@@ -2357,7 +2357,7 @@ index 00000000..c5cc90b7
 +}
 diff --git a/src/app/features/settings/developer-tools/AccountData.tsx b/src/app/features/settings/developer-tools/AccountData.tsx
 deleted file mode 100644
-index 8bccb62e..00000000
+index 8bccb62ec..000000000
 --- a/src/app/features/settings/developer-tools/AccountData.tsx
 +++ /dev/null
 @@ -1,100 +0,0 @@
@@ -2463,7 +2463,7 @@ index 8bccb62e..00000000
 -}
 diff --git a/src/app/features/settings/developer-tools/AccountDataList.tsx b/src/app/features/settings/developer-tools/AccountDataList.tsx
 new file mode 100644
-index 00000000..9c9cbe6a
+index 000000000..9c9cbe6ad
 --- /dev/null
 +++ b/src/app/features/settings/developer-tools/AccountDataList.tsx
 @@ -0,0 +1,54 @@
@@ -2522,7 +2522,7 @@ index 00000000..9c9cbe6a
 +  );
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567..1378c0c9 100644
+index a3f04567b..1378c0c92 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -1,5 +1,7 @@
@@ -2835,7 +2835,7 @@ index a3f04567..1378c0c9 100644
 +  }
  }
 diff --git a/src/app/features/settings/devices/LocalBackup.tsx b/src/app/features/settings/devices/LocalBackup.tsx
-index 00128c8f..35baa9cb 100644
+index 00128c8fe..35baa9cb1 100644
 --- a/src/app/features/settings/devices/LocalBackup.tsx
 +++ b/src/app/features/settings/devices/LocalBackup.tsx
 @@ -11,6 +11,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -2911,7 +2911,7 @@ index 00128c8f..35baa9cb 100644
          variant="SurfaceVariant"
 diff --git a/src/app/hooks/useExtendedProfile.ts b/src/app/hooks/useExtendedProfile.ts
 new file mode 100644
-index 00000000..b2b79c51
+index 000000000..b2b79c51f
 --- /dev/null
 +++ b/src/app/hooks/useExtendedProfile.ts
 @@ -0,0 +1,116 @@
@@ -3032,7 +3032,7 @@ index 00000000..b2b79c51
 +  return false;
 +}
 diff --git a/src/app/pages/client/sidebar/SettingsTab.tsx b/src/app/pages/client/sidebar/SettingsTab.tsx
-index bb212184..df0515a2 100644
+index bb2121846..df0515a25 100644
 --- a/src/app/pages/client/sidebar/SettingsTab.tsx
 +++ b/src/app/pages/client/sidebar/SettingsTab.tsx
 @@ -1,10 +1,9 @@
@@ -3072,7 +3072,7 @@ index bb212184..df0515a2 100644
            </SidebarAvatar>
          )}
 diff --git a/src/types/matrix/common.ts b/src/types/matrix/common.ts
-index 210c711f..2764d6c3 100644
+index 210c711f4..2764d6c30 100644
 --- a/src/types/matrix/common.ts
 +++ b/src/types/matrix/common.ts
 @@ -3,7 +3,8 @@ import { MsgType } from 'matrix-js-sdk';
@@ -3096,7 +3096,7 @@ index 210c711f..2764d6c3 100644
 +  disallowed?: string[];
 +};
 diff --git a/src/types/utils.ts b/src/types/utils.ts
-index 353ace6e..84632c99 100644
+index 353ace6eb..84632c995 100644
 --- a/src/types/utils.ts
 +++ b/src/types/utils.ts
 @@ -1,3 +1,8 @@

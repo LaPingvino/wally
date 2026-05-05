@@ -1,5 +1,5 @@
 diff --git a/src/app/features/call/CallView.tsx b/src/app/features/call/CallView.tsx
-index 67c047cc..98d6d113 100644
+index 67c047cca..98d6d1137 100644
 --- a/src/app/features/call/CallView.tsx
 +++ b/src/app/features/call/CallView.tsx
 @@ -81,12 +81,25 @@ export function CallView({ room }: { room: Room }) {
@@ -34,7 +34,7 @@ index 67c047cc..98d6d113 100644
    const { navigateRoom } = useRoomNavigate();
    const screenSize = useScreenSizeContext();
 diff --git a/src/app/features/call/CallViewUser.tsx b/src/app/features/call/CallViewUser.tsx
-index 776fead6..31b2abec 100644
+index 776fead60..31b2abec7 100644
 --- a/src/app/features/call/CallViewUser.tsx
 +++ b/src/app/features/call/CallViewUser.tsx
 @@ -1,7 +1,7 @@
@@ -89,7 +89,7 @@ index 776fead6..31b2abec 100644
    const handleUserClick: React.MouseEventHandler<HTMLButtonElement> = (evt) => {
      openProfile(room.roomId, space?.roomId, userId, evt.currentTarget.getBoundingClientRect());
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
-index 402c1d09..2efbb0ad 100644
+index 402c1d095..2efbb0ad9 100644
 --- a/src/app/features/issues/IssueBoard.tsx
 +++ b/src/app/features/issues/IssueBoard.tsx
 @@ -1573,7 +1573,6 @@ export function IssueBoard({ room }: IssueBoardProps) {
@@ -101,7 +101,7 @@ index 402c1d09..2efbb0ad 100644
      const stateKey = entry ? entry.event.getStateKey()! : generateId();
      await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, content, stateKey);
 diff --git a/src/app/features/room-nav/RoomNavUser.tsx b/src/app/features/room-nav/RoomNavUser.tsx
-index 96795647..f34b7111 100644
+index 967956474..f34b7111b 100644
 --- a/src/app/features/room-nav/RoomNavUser.tsx
 +++ b/src/app/features/room-nav/RoomNavUser.tsx
 @@ -1,6 +1,6 @@

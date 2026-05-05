@@ -1,6 +1,6 @@
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
 new file mode 100644
-index 00000000..55f68b47
+index 000000000..55f68b47f
 --- /dev/null
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
 @@ -0,0 +1,354 @@
@@ -359,7 +359,7 @@ index 00000000..55f68b47
 +  return null;
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index 33f0c363..c63b43ef 100644
+index 33f0c3639..c63b43ef4 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -49,6 +49,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
@@ -389,7 +389,7 @@ index 33f0c363..c63b43ef 100644
                    </Box>
                    <Box direction="Column" gap="100">
 diff --git a/src/app/pages/App.tsx b/src/app/pages/App.tsx
-index 52ec7f20..b2470310 100644
+index 52ec7f206..b2470310e 100644
 --- a/src/app/pages/App.tsx
 +++ b/src/app/pages/App.tsx
 @@ -12,6 +12,24 @@ import { FeatureCheck } from './FeatureCheck';
@@ -427,7 +427,7 @@ index 52ec7f20..b2470310 100644
                        <ReactQueryDevtools initialIsOpen={false} />
                      </QueryClientProvider>
 diff --git a/src/app/pages/Router.tsx b/src/app/pages/Router.tsx
-index 4de42081..76294ba3 100644
+index 4de42081f..76294ba32 100644
 --- a/src/app/pages/Router.tsx
 +++ b/src/app/pages/Router.tsx
 @@ -71,7 +71,7 @@ import { getFallbackSession } from '../state/sessions';
@@ -449,7 +449,7 @@ index 4de42081..76294ba3 100644
  };
 diff --git a/src/app/pages/client/AddAccountDialog.tsx b/src/app/pages/client/AddAccountDialog.tsx
 new file mode 100644
-index 00000000..16f78b3e
+index 000000000..16f78b3e7
 --- /dev/null
 +++ b/src/app/pages/client/AddAccountDialog.tsx
 @@ -0,0 +1,213 @@
@@ -667,7 +667,7 @@ index 00000000..16f78b3e
 +  );
 +}
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index 93f0526e..068dcc69 100644
+index 93f0526e3..068dcc699 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
 @@ -13,7 +13,12 @@ import {
@@ -853,7 +853,7 @@ index 93f0526e..068dcc69 100644
    );
  }
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index a2e1b682..168bda38 100644
+index a2e1b6820..168bda38b 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -1,4 +1,4 @@
@@ -863,7 +863,7 @@ index a2e1b682..168bda38 100644
  
  import {
 diff --git a/src/app/pages/client/sidebar/SettingsTab.tsx b/src/app/pages/client/sidebar/SettingsTab.tsx
-index df0515a2..065325f5 100644
+index df0515a25..065325f52 100644
 --- a/src/app/pages/client/sidebar/SettingsTab.tsx
 +++ b/src/app/pages/client/sidebar/SettingsTab.tsx
 @@ -28,7 +28,7 @@ export function SettingsTab() {
@@ -876,7 +876,7 @@ index df0515a2..065325f5 100644
                userId={userId}
                src={avatarUrl}
 diff --git a/src/app/state/sessions.ts b/src/app/state/sessions.ts
-index a9c34ce9..956b00bd 100644
+index a9c34ce91..956b00bd7 100644
 --- a/src/app/state/sessions.ts
 +++ b/src/app/state/sessions.ts
 @@ -46,7 +46,14 @@ export const removeFallbackSession = () => {
@@ -943,7 +943,7 @@ index a9c34ce9..956b00bd 100644
  //   if (session.fallbackSdkStores) {
  //     return FALLBACK_STORE_NAME;
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 582be149..24eeb821 100644
+index 582be149e..24eeb8210 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -54,6 +54,7 @@ export interface Settings {
@@ -963,7 +963,7 @@ index 582be149..24eeb821 100644
  
  export const getSettings = () => {
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index 498d4f75..c07be2fb 100644
+index 498d4f75d..c07be2fb2 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -3,22 +3,37 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from

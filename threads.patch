@@ -1,5 +1,5 @@
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index f88ccf93..94eee2a8 100644
+index f88ccf938..94eee2a8f 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -123,9 +123,10 @@ interface RoomInputProps {
@@ -57,7 +57,7 @@ index f88ccf93..94eee2a8 100644
      const handleKeyDown: KeyboardEventHandler = useCallback(
        (evt) => {
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 39d7e50a..ec1fb60b 100644
+index 39d7e50a6..ec1fb60b1 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -229,6 +229,7 @@ type RoomTimelineProps = {
@@ -411,7 +411,7 @@ index 39d7e50a..ec1fb60b 100644
    };
 diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
 new file mode 100644
-index 00000000..9a646384
+index 000000000..9a6463842
 --- /dev/null
 +++ b/src/app/features/room/ThreadView.tsx
 @@ -0,0 +1,170 @@
@@ -587,7 +587,7 @@ index 00000000..9a646384
 +}
 diff --git a/src/app/features/room/ThreadsDrawer.tsx b/src/app/features/room/ThreadsDrawer.tsx
 new file mode 100644
-index 00000000..d0950d49
+index 000000000..d0950d495
 --- /dev/null
 +++ b/src/app/features/room/ThreadsDrawer.tsx
 @@ -0,0 +1,337 @@

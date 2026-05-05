@@ -1,6 +1,6 @@
 diff --git a/src/app/features/room/PersonaPicker.tsx b/src/app/features/room/PersonaPicker.tsx
 new file mode 100644
-index 00000000..d36b07e8
+index 000000000..d36b07e87
 --- /dev/null
 +++ b/src/app/features/room/PersonaPicker.tsx
 @@ -0,0 +1,318 @@
@@ -323,7 +323,7 @@ index 00000000..d36b07e8
 +  );
 +}
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index 4376cc90..87382e89 100644
+index 4376cc90c..87382e89b 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -9,6 +9,8 @@ import React, {
@@ -405,7 +405,7 @@ index 4376cc90..87382e89 100644
                </IconButton>
              </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 1362cbcc..32efdae8 100644
+index 1362cbccf..32efdae84 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -86,6 +86,7 @@ import {
@@ -439,7 +439,7 @@ index 1362cbcc..32efdae8 100644
        minuteDifference(prevEvent.getTs(), mEvent.getTs()) < 2;
  
 diff --git a/src/app/features/room/RoomView.tsx b/src/app/features/room/RoomView.tsx
-index a4f0d7af..b2f29f9f 100644
+index a4f0d7af6..b2f29f9ff 100644
 --- a/src/app/features/room/RoomView.tsx
 +++ b/src/app/features/room/RoomView.tsx
 @@ -1,6 +1,8 @@
@@ -748,7 +748,7 @@ index a4f0d7af..b2f29f9f 100644
    );
  }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index d7280df5..60b757c6 100644
+index d7280df54..60b757c6e 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -53,12 +53,11 @@ import {
@@ -813,7 +813,7 @@ index d7280df5..60b757c6 100644
            </Username>
            {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index c63b43ef..0a031751 100644
+index c63b43ef4..0a0317516 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -50,6 +50,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
@@ -844,7 +844,7 @@ index c63b43ef..0a031751 100644
                    <Box direction="Column" gap="100">
 diff --git a/src/app/state/personas.ts b/src/app/state/personas.ts
 new file mode 100644
-index 00000000..874eaff7
+index 000000000..874eaff73
 --- /dev/null
 +++ b/src/app/state/personas.ts
 @@ -0,0 +1,59 @@
@@ -908,7 +908,7 @@ index 00000000..874eaff7
 +  }
 +);
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 19e58c43..74b9153c 100644
+index 19e58c433..74b9153c6 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -63,6 +63,7 @@ export interface Settings {

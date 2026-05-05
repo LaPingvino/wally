@@ -1,0 +1,692 @@
+diff --git a/package.json b/package.json
+index 8e7b37b43..69f6f4dd2 100644
+--- a/package.json
++++ b/package.json
+@@ -16,6 +16,8 @@
+     "check:prettier": "prettier --check .",
+     "fix:prettier": "prettier --write .",
+     "typecheck": "tsc --noEmit",
++    "test": "vitest run",
++    "test:watch": "vitest",
+     "prepare": "husky install",
+     "commit": "git-cz",
+     "semantic-release": "semantic-release"
+@@ -62,24 +64,24 @@
+   "author": "Ajay Bura",
+   "license": "AGPL-3.0-only",
+   "dependencies": {
+-    "@atlaskit/pragmatic-drag-and-drop": "1.1.6",
++    "@atlaskit/pragmatic-drag-and-drop": "1.7.7",
+     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "1.3.0",
+-    "@atlaskit/pragmatic-drag-and-drop-hitbox": "1.0.3",
++    "@atlaskit/pragmatic-drag-and-drop-hitbox": "1.1.0",
+     "@fontsource/inter": "4.5.14",
+-    "@tanstack/react-query": "5.24.1",
+-    "@tanstack/react-query-devtools": "5.24.1",
+-    "@tanstack/react-virtual": "3.2.0",
+-    "@vanilla-extract/css": "1.9.3",
++    "@tanstack/react-query": "5.90.21",
++    "@tanstack/react-query-devtools": "5.91.3",
++    "@tanstack/react-virtual": "3.13.19",
++    "@vanilla-extract/css": "1.18.0",
+     "@vanilla-extract/recipes": "0.3.0",
+     "@vanilla-extract/vite-plugin": "3.7.1",
+     "await-to-js": "3.0.0",
+     "badwords-list": "2.0.1-4",
+-    "blurhash": "2.0.4",
++    "blurhash": "2.0.5",
+     "browser-encrypt-attachment": "0.3.0",
+-    "chroma-js": "3.1.2",
+-    "classnames": "2.3.2",
++    "chroma-js": "3.2.0",
++    "classnames": "2.5.1",
+     "dateformat": "5.0.3",
+-    "dayjs": "1.11.10",
++    "dayjs": "1.11.19",
+     "domhandler": "5.0.3",
+     "emojibase": "15.3.1",
+     "emojibase-data": "15.3.2",
+@@ -89,34 +91,37 @@
+     "html-dom-parser": "4.0.0",
+     "html-react-parser": "4.2.0",
+     "i18next": "23.12.2",
+-    "i18next-browser-languagedetector": "8.0.0",
++    "i18next-browser-languagedetector": "8.2.1",
+     "i18next-http-backend": "2.5.2",
+     "immer": "9.0.16",
+     "is-hotkey": "0.2.0",
+-    "jotai": "2.6.0",
++    "jotai": "2.18.0",
+     "linkify-react": "4.3.2",
+     "linkifyjs": "4.3.2",
+-    "matrix-js-sdk": "38.2.0",
++    "livekit-client": "2.18.0",
++    "markdown-it": "14.1.1",
++    "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#ebfa975eba8886733ff06af4ac8e57ff7788a983",
+     "matrix-widget-api": "1.13.0",
+     "millify": "6.1.0",
+     "pdfjs-dist": "4.2.67",
+     "prismjs": "1.30.0",
+     "react": "18.2.0",
+-    "react-aria": "3.29.1",
++    "react-aria": "3.46.0",
+     "react-blurhash": "0.2.0",
+     "react-colorful": "5.6.1",
+     "react-dom": "18.2.0",
+     "react-error-boundary": "4.0.13",
+     "react-google-recaptcha": "2.1.0",
+     "react-i18next": "15.0.0",
+-    "react-range": "1.8.14",
++    "react-range": "1.10.0",
+     "react-router-dom": "6.30.3",
+-    "sanitize-html": "2.12.1",
++    "sanitize-html": "2.17.1",
+     "slate": "0.123.0",
+     "slate-dom": "0.123.0",
+     "slate-history": "0.113.1",
+     "slate-react": "0.123.0",
+-    "ua-parser-js": "1.0.35"
++    "ua-parser-js": "1.0.35",
++    "zod": "4.3.6"
+   },
+   "devDependencies": {
+     "@element-hq/element-call-embedded": "0.16.3",
+@@ -125,36 +130,39 @@
+     "@rollup/plugin-wasm": "6.1.1",
+     "@semantic-release/exec": "7.1.0",
+     "@semantic-release/git": "10.0.1",
+-    "@types/chroma-js": "3.1.1",
++    "@types/chroma-js": "3.1.2",
+     "@types/file-saver": "2.0.5",
+     "@types/is-hotkey": "0.1.10",
+-    "@types/node": "18.11.18",
+-    "@types/prismjs": "1.26.0",
+-    "@types/react": "18.2.39",
+-    "@types/react-dom": "18.2.17",
++    "@types/markdown-it": "14.1.2",
++    "@types/node": "18.19.130",
++    "@types/prismjs": "1.26.6",
++    "@types/react": "18.3.28",
++    "@types/react-dom": "18.3.7",
+     "@types/react-google-recaptcha": "2.1.8",
+-    "@types/sanitize-html": "2.9.0",
+-    "@types/ua-parser-js": "0.7.36",
+-    "@typescript-eslint/eslint-plugin": "5.46.1",
+-    "@typescript-eslint/parser": "5.46.1",
+-    "@vitejs/plugin-react": "4.2.0",
++    "@types/sanitize-html": "2.16.0",
++    "@types/ua-parser-js": "0.7.39",
++    "@typescript-eslint/eslint-plugin": "5.62.0",
++    "@typescript-eslint/parser": "5.62.0",
++    "@vitejs/plugin-react": "4.7.0",
+     "buffer": "6.0.3",
+     "cz-conventional-changelog": "3.3.0",
+-    "eslint": "8.29.0",
++    "eslint": "8.57.1",
+     "eslint-config-airbnb": "19.0.4",
+-    "eslint-config-prettier": "8.5.0",
++    "eslint-config-prettier": "8.10.2",
+     "eslint-plugin-import": "2.29.1",
+     "eslint-plugin-jsx-a11y": "6.6.1",
+-    "eslint-plugin-react": "7.31.11",
++    "eslint-plugin-react": "7.37.5",
+     "eslint-plugin-react-hooks": "4.6.0",
++    "happy-dom": "20.8.3",
+     "husky": "9.1.7",
+     "lint-staged": "16.3.2",
+-    "prettier": "2.8.1",
++    "prettier": "2.8.8",
+     "semantic-release": "25.0.3",
+-    "typescript": "4.9.4",
+-    "vite": "5.4.19",
++    "typescript": "5.9.3",
++    "vite": "5.4.21",
+     "vite-plugin-pwa": "0.20.5",
+-    "vite-plugin-static-copy": "1.0.4",
+-    "vite-plugin-top-level-await": "1.4.4"
++    "vite-plugin-static-copy": "1.0.6",
++    "vite-plugin-top-level-await": "1.6.0",
++    "vitest": "4.0.18"
+   }
+ }
+diff --git a/src/app/plugins/markdown/block/parser.ts b/src/app/plugins/markdown/block/parser.ts
+index ed16a3278..f6dc177f5 100644
+--- a/src/app/plugins/markdown/block/parser.ts
++++ b/src/app/plugins/markdown/block/parser.ts
+@@ -1,47 +1,68 @@
++import type Token from 'markdown-it/lib/token.mjs';
++import { markdownIt } from '../markdownit';
+ import { replaceMatch } from '../internal';
+-import {
+-  BlockQuoteRule,
+-  CodeBlockRule,
+-  ESC_BLOCK_SEQ,
+-  HeadingRule,
+-  OrderedListRule,
+-  UnorderedListRule,
+-} from './rules';
+-import { runBlockRule } from './runner';
++import { ESC_BLOCK_SEQ } from './rules';
+ import { BlockMDParser } from './type';
+ 
+-/**
+- * Parses block-level markdown text into HTML using defined block rules.
+- *
+- * @param text - The markdown text to be parsed.
+- * @param parseInline - Optional function to parse inline elements.
+- * @returns The parsed HTML or the original text if no block-level markdown was found.
+- */
++const PASSTHROUGH_TOKEN_TYPES = new Set([
++  'paragraph_open',
++  'paragraph_close',
++  'inline',
++  'text',
++  'softbreak',
++  'hardbreak',
++]);
++
++const hasBlockStructure = (tokens: Token[]): boolean => {
++  for (const t of tokens) {
++    if (!PASSTHROUGH_TOKEN_TYPES.has(t.type)) return true;
++  }
++  return false;
++};
++
++const renderWithInlineCallback = (
++  tokens: Token[],
++  env: Record<string, unknown>,
++  parseInline?: (text: string) => string
++): string => {
++  const renderer = markdownIt.renderer;
++  const options = markdownIt.options;
++  let result = '';
++  for (let i = 0; i < tokens.length; i += 1) {
++    const t = tokens[i];
++    if (t.type === 'inline') {
++      result += parseInline
++        ? parseInline(t.content)
++        : renderer.renderInline(t.children || [], options, env);
++    } else if (renderer.rules[t.type]) {
++      const rule = renderer.rules[t.type];
++      if (rule) result += rule(tokens, i, options, env, renderer);
++    } else {
++      result += renderer.renderToken(tokens, i, options);
++    }
++  }
++  return result;
++};
++
+ export const parseBlockMD: BlockMDParser = (text, parseInline) => {
+   if (text === '') return text;
+-  let result: string | undefined;
+ 
+-  if (!result) result = runBlockRule(text, CodeBlockRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, BlockQuoteRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, OrderedListRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, UnorderedListRule, parseBlockMD, parseInline);
+-  if (!result) result = runBlockRule(text, HeadingRule, parseBlockMD, parseInline);
++  const env = {};
++  const tokens = markdownIt.parse(text, env);
+ 
+-  // replace \n with <br/> because want to preserve empty lines
+-  if (!result) {
+-    result = text
++  if (!hasBlockStructure(tokens)) {
++    return text
+       .split('\n')
+       .map((lineText) => {
+         const match = lineText.match(ESC_BLOCK_SEQ);
+         if (!match) {
+           return parseInline?.(lineText) ?? lineText;
+         }
+-
+         const [, g1] = match;
+         return replaceMatch(lineText, match, g1, (t) => [parseInline?.(t) ?? t]).join('');
+       })
+       .join('<br/>');
+   }
+ 
+-  return result ?? text;
++  return renderWithInlineCallback(tokens, env, parseInline).replace(/\n+$/, '');
+ };
+diff --git a/src/app/plugins/markdown/inline/parser.ts b/src/app/plugins/markdown/inline/parser.ts
+index 37c71a661..9baa4f742 100644
+--- a/src/app/plugins/markdown/inline/parser.ts
++++ b/src/app/plugins/markdown/inline/parser.ts
+@@ -1,40 +1,7 @@
+-import {
+-  BoldRule,
+-  CodeRule,
+-  EscapeRule,
+-  ItalicRule1,
+-  ItalicRule2,
+-  LinkRule,
+-  SpoilerRule,
+-  StrikeRule,
+-  UnderlineRule,
+-} from './rules';
+-import { runInlineRule, runInlineRules } from './runner';
++import { markdownIt } from '../markdownit';
+ import { InlineMDParser } from './type';
+ 
+-const LeveledRules = [
+-  BoldRule,
+-  ItalicRule1,
+-  UnderlineRule,
+-  ItalicRule2,
+-  StrikeRule,
+-  SpoilerRule,
+-  LinkRule,
+-  EscapeRule,
+-];
+-
+-/**
+- * Parses inline markdown text into HTML using defined rules.
+- *
+- * @param text - The markdown text to be parsed.
+- * @returns The parsed HTML or the original text if no markdown was found.
+- */
+ export const parseInlineMD: InlineMDParser = (text) => {
+   if (text === '') return text;
+-  let result: string | undefined;
+-  if (!result) result = runInlineRule(text, CodeRule, parseInlineMD);
+-
+-  if (!result) result = runInlineRules(text, LeveledRules, parseInlineMD);
+-
+-  return result ?? text;
++  return markdownIt.renderInline(text);
+ };
+diff --git a/src/app/plugins/markdown/markdownit.test.ts b/src/app/plugins/markdown/markdownit.test.ts
+new file mode 100644
+index 000000000..63d7ec545
+--- /dev/null
++++ b/src/app/plugins/markdown/markdownit.test.ts
+@@ -0,0 +1,157 @@
++import { describe, expect, it } from 'vitest';
++import { parseBlockMD } from './block/parser';
++import { parseInlineMD } from './inline/parser';
++
++describe('parseInlineMD', () => {
++  it('renders plain text unchanged', () => {
++    expect(parseInlineMD('hello world')).toBe('hello world');
++  });
++
++  it('renders bold with data-md', () => {
++    expect(parseInlineMD('**hi**')).toBe('<strong data-md="**">hi</strong>');
++  });
++
++  it('renders italic with star', () => {
++    expect(parseInlineMD('*hi*')).toBe('<em data-md="*">hi</em>');
++  });
++
++  it('renders italic with underscore', () => {
++    expect(parseInlineMD('_hi_')).toBe('<em data-md="_">hi</em>');
++  });
++
++  it('renders __ as underline (Matrix flavor)', () => {
++    expect(parseInlineMD('__hi__')).toBe('<u data-md="__">hi</u>');
++  });
++
++  it('renders strikethrough', () => {
++    expect(parseInlineMD('~~hi~~')).toBe('<s data-md="~~">hi</s>');
++  });
++
++  it('renders inline code', () => {
++    expect(parseInlineMD('`hi`')).toBe('<code data-md="`">hi</code>');
++  });
++
++  it('renders spoiler', () => {
++    expect(parseInlineMD('||secret||')).toBe(
++      '<span data-md="||" data-mx-spoiler="">secret</span>'
++    );
++  });
++
++  it('does NOT make k. into an ordered list (block-level only anyway)', () => {
++    // inline parser shouldn't touch block syntax
++    expect(parseInlineMD('k. word')).toBe('k. word');
++  });
++});
++
++describe('parseBlockMD', () => {
++  it('preserves plain text without block markdown', () => {
++    expect(parseBlockMD('hello\nworld\n')).toBe('hello<br/>world<br/>');
++  });
++
++  it('does NOT treat "k. foo" as an ordered list', () => {
++    const result = parseBlockMD('k. foo\n');
++    expect(result).not.toContain('<ol');
++    expect(result).toContain('k. foo');
++  });
++
++  it('renders ATX heading', () => {
++    expect(parseBlockMD('# title\n')).toContain('<h1 data-md="#">');
++  });
++
++  it('renders ordered list with digits', () => {
++    const result = parseBlockMD('1. one\n2. two\n');
++    expect(result).toContain('<ol');
++    expect(result).toContain('<li><p>one</p></li>');
++  });
++
++  it('renders unordered list with asterisk', () => {
++    const result = parseBlockMD('* one\n* two\n');
++    expect(result).toContain('<ul data-md="*">');
++  });
++
++  it('renders fenced code block', () => {
++    const result = parseBlockMD('```js\nfoo\n```\n');
++    expect(result).toContain('<pre data-md="```">');
++    expect(result).toContain('class="language-js"');
++  });
++
++  it('renders blockquote', () => {
++    const result = parseBlockMD('> quote\n');
++    expect(result).toContain('<blockquote');
++  });
++
++  it('passes inline content through parseInline callback', () => {
++    const result = parseBlockMD('# title\n', (text) => `[${text}]`);
++    expect(result).toBe('<h1 data-md="#">[title]</h1>');
++  });
++
++  it('preserves embedded HTML through callback when no block markdown', () => {
++    const html = '<a href="x">**not bold**</a>';
++    const passthrough = (t: string) => t;
++    expect(parseBlockMD(html, passthrough)).toBe(html);
++  });
++});
++
++describe('regression: URL with underscores', () => {
++  it('does not italicize text inside a URL', () => {
++    // GFM linkify auto-detects, no _emph_ inside URL
++    const result = parseInlineMD('see https://my_weird_link.example.com/foo');
++    expect(result).not.toContain('<em');
++    expect(result).toContain('my_weird_link.example.com');
++  });
++});
++
++describe('regression: variable-length backtick fences', () => {
++  it('inline code with embedded backtick via double fence', () => {
++    expect(parseInlineMD('`` ` ``')).toContain('<code data-md="``">');
++  });
++
++  it('block code fence longer than 3', () => {
++    const result = parseBlockMD('````\nlet x = `hi`;\n````\n');
++    expect(result).toContain('<pre data-md="````">');
++    expect(result).toContain('let x = `hi`;');
++  });
++});
++
++describe('regression: escape sequences', () => {
++  it('escaped asterisk does not bold', () => {
++    expect(parseInlineMD('\\*not bold\\*')).toBe('*not bold*');
++  });
++
++  it('escaped pipe does not start spoiler', () => {
++    const result = parseInlineMD('\\|\\|literal\\|\\|');
++    expect(result).not.toContain('data-mx-spoiler');
++  });
++});
++
++describe('GFM-style additions', () => {
++  it('renders a table', () => {
++    const src = '| a | b |\n|---|---|\n| 1 | 2 |\n';
++    const result = parseBlockMD(src);
++    expect(result).toContain('<table>');
++    expect(result).toContain('<th>a</th>');
++    expect(result).toContain('<td>1</td>');
++  });
++
++  it('renders horizontal rule', () => {
++    expect(parseBlockMD('---\n')).toContain('<hr>');
++  });
++
++  it('autolinks bare URL', () => {
++    const result = parseInlineMD('see https://example.com here');
++    expect(result).toContain('<a href="https://example.com"');
++  });
++});
++
++describe('regression: ordered list edge cases', () => {
++  it('does not match alphabetic ordered list (k.)', () => {
++    const result = parseBlockMD('k. word\n');
++    expect(result).not.toContain('<ol');
++  });
++
++  it('matches multi-digit ordered list', () => {
++    const result = parseBlockMD('10. ten\n11. eleven\n');
++    expect(result).toContain('<ol');
++    expect(result).toContain('start="10"');
++  });
++});
+diff --git a/src/app/plugins/markdown/markdownit.ts b/src/app/plugins/markdown/markdownit.ts
+new file mode 100644
+index 000000000..0361c6bb1
+--- /dev/null
++++ b/src/app/plugins/markdown/markdownit.ts
+@@ -0,0 +1,225 @@
++import MarkdownIt from 'markdown-it';
++import type Token from 'markdown-it/lib/token.mjs';
++
++const SPOILER_MARKER = 0x7c; /* | */
++
++// Adapted from markdown-it-mark (MIT). Pairs `||` delimiters and converts
++// them into spoiler tokens after the inline tokenizer runs.
++const spoilerPlugin = (md: MarkdownIt): void => {
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const tokenize = (state: any, silent: boolean): boolean => {
++    const start = state.pos;
++    if (state.src.charCodeAt(start) !== SPOILER_MARKER) return false;
++    if (silent) return false;
++
++    const scanned = state.scanDelims(state.pos, true);
++    let len: number = scanned.length;
++    if (len < 2) return false;
++
++    if (len % 2) {
++      const tok = state.push('text', '', 0);
++      tok.content = '|';
++      len -= 1;
++    }
++
++    for (let i = 0; i < len; i += 2) {
++      const token = state.push('text', '', 0);
++      token.content = '||';
++      if (!scanned.can_open && !scanned.can_close) continue;
++      state.delimiters.push({
++        marker: SPOILER_MARKER,
++        length: 0,
++        token: state.tokens.length - 1,
++        end: -1,
++        open: scanned.can_open,
++        close: scanned.can_close,
++      });
++    }
++
++    state.pos += scanned.length;
++    return true;
++  };
++
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  const postProcess = (state: any, delimiters: any[]): void => {
++    const loneMarkers: number[] = [];
++    const max = delimiters.length;
++
++    for (let i = 0; i < max; i += 1) {
++      const startDelim = delimiters[i];
++      if (startDelim.marker !== SPOILER_MARKER) continue;
++      if (startDelim.end === -1) continue;
++
++      const endDelim = delimiters[startDelim.end];
++
++      let token: Token = state.tokens[startDelim.token];
++      token.type = 'spoiler_open';
++      token.tag = 'span';
++      token.nesting = 1;
++      token.markup = '||';
++      token.content = '';
++
++      token = state.tokens[endDelim.token];
++      token.type = 'spoiler_close';
++      token.tag = 'span';
++      token.nesting = -1;
++      token.markup = '||';
++      token.content = '';
++
++      if (
++        state.tokens[endDelim.token - 1].type === 'text' &&
++        state.tokens[endDelim.token - 1].content === '|'
++      ) {
++        loneMarkers.push(endDelim.token - 1);
++      }
++    }
++
++    while (loneMarkers.length) {
++      const i = loneMarkers.pop() as number;
++      let j = i + 1;
++      while (j < state.tokens.length && state.tokens[j].type === 'spoiler_close') {
++        j += 1;
++      }
++      j -= 1;
++      if (i !== j) {
++        const swap = state.tokens[j];
++        state.tokens[j] = state.tokens[i];
++        state.tokens[i] = swap;
++      }
++    }
++  };
++
++  md.inline.ruler.before('text', 'spoiler', tokenize);
++
++  // markdown-it's built-in `text` rule does not treat `|` as a terminator,
++  // so it greedily consumes spoiler closers. Replace `text` with a version
++  // that also stops at `|`.
++  const TERMINATORS = new Set([
++    0x0a, 0x21, 0x23, 0x24, 0x25, 0x26, 0x2a, 0x2b, 0x2d, 0x3a, 0x3c, 0x3d,
++    0x3e, 0x40, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x7b, 0x7c, 0x7d, 0x7e,
++  ]);
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  md.inline.ruler.at('text', (state: any, silent: boolean): boolean => {
++    let pos = state.pos;
++    while (pos < state.posMax && !TERMINATORS.has(state.src.charCodeAt(pos))) {
++      pos += 1;
++    }
++    if (pos === state.pos) return false;
++    if (!silent) state.pending += state.src.slice(state.pos, pos);
++    state.pos = pos;
++    return true;
++  });
++
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  md.inline.ruler2.before('emphasis', 'spoiler', (state: any) => {
++    const tokensMeta = state.tokens_meta;
++    postProcess(state, state.delimiters);
++    for (let curr = 0; curr < tokensMeta.length; curr += 1) {
++      if (tokensMeta[curr] && tokensMeta[curr].delimiters) {
++        postProcess(state, tokensMeta[curr].delimiters);
++      }
++    }
++    return true;
++  });
++
++  md.renderer.rules.spoiler_open = () => '<span data-md="||" data-mx-spoiler="">';
++  md.renderer.rules.spoiler_close = () => '</span>';
++};
++
++const buildMarkdownIt = (): MarkdownIt => {
++  const md = new MarkdownIt({
++    html: true,
++    linkify: true,
++    breaks: false,
++    typographer: false,
++  });
++
++  md.disable(['code']);
++  md.use(spoilerPlugin);
++
++  const origStrongOpen =
++    md.renderer.rules.strong_open ?? ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts));
++  const origStrongClose =
++    md.renderer.rules.strong_close ?? ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts));
++
++  md.renderer.rules.strong_open = (tokens, idx, opts, env, self) => {
++    const t = tokens[idx];
++    if (t.markup === '__') return '<u data-md="__">';
++    return `<strong data-md="**">`;
++  };
++  md.renderer.rules.strong_close = (tokens, idx, opts, env, self) => {
++    const t = tokens[idx];
++    if (t.markup === '__') return '</u>';
++    return '</strong>';
++  };
++
++  md.renderer.rules.em_open = (tokens, idx) => {
++    const t = tokens[idx];
++    return `<em data-md="${t.markup}">`;
++  };
++  md.renderer.rules.em_close = () => '</em>';
++
++  md.renderer.rules.s_open = () => '<s data-md="~~">';
++  md.renderer.rules.s_close = () => '</s>';
++
++  const escapeHtml = md.utils.escapeHtml;
++
++  md.renderer.rules.code_inline = (tokens, idx) => {
++    const t = tokens[idx];
++    const fence = t.markup || '`';
++    return `<code data-md="${fence}">${escapeHtml(t.content)}</code>`;
++  };
++
++  md.renderer.rules.fence = (tokens, idx) => {
++    const t = tokens[idx];
++    const info = t.info ? t.info.trim() : '';
++    const fence = t.markup || '```';
++    const lang = info ? info.substring(info.lastIndexOf('.') + 1) : '';
++    const filename = info && info !== lang ? info : '';
++    const classAttr = lang ? ` class="language-${escapeHtml(lang)}"` : '';
++    const labelAttr = filename ? ` data-label="${escapeHtml(filename)}"` : '';
++    const escaped = escapeHtml(t.content);
++    return `<pre data-md="${fence}"><code${classAttr}${labelAttr}>${escaped}</code></pre>\n`;
++  };
++
++  md.renderer.rules.heading_open = (tokens, idx) => {
++    const t = tokens[idx];
++    const level = Number(t.tag.slice(1));
++    const hashes = '#'.repeat(level);
++    return `<${t.tag} data-md="${hashes}">`;
++  };
++
++  md.renderer.rules.bullet_list_open = (tokens, idx) => {
++    const t = tokens[idx];
++    const marker = t.markup || '*';
++    return `<ul data-md="${marker}">`;
++  };
++
++  md.renderer.rules.ordered_list_open = (tokens, idx) => {
++    const t = tokens[idx];
++    const start = t.attrGet('start');
++    const startAttr = start ? ` start="${start}"` : '';
++    const dataMd = start ? `${start}.` : '1.';
++    return `<ol data-md="${dataMd}"${startAttr}>`;
++  };
++
++  md.renderer.rules.list_item_open = () => '<li><p>';
++  md.renderer.rules.list_item_close = () => '</p></li>';
++
++  md.renderer.rules.blockquote_open = () => '<blockquote data-md="&gt;">';
++
++  const origLinkOpen =
++    md.renderer.rules.link_open ?? ((tokens, idx, opts, _env, self) => self.renderToken(tokens, idx, opts));
++  md.renderer.rules.link_open = (tokens, idx, opts, env, self) => {
++    const t = tokens[idx];
++    if (t.markup === 'linkify' || t.markup === 'autolink') {
++      return origLinkOpen(tokens, idx, opts, env, self);
++    }
++    t.attrJoin('data-md', '');
++    return origLinkOpen(tokens, idx, opts, env, self);
++  };
++
++  return md;
++};
++
++export const markdownIt = buildMarkdownIt();

@@ -1,5 +1,5 @@
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
-index 965e2da0..6da3ca07 100644
+index 965e2da01..6da3ca077 100644
 --- a/src/app/hooks/useNavigateUnread.ts
 +++ b/src/app/hooks/useNavigateUnread.ts
 @@ -8,6 +8,7 @@ import { mDirectAtom } from '../state/mDirectList';

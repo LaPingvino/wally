@@ -1,5 +1,5 @@
 diff --git a/.gitignore b/.gitignore
-index 1af58a97..f75536e4 100644
+index 1af58a970..f75536e43 100644
 --- a/.gitignore
 +++ b/.gitignore
 @@ -4,4 +4,5 @@ node_modules
@@ -12,7 +12,7 @@ index 1af58a97..f75536e4 100644
 +public/font/NotoColorEmoji.Bahai.*.ttf
 diff --git a/src/__tests__/a11y-audit.test.ts b/src/__tests__/a11y-audit.test.ts
 new file mode 100644
-index 00000000..b869bc5a
+index 000000000..b869bc5a7
 --- /dev/null
 +++ b/src/__tests__/a11y-audit.test.ts
 @@ -0,0 +1,203 @@
@@ -220,7 +220,7 @@ index 00000000..b869bc5a
 +  });
 +});
 diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
-index 55f68b47..34df387d 100644
+index 55f68b47f..34df387d3 100644
 --- a/src/app/components/GlobalKeyboardShortcuts.tsx
 +++ b/src/app/components/GlobalKeyboardShortcuts.tsx
 @@ -134,7 +134,12 @@ function findSidebarFocus(): HTMLElement | null {
@@ -257,7 +257,7 @@ index 55f68b47..34df387d 100644
      evt.preventDefault();
 diff --git a/src/app/components/NativeDialog.css.ts b/src/app/components/NativeDialog.css.ts
 new file mode 100644
-index 00000000..bffc7a10
+index 000000000..bffc7a10c
 --- /dev/null
 +++ b/src/app/components/NativeDialog.css.ts
 @@ -0,0 +1,16 @@
@@ -279,7 +279,7 @@ index 00000000..bffc7a10
 +});
 diff --git a/src/app/components/NativeDialog.tsx b/src/app/components/NativeDialog.tsx
 new file mode 100644
-index 00000000..b3167e6b
+index 000000000..b3167e6b6
 --- /dev/null
 +++ b/src/app/components/NativeDialog.tsx
 @@ -0,0 +1,62 @@
@@ -346,7 +346,7 @@ index 00000000..b3167e6b
 +  );
 +}
 diff --git a/src/app/components/editor/Editor.tsx b/src/app/components/editor/Editor.tsx
-index bd848dd5..f7655fea 100644
+index bd848dd5a..f7655fea3 100644
 --- a/src/app/components/editor/Editor.tsx
 +++ b/src/app/components/editor/Editor.tsx
 @@ -99,6 +99,8 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
@@ -359,7 +359,7 @@ index bd848dd5..f7655fea 100644
          const shortcutToggled = toggleKeyboardShortcut(editor, evt);
          if (shortcutToggled) evt.preventDefault();
 diff --git a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
-index ddac0576..30b81538 100644
+index ddac0576c..30b815386 100644
 --- a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
 +++ b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
 @@ -8,9 +8,6 @@ import React, {
@@ -422,7 +422,7 @@ index ddac0576..30b81538 100644
    );
  }
 diff --git a/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx b/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
-index 217491e6..3ae33212 100644
+index 217491e68..3ae33212c 100644
 --- a/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
 +++ b/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
 @@ -1,10 +1,5 @@
@@ -555,7 +555,7 @@ index 217491e6..3ae33212 100644
    );
  }
 diff --git a/src/app/components/message/Reply.tsx b/src/app/components/message/Reply.tsx
-index 57bf2af9..91ef8aa9 100644
+index 57bf2af99..91ef8aa9d 100644
 --- a/src/app/components/message/Reply.tsx
 +++ b/src/app/components/message/Reply.tsx
 @@ -107,6 +107,11 @@ export const Reply = as<'div', ReplyProps>(
@@ -571,7 +571,7 @@ index 57bf2af9..91ef8aa9 100644
            username={
              sender && (
 diff --git a/src/app/components/nav/NavItem.tsx b/src/app/components/nav/NavItem.tsx
-index 1ec1257f..83c70393 100644
+index 1ec1257fb..83c703939 100644
 --- a/src/app/components/nav/NavItem.tsx
 +++ b/src/app/components/nav/NavItem.tsx
 @@ -22,12 +22,12 @@ export const NavItem = as<
@@ -590,7 +590,7 @@ index 1ec1257f..83c70393 100644
    )
  );
 diff --git a/src/app/components/page/Page.tsx b/src/app/components/page/Page.tsx
-index a5456385..f8fd4391 100644
+index a54563855..f8fd43910 100644
 --- a/src/app/components/page/Page.tsx
 +++ b/src/app/components/page/Page.tsx
 @@ -33,6 +33,8 @@ export function PageNav({ size, children }: ClientDrawerLayoutProps & css.PageNa
@@ -633,7 +633,7 @@ index a5456385..f8fd4391 100644
      direction="Column"
      className={classNames(ContainerColor({ variant: 'Surface' }), className)}
 diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
-index 1ee72d4a..eff5715b 100644
+index 1ee72d4aa..eff5715b1 100644
 --- a/src/app/components/room-avatar/RoomAvatar.tsx
 +++ b/src/app/components/room-avatar/RoomAvatar.tsx
 @@ -23,6 +23,8 @@ export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps
@@ -646,7 +646,7 @@ index 1ee72d4a..eff5715b 100644
          {renderFallback()}
        </AvatarFallback>
 diff --git a/src/app/components/room-intro/RoomIntro.tsx b/src/app/components/room-intro/RoomIntro.tsx
-index ce550992..57aceaf0 100644
+index ce550992d..57aceaf02 100644
 --- a/src/app/components/room-intro/RoomIntro.tsx
 +++ b/src/app/components/room-intro/RoomIntro.tsx
 @@ -30,8 +30,9 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) =>
@@ -663,7 +663,7 @@ index ce550992..57aceaf0 100644
  
 diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
 new file mode 100644
-index 00000000..2e94e912
+index 000000000..2e94e9122
 --- /dev/null
 +++ b/src/app/components/room-listbox/RoomListbox.tsx
 @@ -0,0 +1,38 @@
@@ -706,7 +706,7 @@ index 00000000..2e94e912
 +  );
 +}
 diff --git a/src/app/components/sidebar/Sidebar.tsx b/src/app/components/sidebar/Sidebar.tsx
-index 7caf1b21..e0f6bffb 100644
+index 7caf1b21b..e0f6bffb2 100644
 --- a/src/app/components/sidebar/Sidebar.tsx
 +++ b/src/app/components/sidebar/Sidebar.tsx
 @@ -3,6 +3,6 @@ import { as } from 'folds';
@@ -719,7 +719,7 @@ index 7caf1b21..e0f6bffb 100644
 +  <AsSidebar className={classNames(css.Sidebar, className)} aria-label="Spaces" {...props} ref={ref} />
  ));
 diff --git a/src/app/components/sidebar/SidebarItem.tsx b/src/app/components/sidebar/SidebarItem.tsx
-index b23772bb..11468dd6 100644
+index b23772bb7..11468dd64 100644
 --- a/src/app/components/sidebar/SidebarItem.tsx
 +++ b/src/app/components/sidebar/SidebarItem.tsx
 @@ -34,6 +34,11 @@ export function SidebarItemTooltip({
@@ -750,7 +750,7 @@ index b23772bb..11468dd6 100644
    );
  }
 diff --git a/src/app/components/user-avatar/UserAvatar.tsx b/src/app/components/user-avatar/UserAvatar.tsx
-index d9de9b79..5afee73a 100644
+index d9de9b79f..5afee73a8 100644
 --- a/src/app/components/user-avatar/UserAvatar.tsx
 +++ b/src/app/components/user-avatar/UserAvatar.tsx
 @@ -23,6 +23,8 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
@@ -763,7 +763,7 @@ index d9de9b79..5afee73a 100644
          {renderFallback()}
        </AvatarFallback>
 diff --git a/src/app/features/create-room/CreateRoomModal.tsx b/src/app/features/create-room/CreateRoomModal.tsx
-index d5d8c92d..4f4f48e1 100644
+index d5d8c92da..4f4f48e1b 100644
 --- a/src/app/features/create-room/CreateRoomModal.tsx
 +++ b/src/app/features/create-room/CreateRoomModal.tsx
 @@ -6,14 +6,9 @@ import {
@@ -879,7 +879,7 @@ index d5d8c92d..4f4f48e1 100644
    );
  }
 diff --git a/src/app/features/create-space/CreateSpaceModal.tsx b/src/app/features/create-space/CreateSpaceModal.tsx
-index c1bc6898..b959ba9e 100644
+index c1bc6898f..b959ba9e2 100644
 --- a/src/app/features/create-space/CreateSpaceModal.tsx
 +++ b/src/app/features/create-space/CreateSpaceModal.tsx
 @@ -6,14 +6,9 @@ import {
@@ -992,7 +992,7 @@ index c1bc6898..b959ba9e 100644
    );
  }
 diff --git a/src/app/features/lobby/Lobby.tsx b/src/app/features/lobby/Lobby.tsx
-index 4b19e516..d1c87128 100644
+index 4b19e5163..d1c871285 100644
 --- a/src/app/features/lobby/Lobby.tsx
 +++ b/src/app/features/lobby/Lobby.tsx
 @@ -436,7 +436,7 @@ export function Lobby() {
@@ -1005,7 +1005,7 @@ index 4b19e516..d1c87128 100644
                  <PageContentCenter>
                    <ScrollTopContainer
 diff --git a/src/app/features/lobby/RoomItem.tsx b/src/app/features/lobby/RoomItem.tsx
-index 7de59acd..bfd6dd96 100644
+index 7de59acd9..bfd6dd96c 100644
 --- a/src/app/features/lobby/RoomItem.tsx
 +++ b/src/app/features/lobby/RoomItem.tsx
 @@ -207,7 +207,7 @@ function RoomProfile({
@@ -1027,7 +1027,7 @@ index 7de59acd..bfd6dd96 100644
          ref={ref}
        >
 diff --git a/src/app/features/room-nav/RoomNavItem.tsx b/src/app/features/room-nav/RoomNavItem.tsx
-index 6287bedd..c59d636f 100644
+index 6287bedd7..c59d636f9 100644
 --- a/src/app/features/room-nav/RoomNavItem.tsx
 +++ b/src/app/features/room-nav/RoomNavItem.tsx
 @@ -287,14 +287,31 @@ export function RoomNavItem({
@@ -1065,7 +1065,7 @@ index 6287bedd..c59d636f 100644
    const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
      evt.preventDefault();
 diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
-index d9205076..22ea00a6 100644
+index d9205076b..22ea00a63 100644
 --- a/src/app/features/room/MembersDrawer.tsx
 +++ b/src/app/features/room/MembersDrawer.tsx
 @@ -2,6 +2,7 @@ import React, {
@@ -1119,7 +1119,7 @@ index d9205076..22ea00a6 100644
        <MemberDrawerHeader room={room} />
        <Box className={css.MemberDrawerContentBase} grow="Yes">
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index 94eee2a8..4da9a96f 100644
+index 94eee2a8f..4da9a96f7 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -567,6 +567,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
@@ -1168,7 +1168,7 @@ index 94eee2a8..4da9a96f 100644
                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
                        }
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index ec1fb60b..8b098e8d 100644
+index ec1fb60b1..8b098e8dc 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -1883,7 +1883,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
@@ -1181,7 +1181,7 @@ index ec1fb60b..8b098e8d 100644
            direction="Column"
            justifyContent="End"
 diff --git a/src/app/features/room/RoomViewFollowing.tsx b/src/app/features/room/RoomViewFollowing.tsx
-index 5a96e6ad..1bdbc67e 100644
+index 5a96e6ad4..1bdbc67ef 100644
 --- a/src/app/features/room/RoomViewFollowing.tsx
 +++ b/src/app/features/room/RoomViewFollowing.tsx
 @@ -68,6 +68,7 @@ export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
@@ -1193,7 +1193,7 @@ index 5a96e6ad..1bdbc67e 100644
            alignItems="Center"
            justifyContent="End"
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
-index d97c4651..dabac747 100644
+index d97c46512..dabac747a 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
 +++ b/src/app/features/room/RoomViewHeader.tsx
 @@ -1,4 +1,4 @@
@@ -1270,7 +1270,7 @@ index d97c4651..dabac747 100644
                Wobble here (left side of group) is less noticeable than at the right. */}
  
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 8b109bba..4c604a88 100644
+index 8b109bbab..4c604a88f 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -486,7 +486,7 @@ export const MessageDeleteItem = as<
@@ -1358,7 +1358,7 @@ index 8b109bba..4c604a88 100644
                    >
                      <Icon src={Icons.VerticalDots} size="100" />
 diff --git a/src/app/features/search/Search.tsx b/src/app/features/search/Search.tsx
-index cfc4ee5f..bc7ec0b1 100644
+index cfc4ee5fb..bc7ec0b12 100644
 --- a/src/app/features/search/Search.tsx
 +++ b/src/app/features/search/Search.tsx
 @@ -270,6 +270,10 @@ export function Search({ requestClose }: SearchProps) {
@@ -1373,7 +1373,7 @@ index cfc4ee5f..bc7ec0b1 100644
                  onChange={handleInputChange}
                  onKeyDown={handleInputKeyDown}
 diff --git a/src/app/features/settings/Settings.tsx b/src/app/features/settings/Settings.tsx
-index fc8e1a7f..c200caab 100644
+index fc8e1a7ff..c200caab1 100644
 --- a/src/app/features/settings/Settings.tsx
 +++ b/src/app/features/settings/Settings.tsx
 @@ -9,12 +9,8 @@ import {
@@ -1426,7 +1426,7 @@ index fc8e1a7f..c200caab 100644
                    )}
                  </UseStateProvider>
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
-index 00f87c32..ee8321c6 100644
+index 00f87c323..ee8321c60 100644
 --- a/src/app/features/settings/about/About.tsx
 +++ b/src/app/features/settings/about/About.tsx
 @@ -24,7 +24,7 @@ export function About({ requestClose }: AboutProps) {
@@ -1439,7 +1439,7 @@ index 00f87c32..ee8321c6 100644
              </IconButton>
            </Box>
 diff --git a/src/app/features/settings/account/Account.tsx b/src/app/features/settings/account/Account.tsx
-index c4b56e47..bf3e6032 100644
+index c4b56e475..bf3e60324 100644
 --- a/src/app/features/settings/account/Account.tsx
 +++ b/src/app/features/settings/account/Account.tsx
 @@ -20,7 +20,7 @@ export function Account({ requestClose }: AccountProps) {
@@ -1452,7 +1452,7 @@ index c4b56e47..bf3e6032 100644
              </IconButton>
            </Box>
 diff --git a/src/app/features/settings/account/IgnoredUserList.tsx b/src/app/features/settings/account/IgnoredUserList.tsx
-index 98db9459..8c3bec20 100644
+index 98db9459a..8c3bec20e 100644
 --- a/src/app/features/settings/account/IgnoredUserList.tsx
 +++ b/src/app/features/settings/account/IgnoredUserList.tsx
 @@ -69,6 +69,7 @@ function IgnoreUserInput({ userList }: { userList: string[] }) {
@@ -1464,7 +1464,7 @@ index 98db9459..8c3bec20 100644
                  radii="300"
                  variant="Secondary"
 diff --git a/src/app/features/settings/devices/DeviceTile.tsx b/src/app/features/settings/devices/DeviceTile.tsx
-index 71b684f5..1c1fc5d2 100644
+index 71b684f56..1c1fc5d2b 100644
 --- a/src/app/features/settings/devices/DeviceTile.tsx
 +++ b/src/app/features/settings/devices/DeviceTile.tsx
 @@ -11,12 +11,8 @@ import {
@@ -1532,7 +1532,7 @@ index 71b684f5..1c1fc5d2 100644
              <Icon size="50" src={details ? Icons.ChevronBottom : Icons.ChevronRight} />
            </IconButton>
 diff --git a/src/app/features/settings/devices/Devices.tsx b/src/app/features/settings/devices/Devices.tsx
-index c957ab31..22a46f39 100644
+index c957ab318..22a46f396 100644
 --- a/src/app/features/settings/devices/Devices.tsx
 +++ b/src/app/features/settings/devices/Devices.tsx
 @@ -74,7 +74,7 @@ export function Devices({ requestClose }: DevicesProps) {
@@ -1545,7 +1545,7 @@ index c957ab31..22a46f39 100644
              </IconButton>
            </Box>
 diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
-index 6ec13f67..c57844a4 100644
+index 6ec13f679..c57844a4d 100644
 --- a/src/app/features/settings/general/General.tsx
 +++ b/src/app/features/settings/general/General.tsx
 @@ -601,6 +601,7 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
@@ -1557,7 +1557,7 @@ index 6ec13f67..c57844a4 100644
          >
            <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
-index 9cf01c5f..965d7c14 100644
+index 9cf01c5f9..965d7c143 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
 +++ b/src/app/features/settings/notifications/SystemNotification.tsx
 @@ -238,6 +238,9 @@ export function SystemNotification() {
@@ -1587,7 +1587,7 @@ index 9cf01c5f..965d7c14 100644
        <SequenceCard
          className={SequenceCardStyle}
 diff --git a/src/app/hooks/useAsyncSearch.ts b/src/app/hooks/useAsyncSearch.ts
-index 3852d3b9..026c847f 100644
+index 3852d3b97..026c847fb 100644
 --- a/src/app/hooks/useAsyncSearch.ts
 +++ b/src/app/hooks/useAsyncSearch.ts
 @@ -1,4 +1,4 @@
@@ -1637,7 +1637,7 @@ index 3852d3b9..026c847f 100644
    }, [terminateSearch]);
 diff --git a/src/app/hooks/useNavArrowKeys.ts b/src/app/hooks/useNavArrowKeys.ts
 new file mode 100644
-index 00000000..4bba79de
+index 000000000..4bba79dea
 --- /dev/null
 +++ b/src/app/hooks/useNavArrowKeys.ts
 @@ -0,0 +1,40 @@
@@ -1683,7 +1683,7 @@ index 00000000..4bba79de
 +}
 diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
 new file mode 100644
-index 00000000..7ed76e62
+index 000000000..7ed76e62c
 --- /dev/null
 +++ b/src/app/hooks/useNavigateUnread.ts
 @@ -0,0 +1,207 @@
@@ -1896,7 +1896,7 @@ index 00000000..7ed76e62
 +}
 diff --git a/src/app/hooks/useRoomListKeyboard.ts b/src/app/hooks/useRoomListKeyboard.ts
 new file mode 100644
-index 00000000..14e637c7
+index 000000000..14e637c78
 --- /dev/null
 +++ b/src/app/hooks/useRoomListKeyboard.ts
 @@ -0,0 +1,137 @@
@@ -2038,7 +2038,7 @@ index 00000000..14e637c7
 +  };
 +};
 diff --git a/src/app/hooks/useRoomMeta.ts b/src/app/hooks/useRoomMeta.ts
-index 086c3a56..43dcf758 100644
+index 086c3a56f..43dcf758d 100644
 --- a/src/app/hooks/useRoomMeta.ts
 +++ b/src/app/hooks/useRoomMeta.ts
 @@ -1,11 +1,39 @@
@@ -2157,7 +2157,7 @@ index 086c3a56..43dcf758 100644
    return name;
  };
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index 23bd48e6..164dd1f0 100644
+index 23bd48e64..164dd1f0f 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -2229,7 +2229,7 @@ index 23bd48e6..164dd1f0 100644
    }, [
      mx,
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index 168bda38..2c685167 100644
+index 168bda38b..2c685167f 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -1,4 +1,4 @@
@@ -2287,7 +2287,7 @@ index 168bda38..2c685167 100644
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
 diff --git a/src/app/pages/client/call/PersistentCallContainer.tsx b/src/app/pages/client/call/PersistentCallContainer.tsx
-index faa844ee..3d5a0eee 100644
+index faa844ee5..3d5a0eeec 100644
 --- a/src/app/pages/client/call/PersistentCallContainer.tsx
 +++ b/src/app/pages/client/call/PersistentCallContainer.tsx
 @@ -287,9 +287,9 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
@@ -2304,7 +2304,7 @@ index faa844ee..3d5a0eee 100644
          >
            <Box grow="Yes" style={{ position: 'relative' }}>
 diff --git a/src/app/pages/client/explore/Explore.tsx b/src/app/pages/client/explore/Explore.tsx
-index dae83166..e8910595 100644
+index dae831668..e89105952 100644
 --- a/src/app/pages/client/explore/Explore.tsx
 +++ b/src/app/pages/client/explore/Explore.tsx
 @@ -110,7 +110,7 @@ export function AddServer() {
@@ -2317,7 +2317,7 @@ index dae83166..e8910595 100644
                      <Text style={{ color: color.Critical.Main }} size="T300">
                        Failed to load public rooms. Please try again.
 diff --git a/src/app/pages/client/sidebar/DirectTab.tsx b/src/app/pages/client/sidebar/DirectTab.tsx
-index dcd44e2f..2e450abf 100644
+index dcd44e2f7..2e450abf3 100644
 --- a/src/app/pages/client/sidebar/DirectTab.tsx
 +++ b/src/app/pages/client/sidebar/DirectTab.tsx
 @@ -93,7 +93,7 @@ export function DirectTab() {
@@ -2330,7 +2330,7 @@ index dcd44e2f..2e450abf 100644
            <SidebarAvatar
              as="button"
 diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index 778b729e..17cd71d5 100644
+index 778b729e2..17cd71d5a 100644
 --- a/src/app/pages/client/sidebar/HomeTab.tsx
 +++ b/src/app/pages/client/sidebar/HomeTab.tsx
 @@ -95,7 +95,7 @@ export function HomeTab() {
@@ -2343,7 +2343,7 @@ index 778b729e..17cd71d5 100644
            <SidebarAvatar
              as="button"
 diff --git a/src/app/pages/client/sidebar/SearchTab.tsx b/src/app/pages/client/sidebar/SearchTab.tsx
-index 7ceb5c49..5b8a466f 100644
+index 7ceb5c499..5b8a466f6 100644
 --- a/src/app/pages/client/sidebar/SearchTab.tsx
 +++ b/src/app/pages/client/sidebar/SearchTab.tsx
 @@ -11,7 +11,7 @@ export function SearchTab() {
@@ -2356,7 +2356,7 @@ index 7ceb5c49..5b8a466f 100644
            <SidebarAvatar as="button" ref={triggerRef} outlined onClick={open}>
              <Icon src={Icons.Search} filled={opened} />
 diff --git a/src/app/pages/client/sidebar/SpaceTabs.tsx b/src/app/pages/client/sidebar/SpaceTabs.tsx
-index 6fc528a1..750f4ad1 100644
+index 6fc528a10..750f4ad14 100644
 --- a/src/app/pages/client/sidebar/SpaceTabs.tsx
 +++ b/src/app/pages/client/sidebar/SpaceTabs.tsx
 @@ -522,7 +522,7 @@ function OpenedSpaceFolder({ folder, onClose, children }: OpenedSpaceFolderProps
@@ -2378,7 +2378,7 @@ index 6fc528a1..750f4ad1 100644
                    const space = mx.getRoom(sId);
                    if (!space) return null;
 diff --git a/src/app/plugins/react-custom-html-parser.tsx b/src/app/plugins/react-custom-html-parser.tsx
-index 961131d9..4db53188 100644
+index 961131d9b..4db531881 100644
 --- a/src/app/plugins/react-custom-html-parser.tsx
 +++ b/src/app/plugins/react-custom-html-parser.tsx
 @@ -486,12 +486,12 @@ export const getReactCustomHtmlParser = (
@@ -2398,7 +2398,7 @@ index 961131d9..4db53188 100644
  
 diff --git a/src/app/utils/sounds.ts b/src/app/utils/sounds.ts
 new file mode 100644
-index 00000000..70f6eacf
+index 000000000..70f6eacf7
 --- /dev/null
 +++ b/src/app/utils/sounds.ts
 @@ -0,0 +1,69 @@

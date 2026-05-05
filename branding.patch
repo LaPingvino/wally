@@ -1,5 +1,5 @@
 diff --git a/index.html b/index.html
-index 2eefeee2..de257ced 100644
+index 2eefeee2c..de257cedf 100644
 --- a/index.html
 +++ b/index.html
 @@ -4,8 +4,8 @@
@@ -34,7 +34,7 @@ index 2eefeee2..de257ced 100644
      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
  
 diff --git a/public/manifest.json b/public/manifest.json
-index acdcd004..3a029796 100644
+index acdcd0042..3a029796b 100644
 --- a/public/manifest.json
 +++ b/public/manifest.json
 @@ -1,7 +1,7 @@
@@ -49,7 +49,7 @@ index acdcd004..3a029796 100644
    "lang": "en-US",
    "display": "standalone",
 diff --git a/src/app/components/splash-screen/SplashScreen.tsx b/src/app/components/splash-screen/SplashScreen.tsx
-index 27adadba..0d1e2877 100644
+index 27adadbad..0d1e28774 100644
 --- a/src/app/components/splash-screen/SplashScreen.tsx
 +++ b/src/app/components/splash-screen/SplashScreen.tsx
 @@ -21,7 +21,7 @@ export function SplashScreen({ children }: SplashScreenProps) {
@@ -62,7 +62,7 @@ index 27adadba..0d1e2877 100644
        </Box>
      </Box>
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
-index f536d12e..00f87c32 100644
+index f536d12ef..00f87c323 100644
 --- a/src/app/features/settings/about/About.tsx
 +++ b/src/app/features/settings/about/About.tsx
 @@ -39,22 +39,22 @@ export function About({ requestClose }: AboutProps) {
@@ -93,7 +93,7 @@ index f536d12e..00f87c32 100644
                        target="_blank"
                        variant="Secondary"
 diff --git a/src/app/pages/auth/AuthLayout.tsx b/src/app/pages/auth/AuthLayout.tsx
-index 3943f42d..8b3da2db 100644
+index 3943f42d1..8b3da2db3 100644
 --- a/src/app/pages/auth/AuthLayout.tsx
 +++ b/src/app/pages/auth/AuthLayout.tsx
 @@ -134,8 +134,8 @@ export function AuthLayout() {
@@ -108,7 +108,7 @@ index 3943f42d..8b3da2db 100644
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index b3ec2eb4..55fcefb9 100644
+index b3ec2eb44..55fcefb9e 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
 @@ -3,6 +3,34 @@ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';

@@ -1,6 +1,6 @@
 diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
 new file mode 100644
-index 00000000..e9fc3802
+index 000000000..e9fc38020
 --- /dev/null
 +++ b/src/app/widget/IssueBoardWidget.tsx
 @@ -0,0 +1,1338 @@
@@ -1344,7 +1344,7 @@ index 00000000..e9fc3802
 +}
 diff --git a/src/widget.tsx b/src/widget.tsx
 new file mode 100644
-index 00000000..f961cc4d
+index 000000000..f961cc4d1
 --- /dev/null
 +++ b/src/widget.tsx
 @@ -0,0 +1,98 @@
@@ -1447,7 +1447,7 @@ index 00000000..f961cc4d
 +  );
 +}, 4000);
 diff --git a/vite.config.js b/vite.config.js
-index a5af94d8..19d282c2 100644
+index a5af94d8b..19d282c21 100644
 --- a/vite.config.js
 +++ b/vite.config.js
 @@ -133,6 +133,10 @@ export default defineConfig({
@@ -1463,7 +1463,7 @@ index a5af94d8..19d282c2 100644
  });
 diff --git a/widget.html b/widget.html
 new file mode 100644
-index 00000000..716ec27d
+index 000000000..716ec27d0
 --- /dev/null
 +++ b/widget.html
 @@ -0,0 +1,17 @@

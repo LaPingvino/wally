@@ -1,5 +1,5 @@
 diff --git a/src/app/hooks/useTheme.ts b/src/app/hooks/useTheme.ts
-index cdbb9dba..d8a3f2f5 100644
+index cdbb9dba3..d8a3f2f5a 100644
 --- a/src/app/hooks/useTheme.ts
 +++ b/src/app/hooks/useTheme.ts
 @@ -1,7 +1,7 @@
@@ -47,7 +47,7 @@ index cdbb9dba..d8a3f2f5 100644
      []
    );
 diff --git a/src/colors.css.ts b/src/colors.css.ts
-index 268cbf78..ab0f39f9 100644
+index 268cbf788..ab0f39f90 100644
 --- a/src/colors.css.ts
 +++ b/src/colors.css.ts
 @@ -197,6 +197,148 @@ const darkThemeData = {

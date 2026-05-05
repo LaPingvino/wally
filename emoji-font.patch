@@ -1,5 +1,5 @@
 diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
-index b861a060..6ec13f67 100644
+index b861a060b..6ec13f679 100644
 --- a/src/app/features/settings/general/General.tsx
 +++ b/src/app/features/settings/general/General.tsx
 @@ -32,7 +32,7 @@ import FocusTrap from 'focus-trap-react';
@@ -128,7 +128,7 @@ index b861a060..6ec13f67 100644
        </SequenceCard>
  
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index ce952bfc..23bd48e6 100644
+index ce952bfc6..23bd48e64 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -10,7 +10,7 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
@@ -167,7 +167,7 @@ index ce952bfc..23bd48e6 100644
  
    return null;
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index 9fbad4ff..dccb6ed8 100644
+index 9fbad4ff0..dccb6ed8b 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -14,6 +14,11 @@ export enum MessageLayout {
@@ -221,7 +221,7 @@ index 9fbad4ff..dccb6ed8 100644
  };
  
 diff --git a/src/index.css b/src/index.css
-index d4696367..4a0c45f0 100644
+index d46963677..4a0c45f08 100644
 --- a/src/index.css
 +++ b/src/index.css
 @@ -5,6 +5,12 @@

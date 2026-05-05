@@ -1,6 +1,6 @@
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 new file mode 100644
-index 00000000..402c1d09
+index 000000000..402c1d095
 --- /dev/null
 +++ b/src/app/features/issues/IssueBoard.tsx
 @@ -0,0 +1,2029 @@
@@ -2035,7 +2035,7 @@ index 00000000..402c1d09
 +}
 diff --git a/src/app/features/issues/useKanbanDnD.ts b/src/app/features/issues/useKanbanDnD.ts
 new file mode 100644
-index 00000000..bdf6b9f7
+index 000000000..bdf6b9f7f
 --- /dev/null
 +++ b/src/app/features/issues/useKanbanDnD.ts
 @@ -0,0 +1,148 @@
@@ -2188,7 +2188,7 @@ index 00000000..bdf6b9f7
 +  return { ref, isOver };
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index 1378c0c9..33f0c363 100644
+index 1378c0c92..33f0c3639 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -48,6 +48,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
@@ -2228,7 +2228,7 @@ index 1378c0c9..33f0c363 100644
                      <Text size="L400">Options</Text>
                      <SequenceCard
 diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
-index dccb6ed8..582be149 100644
+index dccb6ed8b..582be149e 100644
 --- a/src/app/state/settings.ts
 +++ b/src/app/state/settings.ts
 @@ -53,6 +53,7 @@ export interface Settings {
