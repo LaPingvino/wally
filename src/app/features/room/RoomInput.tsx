@@ -364,7 +364,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const submit = useCallback(async () => {
-      const commandName = getBeginCommand(editor);
+      let commandName = getBeginCommand(editor);
       let plainText = toPlainText(editor.children, isMarkdown).trim();
       let customHtml = trimCustomHtml(
         toMatrixCustomHTML(editor.children, {
@@ -373,6 +373,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           allowInlineMarkdown: isMarkdown,
         })
       );
+      // Fallback: if the user typed `/cmd …` and pressed Enter without
+      // promoting it via the autocomplete (Tab/click), still recognise a
+      // known command. Matches Slack/Discord/IRC ergonomics.
+      if (!commandName) {
+        const m = plainText.match(/^\/([a-zA-Z][\w-]*)(\s|$)/);
+        if (m && (Object.values(Command) as string[]).includes(m[1])) {
+          commandName = m[1];
+        }
+      }
       let msgType = MsgType.Text;
 
       if (commandName) {
