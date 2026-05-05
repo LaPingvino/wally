@@ -22,7 +22,7 @@ const PATCHES: Array<{ name: string; desc: string; status: 'full' | 'partial' | 
   { name: 'widgets-support', desc: 'Generic widget drawer for room widgets via the Matrix Widget API', status: 'partial' },
   { name: 'themes', desc: 'Ash (dark neutral grey) and Sepia (warm parchment) themes', status: 'full' },
   { name: 'per-msg-profiles', desc: 'Per-message profiles (MSC4144): send messages as a persona, display sender personas inline', status: 'full' },
-  { name: 'markdown-parser', desc: 'markdown-it-based parser with spoilers, underline, GFM tables and autolinks', status: 'branch' },
+  { name: 'markdown-parser', desc: 'markdown-it-based parser with spoilers, underline, GFM tables and autolinks', status: 'full' },
 ];
 
 const STATUS_BADGE: Record<'full' | 'partial' | 'branch', string> = {
