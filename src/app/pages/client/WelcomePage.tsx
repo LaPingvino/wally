@@ -18,7 +18,7 @@ const PATCHES: Array<{ name: string; desc: string; status: 'full' | 'partial' | 
   { name: 'idb-retry', desc: 'Automatic retry when IndexedDB fails on startup', status: 'partial' },
   { name: 'issue-widget', desc: 'Issue tracker as an embeddable Matrix Widget API widget', status: 'full' },
   { name: 'ux-fixes', desc: 'Room sort options, inbox unread view, and navigation improvements', status: 'partial' },
-  { name: 'navigate-unread', desc: 'Cross-bucket unread navigation, prev/next-unread shortcuts, sidebar-anchor handling for subspaces', status: 'branch' },
+  { name: 'navigate-unread', desc: 'Cross-bucket unread navigation, prev/next-unread shortcuts, sidebar-anchor handling for subspaces', status: 'partial' },
   { name: 'widgets-support', desc: 'Generic widget drawer for room widgets via the Matrix Widget API', status: 'branch' },
   { name: 'themes', desc: 'Ash (dark neutral grey) and Sepia (warm parchment) themes', status: 'full' },
   { name: 'per-msg-profiles', desc: 'Per-message profiles (MSC4144): send messages as a persona, display sender personas inline', status: 'branch' },
