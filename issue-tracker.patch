@@ -11875,7 +11875,7 @@ index 00000000..70f6eacf
 +  setTimeout(() => tone(659.25, 0.12, 0.18), 200);
 +}
 diff --git a/src/index.css b/src/index.css
-index ca28536d..699e20fc 100644
+index d4696367..4a0c45f0 100644
 --- a/src/index.css
 +++ b/src/index.css
 @@ -5,6 +5,12 @@

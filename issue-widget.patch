@@ -15180,7 +15180,7 @@ index 498d4f75..c07be2fb 100644
  
  export const clearLoginData = async () => {
 diff --git a/src/index.css b/src/index.css
-index ca28536d..699e20fc 100644
+index d4696367..4a0c45f0 100644
 --- a/src/index.css
 +++ b/src/index.css
 @@ -5,6 +5,12 @@
