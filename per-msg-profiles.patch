@@ -405,7 +405,7 @@ index 4376cc90c..87382e89b 100644
                </IconButton>
              </>
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 1362cbccf..32efdae84 100644
+index b4080ebcf..cd51913f8 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -86,6 +86,7 @@ import {
@@ -416,7 +416,7 @@ index 1362cbccf..32efdae84 100644
  import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
  import { Reactions, Message, Event, EncryptedContent } from './message';
  import { useMemberEventParser } from '../../hooks/useMemberEventParser';
-@@ -1874,12 +1875,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1933,12 +1934,21 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
        dayDivider = prevEvent ? !inSameDay(prevEvent.getTs(), mEvent.getTs()) : false;
      }
  
@@ -748,7 +748,7 @@ index a4f0d7af6..b2f29f9ff 100644
    );
  }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index d7280df54..60b757c6e 100644
+index ec768ac30..3540d0a01 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -53,12 +53,11 @@ import {
@@ -765,7 +765,7 @@ index d7280df54..60b757c6e 100644
  import { useMatrixClient } from '../../../hooks/useMatrixClient';
  import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
  import * as css from './styles.css';
-@@ -337,8 +336,6 @@ export const MessageCopyLinkItem = as<
+@@ -338,8 +337,6 @@ export const MessageCopyLinkItem = as<
      onClose?: () => void;
    }
  >(({ room, mEvent, onClose, ...props }, ref) => {
@@ -774,7 +774,7 @@ index d7280df54..60b757c6e 100644
    const handleCopy = () => {
      const eventId = mEvent.getId();
      if (!eventId) return;
-@@ -741,9 +738,15 @@ export const Message = as<'div', MessageProps>(
+@@ -742,9 +739,15 @@ export const Message = as<'div', MessageProps>(
      const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
      const optionsVisible = !!menuAnchor || !!emojiBoardAnchor;
  
@@ -792,7 +792,7 @@ index d7280df54..60b757c6e 100644
  
      const tagColor = memberPowerTag?.color
        ? accessibleTagColors?.get(memberPowerTag.color)
-@@ -776,7 +779,18 @@ export const Message = as<'div', MessageProps>(
+@@ -777,7 +780,18 @@ export const Message = as<'div', MessageProps>(
                truncate
              >
                <UsernameBold>{senderDisplayName}</UsernameBold>

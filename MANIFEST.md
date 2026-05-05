@@ -32,4 +32,4 @@ you can apply those manually from the per-family branch.
 - `navigate-unread.patch` — partial (1/7 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `widgets-support.patch` — partial (9/43 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `widgets-support.skipped`
 
-_Generated 2026-05-05T22:05:17Z_
+_Generated 2026-05-05T22:16:44Z_

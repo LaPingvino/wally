@@ -1013,7 +1013,7 @@ index 4da9a96f7..4376cc90c 100644
            onKeyUp={handleKeyUp}
            onPaste={handlePaste}
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 8b098e8dc..1362cbccf 100644
+index 65fd0e2dc..b4080ebcf 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -29,7 +29,7 @@ import { ReactEditor } from 'slate-react';
@@ -1049,7 +1049,7 @@ index 8b098e8dc..1362cbccf 100644
    const mentionClickHandler = useMentionClickHandler(room.roomId);
    const spoilerClickHandler = useSpoilerClickHandler();
    const openUserRoomProfile = useOpenUserRoomProfile();
-@@ -850,6 +860,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -909,6 +919,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
      useCallback(() => roomInputRef.current, [roomInputRef])
    );
  
@@ -1072,7 +1072,7 @@ index 8b098e8dc..1362cbccf 100644
    const tryAutoMarkAsRead = useCallback(() => {
      const readUptoEventId = readUptoEventIdRef.current;
      if (!readUptoEventId) {
-@@ -1664,13 +1690,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1723,13 +1749,13 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
            </Event>
          );
        },
@@ -1090,7 +1090,7 @@ index 8b098e8dc..1362cbccf 100644
        const timeJSX = (
          <Time
            ts={mEvent.getTs()}
-@@ -1679,7 +1705,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1738,7 +1764,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
            dateFormatString={dateFormatString}
          />
        );
@@ -1098,7 +1098,7 @@ index 8b098e8dc..1362cbccf 100644
        return (
          <Event
            key={mEvent.getId()}
-@@ -1689,28 +1714,86 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1748,28 +1773,86 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
            mEvent={mEvent}
            highlight={highlighted}
            messageSpacing={messageSpacing}
@@ -1191,7 +1191,7 @@ index 8b098e8dc..1362cbccf 100644
      (mEventId, mEvent, item) => {
        if (!showHiddenEvents) return null;
        if (Object.keys(mEvent.getContent()).length === 0) return null;
-@@ -1860,27 +1943,88 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1919,27 +2002,88 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
  
    return (
      <Box grow="Yes" style={{ position: 'relative' }}>
@@ -1533,10 +1533,10 @@ index dabac747a..8e743fc75 100644
                Unified: "Start Call" before a call, "Show/Hide Call" toggle once active. */}
            {(canCall || isActiveCall || room.isCallRoom()) && !isIssueBoard && (
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 4c604a88f..d7280df54 100644
+index 4d9ffb99a..ec768ac30 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
-@@ -735,11 +735,11 @@ export const Message = as<'div', MessageProps>(
+@@ -736,11 +736,11 @@ export const Message = as<'div', MessageProps>(
      const useAuthentication = useMediaAuthentication();
      const senderId = mEvent.getSender() ?? '';
  
@@ -1551,7 +1551,7 @@ index 4c604a88f..d7280df54 100644
  
      const senderDisplayName =
        getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
-@@ -782,15 +782,15 @@ export const Message = as<'div', MessageProps>(
+@@ -783,15 +783,15 @@ export const Message = as<'div', MessageProps>(
            {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
          </Box>
          <Box shrink="No" gap="100">
@@ -1571,7 +1571,7 @@ index 4c604a88f..d7280df54 100644
            )}
            <Time
              ts={mEvent.getTs()}
-@@ -901,12 +901,10 @@ export const Message = as<'div', MessageProps>(
+@@ -902,12 +902,10 @@ export const Message = as<'div', MessageProps>(
          highlight={highlight}
          selected={!!menuAnchor || !!emojiBoardAnchor}
          {...props}

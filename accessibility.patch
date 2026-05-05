@@ -1168,10 +1168,10 @@ index 94eee2a8f..4da9a96f7 100644
                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
                        }
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index ec1fb60b1..8b098e8dc 100644
+index f9fd18b60..65fd0e2dc 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
-@@ -1883,7 +1883,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1942,7 +1942,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
            </Chip>
          </TimelineFloat>
        )}
@@ -1270,10 +1270,10 @@ index d97c46512..dabac747a 100644
                Wobble here (left side of group) is less noticeable than at the right. */}
  
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 8b109bbab..4c604a88f 100644
+index db84d021b..4d9ffb99a 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
-@@ -486,7 +486,7 @@ export const MessageDeleteItem = as<
+@@ -487,7 +487,7 @@ export const MessageDeleteItem = as<
                        (optional)
                      </Text>
                    </Text>
@@ -1282,7 +1282,7 @@ index 8b109bbab..4c604a88f 100644
                    {deleteState.status === AsyncStatus.Error && (
                      <Text style={{ color: color.Critical.Main }} size="T300">
                        Failed to delete message! Please try again.
-@@ -612,7 +612,7 @@ export const MessageReportItem = as<
+@@ -613,7 +613,7 @@ export const MessageReportItem = as<
                  </Text>
                  <Box direction="Column" gap="100">
                    <Text size="L400">Reason</Text>
@@ -1291,7 +1291,7 @@ index 8b109bbab..4c604a88f 100644
                    {reportState.status === AsyncStatus.Error && (
                      <Text style={{ color: color.Critical.Main }} size="T300">
                        Failed to report message! Please try again.
-@@ -893,6 +893,8 @@ export const Message = as<'div', MessageProps>(
+@@ -894,6 +894,8 @@ export const Message = as<'div', MessageProps>(
          className={classNames(css.MessageBase, className, {
            [css.MessageBaseBubbleCollapsed]: messageLayout === MessageLayout.Bubble && collapse,
          })}
@@ -1300,7 +1300,7 @@ index 8b109bbab..4c604a88f 100644
          tabIndex={0}
          space={messageSpacing}
          collapse={collapse}
-@@ -934,6 +936,7 @@ export const Message = as<'div', MessageProps>(
+@@ -935,6 +937,7 @@ export const Message = as<'div', MessageProps>(
                    >
                      <IconButton
                        onClick={handleOpenEmojiBoard}
@@ -1308,7 +1308,7 @@ index 8b109bbab..4c604a88f 100644
                        variant="SurfaceVariant"
                        size="300"
                        radii="300"
-@@ -945,6 +948,7 @@ export const Message = as<'div', MessageProps>(
+@@ -946,6 +949,7 @@ export const Message = as<'div', MessageProps>(
                  )}
                  <IconButton
                    onClick={onReplyClick}
@@ -1316,7 +1316,7 @@ index 8b109bbab..4c604a88f 100644
                    data-event-id={mEvent.getId()}
                    variant="SurfaceVariant"
                    size="300"
-@@ -955,6 +959,7 @@ export const Message = as<'div', MessageProps>(
+@@ -956,6 +960,7 @@ export const Message = as<'div', MessageProps>(
                  {!isThreadedMessage && (
                    <IconButton
                      onClick={(ev) => onReplyClick(ev, true)}
@@ -1324,7 +1324,7 @@ index 8b109bbab..4c604a88f 100644
                      data-event-id={mEvent.getId()}
                      variant="SurfaceVariant"
                      size="300"
-@@ -966,6 +971,7 @@ export const Message = as<'div', MessageProps>(
+@@ -967,6 +972,7 @@ export const Message = as<'div', MessageProps>(
                  {canEditEvent(mx, mEvent) && onEditId && (
                    <IconButton
                      onClick={() => onEditId(mEvent.getId())}
@@ -1332,7 +1332,7 @@ index 8b109bbab..4c604a88f 100644
                      variant="SurfaceVariant"
                      size="300"
                      radii="300"
-@@ -1134,6 +1140,7 @@ export const Message = as<'div', MessageProps>(
+@@ -1142,6 +1148,7 @@ export const Message = as<'div', MessageProps>(
                      size="300"
                      radii="300"
                      onClick={handleOpenMenu}
@@ -1340,7 +1340,7 @@ index 8b109bbab..4c604a88f 100644
                      aria-pressed={!!menuAnchor}
                    >
                      <Icon src={Icons.VerticalDots} size="100" />
-@@ -1221,6 +1228,8 @@ export const Event = as<'div', EventProps>(
+@@ -1229,6 +1236,8 @@ export const Event = as<'div', EventProps>(
      return (
        <MessageBase
          className={classNames(css.MessageBase, className)}
@@ -1349,7 +1349,7 @@ index 8b109bbab..4c604a88f 100644
          tabIndex={0}
          space={messageSpacing}
          autoCollapse
-@@ -1300,6 +1309,7 @@ export const Event = as<'div', EventProps>(
+@@ -1315,6 +1324,7 @@ export const Event = as<'div', EventProps>(
                      size="300"
                      radii="300"
                      onClick={handleOpenMenu}
@@ -2157,7 +2157,7 @@ index 086c3a56f..43dcf758d 100644
    return name;
  };
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index 23bd48e64..164dd1f0f 100644
+index 725935048..db6ade689 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
 @@ -1,7 +1,7 @@
@@ -2176,9 +2176,9 @@ index 23bd48e64..164dd1f0f 100644
 +import { playReactionSound, playTypingSound } from '../../utils/sounds';
 +import { announce } from '../../utils/announce';
  import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+ import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
- import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
-@@ -238,8 +240,49 @@ function MessageNotifications() {
+@@ -239,8 +241,49 @@ function MessageNotifications() {
        }
      };
      mx.on(RoomEvent.Timeline, handleTimelineEvent);

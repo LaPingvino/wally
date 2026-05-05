@@ -1,9 +1,9 @@
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
-index 164dd1f0f..9708f1a16 100644
+index db6ade689..a391cec55 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
 +++ b/src/app/pages/client/ClientNonUIFeatures.tsx
-@@ -28,6 +28,73 @@ import { announce } from '../../utils/announce';
- import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+@@ -29,6 +29,73 @@ import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
+ import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
  import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
  import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 +import { SyncState } from 'matrix-js-sdk';
@@ -76,7 +76,7 @@ index 164dd1f0f..9708f1a16 100644
  
  function SystemEmojiFeature() {
    const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
-@@ -310,6 +377,7 @@ type ClientNonUIFeaturesProps = {
+@@ -316,6 +383,7 @@ function BackgroundBackfillFeature() {
  export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
    return (
      <>
@@ -179,10 +179,10 @@ index a9474c317..0d887b71d 100644
 +  return false;
  };
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index c07be2fb2..d16e5eb6a 100644
+index b255c2088..8cdee70ba 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
-@@ -78,6 +78,7 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -82,6 +82,7 @@ export const logoutClient = async (mx: MatrixClient) => {
    const isSecondary =
      window.location.pathname.startsWith('/account/') || slot !== null;
  
@@ -190,7 +190,7 @@ index c07be2fb2..d16e5eb6a 100644
    pushSessionToSW();
    mx.stopClient();
    try {
-@@ -103,6 +104,7 @@ export const logoutClient = async (mx: MatrixClient) => {
+@@ -107,6 +108,7 @@ export const logoutClient = async (mx: MatrixClient) => {
  };
  
  export const clearLoginData = async () => {
@@ -198,7 +198,7 @@ index c07be2fb2..d16e5eb6a 100644
    const dbs = await window.indexedDB.databases();
  
    dbs.forEach((idbInfo) => {
-@@ -115,3 +117,99 @@ export const clearLoginData = async () => {
+@@ -119,3 +121,99 @@ export const clearLoginData = async () => {
    window.localStorage.clear();
    window.location.reload();
  };

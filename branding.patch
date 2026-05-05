@@ -108,7 +108,7 @@ index 3943f42d1..8b3da2db3 100644
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index b3ec2eb44..55fcefb9e 100644
+index b3ec2eb44..f64095324 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
 @@ -3,6 +3,34 @@ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
@@ -134,7 +134,7 @@ index b3ec2eb44..55fcefb9e 100644
 +  { name: 'widgets-support', desc: 'Generic widget drawer for room widgets via the Matrix Widget API', status: 'partial' },
 +  { name: 'themes', desc: 'Ash (dark neutral grey) and Sepia (warm parchment) themes', status: 'full' },
 +  { name: 'per-msg-profiles', desc: 'Per-message profiles (MSC4144): send messages as a persona, display sender personas inline', status: 'full' },
-+  { name: 'markdown-parser', desc: 'markdown-it-based parser with spoilers, underline, GFM tables and autolinks', status: 'branch' },
++  { name: 'markdown-parser', desc: 'markdown-it-based parser with spoilers, underline, GFM tables and autolinks', status: 'full' },
 +];
 +
 +const STATUS_BADGE: Record<'full' | 'partial' | 'branch', string> = {
