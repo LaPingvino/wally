@@ -25,17 +25,17 @@ matching `.skipped` file lists the commits that were dropped, so
 you can apply those manually from the per-family branch.
 
 - `accessibility.patch` — partial (31/54 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account; see `accessibility.skipped`
-- `idb-retry.patch` — partial (4/17 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (20/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, branding, issue-tracker, multi-account; see `ux-fixes.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
 
 These families couldn't apply even partially on top of the resolved
 set; fetch the per-family branch on Codeberg:
 
+- `idb-retry` — `git fetch codeberg idb-retry`
+- `ux-fixes` — `git fetch codeberg ux-fixes`
 - `navigate-unread` — `git fetch codeberg navigate-unread`
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `markdown-parser` — `git fetch codeberg markdown-parser`
 
-_Generated 2026-05-05T19:17:29Z_
+_Generated 2026-05-05T21:28:25Z_
