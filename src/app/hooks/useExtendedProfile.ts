@@ -42,10 +42,15 @@ export function useExtendedProfile(
   const { data, refetch } = useQuery({
     queryKey: ['extended-profile', userId],
     queryFn: useCallback(async () => {
-      if (extendedProfileSupported) {
+      if (!extendedProfileSupported) return null;
+      try {
         return extendedProfile.parse(await mx.getExtendedProfile(userId));
+      } catch {
+        // Fetch or parse failed (server lied about support, transient
+        // post-crash-recovery error, etc). Treat as "no extended profile"
+        // so the UI doesn't stay stuck in a busy/greyed-out state.
+        return null;
       }
-      return null;
     }, [mx, userId, extendedProfileSupported]),
     refetchOnMount: false,
   });
