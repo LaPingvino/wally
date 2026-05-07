@@ -32,31 +32,44 @@ export function useExtendedProfileSupported(): boolean {
   return unstableFeatures?.['uk.tcpip.msc4133'] || versions.includes('v1.15');
 }
 
-/// Whether to use the v1.15 stable endpoint at /_matrix/client/v3/profile/{userId}
-/// instead of letting the SDK pick the unstable prefix. Some servers (e.g.
-/// Continuwuity) support the stable spec but don't advertise the
-/// `uk.tcpip.msc4133.stable` unstable-feature flag the SDK probes for, so the
-/// SDK's own helpers 404 against /_matrix/client/unstable/uk.tcpip.msc4133/...
+/// Whether to bypass the SDK's prefix logic for MSC4133 calls. Always true if
+/// the homeserver claims support at all — we try the v1.15 stable endpoint
+/// first, then fall back to the unstable namespace on 404. This handles both
+/// servers that advertise `v1.15` (e.g. modern Continuwuity) and servers that
+/// only advertise the `uk.tcpip.msc4133` unstable feature flag, including the
+/// pathological case where the SDK's own probe of `uk.tcpip.msc4133.stable`
+/// gets the wrong answer and 404s our request.
 export function useExtendedProfileUsesStableEndpoint(): boolean {
-  const { versions } = useSpecVersions();
-  return versions.includes('v1.15');
+  return useExtendedProfileSupported();
 }
 
 const V3_PREFIX = '/_matrix/client/v3';
+const UNSTABLE_PREFIX = '/_matrix/client/unstable/uk.tcpip.msc4133';
 const profilePath = (userId: string) => `/profile/${encodeURIComponent(userId)}`;
 const profileFieldPath = (userId: string, key: string) =>
   `${profilePath(userId)}/${encodeURIComponent(key)}`;
 
-/// Direct HTTP wrappers that bypass the SDK's unstable-prefix logic. Used when
-/// `useExtendedProfileUsesStableEndpoint()` is true.
+function isNotFound(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { httpStatus?: number; errcode?: string };
+  return e.httpStatus === 404 || e.errcode === 'M_UNRECOGNIZED' || e.errcode === 'M_NOT_FOUND';
+}
+
+/// Direct HTTP wrappers that bypass the SDK's unstable-prefix logic. Try the
+/// v1.15 stable endpoint first; on 404 / M_UNRECOGNIZED, retry against the
+/// unstable namespace (the SDK's old default).
 export async function fetchExtendedProfileStable(
   mx: MatrixClient,
   userId: string
 ): Promise<unknown> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (mx.http as any).authedRequest('GET', profilePath(userId), undefined, undefined, {
-    prefix: V3_PREFIX,
-  });
+  const req = (mx.http as any).authedRequest.bind(mx.http);
+  try {
+    return await req('GET', profilePath(userId), undefined, undefined, { prefix: V3_PREFIX });
+  } catch (err) {
+    if (!isNotFound(err)) throw err;
+    return req('GET', profilePath(userId), undefined, undefined, { prefix: UNSTABLE_PREFIX });
+  }
 }
 
 export async function setExtendedProfilePropertyStable(
@@ -66,13 +79,15 @@ export async function setExtendedProfilePropertyStable(
   value: unknown
 ): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (mx.http as any).authedRequest(
-    'PUT',
-    profileFieldPath(userId, key),
-    undefined,
-    { [key]: value },
-    { prefix: V3_PREFIX }
-  );
+  const req = (mx.http as any).authedRequest.bind(mx.http);
+  const path = profileFieldPath(userId, key);
+  const body = { [key]: value };
+  try {
+    await req('PUT', path, undefined, body, { prefix: V3_PREFIX });
+  } catch (err) {
+    if (!isNotFound(err)) throw err;
+    await req('PUT', path, undefined, body, { prefix: UNSTABLE_PREFIX });
+  }
 }
 
 export async function deleteExtendedProfilePropertyStable(
@@ -81,13 +96,14 @@ export async function deleteExtendedProfilePropertyStable(
   key: string
 ): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (mx.http as any).authedRequest(
-    'DELETE',
-    profileFieldPath(userId, key),
-    undefined,
-    undefined,
-    { prefix: V3_PREFIX }
-  );
+  const req = (mx.http as any).authedRequest.bind(mx.http);
+  const path = profileFieldPath(userId, key);
+  try {
+    await req('DELETE', path, undefined, undefined, { prefix: V3_PREFIX });
+  } catch (err) {
+    if (!isNotFound(err)) throw err;
+    await req('DELETE', path, undefined, undefined, { prefix: UNSTABLE_PREFIX });
+  }
 }
 
 export type ExtendedProfileResult = {

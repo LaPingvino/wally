@@ -25,6 +25,16 @@ function makeMockClient() {
   return { mx, authedRequest };
 }
 
+class MockMatrixError extends Error {
+  httpStatus: number;
+  errcode: string;
+  constructor(httpStatus: number, errcode = 'M_UNRECOGNIZED') {
+    super(`[${httpStatus}] ${errcode}`);
+    this.httpStatus = httpStatus;
+    this.errcode = errcode;
+  }
+}
+
 describe('extended profile stable-endpoint wrappers', () => {
   const userId = '@joop:chat.kiefte.eu';
 
@@ -73,6 +83,47 @@ describe('extended profile stable-endpoint wrappers', () => {
     expect(query).toBeUndefined();
     expect(body).toBeUndefined();
     expect(opts).toEqual({ prefix: '/_matrix/client/v3' });
+  });
+
+  it('GET falls back to /_matrix/client/unstable/uk.tcpip.msc4133/... on 404', async () => {
+    const { mx, authedRequest } = makeMockClient();
+    authedRequest
+      .mockRejectedValueOnce(new MockMatrixError(404, 'M_UNRECOGNIZED'))
+      .mockResolvedValueOnce({ displayname: 'fallback' });
+
+    const result = await fetchExtendedProfileStable(mx, userId);
+
+    expect(authedRequest).toHaveBeenCalledTimes(2);
+    expect(authedRequest.mock.calls[0][4]).toEqual({ prefix: '/_matrix/client/v3' });
+    expect(authedRequest.mock.calls[1][4]).toEqual({
+      prefix: '/_matrix/client/unstable/uk.tcpip.msc4133',
+    });
+    expect(result).toEqual({ displayname: 'fallback' });
+  });
+
+  it('PUT falls back to unstable on 404 and sends the same body', async () => {
+    const { mx, authedRequest } = makeMockClient();
+    authedRequest
+      .mockRejectedValueOnce(new MockMatrixError(404))
+      .mockResolvedValueOnce({});
+
+    await setExtendedProfilePropertyStable(mx, userId, 'us.cloke.msc4175.tz', 'Europe/Lisbon');
+
+    expect(authedRequest).toHaveBeenCalledTimes(2);
+    expect(authedRequest.mock.calls[0][4]).toEqual({ prefix: '/_matrix/client/v3' });
+    expect(authedRequest.mock.calls[1][4]).toEqual({
+      prefix: '/_matrix/client/unstable/uk.tcpip.msc4133',
+    });
+    expect(authedRequest.mock.calls[1][3]).toEqual({ 'us.cloke.msc4175.tz': 'Europe/Lisbon' });
+  });
+
+  it('does NOT fall back on non-404 errors (e.g. 403 forbidden)', async () => {
+    const { mx, authedRequest } = makeMockClient();
+    const err = new MockMatrixError(403, 'M_FORBIDDEN');
+    authedRequest.mockRejectedValueOnce(err);
+
+    await expect(fetchExtendedProfileStable(mx, userId)).rejects.toBe(err);
+    expect(authedRequest).toHaveBeenCalledTimes(1);
   });
 
   it('percent-encodes user IDs and field keys with reserved characters', async () => {
