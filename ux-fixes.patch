@@ -565,10 +565,10 @@ index 4be501bdc..abc8a5288 100644
    paddingTop: 0,
  });
 diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
-index e6bbcbdf5..2a3a09aab 100644
+index 77646843e..53b71ecd3 100644
 --- a/src/app/features/settings/account/Profile.tsx
 +++ b/src/app/features/settings/account/Profile.tsx
-@@ -168,6 +168,30 @@ export function Profile() {
+@@ -183,6 +183,30 @@ export function Profile() {
            // so we have to update the defaults explicitly here
            setFieldDefaults(fields);
          }
@@ -597,8 +597,8 @@ index e6bbcbdf5..2a3a09aab 100644
 +          })
 +        );
        },
-       [mx, userId, refreshExtendedProfile, extendedProfileSupported, setFieldDefaults]
-     )
+       [
+         mx,
 diff --git a/src/app/hooks/useCommands.ts b/src/app/hooks/useCommands.ts
 index c02b0e94e..6541a9c36 100644
 --- a/src/app/hooks/useCommands.ts

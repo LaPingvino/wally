@@ -359,10 +359,10 @@ index 000000000..55f68b47f
 +  return null;
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index 41169080e..3e046d5ed 100644
+index 5628ccf90..5d7bc15d4 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
-@@ -49,6 +49,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+@@ -55,6 +55,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
  
    const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
    const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
@@ -370,7 +370,7 @@ index 41169080e..3e046d5ed 100644
    const [page, setPage] = useState<DeveloperToolsPage>({ name: 'index' });
    const [globalExpand, setGlobalExpand] = useState(false);
    const [profileExpand, setProfileExpand] = useState(false);
-@@ -152,6 +153,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
+@@ -166,6 +167,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                            />
                          }
                        />

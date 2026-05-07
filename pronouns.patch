@@ -1161,10 +1161,10 @@ index 5e1a20f4a..fc8e1a7ff 100644
                  </Avatar>
                  <Text size="H4" truncate>
 diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
-index e982a7992..e6bbcbdf5 100644
+index e982a7992..77646843e 100644
 --- a/src/app/features/settings/account/Profile.tsx
 +++ b/src/app/features/settings/account/Profile.tsx
-@@ -1,324 +1,307 @@
+@@ -1,324 +1,329 @@
 -import React, {
 -  ChangeEventHandler,
 -  FormEventHandler,
@@ -1208,8 +1208,11 @@ index e982a7992..e6bbcbdf5 100644
 +import { UserHero, UserHeroName } from '../../../components/user-profile/UserHero';
 +import {
 +  ExtendedProfile,
++  deleteExtendedProfilePropertyStable,
 +  profileEditsAllowed,
++  setExtendedProfilePropertyStable,
 +  useExtendedProfile,
++  useExtendedProfileUsesStableEndpoint,
 +} from '../../../hooks/useExtendedProfile';
 +import { ProfileFieldContext, ProfileFieldElementProps } from './fields/ProfileFieldContext';
  import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -1469,6 +1472,7 @@ index e982a7992..e6bbcbdf5 100644
 +    refetch: refreshExtendedProfile,
 +  } = useExtendedProfile(userId);
 +  const extendedProfileSupported = extendedProfile !== null;
++  const useStableExtendedProfileEndpoint = useExtendedProfileUsesStableEndpoint();
 +  const legacyProfile = useUserProfile(userId);
  
 -  const handleReset = () => {
@@ -1509,10 +1513,15 @@ index e982a7992..e6bbcbdf5 100644
 +  // it has to be a layout effect to prevent flickering on saves.
 +  // if MSC4133 isn't supported by the HS this does nothing
 +  useLayoutEffect(() => {
-+    // `extendedProfile` includes the old dn/av fields, so
-+    // we don't have to add those here
 +    if (extendedProfile) {
-+      setFieldDefaults(extendedProfile);
++      // Merge rather than replace: when the fetch errors we fall back to `{}`
++      // and we don't want that to wipe out the legacy displayname/avatar_url
++      // we already seeded from `useUserProfile`.
++      setFieldDefaults((prev) => ({
++        displayname: extendedProfile.displayname ?? prev.displayname,
++        avatar_url: extendedProfile.avatar_url ?? prev.avatar_url,
++        ...extendedProfile,
++      }));
 +    }
 +  }, [setFieldDefaults, extendedProfile]);
  
@@ -1562,7 +1571,13 @@ index e982a7992..e6bbcbdf5 100644
 +          await Promise.all(
 +            Object.entries(fields).map(async ([key, value]) => {
 +              if (value === undefined) {
-+                await mx.deleteExtendedProfileProperty(key);
++                if (useStableExtendedProfileEndpoint) {
++                  await deleteExtendedProfilePropertyStable(mx, userId, key);
++                } else {
++                  await mx.deleteExtendedProfileProperty(key);
++                }
++              } else if (useStableExtendedProfileEndpoint) {
++                await setExtendedProfilePropertyStable(mx, userId, key, value);
 +              } else {
 +                await mx.setExtendedProfileProperty(key, value);
                }
@@ -1607,7 +1622,14 @@ index e982a7992..e6bbcbdf5 100644
 +          setFieldDefaults(fields);
 +        }
 +      },
-+      [mx, userId, refreshExtendedProfile, extendedProfileSupported, setFieldDefaults]
++      [
++        mx,
++        userId,
++        refreshExtendedProfile,
++        extendedProfileSupported,
++        useStableExtendedProfileEndpoint,
++        setFieldDefaults,
++      ]
 +    )
    );
 -}
@@ -2546,7 +2568,7 @@ index 000000000..9c9cbe6ad
 +  );
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567b..a78c12e07 100644
+index a3f04567b..d3e85897b 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -1,5 +1,7 @@
@@ -2557,7 +2579,7 @@ index a3f04567b..a78c12e07 100644
  import { Page, PageContent, PageHeader } from '../../../components/page';
  import { SequenceCard } from '../../../components/sequence-card';
  import { SequenceCardStyle } from '../styles.css';
-@@ -8,117 +10,209 @@ import { useSetting } from '../../../state/hooks/settings';
+@@ -8,117 +10,223 @@ import { useSetting } from '../../../state/hooks/settings';
  import { settingsAtom } from '../../../state/settings';
  import { useMatrixClient } from '../../../hooks/useMatrixClient';
  import {
@@ -2568,7 +2590,12 @@ index a3f04567b..a78c12e07 100644
  import { copyToClipboard } from '../../../utils/dom';
 -import { AccountData } from './AccountData';
 +import { AccountDataList } from './AccountDataList';
-+import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
++import {
++  deleteExtendedProfilePropertyStable,
++  setExtendedProfilePropertyStable,
++  useExtendedProfile,
++  useExtendedProfileUsesStableEndpoint,
++} from '../../../hooks/useExtendedProfile';
 +import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
 +import { CollapsibleCard } from '../../../components/CollapsibleCard';
 +
@@ -2598,6 +2625,7 @@ index a3f04567b..a78c12e07 100644
 +  );
 +
 +  const { data: extendedProfile, refetch: refreshExtendedProfile } = useExtendedProfile(userId);
++  const useStableExtendedProfileEndpoint = useExtendedProfileUsesStableEndpoint();
 +
    const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
 -  const [expand, setExpend] = useState(false);
@@ -2668,18 +2696,26 @@ index a3f04567b..a78c12e07 100644
 -                        onChange={setDeveloperTools}
 +  const submitProfileField: AccountDataSubmitCallback = useCallback(
 +    async (type, content) => {
-+      await mx.setExtendedProfileProperty(type, content);
++      if (useStableExtendedProfileEndpoint) {
++        await setExtendedProfilePropertyStable(mx, userId, type, content);
++      } else {
++        await mx.setExtendedProfileProperty(type, content);
++      }
 +      await refreshExtendedProfile();
 +    },
-+    [mx, refreshExtendedProfile]
++    [mx, userId, refreshExtendedProfile, useStableExtendedProfileEndpoint]
 +  );
 +
 +  const deleteProfileField: AccountDataDeleteCallback = useCallback(
 +    async (type) => {
-+      await mx.deleteExtendedProfileProperty(type);
++      if (useStableExtendedProfileEndpoint) {
++        await deleteExtendedProfilePropertyStable(mx, userId, type);
++      } else {
++        await mx.deleteExtendedProfileProperty(type);
++      }
 +      await refreshExtendedProfile();
 +    },
-+    [mx, refreshExtendedProfile]
++    [mx, userId, refreshExtendedProfile, useStableExtendedProfileEndpoint]
 +  );
 +
 +  const handleClose = useCallback(() => setPage({ name: 'index' }), [setPage]);
@@ -2933,16 +2969,109 @@ index 00128c8fe..35baa9cb1 100644
        <SequenceCard
          className={SequenceCardStyle}
          variant="SurfaceVariant"
+diff --git a/src/app/hooks/__tests__/extendedProfileStable.test.ts b/src/app/hooks/__tests__/extendedProfileStable.test.ts
+new file mode 100644
+index 000000000..6f6ec82ad
+--- /dev/null
++++ b/src/app/hooks/__tests__/extendedProfileStable.test.ts
+@@ -0,0 +1,87 @@
++/**
++ * Tests for the stable-endpoint MSC4133 wrappers.
++ *
++ * Why these exist: some servers (notably Continuwuity at the time of writing)
++ * advertise spec v1.15 — which stabilised MSC4133 at /_matrix/client/v3 — but
++ * do NOT advertise the `uk.tcpip.msc4133.stable` unstable-feature flag that
++ * matrix-js-sdk's `getExtendedProfileRequestPrefix()` probes for. The SDK
++ * therefore falls back to /_matrix/client/unstable/uk.tcpip.msc4133/...
++ * which 404s on those servers, breaking pronouns/timezone editing.
++ *
++ * These tests pin the URL, method, and prefix our wrappers emit so a future
++ * SDK / refactor can't silently re-introduce the bug.
++ */
++import { describe, it, expect, vi } from 'vitest';
++import type { MatrixClient } from 'matrix-js-sdk';
++import {
++  fetchExtendedProfileStable,
++  setExtendedProfilePropertyStable,
++  deleteExtendedProfilePropertyStable,
++} from '../useExtendedProfile';
++
++function makeMockClient() {
++  const authedRequest = vi.fn().mockResolvedValue({});
++  const mx = { http: { authedRequest } } as unknown as MatrixClient;
++  return { mx, authedRequest };
++}
++
++describe('extended profile stable-endpoint wrappers', () => {
++  const userId = '@joop:chat.kiefte.eu';
++
++  it('GET hits /_matrix/client/v3/profile/{userId}, not the unstable URL', async () => {
++    const { mx, authedRequest } = makeMockClient();
++    await fetchExtendedProfileStable(mx, userId);
++
++    expect(authedRequest).toHaveBeenCalledTimes(1);
++    const [method, path, query, body, opts] = authedRequest.mock.calls[0];
++    expect(method).toBe('GET');
++    expect(path).toBe(`/profile/${encodeURIComponent(userId)}`);
++    expect(query).toBeUndefined();
++    expect(body).toBeUndefined();
++    expect(opts).toEqual({ prefix: '/_matrix/client/v3' });
++
++    // Sanity: the assembled prefix+path must NOT mention the unstable namespace.
++    const assembled = `${opts.prefix}${path}`;
++    expect(assembled).not.toMatch(/unstable/);
++    expect(assembled).not.toMatch(/uk\.tcpip\.msc4133/);
++  });
++
++  it('PUT writes a single key with the correct body shape', async () => {
++    const { mx, authedRequest } = makeMockClient();
++    const value = [{ language: 'en', summary: 'they/them' }];
++    await setExtendedProfilePropertyStable(mx, userId, 'io.fsky.nyx.pronouns', value);
++
++    const [method, path, query, body, opts] = authedRequest.mock.calls[0];
++    expect(method).toBe('PUT');
++    expect(path).toBe(
++      `/profile/${encodeURIComponent(userId)}/${encodeURIComponent('io.fsky.nyx.pronouns')}`
++    );
++    expect(query).toBeUndefined();
++    expect(body).toEqual({ 'io.fsky.nyx.pronouns': value });
++    expect(opts).toEqual({ prefix: '/_matrix/client/v3' });
++  });
++
++  it('DELETE targets the same field path with no body', async () => {
++    const { mx, authedRequest } = makeMockClient();
++    await deleteExtendedProfilePropertyStable(mx, userId, 'us.cloke.msc4175.tz');
++
++    const [method, path, query, body, opts] = authedRequest.mock.calls[0];
++    expect(method).toBe('DELETE');
++    expect(path).toBe(
++      `/profile/${encodeURIComponent(userId)}/${encodeURIComponent('us.cloke.msc4175.tz')}`
++    );
++    expect(query).toBeUndefined();
++    expect(body).toBeUndefined();
++    expect(opts).toEqual({ prefix: '/_matrix/client/v3' });
++  });
++
++  it('percent-encodes user IDs and field keys with reserved characters', async () => {
++    const { mx, authedRequest } = makeMockClient();
++    // ':' must be encoded; dots in field keys must NOT be (they are unreserved).
++    await setExtendedProfilePropertyStable(mx, '@a:example.org', 'io.fsky.nyx.pronouns', []);
++
++    const [, path] = authedRequest.mock.calls[0];
++    expect(path).toContain('%40a%3Aexample.org');
++    expect(path).toContain('io.fsky.nyx.pronouns');
++  });
++});
 diff --git a/src/app/hooks/useExtendedProfile.ts b/src/app/hooks/useExtendedProfile.ts
 new file mode 100644
-index 000000000..9dacd61cb
+index 000000000..c2e0391b2
 --- /dev/null
 +++ b/src/app/hooks/useExtendedProfile.ts
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,202 @@
 +import { useCallback } from 'react';
 +import z from 'zod';
 +import { useQuery } from '@tanstack/react-query';
-+import { Capabilities } from 'matrix-js-sdk';
++import { Capabilities, MatrixClient } from 'matrix-js-sdk';
 +import { useMatrixClient } from './useMatrixClient';
 +import { useSpecVersions } from './useSpecVersions';
 +import { IProfileFieldsCapability } from '../../types/matrix/common';
@@ -2973,6 +3102,64 @@ index 000000000..9dacd61cb
 +  return unstableFeatures?.['uk.tcpip.msc4133'] || versions.includes('v1.15');
 +}
 +
++/// Whether to use the v1.15 stable endpoint at /_matrix/client/v3/profile/{userId}
++/// instead of letting the SDK pick the unstable prefix. Some servers (e.g.
++/// Continuwuity) support the stable spec but don't advertise the
++/// `uk.tcpip.msc4133.stable` unstable-feature flag the SDK probes for, so the
++/// SDK's own helpers 404 against /_matrix/client/unstable/uk.tcpip.msc4133/...
++export function useExtendedProfileUsesStableEndpoint(): boolean {
++  const { versions } = useSpecVersions();
++  return versions.includes('v1.15');
++}
++
++const V3_PREFIX = '/_matrix/client/v3';
++const profilePath = (userId: string) => `/profile/${encodeURIComponent(userId)}`;
++const profileFieldPath = (userId: string, key: string) =>
++  `${profilePath(userId)}/${encodeURIComponent(key)}`;
++
++/// Direct HTTP wrappers that bypass the SDK's unstable-prefix logic. Used when
++/// `useExtendedProfileUsesStableEndpoint()` is true.
++export async function fetchExtendedProfileStable(
++  mx: MatrixClient,
++  userId: string
++): Promise<unknown> {
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  return (mx.http as any).authedRequest('GET', profilePath(userId), undefined, undefined, {
++    prefix: V3_PREFIX,
++  });
++}
++
++export async function setExtendedProfilePropertyStable(
++  mx: MatrixClient,
++  userId: string,
++  key: string,
++  value: unknown
++): Promise<void> {
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  await (mx.http as any).authedRequest(
++    'PUT',
++    profileFieldPath(userId, key),
++    undefined,
++    { [key]: value },
++    { prefix: V3_PREFIX }
++  );
++}
++
++export async function deleteExtendedProfilePropertyStable(
++  mx: MatrixClient,
++  userId: string,
++  key: string
++): Promise<void> {
++  // eslint-disable-next-line @typescript-eslint/no-explicit-any
++  await (mx.http as any).authedRequest(
++    'DELETE',
++    profileFieldPath(userId, key),
++    undefined,
++    undefined,
++    { prefix: V3_PREFIX }
++  );
++}
++
 +export type ExtendedProfileResult = {
 +  /// `undefined` while the request is in flight, `null` if the HS lacks support,
 +  /// otherwise the parsed extended profile (possibly empty `{}` after a fetch error).
@@ -2988,16 +3175,20 @@ index 000000000..9dacd61cb
 +export function useExtendedProfile(userId: string): ExtendedProfileResult {
 +  const mx = useMatrixClient();
 +  const extendedProfileSupported = useExtendedProfileSupported();
++  const useStable = useExtendedProfileUsesStableEndpoint();
 +  const { data, refetch } = useQuery({
-+    queryKey: ['extended-profile', userId],
++    queryKey: ['extended-profile', userId, useStable],
 +    queryFn: useCallback(async (): Promise<{
 +      profile: ExtendedProfile | null;
 +      error: string | null;
 +    }> => {
 +      if (!extendedProfileSupported) return { profile: null, error: null };
 +      try {
++        const raw = useStable
++          ? await fetchExtendedProfileStable(mx, userId)
++          : await mx.getExtendedProfile(userId);
 +        return {
-+          profile: extendedProfile.parse(await mx.getExtendedProfile(userId)),
++          profile: extendedProfile.parse(raw),
 +          error: null,
 +        };
 +      } catch (err) {
@@ -3010,7 +3201,7 @@ index 000000000..9dacd61cb
 +        console.warn('[extended-profile] fetch failed:', err);
 +        return { profile: {} as ExtendedProfile, error: message };
 +      }
-+    }, [mx, userId, extendedProfileSupported]),
++    }, [mx, userId, extendedProfileSupported, useStable]),
 +    refetchOnMount: false,
 +  });
 +
