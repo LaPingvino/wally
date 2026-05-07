@@ -11,14 +11,13 @@ import {
   Input,
   Menu,
   MenuItem,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   PopOut,
   RectCords,
   Text,
   config,
 } from 'folds';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import {
   activePersonaAtom,
   savedPersonasAtom,
@@ -577,38 +576,26 @@ export function PersonaPicker() {
         }
       />
 
-      {/* Persona edit/add form — rendered as modal overlay so mobile keyboard doesn't close it */}
-      <Overlay open={formOpen} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              onDeactivate: closeForm,
-              clickOutsideDeactivates: true,
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <span>
-              {addMode && (
-                <PersonaForm
-                  title="Add persona"
-                  onSave={handleSaveNew}
-                  onCancel={closeForm}
-                />
-              )}
-              {editIdx !== null && savedPersonas[editIdx] && (
-                <PersonaForm
-                  key={editIdx}
-                  title={`Edit: ${savedPersonas[editIdx].displayname}`}
-                  initial={savedPersonas[editIdx]}
-                  onSave={(edited) => handleSaveEdit(editIdx, edited)}
-                  onCancel={closeForm}
-                />
-              )}
-            </span>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      {/* Persona edit/add form — rendered as native <dialog> so it escapes
+          ancestor clipping and the mobile keyboard doesn't close it. */}
+      <NativeDialog open={formOpen} onClose={closeForm} className={dialogCss.NativeDialog}>
+        {addMode && (
+          <PersonaForm
+            title="Add persona"
+            onSave={handleSaveNew}
+            onCancel={closeForm}
+          />
+        )}
+        {editIdx !== null && savedPersonas[editIdx] && (
+          <PersonaForm
+            key={editIdx}
+            title={`Edit: ${savedPersonas[editIdx].displayname}`}
+            initial={savedPersonas[editIdx]}
+            onSave={(edited) => handleSaveEdit(editIdx, edited)}
+            onCancel={closeForm}
+          />
+        )}
+      </NativeDialog>
     </>
   );
 }

@@ -1,15 +1,15 @@
-import FocusTrap from 'focus-trap-react';
-import { Text, Box, Button, Overlay, OverlayBackdrop, OverlayCenter, Modal } from 'folds';
+import { Text, Box, Button } from 'folds';
 import React, { useState, useMemo, useCallback } from 'react';
 import { ImageEditor } from '../../../../components/image-editor';
 import { SettingTile } from '../../../../components/setting-tile';
 import { CompactUploadCardRenderer } from '../../../../components/upload-card';
+import { NativeDialog } from '../../../../components/NativeDialog';
+import * as dialogCss from '../../../../components/NativeDialog.css';
 import { useFilePicker } from '../../../../hooks/useFilePicker';
 import { useMatrixClient } from '../../../../hooks/useMatrixClient';
 import { useMediaAuthentication } from '../../../../hooks/useMediaAuthentication';
 import { useObjectURL } from '../../../../hooks/useObjectURL';
 import { createUploadAtom, UploadSuccess } from '../../../../state/upload';
-import { stopPropagation } from '../../../../utils/keyboard';
 import { mxcUrlToHttp } from '../../../../utils/matrix';
 import { FieldContext } from '../Profile';
 import { ProfileFieldElementProps } from './ProfileFieldContext';
@@ -92,27 +92,20 @@ export function ProfileAvatar({
         </Box>
       )}
 
-      {imageFileURL && (
-        <Overlay open={false} backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                initialFocus: false,
-                onDeactivate: handleRemoveUpload,
-                clickOutsideDeactivates: true,
-                escapeDeactivates: stopPropagation,
-              }}
-            >
-              <Modal className={ModalWide} variant="Surface" size="500" role="dialog" aria-modal="true" aria-label="Edit Avatar">
-                <ImageEditor
-                  name={imageFile?.name ?? 'Unnamed'}
-                  url={imageFileURL}
-                  requestClose={handleRemoveUpload} />
-              </Modal>
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
+      <NativeDialog
+        open={!!imageFileURL}
+        onClose={handleRemoveUpload}
+        className={dialogCss.NativeDialog}
+      >
+        {imageFileURL && (
+          <div className={ModalWide} role="dialog" aria-modal="true" aria-label="Edit Avatar">
+            <ImageEditor
+              name={imageFile?.name ?? 'Unnamed'}
+              url={imageFileURL}
+              requestClose={handleRemoveUpload} />
+          </div>
+        )}
+      </NativeDialog>
     </SettingTile>
   );
 }

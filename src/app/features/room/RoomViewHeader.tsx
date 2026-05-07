@@ -53,6 +53,8 @@ import { stopPropagation } from '../../utils/keyboard';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getViaServers } from '../../plugins/via-servers';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
 import { RoomPinMenu } from './room-pin-menu';
@@ -780,24 +782,19 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
               <UseStateProvider initial={false}>
                 {(viewTopic, setViewTopic) => (
                   <>
-                    <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
-                      <OverlayCenter>
-                        <FocusTrap
-                          focusTrapOptions={{
-                            initialFocus: false,
-                            clickOutsideDeactivates: true,
-                            onDeactivate: () => setViewTopic(false),
-                            escapeDeactivates: stopPropagation,
-                          }}
-                        >
-                          <RoomTopicViewer
-                            name={name}
-                            topic={topic}
-                            requestClose={() => setViewTopic(false)}
-                          />
-                        </FocusTrap>
-                      </OverlayCenter>
-                    </Overlay>
+                    <NativeDialog
+                      open={viewTopic}
+                      onClose={() => setViewTopic(false)}
+                      className={dialogCss.NativeDialog}
+                    >
+                      {viewTopic && (
+                        <RoomTopicViewer
+                          name={name}
+                          topic={topic}
+                          requestClose={() => setViewTopic(false)}
+                        />
+                      )}
+                    </NativeDialog>
                     <Text
                       as="button"
                       type="button"

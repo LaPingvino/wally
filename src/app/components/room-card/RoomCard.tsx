@@ -8,9 +8,6 @@ import {
   Dialog,
   Icon,
   Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Spinner,
   Text,
   as,
@@ -18,7 +15,8 @@ import {
   config,
 } from 'folds';
 import classNames from 'classnames';
-import FocusTrap from 'focus-trap-react';
+import { NativeDialog } from '../NativeDialog';
+import * as dialogCss from '../NativeDialog.css';
 import * as css from './style.css';
 import { RoomAvatar } from '../room-avatar';
 import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
@@ -26,7 +24,7 @@ import { nameInitials } from '../../utils/common';
 import { millify } from '../../plugins/millify';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { onEnterOrSpace, stopPropagation } from '../../utils/keyboard';
+import { onEnterOrSpace } from '../../utils/keyboard';
 import { RoomType, StateEvent } from '../../../types/matrix/room';
 import { useJoinedRoomId } from '../../hooks/useJoinedRoomId';
 import { useElementSizeObserver } from '../../hooks/useElementSizeObserver';
@@ -101,32 +99,21 @@ function ErrorDialog({
   return (
     <>
       {children(openError)}
-      <Overlay open={viewError} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap
-            focusTrapOptions={{
-              initialFocus: false,
-              clickOutsideDeactivates: true,
-              onDeactivate: closeError,
-              escapeDeactivates: stopPropagation,
-            }}
-          >
-            <Dialog variant="Surface">
-              <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
-                <Box direction="Column" gap="100">
-                  <Text>{title}</Text>
-                  <Text style={{ color: color.Critical.Main }} size="T300" priority="400">
-                    {message}
-                  </Text>
-                </Box>
-                <Button size="400" variant="Secondary" fill="Soft" onClick={closeError}>
-                  <Text size="B400">Cancel</Text>
-                </Button>
-              </Box>
-            </Dialog>
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      <NativeDialog open={viewError} onClose={closeError} className={dialogCss.NativeDialog}>
+        <Dialog variant="Surface">
+          <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
+            <Box direction="Column" gap="100">
+              <Text>{title}</Text>
+              <Text style={{ color: color.Critical.Main }} size="T300" priority="400">
+                {message}
+              </Text>
+            </Box>
+            <Button size="400" variant="Secondary" fill="Soft" onClick={closeError}>
+              <Text size="B400">Cancel</Text>
+            </Button>
+          </Box>
+        </Dialog>
+      </NativeDialog>
     </>
   );
 }
@@ -234,20 +221,9 @@ export const RoomCard = as<'div', RoomCardProps>(
             {roomTopic}
           </RoomCardTopic>
 
-          <Overlay open={viewTopic} backdrop={<OverlayBackdrop />}>
-            <OverlayCenter>
-              <FocusTrap
-                focusTrapOptions={{
-                  initialFocus: false,
-                  clickOutsideDeactivates: true,
-                  onDeactivate: closeTopic,
-                  escapeDeactivates: stopPropagation,
-                }}
-              >
-                {renderTopicViewer(roomName, roomTopic, closeTopic)}
-              </FocusTrap>
-            </OverlayCenter>
-          </Overlay>
+          <NativeDialog open={viewTopic} onClose={closeTopic} className={dialogCss.NativeDialog}>
+            {viewTopic && renderTopicViewer(roomName, roomTopic, closeTopic)}
+          </NativeDialog>
         </Box>
         {typeof joinedMemberCount === 'number' && (
           <Box gap="100">

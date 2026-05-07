@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useKanbanMonitor, useKanbanCardDnD, useKanbanDropTarget, KanbanDropResult } from './useKanbanDnD';
-import FocusTrap from 'focus-trap-react';
 import { EventTimeline, MatrixClient, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
 import {
   Avatar,
@@ -11,9 +10,6 @@ import {
   Icon,
   IconButton,
   Icons,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Scroll,
   Text,
   color,
@@ -25,7 +21,8 @@ import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
-import { stopPropagation } from '../../utils/keyboard';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import { getMemberDisplayName } from '../../utils/room';
 import { UserAvatar } from '../../components/user-avatar';
 import { StateEvent } from '../../../types/matrix/room';
@@ -1982,47 +1979,35 @@ export function IssueBoard({ room }: IssueBoardProps) {
 
       {effectiveViewMode.type === 'kanban' ? renderKanban(effectiveViewMode.fieldKey) : renderList()}
 
-      <Overlay open={editing !== null} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap focusTrapOptions={{ initialFocus: false, clickOutsideDeactivates: true, onDeactivate: closeEdit, escapeDeactivates: stopPropagation }}>
-            {schema && editing !== null && (
-              <IssueForm schema={schema} initial={initialContent} room={room}
-                issueId={editing !== 'new' ? editing.event.getStateKey()! : undefined}
-                creatorId={editing !== 'new' ? editing.creatorId : undefined}
-                lastChangedById={editing !== 'new' ? editing.lastChangedById : undefined}
-                onSave={handleSaveIssue} onCancel={closeEdit}
-                canDelete={editing !== 'new' && canWriteIssues}
-                onDelete={editing !== 'new' ? handleDeleteIssue : undefined} />
-            )}
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      <NativeDialog open={editing !== null} onClose={closeEdit} className={dialogCss.NativeDialog}>
+        {schema && editing !== null && (
+          <IssueForm schema={schema} initial={initialContent} room={room}
+            issueId={editing !== 'new' ? editing.event.getStateKey()! : undefined}
+            creatorId={editing !== 'new' ? editing.creatorId : undefined}
+            lastChangedById={editing !== 'new' ? editing.lastChangedById : undefined}
+            onSave={handleSaveIssue} onCancel={closeEdit}
+            canDelete={editing !== 'new' && canWriteIssues}
+            onDelete={editing !== 'new' ? handleDeleteIssue : undefined} />
+        )}
+      </NativeDialog>
 
-      <Overlay open={editingSchema} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap focusTrapOptions={{ initialFocus: false, clickOutsideDeactivates: true, onDeactivate: closeSchema, escapeDeactivates: stopPropagation }}>
-            {editingSchema && (
-              <SchemaEditor initial={schema} titleText="Edit Schema" onSave={handleSaveSchema} onCancel={closeSchema} />
-            )}
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      <NativeDialog open={editingSchema} onClose={closeSchema} className={dialogCss.NativeDialog}>
+        {editingSchema && (
+          <SchemaEditor initial={schema} titleText="Edit Schema" onSave={handleSaveSchema} onCancel={closeSchema} />
+        )}
+      </NativeDialog>
 
-      <Overlay open={movingIssues} backdrop={<OverlayBackdrop />}>
-        <OverlayCenter>
-          <FocusTrap focusTrapOptions={{ initialFocus: false, clickOutsideDeactivates: true, onDeactivate: () => setMovingIssues(false), escapeDeactivates: stopPropagation }}>
-            {movingIssues && (
-              <MoveIssueDialog
-                sourceRoom={room}
-                sourceSchema={schema}
-                issuesToMove={selectedEntries}
-                onClose={() => setMovingIssues(false)}
-                onMoved={exitSelectionMode}
-              />
-            )}
-          </FocusTrap>
-        </OverlayCenter>
-      </Overlay>
+      <NativeDialog open={movingIssues} onClose={() => setMovingIssues(false)} className={dialogCss.NativeDialog}>
+        {movingIssues && (
+          <MoveIssueDialog
+            sourceRoom={room}
+            sourceSchema={schema}
+            issuesToMove={selectedEntries}
+            onClose={() => setMovingIssues(false)}
+            onMoved={exitSelectionMode}
+          />
+        )}
+      </NativeDialog>
     </Box>
   );
 }

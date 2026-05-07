@@ -3,26 +3,22 @@ import {
   Box,
   Icon,
   Icons,
-  Modal,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
   Text,
   as,
   config,
 } from 'folds';
 import { Room } from 'matrix-js-sdk';
 import classNames from 'classnames';
-import FocusTrap from 'focus-trap-react';
 
 import { getMemberDisplayName } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import * as css from './RoomViewFollowing.css';
+import { NativeDialog } from '../../components/NativeDialog';
+import * as dialogCss from '../../components/NativeDialog.css';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomLatestRenderedEvent } from '../../hooks/useRoomLatestRenderedEvent';
 import { useRoomEventReaders } from '../../hooks/useRoomEventReaders';
 import { EventReaders } from '../../components/event-readers';
-import { stopPropagation } from '../../utils/keyboard';
 
 export function RoomViewFollowingPlaceholder() {
   return <div className={css.RoomViewFollowingPlaceholder} />;
@@ -47,24 +43,11 @@ export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
 
     return (
       <>
-        {eventId && (
-          <Overlay open={open} backdrop={<OverlayBackdrop />}>
-            <OverlayCenter>
-              <FocusTrap
-                focusTrapOptions={{
-                  initialFocus: false,
-                  onDeactivate: () => setOpen(false),
-                  clickOutsideDeactivates: true,
-                  escapeDeactivates: stopPropagation,
-                }}
-              >
-                <Modal variant="Surface" size="300">
-                  <EventReaders room={room} eventId={eventId} requestClose={() => setOpen(false)} />
-                </Modal>
-              </FocusTrap>
-            </OverlayCenter>
-          </Overlay>
-        )}
+        <NativeDialog open={open && !!eventId} onClose={() => setOpen(false)} className={dialogCss.NativeDialog}>
+          {eventId && (
+            <EventReaders room={room} eventId={eventId} requestClose={() => setOpen(false)} />
+          )}
+        </NativeDialog>
         <Box
           as={names.length > 0 ? 'button' : 'div'}
           onClick={names.length > 0 ? () => setOpen(true) : undefined}

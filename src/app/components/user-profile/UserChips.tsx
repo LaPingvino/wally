@@ -22,11 +22,9 @@ import {
   TooltipProvider,
   Tooltip,
   Badge,
-  Overlay,
-  OverlayBackdrop,
-  OverlayCenter,
-  Modal,
 } from 'folds';
+import { NativeDialog } from '../NativeDialog';
+import * as dialogCss from '../NativeDialog.css';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getMxIdServer } from '../../utils/matrix';
 import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
@@ -481,28 +479,22 @@ export function OptionsChip({
 
   return (
     <>
-      {extendedProfile && (
-        <Overlay open={profileFieldsOpen} backdrop={<OverlayBackdrop />}>
-          <OverlayCenter>
-            <FocusTrap
-              focusTrapOptions={{
-                clickOutsideDeactivates: true,
-                onDeactivate: () => setProfileFieldsOpen(false),
-                escapeDeactivates: stopPropagation,
-              }}
-            >
-              <Modal variant="Surface" size="500" role="dialog" aria-modal="true" aria-label="Profile Fields">
-                <TextViewer
-                  name="Profile Fields"
-                  langName="json"
-                  text={JSON.stringify(extendedProfile, null, 2)}
-                  requestClose={() => setProfileFieldsOpen(false)}
-                />
-              </Modal>
-            </FocusTrap>
-          </OverlayCenter>
-        </Overlay>
-      )}
+      <NativeDialog
+        open={profileFieldsOpen && !!extendedProfile}
+        onClose={() => setProfileFieldsOpen(false)}
+        className={dialogCss.NativeDialog}
+      >
+        {extendedProfile && (
+          <div role="dialog" aria-modal="true" aria-label="Profile Fields">
+            <TextViewer
+              name="Profile Fields"
+              langName="json"
+              text={JSON.stringify(extendedProfile, null, 2)}
+              requestClose={() => setProfileFieldsOpen(false)}
+            />
+          </div>
+        )}
+      </NativeDialog>
       <PopOut
         anchor={menuCoords}
         position="Bottom"
