@@ -9,8 +9,11 @@ import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { UserHero, UserHeroName } from '../../../components/user-profile/UserHero';
 import {
   ExtendedProfile,
+  deleteExtendedProfilePropertyStable,
   profileEditsAllowed,
+  setExtendedProfilePropertyStable,
   useExtendedProfile,
+  useExtendedProfileUsesStableEndpoint,
 } from '../../../hooks/useExtendedProfile';
 import { ProfileFieldContext, ProfileFieldElementProps } from './fields/ProfileFieldContext';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -99,6 +102,7 @@ export function Profile() {
     refetch: refreshExtendedProfile,
   } = useExtendedProfile(userId);
   const extendedProfileSupported = extendedProfile !== null;
+  const useStableExtendedProfileEndpoint = useExtendedProfileUsesStableEndpoint();
   const legacyProfile = useUserProfile(userId);
 
   // next-gen auth identity providers may provide profile settings if they want
@@ -127,10 +131,15 @@ export function Profile() {
   // it has to be a layout effect to prevent flickering on saves.
   // if MSC4133 isn't supported by the HS this does nothing
   useLayoutEffect(() => {
-    // `extendedProfile` includes the old dn/av fields, so
-    // we don't have to add those here
     if (extendedProfile) {
-      setFieldDefaults(extendedProfile);
+      // Merge rather than replace: when the fetch errors we fall back to `{}`
+      // and we don't want that to wipe out the legacy displayname/avatar_url
+      // we already seeded from `useUserProfile`.
+      setFieldDefaults((prev) => ({
+        displayname: extendedProfile.displayname ?? prev.displayname,
+        avatar_url: extendedProfile.avatar_url ?? prev.avatar_url,
+        ...extendedProfile,
+      }));
     }
   }, [setFieldDefaults, extendedProfile]);
 
@@ -141,7 +150,13 @@ export function Profile() {
           await Promise.all(
             Object.entries(fields).map(async ([key, value]) => {
               if (value === undefined) {
-                await mx.deleteExtendedProfileProperty(key);
+                if (useStableExtendedProfileEndpoint) {
+                  await deleteExtendedProfilePropertyStable(mx, userId, key);
+                } else {
+                  await mx.deleteExtendedProfileProperty(key);
+                }
+              } else if (useStableExtendedProfileEndpoint) {
+                await setExtendedProfilePropertyStable(mx, userId, key, value);
               } else {
                 await mx.setExtendedProfileProperty(key, value);
               }
@@ -193,7 +208,14 @@ export function Profile() {
           })
         );
       },
-      [mx, userId, refreshExtendedProfile, extendedProfileSupported, setFieldDefaults]
+      [
+        mx,
+        userId,
+        refreshExtendedProfile,
+        extendedProfileSupported,
+        useStableExtendedProfileEndpoint,
+        setFieldDefaults,
+      ]
     )
   );
 

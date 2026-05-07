@@ -16,7 +16,12 @@ import {
 } from '../../../components/AccountDataEditor';
 import { copyToClipboard } from '../../../utils/dom';
 import { AccountDataList } from './AccountDataList';
-import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
+import {
+  deleteExtendedProfilePropertyStable,
+  setExtendedProfilePropertyStable,
+  useExtendedProfile,
+  useExtendedProfileUsesStableEndpoint,
+} from '../../../hooks/useExtendedProfile';
 import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
 import { CollapsibleCard } from '../../../components/CollapsibleCard';
 
@@ -46,6 +51,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   );
 
   const { data: extendedProfile, refetch: refreshExtendedProfile } = useExtendedProfile(userId);
+  const useStableExtendedProfileEndpoint = useExtendedProfileUsesStableEndpoint();
 
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
   const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
@@ -71,18 +77,26 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
 
   const submitProfileField: AccountDataSubmitCallback = useCallback(
     async (type, content) => {
-      await mx.setExtendedProfileProperty(type, content);
+      if (useStableExtendedProfileEndpoint) {
+        await setExtendedProfilePropertyStable(mx, userId, type, content);
+      } else {
+        await mx.setExtendedProfileProperty(type, content);
+      }
       await refreshExtendedProfile();
     },
-    [mx, refreshExtendedProfile]
+    [mx, userId, refreshExtendedProfile, useStableExtendedProfileEndpoint]
   );
 
   const deleteProfileField: AccountDataDeleteCallback = useCallback(
     async (type) => {
-      await mx.deleteExtendedProfileProperty(type);
+      if (useStableExtendedProfileEndpoint) {
+        await deleteExtendedProfilePropertyStable(mx, userId, type);
+      } else {
+        await mx.deleteExtendedProfileProperty(type);
+      }
       await refreshExtendedProfile();
     },
-    [mx, refreshExtendedProfile]
+    [mx, userId, refreshExtendedProfile, useStableExtendedProfileEndpoint]
   );
 
   const handleClose = useCallback(() => setPage({ name: 'index' }), [setPage]);
