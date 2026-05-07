@@ -26,7 +26,7 @@ matching `.skipped` file lists the commits that were dropped, so
 you can apply those manually from the per-family branch.
 
 - `accessibility.patch` — partial (31/54 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account; see `accessibility.skipped`
-- `idb-retry.patch` — partial (4/17 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
+- `idb-retry.patch` — partial (4/18 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
 - `ux-fixes.patch` — partial (21/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/7 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 
@@ -38,4 +38,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-05T22:38:18Z_
+_Generated 2026-05-07T16:41:32Z_

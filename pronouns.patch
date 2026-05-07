@@ -2911,10 +2911,10 @@ index 00128c8fe..35baa9cb1 100644
          variant="SurfaceVariant"
 diff --git a/src/app/hooks/useExtendedProfile.ts b/src/app/hooks/useExtendedProfile.ts
 new file mode 100644
-index 000000000..b2b79c51f
+index 000000000..598fdb356
 --- /dev/null
 +++ b/src/app/hooks/useExtendedProfile.ts
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,121 @@
 +import { useCallback } from 'react';
 +import z from 'zod';
 +import { useQuery } from '@tanstack/react-query';
@@ -2959,10 +2959,15 @@ index 000000000..b2b79c51f
 +  const { data, refetch } = useQuery({
 +    queryKey: ['extended-profile', userId],
 +    queryFn: useCallback(async () => {
-+      if (extendedProfileSupported) {
++      if (!extendedProfileSupported) return null;
++      try {
 +        return extendedProfile.parse(await mx.getExtendedProfile(userId));
++      } catch {
++        // Fetch or parse failed (server lied about support, transient
++        // post-crash-recovery error, etc). Treat as "no extended profile"
++        // so the UI doesn't stay stuck in a busy/greyed-out state.
++        return null;
 +      }
-+      return null;
 +    }, [mx, userId, extendedProfileSupported]),
 +    refetchOnMount: false,
 +  });

@@ -11,3 +11,4 @@ d2700b36  idb-retry: wire up unhandledrejection listener to trigger auto-repair
 afd1c75f  idb-retry: banner during auto-repair reload
 a6b84e02  idb-retry: log device key fingerprints to detect identity rotation
 b8ddbbd1  idb-retry: gate unhandledrejection auto-repair on confirmed probe failure
+69de4661  idb-retry: simplify recovery splash copy
