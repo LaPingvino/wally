@@ -2971,10 +2971,10 @@ index 00128c8fe..35baa9cb1 100644
          variant="SurfaceVariant"
 diff --git a/src/app/hooks/__tests__/extendedProfileStable.test.ts b/src/app/hooks/__tests__/extendedProfileStable.test.ts
 new file mode 100644
-index 000000000..6f6ec82ad
+index 000000000..20e94c673
 --- /dev/null
 +++ b/src/app/hooks/__tests__/extendedProfileStable.test.ts
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,138 @@
 +/**
 + * Tests for the stable-endpoint MSC4133 wrappers.
 + *
@@ -3000,6 +3000,16 @@ index 000000000..6f6ec82ad
 +  const authedRequest = vi.fn().mockResolvedValue({});
 +  const mx = { http: { authedRequest } } as unknown as MatrixClient;
 +  return { mx, authedRequest };
++}
++
++class MockMatrixError extends Error {
++  httpStatus: number;
++  errcode: string;
++  constructor(httpStatus: number, errcode = 'M_UNRECOGNIZED') {
++    super(`[${httpStatus}] ${errcode}`);
++    this.httpStatus = httpStatus;
++    this.errcode = errcode;
++  }
 +}
 +
 +describe('extended profile stable-endpoint wrappers', () => {
@@ -3052,6 +3062,47 @@ index 000000000..6f6ec82ad
 +    expect(opts).toEqual({ prefix: '/_matrix/client/v3' });
 +  });
 +
++  it('GET falls back to /_matrix/client/unstable/uk.tcpip.msc4133/... on 404', async () => {
++    const { mx, authedRequest } = makeMockClient();
++    authedRequest
++      .mockRejectedValueOnce(new MockMatrixError(404, 'M_UNRECOGNIZED'))
++      .mockResolvedValueOnce({ displayname: 'fallback' });
++
++    const result = await fetchExtendedProfileStable(mx, userId);
++
++    expect(authedRequest).toHaveBeenCalledTimes(2);
++    expect(authedRequest.mock.calls[0][4]).toEqual({ prefix: '/_matrix/client/v3' });
++    expect(authedRequest.mock.calls[1][4]).toEqual({
++      prefix: '/_matrix/client/unstable/uk.tcpip.msc4133',
++    });
++    expect(result).toEqual({ displayname: 'fallback' });
++  });
++
++  it('PUT falls back to unstable on 404 and sends the same body', async () => {
++    const { mx, authedRequest } = makeMockClient();
++    authedRequest
++      .mockRejectedValueOnce(new MockMatrixError(404))
++      .mockResolvedValueOnce({});
++
++    await setExtendedProfilePropertyStable(mx, userId, 'us.cloke.msc4175.tz', 'Europe/Lisbon');
++
++    expect(authedRequest).toHaveBeenCalledTimes(2);
++    expect(authedRequest.mock.calls[0][4]).toEqual({ prefix: '/_matrix/client/v3' });
++    expect(authedRequest.mock.calls[1][4]).toEqual({
++      prefix: '/_matrix/client/unstable/uk.tcpip.msc4133',
++    });
++    expect(authedRequest.mock.calls[1][3]).toEqual({ 'us.cloke.msc4175.tz': 'Europe/Lisbon' });
++  });
++
++  it('does NOT fall back on non-404 errors (e.g. 403 forbidden)', async () => {
++    const { mx, authedRequest } = makeMockClient();
++    const err = new MockMatrixError(403, 'M_FORBIDDEN');
++    authedRequest.mockRejectedValueOnce(err);
++
++    await expect(fetchExtendedProfileStable(mx, userId)).rejects.toBe(err);
++    expect(authedRequest).toHaveBeenCalledTimes(1);
++  });
++
 +  it('percent-encodes user IDs and field keys with reserved characters', async () => {
 +    const { mx, authedRequest } = makeMockClient();
 +    // ':' must be encoded; dots in field keys must NOT be (they are unreserved).
@@ -3064,10 +3115,10 @@ index 000000000..6f6ec82ad
 +});
 diff --git a/src/app/hooks/useExtendedProfile.ts b/src/app/hooks/useExtendedProfile.ts
 new file mode 100644
-index 000000000..c2e0391b2
+index 000000000..f06e6aea4
 --- /dev/null
 +++ b/src/app/hooks/useExtendedProfile.ts
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,218 @@
 +import { useCallback } from 'react';
 +import z from 'zod';
 +import { useQuery } from '@tanstack/react-query';
@@ -3102,31 +3153,44 @@ index 000000000..c2e0391b2
 +  return unstableFeatures?.['uk.tcpip.msc4133'] || versions.includes('v1.15');
 +}
 +
-+/// Whether to use the v1.15 stable endpoint at /_matrix/client/v3/profile/{userId}
-+/// instead of letting the SDK pick the unstable prefix. Some servers (e.g.
-+/// Continuwuity) support the stable spec but don't advertise the
-+/// `uk.tcpip.msc4133.stable` unstable-feature flag the SDK probes for, so the
-+/// SDK's own helpers 404 against /_matrix/client/unstable/uk.tcpip.msc4133/...
++/// Whether to bypass the SDK's prefix logic for MSC4133 calls. Always true if
++/// the homeserver claims support at all — we try the v1.15 stable endpoint
++/// first, then fall back to the unstable namespace on 404. This handles both
++/// servers that advertise `v1.15` (e.g. modern Continuwuity) and servers that
++/// only advertise the `uk.tcpip.msc4133` unstable feature flag, including the
++/// pathological case where the SDK's own probe of `uk.tcpip.msc4133.stable`
++/// gets the wrong answer and 404s our request.
 +export function useExtendedProfileUsesStableEndpoint(): boolean {
-+  const { versions } = useSpecVersions();
-+  return versions.includes('v1.15');
++  return useExtendedProfileSupported();
 +}
 +
 +const V3_PREFIX = '/_matrix/client/v3';
++const UNSTABLE_PREFIX = '/_matrix/client/unstable/uk.tcpip.msc4133';
 +const profilePath = (userId: string) => `/profile/${encodeURIComponent(userId)}`;
 +const profileFieldPath = (userId: string, key: string) =>
 +  `${profilePath(userId)}/${encodeURIComponent(key)}`;
 +
-+/// Direct HTTP wrappers that bypass the SDK's unstable-prefix logic. Used when
-+/// `useExtendedProfileUsesStableEndpoint()` is true.
++function isNotFound(err: unknown): boolean {
++  if (!err || typeof err !== 'object') return false;
++  const e = err as { httpStatus?: number; errcode?: string };
++  return e.httpStatus === 404 || e.errcode === 'M_UNRECOGNIZED' || e.errcode === 'M_NOT_FOUND';
++}
++
++/// Direct HTTP wrappers that bypass the SDK's unstable-prefix logic. Try the
++/// v1.15 stable endpoint first; on 404 / M_UNRECOGNIZED, retry against the
++/// unstable namespace (the SDK's old default).
 +export async function fetchExtendedProfileStable(
 +  mx: MatrixClient,
 +  userId: string
 +): Promise<unknown> {
 +  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-+  return (mx.http as any).authedRequest('GET', profilePath(userId), undefined, undefined, {
-+    prefix: V3_PREFIX,
-+  });
++  const req = (mx.http as any).authedRequest.bind(mx.http);
++  try {
++    return await req('GET', profilePath(userId), undefined, undefined, { prefix: V3_PREFIX });
++  } catch (err) {
++    if (!isNotFound(err)) throw err;
++    return req('GET', profilePath(userId), undefined, undefined, { prefix: UNSTABLE_PREFIX });
++  }
 +}
 +
 +export async function setExtendedProfilePropertyStable(
@@ -3136,13 +3200,15 @@ index 000000000..c2e0391b2
 +  value: unknown
 +): Promise<void> {
 +  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-+  await (mx.http as any).authedRequest(
-+    'PUT',
-+    profileFieldPath(userId, key),
-+    undefined,
-+    { [key]: value },
-+    { prefix: V3_PREFIX }
-+  );
++  const req = (mx.http as any).authedRequest.bind(mx.http);
++  const path = profileFieldPath(userId, key);
++  const body = { [key]: value };
++  try {
++    await req('PUT', path, undefined, body, { prefix: V3_PREFIX });
++  } catch (err) {
++    if (!isNotFound(err)) throw err;
++    await req('PUT', path, undefined, body, { prefix: UNSTABLE_PREFIX });
++  }
 +}
 +
 +export async function deleteExtendedProfilePropertyStable(
@@ -3151,13 +3217,14 @@ index 000000000..c2e0391b2
 +  key: string
 +): Promise<void> {
 +  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-+  await (mx.http as any).authedRequest(
-+    'DELETE',
-+    profileFieldPath(userId, key),
-+    undefined,
-+    undefined,
-+    { prefix: V3_PREFIX }
-+  );
++  const req = (mx.http as any).authedRequest.bind(mx.http);
++  const path = profileFieldPath(userId, key);
++  try {
++    await req('DELETE', path, undefined, undefined, { prefix: V3_PREFIX });
++  } catch (err) {
++    if (!isNotFound(err)) throw err;
++    await req('DELETE', path, undefined, undefined, { prefix: UNSTABLE_PREFIX });
++  }
 +}
 +
 +export type ExtendedProfileResult = {
