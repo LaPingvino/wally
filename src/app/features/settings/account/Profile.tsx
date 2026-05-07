@@ -93,7 +93,11 @@ export function Profile() {
   const useAuthentication = useMediaAuthentication();
   const capabilities = useCapabilities();
 
-  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
+  const {
+    data: extendedProfile,
+    error: extendedProfileError,
+    refetch: refreshExtendedProfile,
+  } = useExtendedProfile(userId);
   const extendedProfileSupported = extendedProfile !== null;
   const legacyProfile = useUserProfile(userId);
 
@@ -249,6 +253,26 @@ export function Profile() {
                   )}
                   {profileEditableThroughClient && (
                     <>
+                      {extendedProfileError && (
+                        <CutoutCard
+                          style={{ padding: config.space.S200 }}
+                          variant="Critical"
+                        >
+                          <SettingTile>
+                            <Box direction="Column" gap="100">
+                              <Text size="L400">Extended profile fetch failed</Text>
+                              <Text size="T200">
+                                Pronouns/timezone may not load correctly. The
+                                fields below are still editable — saving will
+                                attempt to write the values back.
+                              </Text>
+                              <Text size="T200" priority="300">
+                                {extendedProfileError}
+                              </Text>
+                            </Box>
+                          </SettingTile>
+                        </CutoutCard>
+                      )}
                       <Box gap="300" direction="Column">
                         {fieldElements}
                       </Box>

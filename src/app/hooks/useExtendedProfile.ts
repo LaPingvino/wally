@@ -32,35 +32,54 @@ export function useExtendedProfileSupported(): boolean {
   return unstableFeatures?.['uk.tcpip.msc4133'] || versions.includes('v1.15');
 }
 
+export type ExtendedProfileResult = {
+  /// `undefined` while the request is in flight, `null` if the HS lacks support,
+  /// otherwise the parsed extended profile (possibly empty `{}` after a fetch error).
+  data: ExtendedProfile | undefined | null;
+  /// The error message if the fetch or parse failed. The form still renders the
+  /// MSC4133 fields with empty defaults so the user can attempt to overwrite,
+  /// but this string is surfaced in the UI for debugging.
+  error: string | null;
+  refetch: () => Promise<void>;
+};
+
 /// Returns the user's MSC4133 extended profile, if our homeserver supports it.
-/// This will return `undefined` while the request is in flight and `null` if the HS lacks support.
-export function useExtendedProfile(
-  userId: string
-): [ExtendedProfile | undefined | null, () => Promise<void>] {
+export function useExtendedProfile(userId: string): ExtendedProfileResult {
   const mx = useMatrixClient();
   const extendedProfileSupported = useExtendedProfileSupported();
   const { data, refetch } = useQuery({
     queryKey: ['extended-profile', userId],
-    queryFn: useCallback(async () => {
-      if (!extendedProfileSupported) return null;
+    queryFn: useCallback(async (): Promise<{
+      profile: ExtendedProfile | null;
+      error: string | null;
+    }> => {
+      if (!extendedProfileSupported) return { profile: null, error: null };
       try {
-        return extendedProfile.parse(await mx.getExtendedProfile(userId));
-      } catch {
-        // Fetch or parse failed (server lied about support, transient
-        // post-crash-recovery error, etc). Treat as "no extended profile"
-        // so the UI doesn't stay stuck in a busy/greyed-out state.
-        return null;
+        return {
+          profile: extendedProfile.parse(await mx.getExtendedProfile(userId)),
+          error: null,
+        };
+      } catch (err) {
+        // Server claims MSC4133 support (via unstable_features or v1.15) but
+        // the request or parse failed. Surface the error in the UI rather than
+        // silently hiding the fields, and keep the form usable with empty
+        // defaults so the user can still attempt to write values back.
+        const message = err instanceof Error ? err.message : String(err);
+        // eslint-disable-next-line no-console
+        console.warn('[extended-profile] fetch failed:', err);
+        return { profile: {} as ExtendedProfile, error: message };
       }
     }, [mx, userId, extendedProfileSupported]),
     refetchOnMount: false,
   });
 
-  return [
-    data,
-    async () => {
+  return {
+    data: data?.profile,
+    error: data?.error ?? null,
+    refetch: async () => {
       await refetch();
     },
-  ];
+  };
 }
 
 const LEGACY_FIELDS = ['displayname', 'avatar_url'];

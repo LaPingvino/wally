@@ -84,7 +84,7 @@ import { getPowerTagIconSrc } from '../../../hooks/useMemberPowerTag';
 import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
 
 function InlinePronouns({ userId }: { userId: string }) {
-  const [profile] = useExtendedProfile(userId);
+  const { data: profile } = useExtendedProfile(userId);
   const pronouns = profile?.['io.fsky.nyx.pronouns'];
   if (!pronouns?.length) return null;
   const summary = pronouns.map((p) => p.summary).join(', ');

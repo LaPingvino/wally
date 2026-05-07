@@ -57,7 +57,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
   const displayName = getMemberDisplayName(room, userId);
   const avatarMxc = getMemberAvatarMxc(room, userId);
   const avatarUrl = (avatarMxc && mxcUrlToHttp(mx, avatarMxc, useAuthentication)) ?? undefined;
-  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
+  const { data: extendedProfile, refetch: refreshExtendedProfile } = useExtendedProfile(userId);
   const timezone = useMemo(() => {
     // @ts-expect-error Intl.supportedValuesOf isn't in the types yet
     const supportedTimezones = Intl.supportedValuesOf('timeZone') as string[];

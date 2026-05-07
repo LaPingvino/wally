@@ -45,7 +45,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
     }, [mx])
   );
 
-  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
+  const { data: extendedProfile, refetch: refreshExtendedProfile } = useExtendedProfile(userId);
 
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
   const [issueTracker, setIssueTracker] = useSetting(settingsAtom, 'issueTracker');
