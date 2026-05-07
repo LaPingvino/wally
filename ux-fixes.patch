@@ -474,7 +474,7 @@ index a19058d26..4aab60158 100644
        return;
      }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 4d9ffb99a..ec768ac30 100644
+index 9c5b2ec77..c11bdb94e 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -736,11 +736,11 @@ export const Message = as<'div', MessageProps>(
@@ -565,10 +565,10 @@ index 4be501bdc..abc8a5288 100644
    paddingTop: 0,
  });
 diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
-index 71f5773f3..6fb3806d2 100644
+index e6bbcbdf5..2a3a09aab 100644
 --- a/src/app/features/settings/account/Profile.tsx
 +++ b/src/app/features/settings/account/Profile.tsx
-@@ -164,6 +164,30 @@ export function Profile() {
+@@ -168,6 +168,30 @@ export function Profile() {
            // so we have to update the defaults explicitly here
            setFieldDefaults(fields);
          }

@@ -521,7 +521,7 @@ index 0e7fb7485..54e40402d 100644
        </Box>
      </Box>
 diff --git a/src/app/components/user-profile/UserRoomProfile.tsx b/src/app/components/user-profile/UserRoomProfile.tsx
-index 78d201ec6..cb54083e1 100644
+index 78d201ec6..748261a79 100644
 --- a/src/app/components/user-profile/UserRoomProfile.tsx
 +++ b/src/app/components/user-profile/UserRoomProfile.tsx
 @@ -1,5 +1,5 @@
@@ -552,7 +552,7 @@ index 78d201ec6..cb54083e1 100644
    const displayName = getMemberDisplayName(room, userId);
    const avatarMxc = getMemberAvatarMxc(room, userId);
    const avatarUrl = (avatarMxc && mxcUrlToHttp(mx, avatarMxc, useAuthentication)) ?? undefined;
-+  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
++  const { data: extendedProfile, refetch: refreshExtendedProfile } = useExtendedProfile(userId);
 +  const timezone = useMemo(() => {
 +    // @ts-expect-error Intl.supportedValuesOf isn't in the types yet
 +    const supportedTimezones = Intl.supportedValuesOf('timeZone') as string[];
@@ -1093,7 +1093,7 @@ index 767a967ee..1a618a68e 100644
    );
  }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 2d87e9bde..8b109bbab 100644
+index 2d87e9bde..1daee2737 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -79,6 +79,19 @@ import { MemberPowerTag, StateEvent } from '../../../../types/matrix/room';
@@ -1103,7 +1103,7 @@ index 2d87e9bde..8b109bbab 100644
 +import { useExtendedProfile } from '../../../hooks/useExtendedProfile';
 +
 +function InlinePronouns({ userId }: { userId: string }) {
-+  const [profile] = useExtendedProfile(userId);
++  const { data: profile } = useExtendedProfile(userId);
 +  const pronouns = profile?.['io.fsky.nyx.pronouns'];
 +  if (!pronouns?.length) return null;
 +  const summary = pronouns.map((p) => p.summary).join(', ');
@@ -1161,10 +1161,10 @@ index 5e1a20f4a..fc8e1a7ff 100644
                  </Avatar>
                  <Text size="H4" truncate>
 diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
-index e982a7992..71f5773f3 100644
+index e982a7992..e6bbcbdf5 100644
 --- a/src/app/features/settings/account/Profile.tsx
 +++ b/src/app/features/settings/account/Profile.tsx
-@@ -1,324 +1,283 @@
+@@ -1,324 +1,307 @@
 -import React, {
 -  ChangeEventHandler,
 -  FormEventHandler,
@@ -1463,7 +1463,11 @@ index e982a7992..71f5773f3 100644
 -    const name = evt.currentTarget.value;
 -    setDisplayName(name);
 -  };
-+  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
++  const {
++    data: extendedProfile,
++    error: extendedProfileError,
++    refetch: refreshExtendedProfile,
++  } = useExtendedProfile(userId);
 +  const extendedProfileSupported = extendedProfile !== null;
 +  const legacyProfile = useUserProfile(userId);
  
@@ -1673,6 +1677,26 @@ index e982a7992..71f5773f3 100644
 +                  )}
 +                  {profileEditableThroughClient && (
 +                    <>
++                      {extendedProfileError && (
++                        <CutoutCard
++                          style={{ padding: config.space.S200 }}
++                          variant="Critical"
++                        >
++                          <SettingTile>
++                            <Box direction="Column" gap="100">
++                              <Text size="L400">Extended profile fetch failed</Text>
++                              <Text size="T200">
++                                Pronouns/timezone may not load correctly. The
++                                fields below are still editable — saving will
++                                attempt to write the values back.
++                              </Text>
++                              <Text size="T200" priority="300">
++                                {extendedProfileError}
++                              </Text>
++                            </Box>
++                          </SettingTile>
++                        </CutoutCard>
++                      )}
 +                      <Box gap="300" direction="Column">
 +                        {fieldElements}
 +                      </Box>
@@ -2522,7 +2546,7 @@ index 000000000..9c9cbe6ad
 +  );
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index a3f04567b..1378c0c92 100644
+index a3f04567b..a78c12e07 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -1,5 +1,7 @@
@@ -2573,7 +2597,7 @@ index a3f04567b..1378c0c92 100644
 +    }, [mx])
 +  );
 +
-+  const [extendedProfile, refreshExtendedProfile] = useExtendedProfile(userId);
++  const { data: extendedProfile, refetch: refreshExtendedProfile } = useExtendedProfile(userId);
 +
    const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
 -  const [expand, setExpend] = useState(false);
@@ -2911,10 +2935,10 @@ index 00128c8fe..35baa9cb1 100644
          variant="SurfaceVariant"
 diff --git a/src/app/hooks/useExtendedProfile.ts b/src/app/hooks/useExtendedProfile.ts
 new file mode 100644
-index 000000000..598fdb356
+index 000000000..9dacd61cb
 --- /dev/null
 +++ b/src/app/hooks/useExtendedProfile.ts
-@@ -0,0 +1,121 @@
+@@ -0,0 +1,140 @@
 +import { useCallback } from 'react';
 +import z from 'zod';
 +import { useQuery } from '@tanstack/react-query';
@@ -2949,35 +2973,54 @@ index 000000000..598fdb356
 +  return unstableFeatures?.['uk.tcpip.msc4133'] || versions.includes('v1.15');
 +}
 +
++export type ExtendedProfileResult = {
++  /// `undefined` while the request is in flight, `null` if the HS lacks support,
++  /// otherwise the parsed extended profile (possibly empty `{}` after a fetch error).
++  data: ExtendedProfile | undefined | null;
++  /// The error message if the fetch or parse failed. The form still renders the
++  /// MSC4133 fields with empty defaults so the user can attempt to overwrite,
++  /// but this string is surfaced in the UI for debugging.
++  error: string | null;
++  refetch: () => Promise<void>;
++};
++
 +/// Returns the user's MSC4133 extended profile, if our homeserver supports it.
-+/// This will return `undefined` while the request is in flight and `null` if the HS lacks support.
-+export function useExtendedProfile(
-+  userId: string
-+): [ExtendedProfile | undefined | null, () => Promise<void>] {
++export function useExtendedProfile(userId: string): ExtendedProfileResult {
 +  const mx = useMatrixClient();
 +  const extendedProfileSupported = useExtendedProfileSupported();
 +  const { data, refetch } = useQuery({
 +    queryKey: ['extended-profile', userId],
-+    queryFn: useCallback(async () => {
-+      if (!extendedProfileSupported) return null;
++    queryFn: useCallback(async (): Promise<{
++      profile: ExtendedProfile | null;
++      error: string | null;
++    }> => {
++      if (!extendedProfileSupported) return { profile: null, error: null };
 +      try {
-+        return extendedProfile.parse(await mx.getExtendedProfile(userId));
-+      } catch {
-+        // Fetch or parse failed (server lied about support, transient
-+        // post-crash-recovery error, etc). Treat as "no extended profile"
-+        // so the UI doesn't stay stuck in a busy/greyed-out state.
-+        return null;
++        return {
++          profile: extendedProfile.parse(await mx.getExtendedProfile(userId)),
++          error: null,
++        };
++      } catch (err) {
++        // Server claims MSC4133 support (via unstable_features or v1.15) but
++        // the request or parse failed. Surface the error in the UI rather than
++        // silently hiding the fields, and keep the form usable with empty
++        // defaults so the user can still attempt to write values back.
++        const message = err instanceof Error ? err.message : String(err);
++        // eslint-disable-next-line no-console
++        console.warn('[extended-profile] fetch failed:', err);
++        return { profile: {} as ExtendedProfile, error: message };
 +      }
 +    }, [mx, userId, extendedProfileSupported]),
 +    refetchOnMount: false,
 +  });
 +
-+  return [
-+    data,
-+    async () => {
++  return {
++    data: data?.profile,
++    error: data?.error ?? null,
++    refetch: async () => {
 +      await refetch();
 +    },
-+  ];
++  };
 +}
 +
 +const LEGACY_FIELDS = ['displayname', 'avatar_url'];

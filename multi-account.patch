@@ -359,7 +359,7 @@ index 000000000..55f68b47f
 +  return null;
 +}
 diff --git a/src/app/features/settings/developer-tools/DevelopTools.tsx b/src/app/features/settings/developer-tools/DevelopTools.tsx
-index 33f0c3639..c63b43ef4 100644
+index 41169080e..3e046d5ed 100644
 --- a/src/app/features/settings/developer-tools/DevelopTools.tsx
 +++ b/src/app/features/settings/developer-tools/DevelopTools.tsx
 @@ -49,6 +49,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {

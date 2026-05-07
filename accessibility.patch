@@ -1139,7 +1139,7 @@ index 5a96e6ad4..1bdbc67ef 100644
            alignItems="Center"
            justifyContent="End"
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index db84d021b..4d9ffb99a 100644
+index cccc53ef5..9c5b2ec77 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
 @@ -487,7 +487,7 @@ export const MessageDeleteItem = as<
