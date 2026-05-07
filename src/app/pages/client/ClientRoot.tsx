@@ -86,16 +86,11 @@ function ClientRootLoading() {
 
   let label = 'Heating up';
   let detail: string | null = null;
-  if (recoveryStage === 'checkpoint') {
-    label = 'Recovering from previous crash…';
-    detail = 'Restoring crypto state from checkpoint. Please stand by.';
+  if (recoveryStage === 'checkpoint' || recoveryStage === 'pending') {
+    label = 'Restoring session…';
   } else if (recoveryStage === 'wipe') {
-    label = 'Recovering from previous crash…';
-    detail =
-      'Local cache was reset. After sync, you may see a red shield — re-verify with your recovery key or another signed-in device to clear it.';
-  } else if (recoveryStage === 'pending') {
-    label = 'Recovering from previous crash…';
-    detail = 'Please stand by.';
+    label = 'Restoring session…';
+    detail = 'Local cache was reset — your encryption keys are safe.';
   }
 
   return (
