@@ -197,7 +197,7 @@ function defaultKanbanField(schema: IssueSchema): string | null {
 
 function loadViewMode(roomId: string, schema: IssueSchema | null): ViewMode {
   try {
-    const stored = localStorage.getItem('cinny-issue-view-' + roomId);
+    const stored = localStorage.getItem('wally-issue-view-' + roomId);
     if (stored === 'list') return { type: 'list' };
     if (stored?.startsWith('kanban:')) {
       const fieldKey = stored.slice(7);
@@ -217,7 +217,7 @@ function loadViewMode(roomId: string, schema: IssueSchema | null): ViewMode {
 function saveViewMode(roomId: string, mode: ViewMode) {
   try {
     localStorage.setItem(
-      'cinny-issue-view-' + roomId,
+      'wally-issue-view-' + roomId,
       mode.type === 'list' ? 'list' : 'kanban:' + mode.fieldKey
     );
   } catch {

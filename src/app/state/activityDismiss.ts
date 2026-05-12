@@ -7,7 +7,7 @@ import { atomWithStorage } from 'jotai/utils';
  * survives reloads.
  */
 export const activityDismissedBeforeAtom = atomWithStorage<number>(
-  'cinny_activity_dismissed_before',
+  'wally_activity_dismissed_before',
   0
 );
 
@@ -18,6 +18,6 @@ export const activityDismissedBeforeAtom = atomWithStorage<number>(
  * same key re-surface it.
  */
 export const activityDismissedItemsAtom = atomWithStorage<Record<string, number>>(
-  'cinny_activity_dismissed_items',
+  'wally_activity_dismissed_items',
   {}
 );

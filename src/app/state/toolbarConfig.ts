@@ -27,7 +27,7 @@ export function getEffectiveItem(config: ToolbarConfig, id: ToolbarItemId): Tool
 
 function loadConfig(): ToolbarConfig {
   try {
-    return JSON.parse(localStorage.getItem('cinny_toolbar_config') ?? '{}');
+    return JSON.parse(localStorage.getItem('wally_toolbar_config') ?? '{}');
   } catch {
     return {};
   }

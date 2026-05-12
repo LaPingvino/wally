@@ -17,7 +17,7 @@ import { setSessionOverride, getSessionForSlot } from '../state/sessions';
 // Detect secondary account slot from URL (browser router) or sessionStorage (hash router)
 const _slotMatch = window.location.pathname.match(/^\/account\/(\d+)(\/|$)/);
 const _sessionSlot = (() => {
-  const s = sessionStorage.getItem('cinny-account-slot');
+  const s = sessionStorage.getItem('wally-account-slot');
   return s !== null ? parseInt(s, 10) : null;
 })();
 const _accountSlot = _slotMatch ? parseInt(_slotMatch[1], 10) : _sessionSlot;
@@ -26,7 +26,7 @@ if (_accountSlot !== null) {
   if (_sess) {
     setSessionOverride(_sess);
   } else {
-    sessionStorage.removeItem('cinny-account-slot');
+    sessionStorage.removeItem('wally-account-slot');
   }
 }
 const _basename = _slotMatch ? `/account/${_accountSlot}/` : undefined;

@@ -29,7 +29,7 @@ function ExportKeys() {
         const blob = new Blob([encKeys], {
           type: 'text/plain;charset=us-ascii',
         });
-        FileSaver.saveAs(blob, 'cinny-keys.txt');
+        FileSaver.saveAs(blob, 'wally-keys.txt');
       },
       [mx]
     )

@@ -8,6 +8,6 @@ export const openSettingsAtKeyboardShortcutsAtom = atom<boolean>(false);
 export const openSettingsAtDevicesAtom = atom<boolean>(false);
 // Maps shortcut description → custom key string (is-hotkey format, e.g. 'mod+k')
 export const customShortcutKeysAtom = atomWithStorage<Record<string, string>>(
-  'cinny_custom_bindings',
+  'wally_custom_bindings',
   {}
 );

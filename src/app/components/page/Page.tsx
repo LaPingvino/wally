@@ -72,7 +72,7 @@ export function PageNavContent({
     <Box grow="Yes" direction="Column">
       <Scroll
         ref={scrollRef}
-        id="cinny-room-listbox"
+        id="wally-room-listbox"
         tabIndex={0}
         variant="Background"
         direction="Vertical"

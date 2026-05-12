@@ -61,7 +61,7 @@ interface CallProviderProps {
 const DEFAULT_AUDIO_ENABLED = false;
 const DEFAULT_VIDEO_ENABLED = false;
 const DEFAULT_CHAT_OPENED = false;
-const SESSION_KEY = 'cinny_active_call';
+const SESSION_KEY = 'wally_active_call';
 
 interface PersistedCallState {
   roomId: string;

@@ -64,7 +64,7 @@ export const useShortcutsList = (): KeyboardShortcut[] => {
           description: 'Focus room list',
           category: 'Navigation',
           allowInEditable: true,
-          action: () => focusSection('#cinny-room-listbox'),
+          action: () => focusSection('#wally-room-listbox'),
         },
         {
           key: c('Focus message timeline', 'alt+l'),
@@ -72,7 +72,7 @@ export const useShortcutsList = (): KeyboardShortcut[] => {
           description: 'Focus message timeline',
           category: 'Navigation',
           allowInEditable: true,
-          action: () => focusSection('#cinny-timeline'),
+          action: () => focusSection('#wally-timeline'),
         },
         {
           key: c('Focus message composer', 'alt+c'),

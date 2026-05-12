@@ -67,7 +67,7 @@ describe('Room list listbox pattern', () => {
   it('PageNavContent has useNavArrowKeys for DOM focus navigation', () => {
     const src = readSrc('components/page/Page.tsx');
     expect(src).toMatch(/useNavArrowKeys/);
-    expect(src).toMatch(/id="cinny-room-listbox"/);
+    expect(src).toMatch(/id="wally-room-listbox"/);
     expect(src).toMatch(/tabIndex=\{0\}/);
   });
 
@@ -148,7 +148,7 @@ describe('F6 section cycling', () => {
 
   it('F6 targets room listbox', () => {
     const src = readSrc('components/GlobalKeyboardShortcuts.tsx');
-    expect(src).toMatch(/cinny-room-listbox/);
+    expect(src).toMatch(/wally-room-listbox/);
   });
 });
 

@@ -132,7 +132,7 @@ function CryptoCheckpointManager() {
     // change across a reload we know crypto identity rotated, which
     // proves the rust-store round-trip lost the device keys (server then
     // sees fresh keys under the same device_id, invalidating signatures).
-    const LAST_KEYS_LS = 'cinny_device_keys_last';
+    const LAST_KEYS_LS = 'wally_device_keys_last';
     const snapshotDeviceKeys = async (reason: string) => {
       try {
         const crypto = mx.getCrypto();

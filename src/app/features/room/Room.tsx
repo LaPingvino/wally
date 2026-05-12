@@ -60,11 +60,11 @@ export function Room() {
 
   // Resizable panels
   const { width: threadPanelWidth, onDividerPointerDown: handleThreadDividerPointerDown } =
-    useResizablePanel(320, 200, 600, 'cinny_thread_panel_width');
+    useResizablePanel(320, 200, 600, 'wally_thread_panel_width');
   const { width: widgetPanelWidth, onDividerPointerDown: handleWidgetDividerPointerDown } =
-    useResizablePanel(420, 280, 700, 'cinny_widget_panel_width');
+    useResizablePanel(420, 280, 700, 'wally_widget_panel_width');
   const { width: memberPanelWidth, onDividerPointerDown: handleMemberDividerPointerDown } =
-    useResizablePanel(266, 180, 500, 'cinny_member_panel_width');
+    useResizablePanel(266, 180, 500, 'wally_member_panel_width');
 
   // Reset all panel views when navigating to a different room.
   useEffect(() => {

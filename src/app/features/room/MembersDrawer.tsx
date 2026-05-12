@@ -263,7 +263,7 @@ export function MembersDrawer({ room, members, width = 266, isFullWidth, onToggl
   // Uses a native DOM listener because the F6-focused Box needs to handle
   // keys even when no child has focus yet (first arrow press after F6).
   useEffect(() => {
-    const panel = document.getElementById('cinny-members-panel');
+    const panel = document.getElementById('wally-members-panel');
     if (!panel) return;
     const handler = (evt: KeyboardEvent) => {
       if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
@@ -287,7 +287,7 @@ export function MembersDrawer({ room, members, width = 266, isFullWidth, onToggl
 
   return (
     <Box
-      id="cinny-members-panel"
+      id="wally-members-panel"
       className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
       shrink="No"
       direction="Column"

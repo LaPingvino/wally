@@ -156,7 +156,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
         }
 
         if ((evt.key === 'ArrowDown' || evt.key === 'ArrowUp') && noMod) {
-          const scrollEl = document.getElementById('cinny-timeline');
+          const scrollEl = document.getElementById('wally-timeline');
           if (!scrollEl) return;
           const messages = Array.from(
             scrollEl.querySelectorAll('[data-timeline-message]')
@@ -217,7 +217,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
         }
 
         if ((evt.key === 'PageDown' || evt.key === 'PageUp') && noMod) {
-          const scrollEl = document.getElementById('cinny-timeline');
+          const scrollEl = document.getElementById('wally-timeline');
           if (!scrollEl) return;
           evt.preventDefault();
           scrollEl.scrollBy({

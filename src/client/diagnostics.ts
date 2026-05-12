@@ -147,8 +147,8 @@ export async function clearFailureLog(): Promise<void> {
 // scary prompt for this category of failure.
 // ---------------------------------------------------------------------------
 
-const HEARTBEAT_KEY = 'cinny_heartbeat_ms';
-const HEARTBEAT_CONTEXT_KEY = 'cinny_heartbeat_context';
+const HEARTBEAT_KEY = 'wally_heartbeat_ms';
+const HEARTBEAT_CONTEXT_KEY = 'wally_heartbeat_context';
 const HEARTBEAT_INTERVAL_MS = 5_000;
 // Gap larger than this means the previous session ended without firing
 // pagehide — almost certainly an OS/browser crash or a forced tab discard.
@@ -453,17 +453,17 @@ export function exposeDiagnosticsOnWindow(): void {
     } catch (e) {
       idbs = [{ name: `<databases() threw: ${String(e)}>` }];
     }
-    const cinnyLocalStorage: Record<string, string | null> = {};
+    const appLocalStorage: Record<string, string | null> = {};
     for (let i = 0; i < localStorage.length; i += 1) {
       const k = localStorage.key(i);
-      if (k && k.startsWith('cinny_')) cinnyLocalStorage[k] = localStorage.getItem(k);
+      if (k && k.startsWith('wally_')) appLocalStorage[k] = localStorage.getItem(k);
     }
     const probe = await probeCryptoIdbs();
     return {
       ts: new Date().toISOString(),
       checkpointBlobs,
       idbs,
-      cinnyLocalStorage,
+      appLocalStorage,
       probeResult: probe ?? 'clean',
     };
   };

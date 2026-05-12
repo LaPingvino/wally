@@ -1,7 +1,7 @@
 import { MatrixClient } from 'matrix-js-sdk';
 import { syncBatchStats } from '../state/syncBatchScheduler';
 
-const REPORT_STORAGE_KEY = 'cinny_mem_reports';
+const REPORT_STORAGE_KEY = 'wally_mem_reports';
 const MAX_STORED_REPORTS = 5;
 
 export interface RoomFootprint {

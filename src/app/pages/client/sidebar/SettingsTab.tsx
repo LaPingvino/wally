@@ -58,12 +58,12 @@ export function SettingsTab() {
     : undefined;
 
   // Account data (localStorage reads; account switching always navigates so stale reads are fine)
-  const slotStr = sessionStorage.getItem('cinny-account-slot');
+  const slotStr = sessionStorage.getItem('wally-account-slot');
   const currentSlot = slotStr !== null ? parseInt(slotStr, 10) : null;
   const isMainActive = currentSlot === null && !window.location.pathname.startsWith('/account/');
   const mainSession = (() => {
-    const b = localStorage.getItem('cinny_hs_base_url');
-    const u = localStorage.getItem('cinny_user_id');
+    const b = localStorage.getItem('wally_hs_base_url');
+    const u = localStorage.getItem('wally_user_id');
     return b && u ? { userId: u } : null;
   })();
   const secondarySessions = getSecondarySessions();
@@ -72,11 +72,11 @@ export function SettingsTab() {
     (slot: number | null) => {
       setMenuAnchor(undefined);
       if (slot === null) {
-        sessionStorage.removeItem('cinny-account-slot');
+        sessionStorage.removeItem('wally-account-slot');
         if (hashRouter?.enabled) window.location.reload();
         else window.location.assign('/');
       } else {
-        sessionStorage.setItem('cinny-account-slot', String(slot));
+        sessionStorage.setItem('wally-account-slot', String(slot));
         if (hashRouter?.enabled) window.location.reload();
         else window.location.assign(`/account/${slot}/`);
       }

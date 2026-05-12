@@ -248,7 +248,7 @@ export function ThreadsDrawer({ room, onClose, width = 320, isFullWidth, onToggl
 
   return (
     <Box
-      id="cinny-threads-panel"
+      id="wally-threads-panel"
       role="region"
       aria-label="Threads panel"
       tabIndex={-1}

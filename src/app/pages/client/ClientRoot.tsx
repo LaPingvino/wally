@@ -79,7 +79,7 @@ function ClientRootLoading() {
   // so the user knows the splash represents recovery work, not a cold start.
   let recoveryStage: string | null = null;
   try {
-    recoveryStage = sessionStorage.getItem('cinny_recovering_from_crash');
+    recoveryStage = sessionStorage.getItem('wally_recovering_from_crash');
   } catch {
     // ignore — fall through to default copy
   }
@@ -165,13 +165,13 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
                     }
                     // No client yet — check if this is a secondary account page so we
                     // don't accidentally wipe the main account's localStorage.
-                    const slotStr = sessionStorage.getItem('cinny-account-slot');
+                    const slotStr = sessionStorage.getItem('wally-account-slot');
                     const slot = slotStr !== null ? parseInt(slotStr, 10) : null;
                     const pathSlotMatch = window.location.pathname.match(/^\/account\/(\d+)/);
                     if (slot !== null || pathSlotMatch) {
                       if (slot !== null) {
                         removeSecondarySession(slot);
-                        sessionStorage.removeItem('cinny-account-slot');
+                        sessionStorage.removeItem('wally-account-slot');
                       } else if (pathSlotMatch) {
                         removeSecondarySession(parseInt(pathSlotMatch[1], 10));
                       }
@@ -203,11 +203,11 @@ const useLogoutListener = (mx?: MatrixClient) => {
     const handleLogout: HttpApiEventHandlerMap[HttpApiEvent.SessionLoggedOut] = async () => {
       mx?.stopClient();
       await mx?.clearStores();
-      const slot = sessionStorage.getItem('cinny-account-slot');
+      const slot = sessionStorage.getItem('wally-account-slot');
       if (slot !== null) {
         // Secondary account session expired — remove it and return to main
         removeSecondarySession(parseInt(slot, 10));
-        sessionStorage.removeItem('cinny-account-slot');
+        sessionStorage.removeItem('wally-account-slot');
         window.location.assign('/');
       } else {
         window.localStorage.clear();
@@ -270,7 +270,7 @@ export function ClientRoot({ children }: ClientRootProps) {
       exposeDiagnosticsOnWindow();
       void dumpFailureLog();
 
-      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
+      const REPAIR_GUARD = 'wally_startup_auto_repair_pending';
       const justRepaired = sessionStorage.getItem(REPAIR_GUARD) === '1';
       if (!justRepaired) {
         try {
@@ -329,7 +329,7 @@ export function ClientRoot({ children }: ClientRootProps) {
   // against repeat repairs in the same recovery cycle.
   useEffect(() => {
     return installCryptoIdbErrorListener(({ message }) => {
-      const REPAIR_GUARD = 'cinny_startup_auto_repair_pending';
+      const REPAIR_GUARD = 'wally_startup_auto_repair_pending';
       if (sessionStorage.getItem(REPAIR_GUARD) === '1') return;
       sessionStorage.setItem(REPAIR_GUARD, '1');
       void logFailureEvent('startup_auto_repair', {

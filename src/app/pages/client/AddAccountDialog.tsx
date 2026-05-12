@@ -63,7 +63,7 @@ export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
         accessToken: response.access_token,
       };
       const slot = addSecondarySession(session);
-      sessionStorage.setItem('cinny-account-slot', String(slot));
+      sessionStorage.setItem('wally-account-slot', String(slot));
       if (hashRouter?.enabled) {
         window.location.reload();
       } else {

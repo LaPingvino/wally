@@ -131,7 +131,7 @@ export const clearCacheAndReload = async (mx: MatrixClient) => {
 };
 
 export const logoutClient = async (mx: MatrixClient) => {
-  const slotStr = sessionStorage.getItem('cinny-account-slot');
+  const slotStr = sessionStorage.getItem('wally-account-slot');
   const slot = slotStr !== null ? parseInt(slotStr, 10) : null;
   const isSecondary =
     window.location.pathname.startsWith('/account/') || slot !== null;
@@ -149,7 +149,7 @@ export const logoutClient = async (mx: MatrixClient) => {
   if (isSecondary) {
     if (slot !== null) {
       removeSecondarySession(slot);
-      sessionStorage.removeItem('cinny-account-slot');
+      sessionStorage.removeItem('wally-account-slot');
     } else {
       const pathSlotMatch = window.location.pathname.match(/^\/account\/(\d+)/);
       if (pathSlotMatch) removeSecondarySession(parseInt(pathSlotMatch[1], 10));
@@ -185,13 +185,13 @@ const SESSION_BACKUP_CACHE = 'cinny-session-backup';
 const SESSION_BACKUP_KEY = '/_session';
 
 const SESSION_LS_KEYS = [
-  'cinny_access_token',
-  'cinny_device_id',
-  'cinny_user_id',
-  'cinny_hs_base_url',
+  'wally_access_token',
+  'wally_device_id',
+  'wally_user_id',
+  'wally_hs_base_url',
 ] as const;
 
-const SECONDARY_SESSIONS_KEY = 'cinny_sessions';
+const SECONDARY_SESSIONS_KEY = 'wally_sessions';
 
 /**
  * Snapshot current localStorage session credentials into the Cache API.
@@ -262,7 +262,7 @@ export const clearSessionBackup = async (): Promise<void> => {
  * to restore credentials from the Cache API backup first.
  */
 export const repairIDBAndReload = async () => {
-  const hadCreds = !!localStorage.getItem('cinny_access_token');
+  const hadCreds = !!localStorage.getItem('wally_access_token');
   await logFailureEvent('idb_repair_started', { hadCreds });
 
   // If localStorage creds are gone, try restoring from Cache API backup.
@@ -276,7 +276,7 @@ export const repairIDBAndReload = async () => {
   // the wipe path is the one where E2EE may need re-verification.
   try {
     sessionStorage.setItem(
-      'cinny_recovering_from_crash',
+      'wally_recovering_from_crash',
       'pending'
     );
   } catch {
@@ -287,7 +287,7 @@ export const repairIDBAndReload = async () => {
   const restored = await restoreFromCheckpoint();
   if (restored) {
     try {
-      sessionStorage.setItem('cinny_recovering_from_crash', 'checkpoint');
+      sessionStorage.setItem('wally_recovering_from_crash', 'checkpoint');
     } catch {
       // ignore
     }
@@ -298,7 +298,7 @@ export const repairIDBAndReload = async () => {
   // No checkpoint available — full wipe.
   await logFailureEvent('idb_wiped');
   try {
-    sessionStorage.setItem('cinny_recovering_from_crash', 'wipe');
+    sessionStorage.setItem('wally_recovering_from_crash', 'wipe');
   } catch {
     // ignore
   }
@@ -325,7 +325,7 @@ export const repairIDBAndReload = async () => {
 // ---------------------------------------------------------------------------
 
 const CHECKPOINT_CACHE = 'cinny-crypto-checkpoint';
-const CHECKPOINT_TS_KEY = 'cinny_checkpoint_ts';
+const CHECKPOINT_TS_KEY = 'wally_checkpoint_ts';
 
 // matches RUST_SDK_STORE_PREFIX in matrix-js-sdk/lib/rust-crypto/constants.js
 const RUST_SDK_STORE_PREFIX = 'matrix-js-sdk';
@@ -365,7 +365,7 @@ async function getCryptoDbNames(): Promise<string[]> {
     }
   } catch {
     // databases() unsupported — fall back to known names only.
-    const userId = localStorage.getItem('cinny_user_id');
+    const userId = localStorage.getItem('wally_user_id');
     result.add(`${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto`);
     result.add(`${RUST_SDK_STORE_PREFIX}::matrix-sdk-crypto-meta`);
     if (userId) {
@@ -731,7 +731,7 @@ async function restoreFromCheckpoint(): Promise<boolean> {
   }
 
   // Also delete the sync store — it'll rebuild from server.
-  const userId = localStorage.getItem('cinny_user_id');
+  const userId = localStorage.getItem('wally_user_id');
   if (userId) {
     indexedDB.deleteDatabase(`sync${userId}`);
     indexedDB.deleteDatabase('web-sync-store');

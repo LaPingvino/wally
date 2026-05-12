@@ -35,16 +35,16 @@ export function setFallbackSession(
   userId: string,
   baseUrl: string
 ) {
-  localStorage.setItem('cinny_access_token', accessToken);
-  localStorage.setItem('cinny_device_id', deviceId);
-  localStorage.setItem('cinny_user_id', userId);
-  localStorage.setItem('cinny_hs_base_url', baseUrl);
+  localStorage.setItem('wally_access_token', accessToken);
+  localStorage.setItem('wally_device_id', deviceId);
+  localStorage.setItem('wally_user_id', userId);
+  localStorage.setItem('wally_hs_base_url', baseUrl);
 }
 export const removeFallbackSession = () => {
-  localStorage.removeItem('cinny_hs_base_url');
-  localStorage.removeItem('cinny_user_id');
-  localStorage.removeItem('cinny_device_id');
-  localStorage.removeItem('cinny_access_token');
+  localStorage.removeItem('wally_hs_base_url');
+  localStorage.removeItem('wally_user_id');
+  localStorage.removeItem('wally_device_id');
+  localStorage.removeItem('wally_access_token');
 };
 let sessionOverride: Session | undefined;
 export const setSessionOverride = (session: Session) => {
@@ -54,10 +54,10 @@ export const setSessionOverride = (session: Session) => {
 export const getFallbackSession = (): Session | undefined => {
   if (sessionOverride) return sessionOverride;
 
-  const baseUrl = localStorage.getItem('cinny_hs_base_url');
-  const userId = localStorage.getItem('cinny_user_id');
-  const deviceId = localStorage.getItem('cinny_device_id');
-  const accessToken = localStorage.getItem('cinny_access_token');
+  const baseUrl = localStorage.getItem('wally_hs_base_url');
+  const userId = localStorage.getItem('wally_user_id');
+  const deviceId = localStorage.getItem('wally_device_id');
+  const accessToken = localStorage.getItem('wally_access_token');
 
   if (baseUrl && userId && deviceId && accessToken) {
     const session: Session = {
@@ -77,7 +77,7 @@ export const getFallbackSession = (): Session | undefined => {
  * End of migration code for old session
  */
 
-const SECONDARY_SESSIONS_KEY = 'cinny_sessions';
+const SECONDARY_SESSIONS_KEY = 'wally_sessions';
 
 export const getSecondarySessions = (): Array<{ slot: number; session: Session }> => {
   try {
@@ -118,8 +118,8 @@ export const getSessionForSlot = (slot: number): Session | undefined => {
   return rest;
 };
 
-const THIS_SESSION_START_KEY = 'cinny_this_session_start';
-const PREV_SESSION_START_KEY = 'cinny_prev_session_start';
+const THIS_SESSION_START_KEY = 'wally_this_session_start';
+const PREV_SESSION_START_KEY = 'wally_prev_session_start';
 
 /**
  * Record the current session start time and promote the previous value.

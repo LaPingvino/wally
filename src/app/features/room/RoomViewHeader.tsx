@@ -813,7 +813,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
           </Box>
         </Box>
 
-        <Box id="cinny-room-header-toolbar" data-section-label="Room actions" role="toolbar" aria-label="Room actions" aria-orientation="horizontal" shrink="No" onKeyDown={handleToolbarKeyDown}>
+        <Box id="wally-room-header-toolbar" data-section-label="Room actions" role="toolbar" aria-label="Room actions" aria-orientation="horizontal" shrink="No" onKeyDown={handleToolbarKeyDown}>
           {/* FRONT: feature buttons — hidden when the feature is impossible for this room.
               Wobble here (left side of group) is less noticeable than at the right. */}
 

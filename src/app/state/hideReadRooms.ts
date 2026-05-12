@@ -9,6 +9,6 @@ import { atomWithStorage } from 'jotai/utils';
  * via Prev/Next — the list stops shuffling as rooms are read.
  */
 export const hideReadRoomsAtom = atomWithStorage<boolean>(
-  'cinny_hide_read_rooms',
+  'wally_hide_read_rooms',
   false
 );

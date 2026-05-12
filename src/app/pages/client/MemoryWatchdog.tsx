@@ -9,8 +9,8 @@ import {
 
 // CallProvider persists its active-call state here; reading the raw key avoids
 // coupling the watchdog to the CallProvider mount order.
-const ACTIVE_CALL_SESSION_KEY = 'cinny_active_call';
-const RESET_COOLDOWN_KEY = 'cinny_mem_reset_at';
+const ACTIVE_CALL_SESSION_KEY = 'wally_active_call';
+const RESET_COOLDOWN_KEY = 'wally_mem_reset_at';
 const CHECK_INTERVAL_MS = 15_000;
 const SOFT_PRESSURE = 0.75;
 const HARD_PRESSURE = 0.9;

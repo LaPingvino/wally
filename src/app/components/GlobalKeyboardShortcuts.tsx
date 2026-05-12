@@ -108,11 +108,11 @@ const SECTION_NAV_BACK_SHORTCUT: DisplayShortcut = {
 };
 
 const SECTION_LABELS: Record<string, string> = {
-  'cinny-room-listbox': 'Room list',
-  'cinny-lobby': 'Space lobby',
-  'cinny-timeline': 'Message timeline',
-  'cinny-members-panel': 'Members panel',
-  'cinny-threads-panel': 'Threads panel',
+  'wally-room-listbox': 'Room list',
+  'wally-lobby': 'Space lobby',
+  'wally-timeline': 'Message timeline',
+  'wally-members-panel': 'Members panel',
+  'wally-threads-panel': 'Threads panel',
 };
 
 function findSidebarFocus(): HTMLElement | null {
@@ -130,10 +130,10 @@ function findSidebarFocus(): HTMLElement | null {
 const SECTION_FINDERS: Array<() => HTMLElement | null> = [
   findSidebarFocus,
   // Room list: single tab stop — focus the listbox itself (arrow keys navigate within)
-  () => document.querySelector<HTMLElement>('#cinny-room-listbox'),
+  () => document.querySelector<HTMLElement>('#wally-room-listbox'),
   // First enabled button in the room header toolbar (skips disabled buttons)
-  () => document.querySelector<HTMLElement>('#cinny-room-header-toolbar button:not([disabled])'),
-  () => document.querySelector('#cinny-timeline'),
+  () => document.querySelector<HTMLElement>('#wally-room-header-toolbar button:not([disabled])'),
+  () => document.querySelector('#wally-timeline'),
   () => document.querySelector('[data-slate-editor="true"]'),
 ];
 
@@ -210,7 +210,7 @@ export function GlobalKeyboardShortcuts() {
             evt.preventDefault();
             navigate(getSpaceLobbyPath(getCanonicalAliasOrRoomId(mx, spaceId)));
             announce(`${mx.getRoom(spaceId)?.name ?? 'Space'} space`);
-            setTimeout(() => document.getElementById('cinny-room-listbox')?.focus(), 80);
+            setTimeout(() => document.getElementById('wally-room-listbox')?.focus(), 80);
           }
           return;
         }
@@ -297,7 +297,7 @@ const handleUnreadNavKeyDown = useCallback(
 
   const { hashRouter } = useClientConfig();
   const hasMainSession =
-    !!localStorage.getItem('cinny_hs_base_url') && !!localStorage.getItem('cinny_user_id');
+    !!localStorage.getItem('wally_hs_base_url') && !!localStorage.getItem('wally_user_id');
   const secondarySessions = getSecondarySessions();
 
   const handleAccountSwitchKeyDown = useCallback(
@@ -314,11 +314,11 @@ const handleUnreadNavKeyDown = useCallback(
       if (target === undefined) return;
       evt.preventDefault();
       if (target === null) {
-        sessionStorage.removeItem('cinny-account-slot');
+        sessionStorage.removeItem('wally-account-slot');
         if (hashRouter?.enabled) window.location.reload();
         else window.location.assign('/');
       } else {
-        sessionStorage.setItem('cinny-account-slot', String(target));
+        sessionStorage.setItem('wally-account-slot', String(target));
         if (hashRouter?.enabled) window.location.reload();
         else window.location.assign(`/account/${target}/`);
       }
