@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, ReactNode, useCallback } from 'react';
+import React, { useRef, useEffect, ReactNode, useCallback, useState } from 'react';
+import { PopOutContainerProvider } from 'folds';
 
 interface NativeDialogProps {
   open: boolean;
@@ -21,14 +22,21 @@ interface NativeDialogProps {
  */
 export function NativeDialog({ open, onClose, children, className, style }: NativeDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Once the dialog mounts we expose it as the PopOut portal container so
+  // dropdowns / menus inside the modal render *inside* the dialog. The
+  // browser marks everything outside an open <dialog> as inert when
+  // showModal() is used — without this, portaled menus are non-clickable.
+  const [popoutContainer, setPopoutContainer] = useState<HTMLDialogElement | undefined>(undefined);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (open && !dialog.open) {
       dialog.showModal();
+      setPopoutContainer(dialog);
     } else if (!open && dialog.open) {
       dialog.close();
+      setPopoutContainer(undefined);
     }
   }, [open]);
 
@@ -58,7 +66,7 @@ export function NativeDialog({ open, onClose, children, className, style }: Nati
       onCancel={handleCancel}
       onClick={handleBackdropClick}
     >
-      {children}
+      <PopOutContainerProvider value={popoutContainer}>{children}</PopOutContainerProvider>
     </dialog>
   );
 }
