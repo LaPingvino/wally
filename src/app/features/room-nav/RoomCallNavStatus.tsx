@@ -32,6 +32,7 @@ import { settingsAtom } from '../../state/settings';
 import { playMentionSound } from '../../utils/sounds';
 import { useNavigateUnread } from '../../hooks/useNavigateUnread';
 import { bottomBarDismissedAtom } from '../../state/bottomBarDismiss';
+import { hideReadRoomsAtom } from '../../state/hideReadRooms';
 import * as css from './RoomCallNavStatus.css';
 
 /**
@@ -436,9 +437,20 @@ export function CallNavStatus() {
   const [dismissed, setDismissed] = useAtom(bottomBarDismissedAtom);
   const handleDismissBar = useCallback(() => setDismissed(true), [setDismissed]);
 
+  // ── Hide-read-rooms toggle ──
+  // Filters the sidebar list to only unread (and selected) rooms so
+  // Prev/Next doesn't make the list shuffle as items are read.
+  const [hideReadRooms, setHideReadRooms] = useAtom(hideReadRoomsAtom);
+  const toggleHideReadRooms = useCallback(
+    () => setHideReadRooms((v) => !v),
+    [setHideReadRooms]
+  );
+
   const hasNav = allNavItems.length > 0;
   const hasCall = hasActiveCall || incomingCalls.length > 0;
-  const hasContent = hasCall || hasNav;
+  // Keep the bar around when hideReadRooms is on even with no unreads,
+  // otherwise the user has no UI to toggle it back off.
+  const hasContent = hasCall || hasNav || hideReadRooms;
   if (!hasContent) return null;
   if (dismissed && !hasCall) return null;
 
@@ -453,6 +465,34 @@ export function CallNavStatus() {
   // Dismiss button is shown only when the bar has no active/incoming call —
   // during a call, hangup / per-call dismiss are the real actions.
   const showDismiss = !hasActiveCall && incomingCalls.length === 0;
+
+  const hideReadButton = (
+    <TooltipProvider
+      position="Top"
+      offset={4}
+      tooltip={
+        <Tooltip>
+          <Text>
+            {hideReadRooms ? 'Show read rooms' : 'Hide read rooms while triaging'}
+          </Text>
+        </Tooltip>
+      }
+    >
+      {(triggerRef) => (
+        <IconButton
+          fill={hideReadRooms ? 'Soft' : 'None'}
+          variant={hideReadRooms ? 'Primary' : 'Surface'}
+          size="300"
+          ref={triggerRef}
+          aria-label={hideReadRooms ? 'Show read rooms' : 'Hide read rooms'}
+          aria-pressed={hideReadRooms}
+          onClick={toggleHideReadRooms}
+        >
+          <Icon src={hideReadRooms ? Icons.EyeBlind : Icons.Eye} size="50" />
+        </IconButton>
+      )}
+    </TooltipProvider>
+  );
 
   const dismissButton = (
     <TooltipProvider
@@ -474,7 +514,7 @@ export function CallNavStatus() {
     </TooltipProvider>
   );
 
-  // Nav-only bar (no call, but unread/mention rooms exist)
+  // Nav-only bar (no call, but unread/mention rooms exist — or toggle is on)
   if (!hasActiveCall && incomingCalls.length === 0) {
     return (
       <Box direction="Column" shrink="No" ref={setBarEl}>
@@ -487,6 +527,7 @@ export function CallNavStatus() {
           role="toolbar"
           aria-label="Unread and mention navigation"
         >
+          {hideReadButton}
           {visibleNav.map((item) => (
             <NavIconButton key={item.key} item={item} />
           ))}
@@ -700,6 +741,7 @@ export function CallNavStatus() {
             </TooltipProvider>
           </>
         )}
+        {(visibleNav.length > 0 || hideReadRooms) && hideReadButton}
         {visibleNav.map((item) => (
           <NavIconButton key={item.key} item={item} />
         ))}

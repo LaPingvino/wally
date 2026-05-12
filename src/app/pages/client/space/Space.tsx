@@ -52,6 +52,7 @@ import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { hideReadRoomsAtom } from '../../../state/hideReadRooms';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useRoomName } from '../../../hooks/useRoomMeta';
@@ -445,6 +446,7 @@ export function Space() {
   const callEmbed = useCallEmbed();
 
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
+  const hideReadRooms = useAtomValue(hideReadRoomsAtom);
 
   const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
 
@@ -488,14 +490,15 @@ export function Space() {
     getRoom,
     useCallback(
       (parentId, roomId) => {
-        if (!closedCategories.has(makeNavCategoryId(space.roomId, parentId))) {
+        const categoryClosed = closedCategories.has(makeNavCategoryId(space.roomId, parentId));
+        if (!hideReadRooms && !categoryClosed) {
           return false;
         }
         const showRoomAnyway =
           roomToUnread.has(roomId) || roomId === selectedRoomId || callEmbed?.roomId === roomId;
         return !showRoomAnyway;
       },
-      [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed]
+      [space.roomId, closedCategories, roomToUnread, selectedRoomId, callEmbed, hideReadRooms]
     ),
     sortSpaceRoomItems
   );
@@ -583,7 +586,13 @@ export function Space() {
         .map(({ roomId }) => roomId),
     [hierarchy, mx]
   );
-  const spaceFavoriteRoomIds = useFavoriteRooms(allSpaceRoomIds);
+  const allSpaceFavoriteRoomIds = useFavoriteRooms(allSpaceRoomIds);
+  const spaceFavoriteRoomIds = useMemo(() => {
+    if (!hideReadRooms) return allSpaceFavoriteRoomIds;
+    return allSpaceFavoriteRoomIds.filter(
+      (rId) => roomToUnread.has(rId) || rId === selectedRoomId
+    );
+  }, [hideReadRooms, allSpaceFavoriteRoomIds, roomToUnread, selectedRoomId]);
   const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
 
   const { navigateRoom } = useRoomNavigate();

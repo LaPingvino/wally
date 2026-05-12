@@ -37,6 +37,7 @@ import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { hideReadRoomsAtom } from '../../../state/hideReadRooms';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useDirectRooms } from './useDirectRooms';
@@ -228,9 +229,16 @@ export function Direct() {
   const noRoomToDisplay = directs.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
   const [roomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
+  const hideReadRooms = useAtomValue(hideReadRoomsAtom);
 
-  const favoriteRoomIds = useFavoriteRooms(directs);
-  const favoriteRoomIdsSet = useMemo(() => new Set(favoriteRoomIds), [favoriteRoomIds]);
+  const allFavoriteRoomIds = useFavoriteRooms(directs);
+  const favoriteRoomIdsSet = useMemo(() => new Set(allFavoriteRoomIds), [allFavoriteRoomIds]);
+  const favoriteRoomIds = useMemo(() => {
+    if (!hideReadRooms) return allFavoriteRoomIds;
+    return allFavoriteRoomIds.filter(
+      (rId) => roomToUnread.has(rId) || rId === selectedRoomId
+    );
+  }, [hideReadRooms, allFavoriteRoomIds, roomToUnread, selectedRoomId]);
 
   const sortedDirects = useMemo(() => {
     let sortFn;
@@ -246,11 +254,11 @@ export function Direct() {
       sortFn = factoryRoomIdByActivity(mx);
     }
     const items = Array.from(directs).sort(sortFn).filter((rId) => !favoriteRoomIdsSet.has(rId));
-    if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
+    if (hideReadRooms || closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId, roomSortOrder, favoriteRoomIdsSet]);
+  }, [mx, directs, closedCategories, roomToUnread, selectedRoomId, roomSortOrder, favoriteRoomIdsSet, hideReadRooms]);
 
   const virtualizer = useVirtualizer({
     count: sortedDirects.length,
