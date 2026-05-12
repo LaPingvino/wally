@@ -17,9 +17,6 @@ export function AuthFooter() {
       >
         v4.11.1
       </Text>
-      <Text as="a" size="T300" href="https://twitter.com/cinnyapp" target="_blank" rel="noreferrer">
-        Twitter
-      </Text>
       <Text as="a" size="T300" href="https://matrix.org" target="_blank" rel="noreferrer">
         Powered by Matrix
       </Text>
