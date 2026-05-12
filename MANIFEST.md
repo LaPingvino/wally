@@ -14,28 +14,19 @@ stack at `codeberg.org/lapingvino/cinny` (branch `main`).
 - `themes.patch` — independent (applies to vanilla cinny)
 - `markdown-parser.patch` — independent (applies to vanilla cinny)
 - `branding.patch` — independent (applies to vanilla cinny)
-- `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding
-- `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker
-
-## Partial patches
-
-These families couldn't be applied in full — some mid-chain commits
-depend on cross-family work that doesn't yet have its own resolvable
-patch. The `.patch` ships the cleanly-applicable subset; the
-matching `.skipped` file lists the commits that were dropped, so
-you can apply those manually from the per-family branch.
-
-- `accessibility.patch` — partial (31/55 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account; see `accessibility.skipped`
-- `idb-retry.patch` — partial (4/18 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (21/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
-- `navigate-unread.patch` — partial (1/7 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, branding, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
 
 These families couldn't apply even partially on top of the resolved
 set; fetch the per-family branch on Codeberg:
 
+- `accessibility` — `git fetch codeberg accessibility`
+- `issue-tracker` — `git fetch codeberg issue-tracker`
+- `multi-account` — `git fetch codeberg multi-account`
+- `idb-retry` — `git fetch codeberg idb-retry`
+- `ux-fixes` — `git fetch codeberg ux-fixes`
+- `navigate-unread` — `git fetch codeberg navigate-unread`
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-07T21:54:53Z_
+_Generated 2026-05-12T14:38:20Z_
