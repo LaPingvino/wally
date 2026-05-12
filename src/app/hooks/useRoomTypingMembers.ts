@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import {
   IRoomIdToTypingMembers,
   TypingReceipt,
-  typingMembersThrottled,
+  roomIdToTypingMembersAtom,
 } from '../state/typingMembers';
 
 const typingReceiptEqual = (a: TypingReceipt, b: TypingReceipt): boolean =>
@@ -21,6 +21,6 @@ export const useRoomTypingMember = (roomId: string) => {
     [roomId]
   );
 
-  const typing = useAtomValue(selectAtom(typingMembersThrottled.out, selector, equalTypingMembers));
+  const typing = useAtomValue(selectAtom(roomIdToTypingMembersAtom, selector, equalTypingMembers));
   return typing;
 };

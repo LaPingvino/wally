@@ -3,7 +3,6 @@ import { MatrixClient } from 'matrix-js-sdk';
 import { useMemo } from 'react';
 import { Membership } from '../../../types/matrix/room';
 import { RoomsAction, useBindRoomsWithMembershipsAtom } from './utils';
-import { makeThrottledAtom } from '../throttledAtom';
 
 const baseRoomsAtom = atom<string[]>([]);
 export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
@@ -28,11 +27,6 @@ export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
     });
   }
 );
-/**
- * Throttled read-only view of allRoomsAtom. See throttledAtom.ts.
- */
-export const allRoomsThrottled = makeThrottledAtom(allRoomsAtom, 'allRooms', 100);
-
 export const useBindAllRoomsAtom = (mx: MatrixClient, allRooms: typeof allRoomsAtom) => {
   useBindRoomsWithMembershipsAtom(
     mx,

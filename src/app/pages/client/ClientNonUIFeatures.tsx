@@ -27,11 +27,7 @@ import { playCurrentRoomSound, playReactionSound, playTypingSound } from '../../
 import { announce } from '../../utils/announce';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
-import { useThrottledAtomDriver } from '../../state/throttledAtom';
-import { roomToUnreadThrottled } from '../../state/room/roomToUnread';
-import { roomToParentsThrottled } from '../../state/room/roomToParents';
-import { allRoomsThrottled } from '../../state/room-list/roomList';
-import { typingMembersThrottled } from '../../state/typingMembers';
+import { useFavoriteRoomsDriver } from '../../hooks/useFavoriteRooms';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
@@ -266,7 +262,7 @@ function PageZoomFeature() {
 }
 
 function FaviconUpdater() {
-  const roomToUnread = useAtomValue(roomToUnreadThrottled.out);
+  const roomToUnread = useAtomValue(roomToUnreadAtom);
 
   useEffect(() => {
     let notification = false;
@@ -539,23 +535,15 @@ function BackgroundBackfillFeature() {
   return null;
 }
 
-/**
- * Mounts the throttled-atom drivers near the app shell. Each driver
- * subscribes to its source atom and trailing-edge-flushes the cache,
- * capping downstream re-renders at the configured rate.
- */
-function ThrottledAtomDrivers() {
-  useThrottledAtomDriver(roomToUnreadThrottled);
-  useThrottledAtomDriver(roomToParentsThrottled);
-  useThrottledAtomDriver(allRoomsThrottled);
-  useThrottledAtomDriver(typingMembersThrottled);
+function GlobalDrivers() {
+  useFavoriteRoomsDriver();
   return null;
 }
 
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
     <>
-      <ThrottledAtomDrivers />
+      <GlobalDrivers />
       <SessionHealthMonitor />
       <CryptoCheckpointManager />
       <MemoryWatchdog />

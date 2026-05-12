@@ -30,7 +30,7 @@ import { getDirectRoomAvatarUrl, getRoomAvatarUrl, getStateEvent } from '../../u
 import { nameInitials } from '../../utils/common';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomUnread } from '../../state/hooks/unread';
-import { roomToUnreadThrottled } from '../../state/room/roomToUnread';
+import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { getPowersLevelFromMatrixEvent, usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
 import { markAsRead } from '../../utils/notifications';
@@ -72,7 +72,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   ({ room, requestClose, notificationMode }, ref) => {
     const mx = useMatrixClient();
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-    const unread = useRoomUnread(room.roomId, roomToUnreadThrottled.out);
+    const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
     const powerLevels = usePowerLevels(room);
     const creators = useRoomCreators(room);
 
@@ -287,7 +287,7 @@ export function RoomNavItem({
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const unread = useRoomUnread(room.roomId, roomToUnreadThrottled.out);
+  const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const typingMember = useRoomTypingMember(room.roomId).filter(
     (receipt) => receipt.userId !== mx.getUserId()
   );

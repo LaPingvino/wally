@@ -19,7 +19,6 @@ import {
   mapParentWithChildren,
 } from '../../utils/room';
 import { SyncBatchScheduler } from '../syncBatchScheduler';
-import { makeThrottledAtom } from '../throttledAtom';
 
 export type RoomToParentsAction =
   | {
@@ -87,15 +86,6 @@ export const roomToParentsAtom = atom<RoomToParents, [RoomToParentsAction], unde
       set(baseRoomToParents, next);
     }
   }
-);
-
-/**
- * Throttled read-only view of roomToParentsAtom. See throttledAtom.ts.
- */
-export const roomToParentsThrottled = makeThrottledAtom(
-  roomToParentsAtom,
-  'roomToParents',
-  100
 );
 
 export const useBindRoomToParentsAtom = (

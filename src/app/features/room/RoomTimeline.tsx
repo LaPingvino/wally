@@ -110,9 +110,9 @@ import { useDocumentFocusChange } from '../../hooks/useDocumentFocusChange';
 import { RenderMessageContent } from '../../components/RenderMessageContent';
 import { Image } from '../../components/media';
 import { ImageViewer } from '../../components/image-viewer';
-import { roomToParentsThrottled } from '../../state/room/roomToParents';
+import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { useRoomUnread } from '../../state/hooks/unread';
-import { roomToUnreadThrottled } from '../../state/room/roomToUnread';
+import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
 import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
@@ -587,8 +587,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   const canPinEvent = permissions.stateEvent(StateEvent.RoomPinnedEvents, mx.getSafeUserId());
   const [editId, setEditId] = useState<string>();
 
-  const roomToParents = useAtomValue(roomToParentsThrottled.out);
-  const unread = useRoomUnread(room.roomId, roomToUnreadThrottled.out);
+  const roomToParents = useAtomValue(roomToParentsAtom);
+  const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
   const { navigateRoom } = useRoomNavigate();
   const [mentionNav, setMentionNav] = useAtom(mentionNavAtom);
   const showMentionNav =

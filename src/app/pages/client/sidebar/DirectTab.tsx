@@ -6,8 +6,8 @@ import { useAtomValue } from 'jotai';
 import { useDirects } from '../../../state/hooks/roomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { mDirectAtom } from '../../../state/mDirectList';
-import { allRoomsThrottled } from '../../../state/room-list/roomList';
-import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
+import { allRoomsAtom } from '../../../state/room-list/roomList';
+import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { getDirectPath, joinPathComponent } from '../../pathUtils';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import {
@@ -32,7 +32,7 @@ type DirectMenuProps = {
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
   const orphanRooms = useDirectRooms();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadThrottled.out);
+  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
   const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
@@ -67,8 +67,8 @@ export function DirectTab() {
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
 
   const mDirects = useAtomValue(mDirectAtom);
-  const directs = useDirects(mx, allRoomsThrottled.out, mDirects);
-  const directUnread = useRoomsUnread(directs, roomToUnreadThrottled.out);
+  const directs = useDirects(mx, allRoomsAtom, mDirects);
+  const directUnread = useRoomsUnread(directs, roomToUnreadAtom);
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const directSelected = useDirectSelected();

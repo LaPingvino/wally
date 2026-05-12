@@ -49,7 +49,7 @@ import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
-import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
+import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { hideReadRoomsAtom } from '../../../state/hideReadRooms';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
@@ -85,7 +85,7 @@ type HomeMenuProps = {
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const orphanRooms = useHomeRooms();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadThrottled.out);
+  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
   const mx = useMatrixClient();
   const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
 
@@ -246,7 +246,7 @@ export function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const rooms = useHomeRooms();
   const notificationPreferences = useRoomsNotificationPreferencesContext();
-  const roomToUnread = useAtomValue(roomToUnreadThrottled.out);
+  const roomToUnread = useAtomValue(roomToUnreadAtom);
   const navigate = useNavigate();
 
   const selectedRoomId = useSelectedRoom();

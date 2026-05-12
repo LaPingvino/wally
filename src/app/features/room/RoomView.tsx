@@ -30,7 +30,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
 import { useRoomUnread } from '../../state/hooks/unread';
-import { roomToUnreadThrottled } from '../../state/room/roomToUnread';
+import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { announce } from '../../utils/announce';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { playReactionSound, playReplyToMeSound } from '../../utils/sounds';
@@ -88,7 +88,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const creators = useRoomCreators(room);
   const direct = useIsDirectRoom();
   const roomDisplayName = useRoomName(room, direct);
-  const unread = useRoomUnread(roomId, roomToUnreadThrottled.out);
+  const unread = useRoomUnread(roomId, roomToUnreadAtom);
 
   useEffect(() => {
     const roomType = room.isCallRoom()

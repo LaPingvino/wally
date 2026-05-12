@@ -45,8 +45,8 @@ import {
   useSpaceChildren,
 } from '../../../state/hooks/roomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { roomToParentsThrottled } from '../../../state/room/roomToParents';
-import { allRoomsThrottled } from '../../../state/room-list/roomList';
+import { roomToParentsAtom } from '../../../state/room/roomToParents';
+import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { getSpaceLobbyPath, getSpacePath, joinPathComponent } from '../../pathUtils';
 import {
   SidebarAvatar,
@@ -79,7 +79,7 @@ import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
 import { useOpenedSidebarFolderAtom } from '../../../state/hooks/openedSidebarFolder';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRoomsUnread } from '../../../state/hooks/unread';
-import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
+import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { markAsRead } from '../../../utils/notifications';
 import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
@@ -103,7 +103,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
   ({ room, requestClose, onUnpin }, ref) => {
     const mx = useMatrixClient();
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-    const roomToParents = useAtomValue(roomToParentsThrottled.out);
+    const roomToParents = useAtomValue(roomToParentsAtom);
     const powerLevels = usePowerLevels(room);
     const creators = useRoomCreators(room);
 
@@ -114,11 +114,11 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
     const [invitePrompt, setInvitePrompt] = useState(false);
 
     const allChild = useSpaceChildren(
-      allRoomsThrottled.out,
+      allRoomsAtom,
       room.roomId,
       useRecursiveChildScopeFactory(mx, roomToParents)
     );
-    const unread = useRoomsUnread(allChild, roomToUnreadThrottled.out);
+    const unread = useRoomsUnread(allChild, roomToUnreadAtom);
 
     const handleMarkAsRead = () => {
       allChild.forEach((childRoomId) => markAsRead(mx, childRoomId, hideActivity));
@@ -612,8 +612,8 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
   const navigate = useNavigate();
   const mx = useMatrixClient();
   const screenSize = useScreenSizeContext();
-  const roomToParents = useAtomValue(roomToParentsThrottled.out);
-  const orphanSpaces = useOrphanSpaces(mx, allRoomsThrottled.out, roomToParents);
+  const roomToParents = useAtomValue(roomToParentsAtom);
+  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
   const [sidebarItems, localEchoSidebarItem] = useSidebarItems(orphanSpaces);
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
   const [openedFolder, setOpenedFolder] = useAtom(useOpenedSidebarFolderAtom());

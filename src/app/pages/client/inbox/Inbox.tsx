@@ -12,8 +12,8 @@ import {
 } from '../../../hooks/router/useInbox';
 import { UnreadBadge } from '../../../components/unread-badge';
 import { allInvitesAtom } from '../../../state/room-list/inviteList';
-import { allRoomsThrottled } from '../../../state/room-list/roomList';
-import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
+import { allRoomsAtom } from '../../../state/room-list/roomList';
+import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
@@ -70,8 +70,8 @@ export function Inbox() {
   const unreadSelected = useInboxUnreadSelected();
   const activitySelected = useInboxActivitySelected();
   const notificationsSupported = useNotificationsSupported();
-  const allRooms = useAtomValue(allRoomsThrottled.out);
-  const allUnread = useRoomsUnread(allRooms, roomToUnreadThrottled.out);
+  const allRooms = useAtomValue(allRoomsAtom);
+  const allUnread = useRoomsUnread(allRooms, roomToUnreadAtom);
 
   const notificationsUnsupported = notificationsSupported === false;
   const notificationsTo = notificationsUnsupported ? getInboxUnreadPath() : getInboxNotificationsPath();

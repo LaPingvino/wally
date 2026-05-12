@@ -2,10 +2,10 @@ import React, { useCallback, useMemo } from 'react';
 import { useAtomValue, useAtom, atom } from 'jotai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MatrixClient } from 'matrix-js-sdk';
-import { roomToUnreadThrottled } from '../state/room/roomToUnread';
+import { roomToUnreadAtom } from '../state/room/roomToUnread';
 import { mDirectAtom } from '../state/mDirectList';
-import { roomToParentsThrottled } from '../state/room/roomToParents';
-import { allRoomsThrottled } from '../state/room-list/roomList';
+import { roomToParentsAtom } from '../state/room/roomToParents';
+import { allRoomsAtom } from '../state/room-list/roomList';
 import {
   useChildRoomScopeFactory,
   useDirects,
@@ -125,9 +125,9 @@ export function useNavigateUnread() {
   const navigate = useNavigate();
   const location = useLocation();
   const mx = useMatrixClient();
-  const roomToUnread = useAtomValue(roomToUnreadThrottled.out);
+  const roomToUnread = useAtomValue(roomToUnreadAtom);
   const mDirects = useAtomValue(mDirectAtom);
-  const roomToParents = useAtomValue(roomToParentsThrottled.out);
+  const roomToParents = useAtomValue(roomToParentsAtom);
   const settings = useAtomValue(settingsAtom);
   const roomSortOrder: string =
     (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
@@ -156,10 +156,10 @@ export function useNavigateUnread() {
     view === 'home' ? HOME_BUCKET : view === 'direct' ? DIRECT_BUCKET : effectiveSpaceBucket ?? HOME_BUCKET;
 
   // ── Get rooms for each view in display order ──
-  const homeRooms = useOrphanRooms(mx, allRoomsThrottled.out, mDirects, roomToParents);
-  const directRooms = useDirects(mx, allRoomsThrottled.out, mDirects);
+  const homeRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
+  const directRooms = useDirects(mx, allRoomsAtom, mDirects);
   const spaceChildSelector = useChildRoomScopeFactory(mx, mDirects, roomToParents);
-  const spaceRooms = useSpaceChildren(allRoomsThrottled.out, selectedSpaceId ?? '', spaceChildSelector);
+  const spaceRooms = useSpaceChildren(allRoomsAtom, selectedSpaceId ?? '', spaceChildSelector);
 
   // Prefer the published current-view list (set by whichever page owns
   // the visible sidebar) so we walk EXACTLY what the user sees. Fall

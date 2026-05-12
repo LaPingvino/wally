@@ -51,19 +51,19 @@ import { useSpace } from '../../../hooks/useSpace';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
-import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
+import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { hideReadRoomsAtom } from '../../../state/hideReadRooms';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useRoomName } from '../../../hooks/useRoomMeta';
 import { HierarchyItem, useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
 import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst, byOrderKey, byTsOldToNew } from '../../../utils/sort';
-import { allRoomsThrottled } from '../../../state/room-list/roomList';
+import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
-import { roomToParentsThrottled } from '../../../state/room/roomToParents';
+import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { markAsRead } from '../../../utils/notifications';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { UseStateProvider } from '../../../components/UseStateProvider';
@@ -105,7 +105,7 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
   const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
-  const roomToParents = useAtomValue(roomToParentsThrottled.out);
+  const roomToParents = useAtomValue(roomToParentsAtom);
   const powerLevels = usePowerLevels(room);
   const creators = useRoomCreators(room);
 
@@ -117,11 +117,11 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
   const [invitePrompt, setInvitePrompt] = useState(false);
 
   const allChild = useSpaceChildren(
-    allRoomsThrottled.out,
+    allRoomsAtom,
     room.roomId,
     useRecursiveChildScopeFactory(mx, roomToParents)
   );
-  const unread = useRoomsUnread(allChild, roomToUnreadThrottled.out);
+  const unread = useRoomsUnread(allChild, roomToUnreadAtom);
 
   const handleMarkAsRead = () => {
     allChild.forEach((childRoomId) => markAsRead(mx, childRoomId, hideActivity));
@@ -434,8 +434,8 @@ export function Space() {
   const spaceIdOrAlias = getCanonicalAliasOrRoomId(mx, space.roomId);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mDirects = useAtomValue(mDirectAtom);
-  const roomToUnread = useAtomValue(roomToUnreadThrottled.out);
-  const allRooms = useAtomValue(allRoomsThrottled.out);
+  const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
   const notificationPreferences = useRoomsNotificationPreferencesContext();
 
