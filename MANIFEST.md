@@ -29,4 +29,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-12T18:47:25Z_
+_Generated 2026-05-12T22:01:18Z_

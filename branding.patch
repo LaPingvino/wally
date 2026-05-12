@@ -215,6 +215,20 @@ index f536d12ef..00f87c323 100644
                        rel="noreferrer noopener"
                        target="_blank"
                        variant="Secondary"
+diff --git a/src/app/pages/auth/AuthFooter.tsx b/src/app/pages/auth/AuthFooter.tsx
+index 7e509d1ee..0b31ff1f9 100644
+--- a/src/app/pages/auth/AuthFooter.tsx
++++ b/src/app/pages/auth/AuthFooter.tsx
+@@ -17,9 +17,6 @@ export function AuthFooter() {
+       >
+         v4.11.1
+       </Text>
+-      <Text as="a" size="T300" href="https://twitter.com/cinnyapp" target="_blank" rel="noreferrer">
+-        Twitter
+-      </Text>
+       <Text as="a" size="T300" href="https://matrix.org" target="_blank" rel="noreferrer">
+         Powered by Matrix
+       </Text>
 diff --git a/src/app/pages/auth/AuthLayout.tsx b/src/app/pages/auth/AuthLayout.tsx
 index 3943f42d1..8b3da2db3 100644
 --- a/src/app/pages/auth/AuthLayout.tsx
