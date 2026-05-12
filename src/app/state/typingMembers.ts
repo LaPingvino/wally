@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useSetting } from './hooks/settings';
 import { settingsAtom } from './settings';
 import { SyncBatchScheduler } from './syncBatchScheduler';
+import { makeThrottledAtom } from './throttledAtom';
 
 export const TYPING_TIMEOUT_MS = 5000; // 5 seconds
 const CLEANUP_INTERVAL_MS = 3000; // Single interval to sweep expired entries
@@ -34,6 +35,8 @@ export type IRoomIdToTypingMembersAction =
   | TypingMemberCleanupAction;
 
 const baseRoomIdToTypingMembersAtom = atom<IRoomIdToTypingMembers>(new Map());
+
+// Forward declaration so we can attach the throttled view below.
 
 export const roomIdToTypingMembersAtom = atom<
   IRoomIdToTypingMembers,
@@ -91,6 +94,26 @@ export const roomIdToTypingMembersAtom = atom<
       }
     }
   }
+);
+
+/**
+ * Throttled read-only view of roomIdToTypingMembersAtom.
+ *
+ * Every typing event from any of the user's rooms triggers a write
+ * here, and every visible RoomNavItem has a selectAtom that re-runs
+ * its selector on each write. On a busy server with hundreds of joined
+ * rooms, that's a lot of selector calls per second. The throttle caps
+ * the firing rate so the per-room components only re-check at most
+ * 10× per second.
+ *
+ * Note this doesn't fix the *shape* (each RoomNavItem still wakes up
+ * for typing in any room). The proper fix is an atomFamily per-room;
+ * this throttle is the cheap step we can ship and measure first.
+ */
+export const typingMembersThrottled = makeThrottledAtom(
+  roomIdToTypingMembersAtom,
+  'typingMembers',
+  100
 );
 
 export const useBindRoomIdToTypingMembersAtom = (

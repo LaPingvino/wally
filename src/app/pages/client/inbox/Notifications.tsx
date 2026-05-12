@@ -73,7 +73,7 @@ import { useMatrixEventRenderer } from '../../../hooks/useMatrixEventRenderer';
 import * as customHtmlCss from '../../../styles/CustomHtml.css';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useRoomUnread } from '../../../state/hooks/unread';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
 import { markAsRead } from '../../../utils/notifications';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { VirtualTile } from '../../../components/virtualizer';
@@ -84,7 +84,7 @@ import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
+import { allRoomsThrottled } from '../../../state/room-list/roomList';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { usePowerLevelTags } from '../../../hooks/usePowerLevelTags';
 import { useTheme } from '../../../hooks/useTheme';
@@ -137,7 +137,7 @@ const useNotificationTimeline = (
   onlyHighlight?: boolean
 ): [NotificationTimeline, LoadTimeline, SilentReloadTimeline] => {
   const mx = useMatrixClient();
-  const allRooms = useAtomValue(allRoomsAtom);
+  const allRooms = useAtomValue(allRoomsThrottled.out);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
 
   const [notificationTimeline, setNotificationTimeline] = useState<NotificationTimeline>({
@@ -225,7 +225,7 @@ function RoomNotificationsGroupComp({
 }: RoomNotificationsGroupProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
-  const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+  const unread = useRoomUnread(room.roomId, roomToUnreadThrottled.out);
 
   const powerLevels = usePowerLevels(room);
   const creators = useRoomCreators(room);

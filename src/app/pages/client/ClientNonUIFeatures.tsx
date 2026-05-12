@@ -31,6 +31,7 @@ import { useThrottledAtomDriver } from '../../state/throttledAtom';
 import { roomToUnreadThrottled } from '../../state/room/roomToUnread';
 import { roomToParentsThrottled } from '../../state/room/roomToParents';
 import { allRoomsThrottled } from '../../state/room-list/roomList';
+import { typingMembersThrottled } from '../../state/typingMembers';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
@@ -265,7 +266,7 @@ function PageZoomFeature() {
 }
 
 function FaviconUpdater() {
-  const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const roomToUnread = useAtomValue(roomToUnreadThrottled.out);
 
   useEffect(() => {
     let notification = false;
@@ -547,6 +548,7 @@ function ThrottledAtomDrivers() {
   useThrottledAtomDriver(roomToUnreadThrottled);
   useThrottledAtomDriver(roomToParentsThrottled);
   useThrottledAtomDriver(allRoomsThrottled);
+  useThrottledAtomDriver(typingMembersThrottled);
   return null;
 }
 

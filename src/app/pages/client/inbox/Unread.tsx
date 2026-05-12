@@ -22,9 +22,9 @@ import {
   PageHero,
 } from '../../../components/page';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
-import { roomToParentsAtom } from '../../../state/room/roomToParents';
+import { allRoomsThrottled } from '../../../state/room-list/roomList';
+import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
+import { roomToParentsThrottled } from '../../../state/room/roomToParents';
 import { mDirectAtom } from '../../../state/mDirectList';
 import { RoomAvatar, RoomIcon } from '../../../components/room-avatar';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -91,7 +91,7 @@ function UnreadRoomGroup({
 }: UnreadRoomGroupProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
-  const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+  const unread = useRoomUnread(room.roomId, roomToUnreadThrottled.out);
 
   const handleOpenClick: React.MouseEventHandler = (e) => {
     const eventId = e.currentTarget.getAttribute('data-event-id');
@@ -221,10 +221,10 @@ function UnreadRoomGroup({
 export function Unread() {
   const mx = useMatrixClient();
   const navigate = useNavigate();
-  const roomToUnread = useAtomValue(roomToUnreadAtom);
-  const allRooms = useAtomValue(allRoomsAtom);
+  const roomToUnread = useAtomValue(roomToUnreadThrottled.out);
+  const allRooms = useAtomValue(allRoomsThrottled.out);
   const mDirects = useAtomValue(mDirectAtom);
-  const roomToParents = useAtomValue(roomToParentsAtom);
+  const roomToParents = useAtomValue(roomToParentsThrottled.out);
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
