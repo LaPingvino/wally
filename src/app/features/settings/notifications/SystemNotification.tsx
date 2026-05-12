@@ -291,7 +291,7 @@ export function SystemNotification() {
       >
         <SettingTile
           title="Notification Sound"
-          description="Play mention, other-room, and reaction sounds when messages arrive."
+          description="Play a sound for mentions and messages in other rooms."
           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
         />
         <SettingTile

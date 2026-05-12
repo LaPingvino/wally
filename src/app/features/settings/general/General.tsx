@@ -1052,12 +1052,13 @@ function Messages() {
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Disable Media Auto Load"
+          title="Auto-Load Media"
+          description="Automatically download images, videos and files as messages arrive."
           after={
             <Switch
               variant="Primary"
-              value={!mediaAutoLoad}
-              onChange={(v) => setMediaAutoLoad(!v)}
+              value={mediaAutoLoad}
+              onChange={setMediaAutoLoad}
             />
           }
         />

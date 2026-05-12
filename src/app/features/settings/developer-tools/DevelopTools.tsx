@@ -150,49 +150,6 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
               <PageContent>
                 <Box direction="Column" gap="700">
                   <Box direction="Column" gap="100">
-                    <Text size="L400">Experimental Features</Text>
-                    <SequenceCard
-                      className={SequenceCardStyle}
-                      variant="SurfaceVariant"
-                      direction="Column"
-                      gap="400"
-                    >
-                      <SettingTile
-                        title="Issue Tracker"
-                        description="Enable per-room issue tracker (experimental)."
-                        after={
-                          <Switch
-                            variant="Primary"
-                            value={issueTracker}
-                            onChange={setIssueTracker}
-                          />
-                        }
-                      />
-                      <SettingTile
-                        title="Multi-Account"
-                        description="Show account switcher in sidebar (experimental)."
-                        after={
-                          <Switch
-                            variant="Primary"
-                            value={multiAccount}
-                            onChange={setMultiAccount}
-                          />
-                        }
-                      />
-                      <SettingTile
-                        title="Per-Message Profiles (Personas)"
-                        description="Send messages under a named persona (MSC4144). The sending Matrix account is always visible as 'via @user:server'."
-                        after={
-                          <Switch
-                            variant="Primary"
-                            value={perMessageProfiles}
-                            onChange={setPerMessageProfiles}
-                          />
-                        }
-                      />
-                    </SequenceCard>
-                  </Box>
-                  <Box direction="Column" gap="100">
                     <Text size="L400">Options</Text>
                     <SequenceCard
                       className={SequenceCardStyle}
@@ -202,6 +159,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                     >
                       <SettingTile
                         title="Enable Developer Tools"
+                        description="Show Access Token and Account Data editors below."
                         after={
                           <Switch
                             variant="Primary"
@@ -238,6 +196,52 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                         />
                       </SequenceCard>
                     )}
+                  </Box>
+                  <Box direction="Column" gap="100">
+                    <Text size="L400">Experimental Features</Text>
+                    <Text size="T200" priority="300">
+                      These ship outside the Developer Tools toggle — they are app features, not debug surfaces.
+                    </Text>
+                    <SequenceCard
+                      className={SequenceCardStyle}
+                      variant="SurfaceVariant"
+                      direction="Column"
+                      gap="400"
+                    >
+                      <SettingTile
+                        title="Issue Tracker"
+                        description="Per-room issue tracker (experimental)."
+                        after={
+                          <Switch
+                            variant="Primary"
+                            value={issueTracker}
+                            onChange={setIssueTracker}
+                          />
+                        }
+                      />
+                      <SettingTile
+                        title="Multi-Account"
+                        description="Show account switcher in sidebar (experimental)."
+                        after={
+                          <Switch
+                            variant="Primary"
+                            value={multiAccount}
+                            onChange={setMultiAccount}
+                          />
+                        }
+                      />
+                      <SettingTile
+                        title="Per-Message Profiles (Personas)"
+                        description="Send messages under a named persona (MSC4144). The sending Matrix account is always visible as 'via @user:server'."
+                        after={
+                          <Switch
+                            variant="Primary"
+                            value={perMessageProfiles}
+                            onChange={setPerMessageProfiles}
+                          />
+                        }
+                      />
+                    </SequenceCard>
                   </Box>
                   {developerTools && (
                     <Box direction="Column" gap="100">
