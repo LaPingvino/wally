@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
 import { Page, PageHero, PageHeroSection } from '../../components/page';
 import CinnySVG from '../../../../public/res/svg/cinny.svg';
+import { APP_VERSION } from '../../version';
 
 // Sync the entries here with PATCH_DEFS in cinny-web-git/push-to-codeberg.sh.
 // Status reflects the latest audit: "full" applies cleanly to vanilla cinny
@@ -52,7 +53,7 @@ export function WelcomePage() {
                   target="_blank"
                   rel="noreferrer noopener"
                 >
-                  v4.11.1
+                  v{APP_VERSION}
                 </a>
               </span>
             }

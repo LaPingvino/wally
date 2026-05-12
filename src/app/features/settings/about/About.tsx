@@ -5,15 +5,12 @@ import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import CinnySVG from '../../../../../public/res/svg/cinny.svg';
-import { clearCacheAndReload } from '../../../../client/initMatrix';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { APP_VERSION } from '../../../version';
 
 type AboutProps = {
   requestClose: () => void;
 };
 export function About({ requestClose }: AboutProps) {
-  const mx = useMatrixClient();
-
   return (
     <Page>
       <PageHeader outlined={false}>
@@ -46,9 +43,9 @@ export function About({ requestClose }: AboutProps) {
                   <Box direction="Column" gap="100">
                     <Box gap="100" alignItems="End">
                       <Text size="H3" as="h2">Wally</Text>
-                      <Text size="T200">v4.11.1</Text>
+                      <Text size="T200">v{APP_VERSION}</Text>
                     </Box>
-                    <Text>A Cinny fork.</Text>
+                    <Text>A stubborn Matrix client.</Text>
                   </Box>
 
                   <Box gap="200" wrap="Wrap">
@@ -65,47 +62,8 @@ export function About({ requestClose }: AboutProps) {
                     >
                       <Text size="B300">Source Code</Text>
                     </Button>
-                    <Button
-                      as="a"
-                      href="https://cinny.in/#sponsor"
-                      rel="noreferrer noopener"
-                      target="_blank"
-                      variant="Critical"
-                      fill="Soft"
-                      size="300"
-                      radii="300"
-                      before={<Icon src={Icons.Heart} size="100" filled />}
-                    >
-                      <Text size="B300">Support</Text>
-                    </Button>
                   </Box>
                 </Box>
-              </Box>
-              <Box direction="Column" gap="100">
-                <Text size="L400">Options</Text>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="400"
-                >
-                  <SettingTile
-                    title="Clear Cache & Reload"
-                    description="Clear all your locally stored data and reload from server."
-                    after={
-                      <Button
-                        onClick={() => clearCacheAndReload(mx)}
-                        variant="Secondary"
-                        fill="Soft"
-                        size="300"
-                        radii="300"
-                        outlined
-                      >
-                        <Text size="B300">Clear Cache</Text>
-                      </Button>
-                    }
-                  />
-                </SequenceCard>
               </Box>
               <Box direction="Column" gap="100">
                 <Text size="L400">Credits</Text>
