@@ -39,3 +39,4 @@ ad8351a6  ux-fixes: pass rtcFoci from AutoDiscoveryInfo to EC widget data
 0cbfdb96  ux-fixes: cross-bucket nav uses navigate-then-settle; serialise diag log
 ea0cbc35  ux-fixes: prev/next reads the displayed list from the page, not a recompute
 5a2660cc  ux-fixes: recognise plain-text /cmd as a command in submit
+7917b07d  ux-fixes: call indicator and unread nav row no longer overlap

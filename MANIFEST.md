@@ -26,7 +26,7 @@ you can apply those manually from the per-family branch.
 
 - `accessibility.patch` — partial (32/56 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account; see `accessibility.skipped`
 - `idb-retry.patch` — partial (4/18 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (20/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
+- `ux-fixes.patch` — partial (20/62 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/8 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `branding.patch` — partial (9/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `branding.skipped`
 
@@ -38,4 +38,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-12T22:30:12Z_
+_Generated 2026-05-12T22:40:20Z_
