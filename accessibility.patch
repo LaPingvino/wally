@@ -279,11 +279,12 @@ index 000000000..bffc7a10c
 +});
 diff --git a/src/app/components/NativeDialog.tsx b/src/app/components/NativeDialog.tsx
 new file mode 100644
-index 000000000..b3167e6b6
+index 000000000..3e578296a
 --- /dev/null
 +++ b/src/app/components/NativeDialog.tsx
-@@ -0,0 +1,62 @@
-+import React, { useRef, useEffect, ReactNode, useCallback } from 'react';
+@@ -0,0 +1,70 @@
++import React, { useRef, useEffect, ReactNode, useCallback, useState } from 'react';
++import { PopOutContainerProvider } from 'folds';
 +
 +interface NativeDialogProps {
 +  open: boolean;
@@ -305,14 +306,21 @@ index 000000000..b3167e6b6
 + */
 +export function NativeDialog({ open, onClose, children, className }: NativeDialogProps) {
 +  const ref = useRef<HTMLDialogElement>(null);
++  // Once the dialog mounts we expose it as the PopOut portal container so
++  // dropdowns / menus inside the modal render *inside* the dialog. The
++  // browser marks everything outside an open <dialog> as inert when
++  // showModal() is used — without this, portaled menus are non-clickable.
++  const [popoutContainer, setPopoutContainer] = useState<HTMLDialogElement | undefined>(undefined);
 +
 +  useEffect(() => {
 +    const dialog = ref.current;
 +    if (!dialog) return;
 +    if (open && !dialog.open) {
 +      dialog.showModal();
++      setPopoutContainer(dialog);
 +    } else if (!open && dialog.open) {
 +      dialog.close();
++      setPopoutContainer(undefined);
 +    }
 +  }, [open]);
 +
@@ -341,7 +349,7 @@ index 000000000..b3167e6b6
 +      onCancel={handleCancel}
 +      onClick={handleBackdropClick}
 +    >
-+      {children}
++      <PopOutContainerProvider value={popoutContainer}>{children}</PopOutContainerProvider>
 +    </dialog>
 +  );
 +}
