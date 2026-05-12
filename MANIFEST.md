@@ -28,7 +28,7 @@ you can apply those manually from the per-family branch.
 - `idb-retry.patch` — partial (4/18 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
 - `ux-fixes.patch` — partial (20/61 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/8 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
-- `branding.patch` — partial (8/9 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `branding.skipped`
+- `branding.patch` — partial (9/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `branding.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
 
@@ -38,4 +38,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-12T22:09:28Z_
+_Generated 2026-05-12T22:19:17Z_

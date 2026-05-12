@@ -237,7 +237,7 @@ index 16f78b3e7..9d0cb0c57 100644
          return { baseUrl: result.baseUrl, response: result.response };
        },
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index b3ec2eb44..872ce492c 100644
+index b3ec2eb44..905fc9224 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
 @@ -3,6 +3,34 @@ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
@@ -286,7 +286,7 @@ index b3ec2eb44..872ce492c 100644
              subTitle={
                <span>
 -                Yet another matrix client.{' '}
-+                A Matrix client, forked from Cinny.{' '}
++                A stubborn Matrix client.{' '}
                  <a
 -                  href="https://github.com/cinnyapp/cinny/releases"
 +                  href="https://codeberg.org/lapingvino/cinny/releases"
