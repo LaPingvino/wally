@@ -1,5 +1,5 @@
 diff --git a/index.html b/index.html
-index 2eefeee2c..418e56b43 100644
+index 2eefeee2c..0b15c39fa 100644
 --- a/index.html
 +++ b/index.html
 @@ -4,21 +4,21 @@
@@ -11,7 +11,7 @@ index 2eefeee2c..418e56b43 100644
 -    <meta name="author" content="Ajay Bura" />
 +    <title>Wally</title>
 +    <meta name="name" content="Wally" />
-+    <meta name="author" content="Joop Kiefte (Wally fork) — based on Cinny by Ajay Bura" />
++    <meta name="author" content="Joop Kiefte (LaPingvino)" />
      <meta
        name="description"
        content="A Matrix client where you can enjoy the conversation using simple, elegant and secure interface protected by e2ee with the power of open source."
@@ -19,7 +19,7 @@ index 2eefeee2c..418e56b43 100644
      <meta
        name="keywords"
 -      content="cinny, cinnyapp, cinnychat, matrix, matrix client, matrix.org, element"
-+      content="wally, matrix, matrix client, matrix.org, element, cinny"
++      content="wally, matrix, matrix client, matrix.org, element"
      />
  
 -    <meta property="og:title" content="Cinny" />
@@ -71,10 +71,27 @@ index 27adadbad..0d1e28774 100644
        </Box>
      </Box>
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
-index c035138ee..ee8321c60 100644
+index c035138ee..1c79f11a9 100644
 --- a/src/app/features/settings/about/About.tsx
 +++ b/src/app/features/settings/about/About.tsx
-@@ -39,22 +39,22 @@ export function About({ requestClose }: AboutProps) {
+@@ -5,15 +5,12 @@ import { SequenceCard } from '../../../components/sequence-card';
+ import { SequenceCardStyle } from '../styles.css';
+ import { SettingTile } from '../../../components/setting-tile';
+ import CinnySVG from '../../../../../public/res/svg/cinny.svg';
+-import { clearCacheAndReload } from '../../../../client/initMatrix';
+-import { useMatrixClient } from '../../../hooks/useMatrixClient';
++import { APP_VERSION } from '../../../version';
+ 
+ type AboutProps = {
+   requestClose: () => void;
+ };
+ export function About({ requestClose }: AboutProps) {
+-  const mx = useMatrixClient();
+-
+   return (
+     <Page>
+       <PageHeader outlined={false}>
+@@ -39,22 +36,22 @@ export function About({ requestClose }: AboutProps) {
                    <img
                      style={{ width: toRem(60), height: toRem(60) }}
                      src={CinnySVG}
@@ -86,11 +103,12 @@ index c035138ee..ee8321c60 100644
                    <Box direction="Column" gap="100">
                      <Box gap="100" alignItems="End">
 -                      <Text size="H3">Cinny</Text>
+-                      <Text size="T200">v4.11.1</Text>
 +                      <Text size="H3" as="h2">Wally</Text>
-                       <Text size="T200">v4.11.1</Text>
++                      <Text size="T200">v{APP_VERSION}</Text>
                      </Box>
 -                    <Text>Yet another matrix client.</Text>
-+                    <Text>A Cinny fork.</Text>
++                    <Text>A stubborn Matrix client.</Text>
                    </Box>
  
                    <Box gap="200" wrap="Wrap">
@@ -101,6 +119,55 @@ index c035138ee..ee8321c60 100644
                        rel="noreferrer noopener"
                        target="_blank"
                        variant="Secondary"
+@@ -65,48 +62,9 @@ export function About({ requestClose }: AboutProps) {
+                     >
+                       <Text size="B300">Source Code</Text>
+                     </Button>
+-                    <Button
+-                      as="a"
+-                      href="https://cinny.in/#sponsor"
+-                      rel="noreferrer noopener"
+-                      target="_blank"
+-                      variant="Critical"
+-                      fill="Soft"
+-                      size="300"
+-                      radii="300"
+-                      before={<Icon src={Icons.Heart} size="100" filled />}
+-                    >
+-                      <Text size="B300">Support</Text>
+-                    </Button>
+                   </Box>
+                 </Box>
+               </Box>
+-              <Box direction="Column" gap="100">
+-                <Text size="L400">Options</Text>
+-                <SequenceCard
+-                  className={SequenceCardStyle}
+-                  variant="SurfaceVariant"
+-                  direction="Column"
+-                  gap="400"
+-                >
+-                  <SettingTile
+-                    title="Clear Cache & Reload"
+-                    description="Clear all your locally stored data and reload from server."
+-                    after={
+-                      <Button
+-                        onClick={() => clearCacheAndReload(mx)}
+-                        variant="Secondary"
+-                        fill="Soft"
+-                        size="300"
+-                        radii="300"
+-                        outlined
+-                      >
+-                        <Text size="B300">Clear Cache</Text>
+-                      </Button>
+-                    }
+-                  />
+-                </SequenceCard>
+-              </Box>
+               <Box direction="Column" gap="100">
+                 <Text size="L400">Credits</Text>
+                 <SequenceCard
 diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
 index a87879295..bfc4c1fa3 100644
 --- a/src/app/features/settings/notifications/SystemNotification.tsx
@@ -115,10 +182,15 @@ index a87879295..bfc4c1fa3 100644
              append: true,
            });
 diff --git a/src/app/pages/auth/AuthFooter.tsx b/src/app/pages/auth/AuthFooter.tsx
-index 7e509d1ee..330be16dc 100644
+index 7e509d1ee..ce17cd27e 100644
 --- a/src/app/pages/auth/AuthFooter.tsx
 +++ b/src/app/pages/auth/AuthFooter.tsx
-@@ -5,21 +5,18 @@ import * as css from './styles.css';
+@@ -1,24 +1,22 @@
+ import React from 'react';
+ import { Box, Text } from 'folds';
+ import * as css from './styles.css';
++import { APP_VERSION } from '../../version';
+ 
  export function AuthFooter() {
    return (
      <Box className={css.AuthFooter} justifyContent="Center" gap="400" wrap="Wrap">
@@ -134,14 +206,14 @@ index 7e509d1ee..330be16dc 100644
          target="_blank"
          rel="noreferrer"
        >
-         v4.11.1
-       </Text>
+-        v4.11.1
+-      </Text>
 -      <Text as="a" size="T300" href="https://twitter.com/cinnyapp" target="_blank" rel="noreferrer">
 -        Twitter
--      </Text>
++        v{APP_VERSION}
+       </Text>
        <Text as="a" size="T300" href="https://matrix.org" target="_blank" rel="noreferrer">
          Powered by Matrix
-       </Text>
 diff --git a/src/app/pages/auth/AuthLayout.tsx b/src/app/pages/auth/AuthLayout.tsx
 index 3943f42d1..8b3da2db3 100644
 --- a/src/app/pages/auth/AuthLayout.tsx
@@ -237,13 +309,15 @@ index 16f78b3e7..9d0cb0c57 100644
          return { baseUrl: result.baseUrl, response: result.response };
        },
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index b3ec2eb44..905fc9224 100644
+index b3ec2eb44..1e1b4c133 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
-@@ -3,6 +3,34 @@ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
+@@ -2,6 +2,35 @@ import React from 'react';
+ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
  import { Page, PageHero, PageHeroSection } from '../../components/page';
  import CinnySVG from '../../../../public/res/svg/cinny.svg';
- 
++import { APP_VERSION } from '../../version';
++
 +// Sync the entries here with PATCH_DEFS in cinny-web-git/push-to-codeberg.sh.
 +// Status reflects the latest audit: "full" applies cleanly to vanilla cinny
 +// (or to the listed dep chain), "partial" ships the cleanly-applicable subset
@@ -271,11 +345,10 @@ index b3ec2eb44..905fc9224 100644
 +  partial: 'partial patch',
 +  branch: 'branch only',
 +};
-+
+ 
  export function WelcomePage() {
    return (
-     <Page>
-@@ -14,13 +42,13 @@ export function WelcomePage() {
+@@ -14,46 +43,83 @@ export function WelcomePage() {
        >
          <PageHeroSection>
            <PageHero
@@ -293,7 +366,9 @@ index b3ec2eb44..905fc9224 100644
                    target="_blank"
                    rel="noreferrer noopener"
                  >
-@@ -29,31 +57,68 @@ export function WelcomePage() {
+-                  v4.11.1
++                  v{APP_VERSION}
+                 </a>
                </span>
              }
            >
@@ -386,6 +461,15 @@ index b3ec2eb44..905fc9224 100644
                </Box>
              </Box>
            </PageHero>
+diff --git a/src/app/version.ts b/src/app/version.ts
+new file mode 100644
+index 000000000..562f33874
+--- /dev/null
++++ b/src/app/version.ts
+@@ -0,0 +1,3 @@
++import pkg from '../../package.json';
++
++export const APP_VERSION = pkg.version as string;
 diff --git a/src/widget.tsx b/src/widget.tsx
 index f961cc4d1..a1c548a83 100644
 --- a/src/widget.tsx

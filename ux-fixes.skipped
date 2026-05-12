@@ -40,3 +40,4 @@ ad8351a6  ux-fixes: pass rtcFoci from AutoDiscoveryInfo to EC widget data
 ea0cbc35  ux-fixes: prev/next reads the displayed list from the page, not a recompute
 5a2660cc  ux-fixes: recognise plain-text /cmd as a command in submit
 7917b07d  ux-fixes: call indicator and unread nav row no longer overlap
+3b737cc2  ux-fixes: settings audit — clearer dev-tools/experimentals split, fix inverted media auto-load switch, correct block-messages and notification-sound copy
