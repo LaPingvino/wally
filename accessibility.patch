@@ -1,0 +1,2233 @@
+diff --git a/.gitignore b/.gitignore
+index 1af58a970..f75536e43 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -4,4 +4,5 @@ node_modules
+ devAssets
+ 
+ .DS_Store
+-.idea
+\ No newline at end of file
++.idea
++public/font/NotoColorEmoji.Bahai.*.ttf
+diff --git a/src/__tests__/a11y-audit.test.ts b/src/__tests__/a11y-audit.test.ts
+new file mode 100644
+index 000000000..b869bc5a7
+--- /dev/null
++++ b/src/__tests__/a11y-audit.test.ts
+@@ -0,0 +1,203 @@
++/**
++ * Structural accessibility audit.
++ *
++ * These tests grep the source code for a11y patterns and anti-patterns,
++ * catching regressions without needing to render components. They verify:
++ * - Key components have proper ARIA roles and labels
++ * - Interactive elements aren't missing accessible names
++ * - Native `<dialog>` is used instead of custom overlays for modal dialogs
++ * - Landmark roles exist for screen reader navigation
++ */
++import { describe, it, expect } from 'vitest';
++import { readFileSync, readdirSync, statSync } from 'fs';
++import { join } from 'path';
++
++const SRC_DIR = join(__dirname, '..', 'app');
++
++function getAllTsxFiles(dir: string): string[] {
++  const files: string[] = [];
++  for (const entry of readdirSync(dir)) {
++    const full = join(dir, entry);
++    if (entry === 'node_modules' || entry === '__tests__') continue;
++    if (statSync(full).isDirectory()) {
++      files.push(...getAllTsxFiles(full));
++    } else if (full.endsWith('.tsx') || full.endsWith('.ts')) {
++      files.push(full);
++    }
++  }
++  return files;
++}
++
++function readSrc(relativePath: string): string {
++  return readFileSync(join(SRC_DIR, relativePath), 'utf-8');
++}
++
++describe('Landmark roles', () => {
++  it('Sidebar renders as <nav> with aria-label', () => {
++    const src = readSrc('components/sidebar/Sidebar.tsx');
++    expect(src).toMatch(/aria-label.*Spaces|aria-label="Spaces"/);
++    expect(src).toMatch(/<.*nav|as.*=.*'nav'/);
++  });
++
++  it('PageNav (room list panel) has navigation landmark', () => {
++    const src = readSrc('components/page/Page.tsx');
++    expect(src).toMatch(/<nav[\s>]|as="nav"/);
++    expect(src).toMatch(/aria-label.*Room list|aria-label="Room list"/);
++  });
++
++  it('Page (main content) renders as <main>', () => {
++    const src = readSrc('components/page/Page.tsx');
++    // Should use 'main' as the default element
++    expect(src).toMatch(/as.*=.*'main'|<main/);
++  });
++
++  it('Timeline has role="log" and aria-label', () => {
++    const src = readSrc('features/room/RoomTimeline.tsx');
++    expect(src).toMatch(/role="log"/);
++    expect(src).toMatch(/aria-label="Message timeline"/);
++  });
++});
++
++describe('Room list listbox pattern', () => {
++  it('RoomListbox has role="listbox" and tabIndex={0}', () => {
++    const src = readSrc('components/room-listbox/RoomListbox.tsx');
++    expect(src).toMatch(/role="listbox"/);
++    expect(src).toMatch(/tabIndex=\{0\}/);
++  });
++
++  it('RoomListbox uses aria-activedescendant', () => {
++    const src = readSrc('components/room-listbox/RoomListbox.tsx');
++    expect(src).toMatch(/aria-activedescendant/);
++  });
++
++  it('RoomNavItem has role="option"', () => {
++    const src = readSrc('features/room-nav/RoomNavItem.tsx');
++    expect(src).toMatch(/role="option"/);
++  });
++
++  it('RoomNavItem default tabIndex is -1 (not individually tabbable)', () => {
++    const src = readSrc('features/room-nav/RoomNavItem.tsx');
++    expect(src).toMatch(/tabIndex=\{tabIndex \?\? -1\}/);
++  });
++
++  it('Keyboard hook supports arrow keys, Home, End, PageUp, PageDown', () => {
++    const src = readSrc('hooks/useRoomListKeyboard.ts');
++    expect(src).toMatch(/arrowdown/i);
++    expect(src).toMatch(/arrowup/i);
++    expect(src).toMatch(/home/i);
++    expect(src).toMatch(/end/i);
++    expect(src).toMatch(/pagedown/i);
++    expect(src).toMatch(/pageup/i);
++  });
++});
++
++describe('Native dialog migration', () => {
++  it('NativeDialog component uses native <dialog> element', () => {
++    const src = readSrc('components/NativeDialog.tsx');
++    expect(src).toMatch(/<dialog/);
++    expect(src).toMatch(/showModal\(\)/);
++  });
++
++  it('NativeDialog handles Escape via onCancel', () => {
++    const src = readSrc('components/NativeDialog.tsx');
++    expect(src).toMatch(/onCancel/);
++  });
++
++  it('NativeDialog handles backdrop click', () => {
++    const src = readSrc('components/NativeDialog.tsx');
++    expect(src).toMatch(/e\.target === ref\.current/);
++  });
++
++  // Verify key dialogs use NativeDialog instead of Overlay+FocusTrap
++  const dialogFiles = [
++    'components/leave-room-prompt/LeaveRoomPrompt.tsx',
++    'components/leave-space-prompt/LeaveSpacePrompt.tsx',
++    'components/join-address-prompt/JoinAddressPrompt.tsx',
++    'components/keyboard-shortcuts-help/KeyboardShortcutsHelp.tsx',
++    'components/UIAFlowOverlay.tsx',
++    'features/create-room/CreateRoomModal.tsx',
++    'features/create-space/CreateSpaceModal.tsx',
++    'features/common-settings/general/RoomEncryption.tsx',
++    'features/common-settings/general/RoomUpgrade.tsx',
++    'features/add-existing/AddExisting.tsx',
++    'features/search/Search.tsx',
++  ];
++
++  for (const file of dialogFiles) {
++    it(`${file} uses NativeDialog`, () => {
++      const src = readSrc(file);
++      expect(src).toMatch(/NativeDialog/);
++      // Should NOT use the old Overlay+FocusTrap pattern for its main dialog
++      // (some files may still have FocusTrap for sub-elements like menus)
++    });
++  }
++});
++
++describe('F6 section cycling', () => {
++  it('GlobalKeyboardShortcuts handles F6 and Shift+F6', () => {
++    const src = readSrc('components/GlobalKeyboardShortcuts.tsx');
++    expect(src).toMatch(/f6/i);
++    expect(src).toMatch(/shift\+f6/i);
++  });
++
++  it('F6 targets room listbox', () => {
++    const src = readSrc('components/GlobalKeyboardShortcuts.tsx');
++    expect(src).toMatch(/cinny-room-listbox/);
++  });
++});
++
++describe('Call accessibility', () => {
++  it('CallView has ARIA announcer for participant changes', () => {
++    const src = readSrc('features/call/CallView.tsx');
++    expect(src).toMatch(/aria-live|CallAriaAnnouncer|announce/);
++  });
++
++  it('Call controls have aria-label and aria-pressed', () => {
++    const src = readSrc('features/call/CallView.tsx');
++    expect(src).toMatch(/aria-label/);
++    expect(src).toMatch(/aria-pressed/);
++  });
++});
++
++describe('No interactive elements without accessible names', () => {
++  it('all <IconButton> usages have aria-label', () => {
++    // Sample the most critical files
++    const criticalFiles = [
++      'features/room-nav/RoomNavItem.tsx',
++      'features/room/RoomViewHeader.tsx',
++      'features/call/CallView.tsx',
++    ];
++
++    for (const file of criticalFiles) {
++      const src = readSrc(file);
++      // Find IconButton opening tags — match until the closing >
++      // that follows the component's last prop (look for > preceded by
++      // a quote, brace, or word char, not inside JSX expressions)
++      const iconButtonBlocks: string[] = [];
++      let idx = 0;
++      while (true) {
++        const start = src.indexOf('<IconButton', idx);
++        if (start === -1) break;
++        // Find the matching > that closes this JSX tag.
++        // Track brace depth to skip over {() => ...} expressions.
++        let braceDepth = 0;
++        let end = start + 11;
++        while (end < src.length) {
++          if (src[end] === '{') braceDepth++;
++          else if (src[end] === '}') braceDepth--;
++          else if (src[end] === '>' && braceDepth === 0) break;
++          end++;
++        }
++        iconButtonBlocks.push(src.substring(start, end + 1));
++        idx = end + 1;
++      }
++
++      for (const btn of iconButtonBlocks) {
++        expect(
++          btn.includes('aria-label') || btn.includes('aria-labelledby'),
++          `IconButton in ${file} missing accessible name: ${btn.substring(0, 120).replace(/\n/g, ' ')}...`
++        ).toBe(true);
++      }
++    }
++  });
++});
+diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
+index 55f68b47f..34df387d3 100644
+--- a/src/app/components/GlobalKeyboardShortcuts.tsx
++++ b/src/app/components/GlobalKeyboardShortcuts.tsx
+@@ -134,7 +134,12 @@ function findSidebarFocus(): HTMLElement | null {
+ // Panels with role="region" + aria-label are auto-discovered by getRegionSections() below.
+ const SECTION_FINDERS: Array<() => HTMLElement | null> = [
+   findSidebarFocus,
+-  () => document.querySelector('#cinny-room-listbox'),
++  () => {
++    const listbox = document.querySelector<HTMLElement>('#cinny-room-listbox');
++    if (!listbox) return null;
++    // Focus the first nav item inside the listbox.
++    return listbox.querySelector<HTMLElement>('[data-nav-item]') ?? listbox;
++  },
+   // First enabled button in the room header toolbar (skips disabled buttons)
+   () => document.querySelector<HTMLElement>('#cinny-room-header-toolbar button:not([disabled])'),
+   () => document.querySelector('#cinny-timeline'),
+@@ -156,7 +161,7 @@ function getRegionSections(): HTMLElement[] {
+     .sort((a, b) => {
+       const rA = a.getBoundingClientRect();
+       const rB = b.getBoundingClientRect();
+-      return rA.top !== rB.top ? rA.top - rB.top : rA.left - rB.left;
++      return rA.left !== rB.left ? rA.left - rB.left : rA.top - rB.top;
+     });
+ }
+ 
+@@ -287,7 +292,7 @@ export function GlobalKeyboardShortcuts() {
+     const sections = [...fixed, ...regions].sort((a, b) => {
+       const rA = a.getBoundingClientRect();
+       const rB = b.getBoundingClientRect();
+-      return rA.top !== rB.top ? rA.top - rB.top : rA.left - rB.left;
++      return rA.left !== rB.left ? rA.left - rB.left : rA.top - rB.top;
+     });
+     if (sections.length === 0) return;
+     evt.preventDefault();
+diff --git a/src/app/components/NativeDialog.css.ts b/src/app/components/NativeDialog.css.ts
+new file mode 100644
+index 000000000..bffc7a10c
+--- /dev/null
++++ b/src/app/components/NativeDialog.css.ts
+@@ -0,0 +1,16 @@
++import { style } from '@vanilla-extract/css';
++import { config, color } from 'folds';
++
++export const NativeDialog = style({
++  border: 'none',
++  borderRadius: config.radii.R400,
++  padding: 0,
++  maxWidth: '90vw',
++  maxHeight: '90vh',
++  backgroundColor: color.Surface.Container,
++  color: color.Surface.OnContainer,
++  boxShadow: `0 8px 32px ${color.Other.Shadow}`,
++  '::backdrop': {
++    backgroundColor: 'rgba(0, 0, 0, 0.5)',
++  },
++});
+diff --git a/src/app/components/NativeDialog.tsx b/src/app/components/NativeDialog.tsx
+new file mode 100644
+index 000000000..b3167e6b6
+--- /dev/null
++++ b/src/app/components/NativeDialog.tsx
+@@ -0,0 +1,62 @@
++import React, { useRef, useEffect, ReactNode, useCallback } from 'react';
++
++interface NativeDialogProps {
++  open: boolean;
++  onClose: () => void;
++  children: ReactNode;
++  className?: string;
++}
++
++/**
++ * Thin wrapper around the native <dialog> element with showModal().
++ *
++ * Replaces the Overlay + OverlayBackdrop + OverlayCenter + FocusTrap pattern
++ * with built-in browser features:
++ * - Focus trapping (automatic with showModal)
++ * - Backdrop (::backdrop pseudo-element)
++ * - Escape to close (cancel event)
++ * - Inert background (everything behind is non-interactive)
++ * - Return focus on close (browser handles this)
++ */
++export function NativeDialog({ open, onClose, children, className }: NativeDialogProps) {
++  const ref = useRef<HTMLDialogElement>(null);
++
++  useEffect(() => {
++    const dialog = ref.current;
++    if (!dialog) return;
++    if (open && !dialog.open) {
++      dialog.showModal();
++    } else if (!open && dialog.open) {
++      dialog.close();
++    }
++  }, [open]);
++
++  const handleCancel = useCallback(
++    (e: React.SyntheticEvent<HTMLDialogElement>) => {
++      e.preventDefault();
++      onClose();
++    },
++    [onClose]
++  );
++
++  const handleBackdropClick = useCallback(
++    (e: React.MouseEvent<HTMLDialogElement>) => {
++      // Only close if clicking the backdrop (the dialog element itself), not its children
++      if (e.target === ref.current) {
++        onClose();
++      }
++    },
++    [onClose]
++  );
++
++  return (
++    <dialog
++      ref={ref}
++      className={className}
++      onCancel={handleCancel}
++      onClick={handleBackdropClick}
++    >
++      {children}
++    </dialog>
++  );
++}
+diff --git a/src/app/components/editor/Editor.tsx b/src/app/components/editor/Editor.tsx
+index bd848dd5a..f7655fea3 100644
+--- a/src/app/components/editor/Editor.tsx
++++ b/src/app/components/editor/Editor.tsx
+@@ -99,6 +99,8 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
+ 
+     const handleKeydown: KeyboardEventHandler = useCallback(
+       (evt) => {
++        // Let F6 (section cycling) bubble to the window handler unimpeded.
++        if (evt.key === 'F6') return;
+         onKeyDown?.(evt);
+         const shortcutToggled = toggleKeyboardShortcut(editor, evt);
+         if (shortcutToggled) evt.preventDefault();
+diff --git a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
+index ddac0576c..30b815386 100644
+--- a/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
++++ b/src/app/components/invite-user-prompt/InviteUserPrompt.tsx
+@@ -8,9 +8,6 @@ import React, {
+   useState,
+ } from 'react';
+ import {
+-  Overlay,
+-  OverlayBackdrop,
+-  OverlayCenter,
+   Box,
+   Header,
+   config,
+@@ -23,7 +20,6 @@ import {
+   Spinner,
+   color,
+   TextArea,
+-  Dialog,
+   Menu,
+   toRem,
+   Scroll,
+@@ -33,6 +29,8 @@ import { Room } from 'matrix-js-sdk';
+ import { isKeyHotkey } from 'is-hotkey';
+ import FocusTrap from 'focus-trap-react';
+ import { stopPropagation } from '../../utils/keyboard';
++import { NativeDialog } from '../NativeDialog';
++import * as dialogCss from '../NativeDialog.css';
+ import { useDirectUsers } from '../../hooks/useDirectUsers';
+ import { getMxIdLocalPart, getMxIdServer, isUserId } from '../../utils/matrix';
+ import { Membership } from '../../../types/matrix/room';
+@@ -151,17 +149,8 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
+   };
+ 
+   return (
+-    <Overlay open backdrop={<OverlayBackdrop />}>
+-      <OverlayCenter>
+-        <FocusTrap
+-          focusTrapOptions={{
+-            initialFocus: () => inputRef.current,
+-            clickOutsideDeactivates: true,
+-            onDeactivate: requestClose,
+-            escapeDeactivates: stopPropagation,
+-          }}
+-        >
+-          <Dialog>
++    <NativeDialog open onClose={requestClose} className={dialogCss.NativeDialog}>
++      <div>
+             <Box grow="Yes" direction="Column">
+               <Header
+                 size="500"
+@@ -283,9 +272,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
+                 </Button>
+               </Box>
+             </Box>
+-          </Dialog>
+-        </FocusTrap>
+-      </OverlayCenter>
+-    </Overlay>
++      </div>
++    </NativeDialog>
+   );
+ }
+diff --git a/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx b/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
+index 217491e68..3ae33212c 100644
+--- a/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
++++ b/src/app/components/leave-room-prompt/LeaveRoomPrompt.tsx
+@@ -1,10 +1,5 @@
+ import React, { useCallback, useEffect } from 'react';
+-import FocusTrap from 'focus-trap-react';
+ import {
+-  Dialog,
+-  Overlay,
+-  OverlayCenter,
+-  OverlayBackdrop,
+   Header,
+   config,
+   Box,
+@@ -19,7 +14,8 @@ import {
+ import { MatrixError } from 'matrix-js-sdk';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+-import { stopPropagation } from '../../utils/keyboard';
++import { NativeDialog } from '../NativeDialog';
++import * as css from '../NativeDialog.css';
+ 
+ type LeaveRoomPromptProps = {
+   roomId: string;
+@@ -46,63 +42,50 @@ export function LeaveRoomPrompt({ roomId, onDone, onCancel }: LeaveRoomPromptPro
+   }, [leaveState, onDone]);
+ 
+   return (
+-    <Overlay open backdrop={<OverlayBackdrop />}>
+-      <OverlayCenter>
+-        <FocusTrap
+-          focusTrapOptions={{
+-            initialFocus: false,
+-            onDeactivate: onCancel,
+-            clickOutsideDeactivates: true,
+-            escapeDeactivates: stopPropagation,
+-          }}
++    <NativeDialog open onClose={onCancel} className={css.NativeDialog}>
++      <Header
++        style={{
++          padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
++          borderBottomWidth: config.borderWidth.B300,
++        }}
++        variant="Surface"
++        size="500"
++      >
++        <Box grow="Yes">
++          <Text size="H4">Leave Room</Text>
++        </Box>
++        <IconButton size="300" onClick={onCancel} radii="300">
++          <Icon src={Icons.Cross} />
++        </IconButton>
++      </Header>
++      <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
++        <Box direction="Column" gap="200">
++          <Text priority="400">Are you sure you want to leave this room?</Text>
++          {leaveState.status === AsyncStatus.Error && (
++            <Text style={{ color: color.Critical.Main }} size="T300">
++              Failed to leave room! {leaveState.error.message}
++            </Text>
++          )}
++        </Box>
++        <Button
++          type="submit"
++          variant="Critical"
++          onClick={handleLeave}
++          before={
++            leaveState.status === AsyncStatus.Loading ? (
++              <Spinner fill="Solid" variant="Critical" size="200" />
++            ) : undefined
++          }
++          aria-disabled={
++            leaveState.status === AsyncStatus.Loading ||
++            leaveState.status === AsyncStatus.Success
++          }
+         >
+-          <Dialog variant="Surface">
+-            <Header
+-              style={{
+-                padding: `0 ${config.space.S200} 0 ${config.space.S400}`,
+-                borderBottomWidth: config.borderWidth.B300,
+-              }}
+-              variant="Surface"
+-              size="500"
+-            >
+-              <Box grow="Yes">
+-                <Text size="H4">Leave Room</Text>
+-              </Box>
+-              <IconButton size="300" onClick={onCancel} radii="300">
+-                <Icon src={Icons.Cross} />
+-              </IconButton>
+-            </Header>
+-            <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
+-              <Box direction="Column" gap="200">
+-                <Text priority="400">Are you sure you want to leave this room?</Text>
+-                {leaveState.status === AsyncStatus.Error && (
+-                  <Text style={{ color: color.Critical.Main }} size="T300">
+-                    Failed to leave room! {leaveState.error.message}
+-                  </Text>
+-                )}
+-              </Box>
+-              <Button
+-                type="submit"
+-                variant="Critical"
+-                onClick={handleLeave}
+-                before={
+-                  leaveState.status === AsyncStatus.Loading ? (
+-                    <Spinner fill="Solid" variant="Critical" size="200" />
+-                  ) : undefined
+-                }
+-                aria-disabled={
+-                  leaveState.status === AsyncStatus.Loading ||
+-                  leaveState.status === AsyncStatus.Success
+-                }
+-              >
+-                <Text size="B400">
+-                  {leaveState.status === AsyncStatus.Loading ? 'Leaving...' : 'Leave'}
+-                </Text>
+-              </Button>
+-            </Box>
+-          </Dialog>
+-        </FocusTrap>
+-      </OverlayCenter>
+-    </Overlay>
++          <Text size="B400">
++            {leaveState.status === AsyncStatus.Loading ? 'Leaving...' : 'Leave'}
++          </Text>
++        </Button>
++      </Box>
++    </NativeDialog>
+   );
+ }
+diff --git a/src/app/components/message/Reply.tsx b/src/app/components/message/Reply.tsx
+index 57bf2af99..91ef8aa9d 100644
+--- a/src/app/components/message/Reply.tsx
++++ b/src/app/components/message/Reply.tsx
+@@ -107,6 +107,11 @@ export const Reply = as<'div', ReplyProps>(
+         )}
+         <ReplyLayout
+           as="button"
++          aria-label={
++            sender
++              ? `Go to original message by ${getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender}`
++              : 'Go to original message'
++          }
+           userColor={usernameColor}
+           username={
+             sender && (
+diff --git a/src/app/components/nav/NavItem.tsx b/src/app/components/nav/NavItem.tsx
+index 1ec1257fb..83c703939 100644
+--- a/src/app/components/nav/NavItem.tsx
++++ b/src/app/components/nav/NavItem.tsx
+@@ -22,12 +22,12 @@ export const NavItem = as<
+ 
+ export const NavLink = forwardRef<HTMLAnchorElement, ComponentProps<typeof Link>>(
+   ({ className, ...props }, ref) => (
+-    <Link className={classNames(css.NavLink, className)} {...props} ref={ref} />
++    <Link className={classNames(css.NavLink, className)} data-nav-item="" {...props} ref={ref} />
+   )
+ );
+ 
+ export const NavButton = as<'button'>(
+   ({ as: AsNavButton = 'button', className, ...props }, ref) => (
+-    <AsNavButton className={classNames(css.NavLink, className)} {...props} ref={ref} />
++    <AsNavButton className={classNames(css.NavLink, className)} data-nav-item="" {...props} ref={ref} />
+   )
+ );
+diff --git a/src/app/components/page/Page.tsx b/src/app/components/page/Page.tsx
+index a54563855..f8fd43910 100644
+--- a/src/app/components/page/Page.tsx
++++ b/src/app/components/page/Page.tsx
+@@ -33,6 +33,8 @@ export function PageNav({ size, children }: ClientDrawerLayoutProps & css.PageNa
+ 
+   return (
+     <Box
++      as="nav"
++      aria-label="Room list"
+       grow={isMobile ? 'Yes' : undefined}
+       className={css.PageNav({ size })}
+       shrink={isMobile ? 'Yes' : 'No'}
+@@ -63,8 +65,17 @@ export function PageNavContent({
+   children: ReactNode;
+   scrollRef?: MutableRefObject<HTMLDivElement | null>;
+ }) {
++  // Arrow key navigation is handled by RoomListbox's useRoomListKeyboard hook
++  // via aria-activedescendant. No parent-level arrow key handler needed.
+   return (
+-    <Box grow="Yes" direction="Column">
++    <Box
++      grow="Yes"
++      direction="Column"
++      id={id}
++      tabIndex={id ? 0 : undefined}
++      onKeyDown={onKeyDown}
++      onFocus={onFocus}
++    >
+       <Scroll
+         ref={scrollRef}
+         variant="Background"
+@@ -79,8 +90,9 @@ export function PageNavContent({
+   );
+ }
+ 
+-export const Page = as<'div'>(({ className, ...props }, ref) => (
++export const Page = as<'main'>(({ as: AsPage = 'main', className, ...props }, ref) => (
+   <Box
++    as={AsPage}
+     grow="Yes"
+     direction="Column"
+     className={classNames(ContainerColor({ variant: 'Surface' }), className)}
+diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
+index cbcd626a2..85969b563 100644
+--- a/src/app/components/room-avatar/RoomAvatar.tsx
++++ b/src/app/components/room-avatar/RoomAvatar.tsx
+@@ -23,6 +23,8 @@ export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps
+       <AvatarFallback
+         style={{ backgroundColor: colorMXID(roomId ?? ''), color: color.Surface.Container }}
+         className={css.RoomAvatar}
++        role="img"
++        aria-label={alt ?? undefined}
+       >
+         {renderFallback()}
+       </AvatarFallback>
+diff --git a/src/app/components/room-listbox/RoomListbox.tsx b/src/app/components/room-listbox/RoomListbox.tsx
+new file mode 100644
+index 000000000..2e94e9122
+--- /dev/null
++++ b/src/app/components/room-listbox/RoomListbox.tsx
+@@ -0,0 +1,38 @@
++import React, { ReactNode } from 'react';
++
++interface RoomListboxProps {
++  id?: string;
++  'aria-label': string;
++  items: string[];
++  focusedIndex: number;
++  // keyboard handling is done by PageNavContent's useNavArrowKeys
++  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
++  onFocus?: React.FocusEventHandler<HTMLDivElement>;
++  children: ReactNode;
++}
++
++export function RoomListbox({
++  id,
++  'aria-label': ariaLabel,
++  items,
++  focusedIndex,
++  children,
++}: RoomListboxProps) {
++  const activedescendant =
++    focusedIndex >= 0 && items[focusedIndex]
++      ? `room-option-${items[focusedIndex]}`
++      : undefined;
++
++  return (
++    <div
++      id={id}
++      role="listbox"
++      aria-label={ariaLabel}
++      aria-activedescendant={activedescendant}
++      aria-orientation="vertical"
++      tabIndex={-1}
++    >
++      {children}
++    </div>
++  );
++}
+diff --git a/src/app/components/sidebar/Sidebar.tsx b/src/app/components/sidebar/Sidebar.tsx
+index 7caf1b21b..e0f6bffb2 100644
+--- a/src/app/components/sidebar/Sidebar.tsx
++++ b/src/app/components/sidebar/Sidebar.tsx
+@@ -3,6 +3,6 @@ import { as } from 'folds';
+ import React from 'react';
+ import * as css from './Sidebar.css';
+ 
+-export const Sidebar = as<'div'>(({ as: AsSidebar = 'div', className, ...props }, ref) => (
+-  <AsSidebar className={classNames(css.Sidebar, className)} {...props} ref={ref} />
++export const Sidebar = as<'nav'>(({ as: AsSidebar = 'nav', className, ...props }, ref) => (
++  <AsSidebar className={classNames(css.Sidebar, className)} aria-label="Spaces" {...props} ref={ref} />
+ ));
+diff --git a/src/app/components/sidebar/SidebarItem.tsx b/src/app/components/sidebar/SidebarItem.tsx
+index b23772bb7..11468dd64 100644
+--- a/src/app/components/sidebar/SidebarItem.tsx
++++ b/src/app/components/sidebar/SidebarItem.tsx
+@@ -34,6 +34,11 @@ export function SidebarItemTooltip({
+     return children(() => undefined);
+   }
+ 
++  // Automatically set aria-label on the trigger element from the tooltip text,
++  // so screen readers announce sidebar buttons correctly without requiring
++  // every caller to add aria-label manually.
++  const ariaLabel = typeof tooltip === 'string' ? tooltip : undefined;
++
+   return (
+     <TooltipProvider
+       delay={400}
+@@ -44,7 +49,13 @@ export function SidebarItemTooltip({
+         </Tooltip>
+       }
+     >
+-      {children}
++      {ariaLabel
++        ? (triggerRef: RefCallback<HTMLElement | SVGElement>) =>
++            children((el) => {
++              triggerRef(el);
++              if (el) el.setAttribute('aria-label', ariaLabel);
++            })
++        : children}
+     </TooltipProvider>
+   );
+ }
+diff --git a/src/app/components/user-avatar/UserAvatar.tsx b/src/app/components/user-avatar/UserAvatar.tsx
+index d9de9b79f..5afee73a8 100644
+--- a/src/app/components/user-avatar/UserAvatar.tsx
++++ b/src/app/components/user-avatar/UserAvatar.tsx
+@@ -23,6 +23,8 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
+       <AvatarFallback
+         style={{ backgroundColor: colorMXID(userId), color: color.Surface.Container }}
+         className={classNames(css.UserAvatar, className)}
++        role="img"
++        aria-label={alt ?? undefined}
+       >
+         {renderFallback()}
+       </AvatarFallback>
+diff --git a/src/app/features/create-room/CreateRoomModal.tsx b/src/app/features/create-room/CreateRoomModal.tsx
+index d5d8c92da..4f4f48e1b 100644
+--- a/src/app/features/create-room/CreateRoomModal.tsx
++++ b/src/app/features/create-room/CreateRoomModal.tsx
+@@ -6,14 +6,9 @@ import {
+   Icon,
+   IconButton,
+   Icons,
+-  Modal,
+-  Overlay,
+-  OverlayBackdrop,
+-  OverlayCenter,
+   Scroll,
+   Text,
+ } from 'folds';
+-import FocusTrap from 'focus-trap-react';
+ import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
+ import { SpaceProvider } from '../../hooks/useSpace';
+ import { CreateRoomForm } from './CreateRoom';
+@@ -22,8 +17,9 @@ import {
+   useCreateRoomModalState,
+ } from '../../state/hooks/createRoomModal';
+ import { CreateRoomModalState } from '../../state/createRoomModal';
+-import { stopPropagation } from '../../utils/keyboard';
+ import { CreateRoomType } from '../../components/create-room/types';
++import { NativeDialog } from '../../components/NativeDialog';
++import * as dialogCss from '../../components/NativeDialog.css';
+ 
+ type CreateRoomModalProps = {
+   state: CreateRoomModalState;
+@@ -38,53 +34,40 @@ function CreateRoomModal({ state }: CreateRoomModalProps) {
+ 
+   return (
+     <SpaceProvider value={space ?? null}>
+-      <Overlay open backdrop={<OverlayBackdrop />}>
+-        <OverlayCenter>
+-          <FocusTrap
+-            focusTrapOptions={{
+-              initialFocus: false,
+-              clickOutsideDeactivates: true,
+-              onDeactivate: closeDialog,
+-              escapeDeactivates: stopPropagation,
++      <NativeDialog open onClose={closeDialog} className={dialogCss.NativeDialog}>
++        <Box direction="Column">
++          <Header
++            size="500"
++            style={{
++              padding: config.space.S200,
++              paddingLeft: config.space.S400,
+             }}
+           >
+-            <Modal size="300" flexHeight>
+-              <Box direction="Column">
+-                <Header
+-                  size="500"
+-                  style={{
+-                    padding: config.space.S200,
+-                    paddingLeft: config.space.S400,
+-                  }}
+-                >
+-                  <Box grow="Yes">
+-                    <Text size="H4">
+-                      {type === CreateRoomType.VoiceRoom ? 'New Voice Room' : 'New Chat Room'}
+-                    </Text>
+-                  </Box>
+-                  <Box shrink="No">
+-                    <IconButton size="300" radii="300" onClick={closeDialog}>
+-                      <Icon src={Icons.Cross} />
+-                    </IconButton>
+-                  </Box>
+-                </Header>
+-                <Scroll size="300" hideTrack>
+-                  <Box
+-                    style={{
+-                      padding: config.space.S400,
+-                      paddingRight: config.space.S200,
+-                    }}
+-                    direction="Column"
+-                    gap="500"
+-                  >
+-                    <CreateRoomForm space={space} onCreate={closeDialog} defaultType={type} />
+-                  </Box>
+-                </Scroll>
+-              </Box>
+-            </Modal>
+-          </FocusTrap>
+-        </OverlayCenter>
+-      </Overlay>
++            <Box grow="Yes">
++              <Text size="H4">
++                {type === CreateRoomType.VoiceRoom ? 'New Voice Room' : 'New Chat Room'}
++              </Text>
++            </Box>
++            <Box shrink="No">
++              <IconButton size="300" radii="300" onClick={closeDialog}>
++                <Icon src={Icons.Cross} />
++              </IconButton>
++            </Box>
++          </Header>
++          <Scroll size="300" hideTrack>
++            <Box
++              style={{
++                padding: config.space.S400,
++                paddingRight: config.space.S200,
++              }}
++              direction="Column"
++              gap="500"
++            >
++              <CreateRoomForm space={space} onCreate={closeDialog} defaultType={type} />
++            </Box>
++          </Scroll>
++        </Box>
++      </NativeDialog>
+     </SpaceProvider>
+   );
+ }
+diff --git a/src/app/features/create-space/CreateSpaceModal.tsx b/src/app/features/create-space/CreateSpaceModal.tsx
+index c1bc6898f..b959ba9e2 100644
+--- a/src/app/features/create-space/CreateSpaceModal.tsx
++++ b/src/app/features/create-space/CreateSpaceModal.tsx
+@@ -6,14 +6,9 @@ import {
+   Icon,
+   IconButton,
+   Icons,
+-  Modal,
+-  Overlay,
+-  OverlayBackdrop,
+-  OverlayCenter,
+   Scroll,
+   Text,
+ } from 'folds';
+-import FocusTrap from 'focus-trap-react';
+ import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
+ import { SpaceProvider } from '../../hooks/useSpace';
+ import { CreateSpaceForm } from './CreateSpace';
+@@ -22,7 +17,8 @@ import {
+   useCreateSpaceModalState,
+ } from '../../state/hooks/createSpaceModal';
+ import { CreateSpaceModalState } from '../../state/createSpaceModal';
+-import { stopPropagation } from '../../utils/keyboard';
++import { NativeDialog } from '../../components/NativeDialog';
++import * as dialogCss from '../../components/NativeDialog.css';
+ 
+ type CreateSpaceModalProps = {
+   state: CreateSpaceModalState;
+@@ -37,52 +33,39 @@ function CreateSpaceModal({ state }: CreateSpaceModalProps) {
+ 
+   return (
+     <SpaceProvider value={space ?? null}>
+-      <Overlay open backdrop={<OverlayBackdrop />}>
+-        <OverlayCenter>
+-          <FocusTrap
+-            focusTrapOptions={{
+-              initialFocus: false,
+-              clickOutsideDeactivates: true,
+-              onDeactivate: closeDialog,
+-              escapeDeactivates: stopPropagation,
++      <NativeDialog open onClose={closeDialog} className={dialogCss.NativeDialog}>
++        <Box direction="Column">
++          <Header
++            size="500"
++            style={{
++              padding: config.space.S200,
++              paddingLeft: config.space.S400,
++              borderBottomWidth: config.borderWidth.B300,
+             }}
+           >
+-            <Modal size="300" flexHeight>
+-              <Box direction="Column">
+-                <Header
+-                  size="500"
+-                  style={{
+-                    padding: config.space.S200,
+-                    paddingLeft: config.space.S400,
+-                    borderBottomWidth: config.borderWidth.B300,
+-                  }}
+-                >
+-                  <Box grow="Yes">
+-                    <Text size="H4">New Space</Text>
+-                  </Box>
+-                  <Box shrink="No">
+-                    <IconButton size="300" radii="300" onClick={closeDialog}>
+-                      <Icon src={Icons.Cross} />
+-                    </IconButton>
+-                  </Box>
+-                </Header>
+-                <Scroll size="300" hideTrack>
+-                  <Box
+-                    style={{
+-                      padding: config.space.S400,
+-                      paddingRight: config.space.S200,
+-                    }}
+-                    direction="Column"
+-                    gap="500"
+-                  >
+-                    <CreateSpaceForm space={space} onCreate={closeDialog} />
+-                  </Box>
+-                </Scroll>
+-              </Box>
+-            </Modal>
+-          </FocusTrap>
+-        </OverlayCenter>
+-      </Overlay>
++            <Box grow="Yes">
++              <Text size="H4">New Space</Text>
++            </Box>
++            <Box shrink="No">
++              <IconButton size="300" radii="300" onClick={closeDialog}>
++                <Icon src={Icons.Cross} />
++              </IconButton>
++            </Box>
++          </Header>
++          <Scroll size="300" hideTrack>
++            <Box
++              style={{
++                padding: config.space.S400,
++                paddingRight: config.space.S200,
++              }}
++              direction="Column"
++              gap="500"
++            >
++              <CreateSpaceForm space={space} onCreate={closeDialog} />
++            </Box>
++          </Scroll>
++        </Box>
++      </NativeDialog>
+     </SpaceProvider>
+   );
+ }
+diff --git a/src/app/features/lobby/Lobby.tsx b/src/app/features/lobby/Lobby.tsx
+index 4b19e5163..d1c871285 100644
+--- a/src/app/features/lobby/Lobby.tsx
++++ b/src/app/features/lobby/Lobby.tsx
+@@ -436,7 +436,7 @@ export function Lobby() {
+             powerLevels={roomsPowerLevels.get(space.roomId) ?? {}}
+           />
+           <Box style={{ position: 'relative' }} grow="Yes">
+-            <Scroll ref={scrollRef} hideTrack visibility="Hover">
++            <Scroll ref={scrollRef} hideTrack visibility="Hover" id="cinny-lobby" tabIndex={-1} role="feed" aria-label="Space lobby">
+               <PageContent>
+                 <PageContentCenter>
+                   <ScrollTopContainer
+diff --git a/src/app/features/lobby/RoomItem.tsx b/src/app/features/lobby/RoomItem.tsx
+index 7de59acd9..bfd6dd96c 100644
+--- a/src/app/features/lobby/RoomItem.tsx
++++ b/src/app/features/lobby/RoomItem.tsx
+@@ -207,7 +207,7 @@ function RoomProfile({
+       </Avatar>
+       <Box grow="Yes" direction="Column">
+         <Box gap="200" alignItems="Center">
+-          <Text size="H5" truncate>
++          <Text as="h3" size="H5" truncate>
+             {name}
+           </Text>
+           {suggested && (
+@@ -327,6 +327,8 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
+         variant="SurfaceVariant"
+         gap="300"
+         alignItems="Center"
++        role="article"
++        aria-label={room?.name || roomId}
+         {...props}
+         ref={ref}
+       >
+diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
+index d9205076b..22ea00a63 100644
+--- a/src/app/features/room/MembersDrawer.tsx
++++ b/src/app/features/room/MembersDrawer.tsx
+@@ -2,6 +2,7 @@ import React, {
+   ChangeEventHandler,
+   MouseEventHandler,
+   useCallback,
++  useEffect,
+   useMemo,
+   useRef,
+   useState,
+@@ -244,11 +245,41 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
+     openUserRoomProfile(room.roomId, space?.roomId, userId, btn.getBoundingClientRect(), 'Left');
+   };
+ 
++  // Arrow key navigation between member items.
++  // Uses a native DOM listener because the F6-focused Box needs to handle
++  // keys even when no child has focus yet (first arrow press after F6).
++  useEffect(() => {
++    const panel = document.getElementById('cinny-members-panel');
++    if (!panel) return;
++    const handler = (evt: KeyboardEvent) => {
++      if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
++      if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
++      const items = Array.from(panel.querySelectorAll<HTMLElement>('[data-user-id]'));
++      if (items.length === 0) return;
++      const active = document.activeElement as HTMLElement;
++      const idx = items.indexOf(active);
++      // Only handle if focus is on/inside the panel
++      if (idx < 0 && !panel.contains(active)) return;
++      evt.preventDefault();
++      const next = evt.key === 'ArrowDown'
++        ? Math.min((idx < 0 ? 0 : idx + 1), items.length - 1)
++        : Math.max((idx < 0 ? items.length - 1 : idx - 1), 0);
++      items[next]?.focus({ preventScroll: true });
++      items[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
++    };
++    panel.addEventListener('keydown', handler);
++    return () => panel.removeEventListener('keydown', handler);
++  }, []);
++
+   return (
+     <Box
++      id="cinny-members-panel"
+       className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
+       shrink="No"
+       direction="Column"
++      role="region"
++      aria-label="Members panel"
++      tabIndex={-1}
+     >
+       <MemberDrawerHeader room={room} />
+       <Box className={css.MemberDrawerContentBase} grow="Yes">
+diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
+index 94eee2a8f..4da9a96f7 100644
+--- a/src/app/features/room/RoomInput.tsx
++++ b/src/app/features/room/RoomInput.tsx
+@@ -567,6 +567,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+                 >
+                   <IconButton
+                     onClick={() => setReplyDraft(undefined)}
++                    aria-label="Cancel reply"
+                     variant="SurfaceVariant"
+                     size="300"
+                     radii="300"
+@@ -599,9 +600,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+           before={
+             <IconButton
+               onClick={() => pickFile('*')}
++              aria-label="Attach file"
+               variant="SurfaceVariant"
+               size="300"
+               radii="300"
++              tabIndex={-1}
+             >
+               <Icon src={Icons.PlusCircle} />
+             </IconButton>
+@@ -613,6 +616,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+                 size="300"
+                 radii="300"
+                 onClick={() => setToolbar(!toolbar)}
++                aria-label={toolbar ? 'Hide formatting toolbar' : 'Show formatting toolbar'}
++                aria-pressed={toolbar}
+               >
+                 <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
+               </IconButton>
+@@ -651,6 +656,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+                   >
+                     {!hideStickerBtn && (
+                       <IconButton
++                        aria-label="Open sticker picker"
+                         aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
+                         onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
+                         variant="SurfaceVariant"
+@@ -665,6 +671,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+                     )}
+                     <IconButton
+                       ref={emojiBtnRef}
++                      aria-label="Open emoji picker"
+                       aria-pressed={
+                         hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
+                       }
+diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
+index f9fd18b60..65fd0e2dc 100644
+--- a/src/app/features/room/RoomTimeline.tsx
++++ b/src/app/features/room/RoomTimeline.tsx
+@@ -1942,7 +1942,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+           </Chip>
+         </TimelineFloat>
+       )}
+-      <Scroll ref={scrollRef} visibility="Hover">
++      <Scroll ref={scrollRef} visibility="Hover" id="cinny-timeline" tabIndex={0} role="log" aria-label="Message timeline" aria-live="polite">
+         <Box
+           direction="Column"
+           justifyContent="End"
+diff --git a/src/app/features/room/RoomViewFollowing.tsx b/src/app/features/room/RoomViewFollowing.tsx
+index 5a96e6ad4..1bdbc67ef 100644
+--- a/src/app/features/room/RoomViewFollowing.tsx
++++ b/src/app/features/room/RoomViewFollowing.tsx
+@@ -68,6 +68,7 @@ export const RoomViewFollowing = as<'div', RoomViewFollowingProps>(
+         <Box
+           as={names.length > 0 ? 'button' : 'div'}
+           onClick={names.length > 0 ? () => setOpen(true) : undefined}
++          aria-label={names.length > 0 ? 'View read receipts' : undefined}
+           className={classNames(css.RoomViewFollowing({ clickable: names.length > 0 }), className)}
+           alignItems="Center"
+           justifyContent="End"
+diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
+index cccc53ef5..9c5b2ec77 100644
+--- a/src/app/features/room/message/Message.tsx
++++ b/src/app/features/room/message/Message.tsx
+@@ -487,7 +487,7 @@ export const MessageDeleteItem = as<
+                       (optional)
+                     </Text>
+                   </Text>
+-                  <Input name="reasonInput" variant="Background" />
++                  <Input name="reasonInput" variant="Background" aria-label="Reason for removal" />
+                   {deleteState.status === AsyncStatus.Error && (
+                     <Text style={{ color: color.Critical.Main }} size="T300">
+                       Failed to delete message! Please try again.
+@@ -613,7 +613,7 @@ export const MessageReportItem = as<
+                 </Text>
+                 <Box direction="Column" gap="100">
+                   <Text size="L400">Reason</Text>
+-                  <Input name="reasonInput" variant="Background" required />
++                  <Input name="reasonInput" variant="Background" required aria-label="Reason for report" />
+                   {reportState.status === AsyncStatus.Error && (
+                     <Text style={{ color: color.Critical.Main }} size="T300">
+                       Failed to report message! Please try again.
+@@ -894,6 +894,8 @@ export const Message = as<'div', MessageProps>(
+         className={classNames(css.MessageBase, className, {
+           [css.MessageBaseBubbleCollapsed]: messageLayout === MessageLayout.Bubble && collapse,
+         })}
++        data-timeline-message=""
++        data-event-id={mEvent.getId()}
+         tabIndex={0}
+         space={messageSpacing}
+         collapse={collapse}
+@@ -935,6 +937,7 @@ export const Message = as<'div', MessageProps>(
+                   >
+                     <IconButton
+                       onClick={handleOpenEmojiBoard}
++                      aria-label="Add reaction"
+                       variant="SurfaceVariant"
+                       size="300"
+                       radii="300"
+@@ -946,6 +949,7 @@ export const Message = as<'div', MessageProps>(
+                 )}
+                 <IconButton
+                   onClick={onReplyClick}
++                  aria-label="Reply"
+                   data-event-id={mEvent.getId()}
+                   variant="SurfaceVariant"
+                   size="300"
+@@ -956,6 +960,7 @@ export const Message = as<'div', MessageProps>(
+                 {!isThreadedMessage && (
+                   <IconButton
+                     onClick={(ev) => onReplyClick(ev, true)}
++                    aria-label="Open thread"
+                     data-event-id={mEvent.getId()}
+                     variant="SurfaceVariant"
+                     size="300"
+@@ -967,6 +972,7 @@ export const Message = as<'div', MessageProps>(
+                 {canEditEvent(mx, mEvent) && onEditId && (
+                   <IconButton
+                     onClick={() => onEditId(mEvent.getId())}
++                    aria-label="Edit message"
+                     variant="SurfaceVariant"
+                     size="300"
+                     radii="300"
+@@ -1142,6 +1148,7 @@ export const Message = as<'div', MessageProps>(
+                     size="300"
+                     radii="300"
+                     onClick={handleOpenMenu}
++                    aria-label="More message actions"
+                     aria-pressed={!!menuAnchor}
+                   >
+                     <Icon src={Icons.VerticalDots} size="100" />
+@@ -1229,6 +1236,8 @@ export const Event = as<'div', EventProps>(
+     return (
+       <MessageBase
+         className={classNames(css.MessageBase, className)}
++        data-timeline-message=""
++        data-event-id={mEvent.getId()}
+         tabIndex={0}
+         space={messageSpacing}
+         autoCollapse
+@@ -1315,6 +1324,7 @@ export const Event = as<'div', EventProps>(
+                     size="300"
+                     radii="300"
+                     onClick={handleOpenMenu}
++                    aria-label="More message actions"
+                     aria-pressed={!!menuAnchor}
+                   >
+                     <Icon src={Icons.VerticalDots} size="100" />
+diff --git a/src/app/features/search/Search.tsx b/src/app/features/search/Search.tsx
+index cfc4ee5fb..bc7ec0b12 100644
+--- a/src/app/features/search/Search.tsx
++++ b/src/app/features/search/Search.tsx
+@@ -270,6 +270,10 @@ export function Search({ requestClose }: SearchProps) {
+                 radii="400"
+                 outlined
+                 placeholder="Search"
++                role="combobox"
++                aria-label="Search rooms and spaces"
++                aria-autocomplete="list"
++                aria-expanded={!!result}
+                 before={<Icon size="200" src={Icons.Search} />}
+                 onChange={handleInputChange}
+                 onKeyDown={handleInputKeyDown}
+diff --git a/src/app/features/settings/Settings.tsx b/src/app/features/settings/Settings.tsx
+index fc8e1a7ff..c200caab1 100644
+--- a/src/app/features/settings/Settings.tsx
++++ b/src/app/features/settings/Settings.tsx
+@@ -9,12 +9,8 @@ import {
+   Icons,
+   IconSrc,
+   MenuItem,
+-  Overlay,
+-  OverlayBackdrop,
+-  OverlayCenter,
+   Text,
+ } from 'folds';
+-import FocusTrap from 'focus-trap-react';
+ import { General } from './general';
+ import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';
+ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
+@@ -30,8 +26,9 @@ import { EmojisStickers } from './emojis-stickers';
+ import { DeveloperTools } from './developer-tools';
+ import { About } from './about';
+ import { UseStateProvider } from '../../components/UseStateProvider';
+-import { stopPropagation } from '../../utils/keyboard';
+ import { LogoutDialog } from '../../components/LogoutDialog';
++import { NativeDialog } from '../../components/NativeDialog';
++import * as dialogCss from '../../components/NativeDialog.css';
+ 
+ export enum SettingsPages {
+   GeneralPage,
+@@ -184,21 +181,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
+                       >
+                         <Text size="B400">Logout</Text>
+                       </Button>
+-                      {logout && (
+-                        <Overlay open backdrop={<OverlayBackdrop />}>
+-                          <OverlayCenter>
+-                            <FocusTrap
+-                              focusTrapOptions={{
+-                                onDeactivate: () => setLogout(false),
+-                                clickOutsideDeactivates: true,
+-                                escapeDeactivates: stopPropagation,
+-                              }}
+-                            >
+-                              <LogoutDialog handleClose={() => setLogout(false)} />
+-                            </FocusTrap>
+-                          </OverlayCenter>
+-                        </Overlay>
+-                      )}
++                      <NativeDialog open={!!logout} onClose={() => setLogout(false)} className={dialogCss.NativeDialog}>
++                        <LogoutDialog handleClose={() => setLogout(false)} />
++                      </NativeDialog>
+                     </>
+                   )}
+                 </UseStateProvider>
+diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
+index f536d12ef..c035138ee 100644
+--- a/src/app/features/settings/about/About.tsx
++++ b/src/app/features/settings/about/About.tsx
+@@ -24,7 +24,7 @@ export function About({ requestClose }: AboutProps) {
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/settings/account/Account.tsx b/src/app/features/settings/account/Account.tsx
+index c4b56e475..bf3e60324 100644
+--- a/src/app/features/settings/account/Account.tsx
++++ b/src/app/features/settings/account/Account.tsx
+@@ -20,7 +20,7 @@ export function Account({ requestClose }: AccountProps) {
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/settings/account/IgnoredUserList.tsx b/src/app/features/settings/account/IgnoredUserList.tsx
+index 98db9459a..8c3bec20e 100644
+--- a/src/app/features/settings/account/IgnoredUserList.tsx
++++ b/src/app/features/settings/account/IgnoredUserList.tsx
+@@ -69,6 +69,7 @@ function IgnoreUserInput({ userList }: { userList: string[] }) {
+               <IconButton
+                 type="reset"
+                 onClick={handleReset}
++                aria-label="Clear user ID"
+                 size="300"
+                 radii="300"
+                 variant="Secondary"
+diff --git a/src/app/features/settings/devices/DeviceTile.tsx b/src/app/features/settings/devices/DeviceTile.tsx
+index 71b684f56..1c1fc5d2b 100644
+--- a/src/app/features/settings/devices/DeviceTile.tsx
++++ b/src/app/features/settings/devices/DeviceTile.tsx
+@@ -11,12 +11,8 @@ import {
+   color,
+   Spinner,
+   toRem,
+-  Overlay,
+-  OverlayBackdrop,
+-  OverlayCenter,
+ } from 'folds';
+ import { CryptoApi } from 'matrix-js-sdk/lib/crypto-api';
+-import FocusTrap from 'focus-trap-react';
+ import { IMyDevice, MatrixError } from 'matrix-js-sdk';
+ import { SettingTile } from '../../../components/setting-tile';
+ import { useMatrixClient } from '../../../hooks/useMatrixClient';
+@@ -26,7 +22,8 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+ import { SequenceCard } from '../../../components/sequence-card';
+ import { SequenceCardStyle } from '../styles.css';
+ import { LogoutDialog } from '../../../components/LogoutDialog';
+-import { stopPropagation } from '../../../utils/keyboard';
++import { NativeDialog } from '../../../components/NativeDialog';
++import * as dialogCss from '../../../components/NativeDialog.css';
+ import { useSetting } from '../../../state/hooks/settings';
+ import { settingsAtom } from '../../../state/settings';
+ 
+@@ -153,6 +150,7 @@ function DeviceRename({ device, onCancel, onRename, refreshDeviceList }: DeviceR
+             size="300"
+             variant="Secondary"
+             radii="300"
++            aria-label="Device name"
+             defaultValue={device.display_name}
+             autoFocus
+             required
+@@ -205,21 +203,9 @@ export function DeviceLogoutBtn() {
+       <Chip variant="Secondary" fill="Soft" radii="Pill" onClick={() => setPrompt(true)}>
+         <Text size="B300">Logout</Text>
+       </Chip>
+-      {prompt && (
+-        <Overlay open backdrop={<OverlayBackdrop />}>
+-          <OverlayCenter>
+-            <FocusTrap
+-              focusTrapOptions={{
+-                onDeactivate: handleClose,
+-                clickOutsideDeactivates: true,
+-                escapeDeactivates: stopPropagation,
+-              }}
+-            >
+-              <LogoutDialog handleClose={handleClose} />
+-            </FocusTrap>
+-          </OverlayCenter>
+-        </Overlay>
+-      )}
++      <NativeDialog open={!!prompt} onClose={handleClose} className={dialogCss.NativeDialog}>
++        <LogoutDialog handleClose={handleClose} />
++      </NativeDialog>
+     </>
+   );
+ }
+@@ -292,6 +278,7 @@ export function DeviceTile({
+             outlined={deleted}
+             radii="300"
+             onClick={() => setDetails(!details)}
++            aria-label={details ? 'Hide device details' : 'Show device details'}
+           >
+             <Icon size="50" src={details ? Icons.ChevronBottom : Icons.ChevronRight} />
+           </IconButton>
+diff --git a/src/app/features/settings/devices/Devices.tsx b/src/app/features/settings/devices/Devices.tsx
+index c957ab318..22a46f396 100644
+--- a/src/app/features/settings/devices/Devices.tsx
++++ b/src/app/features/settings/devices/Devices.tsx
+@@ -74,7 +74,7 @@ export function Devices({ requestClose }: DevicesProps) {
+             </Text>
+           </Box>
+           <Box shrink="No">
+-            <IconButton onClick={requestClose} variant="Surface">
++            <IconButton onClick={requestClose} variant="Surface" aria-label="Close">
+               <Icon src={Icons.Cross} />
+             </IconButton>
+           </Box>
+diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
+index 6ec13f679..c57844a4d 100644
+--- a/src/app/features/settings/general/General.tsx
++++ b/src/app/features/settings/general/General.tsx
+@@ -601,6 +601,7 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
+           variant="Secondary"
+           size="300"
+           radii="300"
++          aria-label="Date format information"
+           aria-pressed={!!anchor}
+         >
+           <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
+diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
+index e0df06df9..a87879295 100644
+--- a/src/app/features/settings/notifications/SystemNotification.tsx
++++ b/src/app/features/settings/notifications/SystemNotification.tsx
+@@ -91,6 +91,9 @@ export function SystemNotification() {
+     settingsAtom,
+     'isNotificationSounds'
+   );
++  const [inRoomActivitySound, setInRoomActivitySound] = useSetting(settingsAtom, 'inRoomActivitySound');
++  const [callAutoJoin, setCallAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
++  const [inboxUnreadNotifications, setInboxUnreadNotifications] = useSetting(settingsAtom, 'inboxUnreadNotifications');
+ 
+   const requestNotificationPermission = () => {
+     window.Notification.requestPermission();
+@@ -141,9 +144,14 @@ export function SystemNotification() {
+       >
+         <SettingTile
+           title="Notification Sound"
+-          description="Play sound when new message arrive."
++          description="Play mention, other-room, and reaction sounds when messages arrive."
+           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
+         />
++        <SettingTile
++          title="In-Room Activity Sounds"
++          description="Play a soft beep for messages in the current room, and a click when someone starts typing."
++          after={<Switch value={inRoomActivitySound} onChange={setInRoomActivitySound} />}
++        />
+       </SequenceCard>
+       <SequenceCard
+         className={SequenceCardStyle}
+diff --git a/src/app/hooks/useAsyncSearch.ts b/src/app/hooks/useAsyncSearch.ts
+index 3852d3b97..026c847fb 100644
+--- a/src/app/hooks/useAsyncSearch.ts
++++ b/src/app/hooks/useAsyncSearch.ts
+@@ -1,4 +1,4 @@
+-import { useCallback, useEffect, useMemo, useState } from 'react';
++import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+ import {
+   MatchHandler,
+   AsyncSearch,
+@@ -110,9 +110,11 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
+   options?: UseAsyncSearchOptions
+ ): [UseAsyncSearchResult<TSearchItem> | undefined, AsyncSearchHandler, SearchResetHandler] => {
+   const [result, setResult] = useState<UseAsyncSearchResult<TSearchItem>>();
++  const activeQueryRef = useRef<string | undefined>();
+ 
+   const [searchCallback, terminateSearch] = useMemo(() => {
+-    setResult(undefined);
++    // Don't clear results when list/options change — re-run the active query
++    // instead so results stay visible while the room list updates.
+ 
+     const handleMatch: MatchHandler<TSearchItem> = (item, query) => {
+       const itemStr = getItemStr(item, query);
+@@ -130,8 +132,17 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
+     return AsyncSearch(list, handleMatch, handleResult, options);
+   }, [list, options, getItemStr]);
+ 
++  // Re-run the active query when the list/options change so results stay visible
++  useEffect(() => {
++    if (activeQueryRef.current !== undefined) {
++      const normalizedQuery = normalize(activeQueryRef.current, options?.normalizeOptions);
++      searchCallback(normalizedQuery);
++    }
++  }, [searchCallback, options?.normalizeOptions]);
++
+   const searchHandler: AsyncSearchHandler = useCallback(
+     (query) => {
++      activeQueryRef.current = query;
+       const normalizedQuery = normalize(query, options?.normalizeOptions);
+       searchCallback(normalizedQuery);
+     },
+@@ -139,6 +150,7 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
+   );
+ 
+   const resetHandler: SearchResetHandler = useCallback(() => {
++    activeQueryRef.current = undefined;
+     terminateSearch();
+     setResult(undefined);
+   }, [terminateSearch]);
+diff --git a/src/app/hooks/useNavArrowKeys.ts b/src/app/hooks/useNavArrowKeys.ts
+new file mode 100644
+index 000000000..4bba79dea
+--- /dev/null
++++ b/src/app/hooks/useNavArrowKeys.ts
+@@ -0,0 +1,40 @@
++import { useCallback, RefObject } from 'react';
++
++/**
++ * Arrow-key navigation for all focusable items inside a scrollable container.
++ * Works across static NavItems, Favorites, and virtualized room items.
++ * Attach the returned onKeyDown to the scroll container element.
++ */
++// Only target primary navigation elements (NavButton, NavLink) — not nested
++// action buttons inside room items (call, chat, more options).
++const FOCUSABLE = '[data-nav-item]';
++
++export function useNavArrowKeys(scrollRef: RefObject<HTMLElement | null>) {
++  return useCallback(
++    (evt: React.KeyboardEvent | KeyboardEvent) => {
++      if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
++      if (evt.ctrlKey || evt.altKey || evt.metaKey || evt.shiftKey) return;
++      const container = scrollRef.current;
++      if (!container) return;
++
++      const items = Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE));
++      const active = document.activeElement as HTMLElement;
++      const idx = items.indexOf(active);
++      // Only handle when focus is already inside the container
++      if (idx < 0 && !container.contains(active)) return;
++
++      evt.preventDefault();
++      let next: number;
++      if (idx < 0) {
++        next = 0;
++      } else if (evt.key === 'ArrowDown') {
++        next = Math.min(idx + 1, items.length - 1);
++      } else {
++        next = Math.max(idx - 1, 0);
++      }
++      items[next]?.focus({ preventScroll: true });
++      items[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
++    },
++    [scrollRef]
++  );
++}
+diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
+new file mode 100644
+index 000000000..7ed76e62c
+--- /dev/null
++++ b/src/app/hooks/useNavigateUnread.ts
+@@ -0,0 +1,207 @@
++import { useCallback, useMemo } from 'react';
++import { useAtomValue, useAtom } from 'jotai';
++import { atom } from 'jotai';
++import { useNavigate } from 'react-router-dom';
++import { MatrixClient } from 'matrix-js-sdk';
++import { roomToUnreadAtom } from '../state/room/roomToUnread';
++import { mDirectAtom } from '../state/mDirectList';
++import { roomToParentsAtom } from '../state/room/roomToParents';
++import { useMatrixClient } from './useMatrixClient';
++import { getCanonicalAliasOrRoomId } from '../utils/matrix';
++import {
++  getDirectRoomPath,
++  getHomeRoomPath,
++  getSpaceRoomPath,
++} from '../pages/pathUtils';
++import { AccountDataEvent } from '../../types/matrix/accountData';
++import {
++  factoryRoomIdByActivity,
++  factoryRoomIdByAtoZ,
++  factoryRoomIdByUnreadFirst,
++} from '../utils/sort';
++import { settingsAtom } from '../state/settings';
++import { useSelectedRoom } from './router/useSelectedRoom';
++
++/**
++ * Track the last navigated room by ID + its position in the list at the time.
++ * Using room ID (not just index) means we can correctly position ourselves
++ * even when the list shrinks as rooms are read.
++ */
++const lastNavigatedAtom = atom<{ roomId: string; index: number } | null>(null);
++
++/**
++ * The roomId last navigated to via unread nav (keyboard shortcuts or inbox buttons).
++ * Used to show the ↑↓ nav bar in the timeline only when in "unread browsing mode".
++ */
++export const unreadNavRoomAtom = atom<string | null>(null);
++
++type SidebarItem = string | { id: string; content: string[] };
++
++/** Flat ordered list of space IDs from the user's sidebar config. */
++function getSidebarSpaceIds(mx: MatrixClient): string[] {
++  const content = mx
++    .getAccountData(AccountDataEvent.CinnySpaces)
++    ?.getContent<{ sidebar?: SidebarItem[] }>();
++  const sidebar = content?.sidebar ?? [];
++  const ids: string[] = [];
++  sidebar.forEach((item) => {
++    if (typeof item === 'string') ids.push(item);
++    else if (typeof item === 'object' && Array.isArray(item.content))
++      item.content.forEach((id) => ids.push(id));
++  });
++  return ids;
++}
++
++/**
++ * Walk up the parent chain (via roomToParents) until we find a space that is
++ * in the sidebar. Returns the sidebar index, or Infinity if none found.
++ */
++function getSidebarIndex(
++  roomId: string,
++  roomToParents: Map<string, Set<string>>,
++  sidebarIndex: Map<string, number>
++): number {
++  const visited = new Set<string>();
++  let frontier = new Set([roomId]);
++  while (frontier.size > 0) {
++    const next = new Set<string>();
++    for (const id of frontier) {
++      for (const parent of roomToParents.get(id) ?? []) {
++        const idx = sidebarIndex.get(parent);
++        if (idx !== undefined) return idx;
++        if (!visited.has(parent)) {
++          visited.add(parent);
++          next.add(parent);
++        }
++      }
++    }
++    frontier = next;
++  }
++  return Infinity;
++}
++
++export function useNavigateUnread() {
++  const navigate = useNavigate();
++  const mx = useMatrixClient();
++  const roomToUnread = useAtomValue(roomToUnreadAtom);
++  const mDirects = useAtomValue(mDirectAtom);
++  const roomToParents = useAtomValue(roomToParentsAtom);
++  const settings = useAtomValue(settingsAtom);
++  const roomSortOrder: string =
++    (settings as unknown as { roomSortOrder?: string }).roomSortOrder ?? 'activity';
++  const [lastNavigated, setLastNavigated] = useAtom(lastNavigatedAtom);
++  const setUnreadNavRoom = useAtom(unreadNavRoomAtom)[1];
++  const selectedRoomId = useSelectedRoom();
++
++  const unreadEntries = useMemo(() => {
++    const getUnread = (id: string) => roomToUnread.get(id) ?? { highlight: 0, total: 0 };
++    const hasUnread = (id: string) => (roomToUnread.get(id)?.total ?? 0) > 0;
++
++    // Build sidebar position lookup (space ID → index)
++    const sidebarSpaceIds = getSidebarSpaceIds(mx);
++    const sidebarIndex = new Map(sidebarSpaceIds.map((id, i) => [id, i]));
++
++    // All rooms with unread, sorted by:
++    //   1. sidebar position of their nearest ancestor space
++    //   2. within same space: current roomSortOrder
++    const allUnread = Array.from(roomToUnread.keys()).filter(
++      (id) => hasUnread(id) && !mx.getRoom(id)?.isSpaceRoom()
++    );
++
++    const sortFallback =
++      roomSortOrder === 'az'
++        ? factoryRoomIdByAtoZ(mx)
++        : roomSortOrder === 'unread'
++        ? factoryRoomIdByUnreadFirst(
++            (id) => getUnread(id).highlight,
++            (id) => getUnread(id).total,
++            factoryRoomIdByActivity(mx)
++          )
++        : factoryRoomIdByActivity(mx);
++
++    allUnread.sort((a, b) => {
++      const ai = getSidebarIndex(a, roomToParents, sidebarIndex);
++      const bi = getSidebarIndex(b, roomToParents, sidebarIndex);
++      if (ai !== bi) return ai - bi;
++      return sortFallback(a, b);
++    });
++
++    return allUnread.map((id) => [id, roomToUnread.get(id)!] as const);
++  }, [mx, roomToUnread, roomToParents, roomSortOrder]);
++
++  const navigateToRoom = useCallback(
++    (roomId: string) => {
++      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
++      const isDirect = mDirects.has(roomId);
++      if (isDirect) {
++        navigate(getDirectRoomPath(roomIdOrAlias));
++      } else {
++        const parents = roomToParents.get(roomId);
++        if (parents && parents.size > 0) {
++          const spaceId = Array.from(parents)[0];
++          navigate(getSpaceRoomPath(getCanonicalAliasOrRoomId(mx, spaceId), roomIdOrAlias));
++        } else {
++          navigate(getHomeRoomPath(roomIdOrAlias));
++        }
++      }
++    },
++    [mx, mDirects, roomToParents, navigate]
++  );
++
++  /**
++   * Resolve the base index to navigate relative to.
++   * Priority: lastNavigated room ID > selectedRoomId > fallback.
++   * fallback = -1 (for next → first room) or length (for prev → last room).
++   *
++   * When the last-navigated room has been read (not in list):
++   *   next: stay at the same position in the shrunk list (clamped - 1 → next = clamped)
++   *   prev: go to the room before the original position (clamped → prev = clamped - 1)
++   *         but avoid wrapping index 0 to end by using max(1, clamped).
++   */
++  const resolveBaseIndex = useCallback(
++    (fallback: number): number => {
++      if (lastNavigated) {
++        const found = unreadEntries.findIndex(([id]) => id === lastNavigated.roomId);
++        if (found >= 0) return found;
++        const clamped = Math.min(lastNavigated.index, unreadEntries.length);
++        return fallback < 0 ? clamped - 1 : Math.max(1, clamped);
++      }
++      if (selectedRoomId) {
++        const found = unreadEntries.findIndex(([id]) => id === selectedRoomId);
++        if (found >= 0) return found;
++      }
++      return fallback;
++    },
++    [unreadEntries, lastNavigated, selectedRoomId]
++  );
++
++  const navigateNext = useCallback(() => {
++    if (unreadEntries.length === 0) return;
++    const baseIndex = resolveBaseIndex(-1);
++    const next = (baseIndex + 1) % unreadEntries.length;
++    const roomId = unreadEntries[next][0];
++    setLastNavigated({ roomId, index: next });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
++
++  const navigatePrev = useCallback(() => {
++    if (unreadEntries.length === 0) return;
++    const baseIndex = resolveBaseIndex(unreadEntries.length);
++    const prev = (baseIndex - 1 + unreadEntries.length) % unreadEntries.length;
++    const roomId = unreadEntries[prev][0];
++    setLastNavigated({ roomId, index: prev });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, resolveBaseIndex, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
++
++  const navigateFirst = useCallback(() => {
++    if (unreadEntries.length === 0) return;
++    const roomId = unreadEntries[0][0];
++    setLastNavigated({ roomId, index: 0 });
++    setUnreadNavRoom(roomId);
++    navigateToRoom(roomId);
++  }, [unreadEntries, setLastNavigated, setUnreadNavRoom, navigateToRoom]);
++
++  return { navigateNext, navigatePrev, navigateFirst, unreadCount: unreadEntries.length };
++}
+diff --git a/src/app/hooks/useRoomListKeyboard.ts b/src/app/hooks/useRoomListKeyboard.ts
+new file mode 100644
+index 000000000..14e637c78
+--- /dev/null
++++ b/src/app/hooks/useRoomListKeyboard.ts
+@@ -0,0 +1,137 @@
++import { useCallback, useEffect, useState } from 'react';
++import { Virtualizer } from '@tanstack/react-virtual';
++import { isKeyHotkey } from 'is-hotkey';
++
++interface UseRoomListKeyboardOptions {
++  items: string[];
++  selectedRoomId: string | undefined;
++  virtualizer: Virtualizer<HTMLDivElement, Element>;
++  onNavigate: (roomId: string) => void;
++  enabled?: boolean;
++  onTypeChar?: (key: string) => void;
++}
++
++export const useRoomListKeyboard = ({
++  items,
++  selectedRoomId,
++  virtualizer,
++  onNavigate,
++  enabled = true,
++  onTypeChar,
++}: UseRoomListKeyboardOptions) => {
++  const [focusedIndex, setFocusedIndex] = useState<number>(-1);
++
++  // Clamp if items list shrinks
++  useEffect(() => {
++    if (focusedIndex >= items.length) {
++      setFocusedIndex(items.length - 1);
++    }
++  }, [items.length, focusedIndex]);
++
++  // Sync focusedIndex to selectedRoomId — when the user clicks a room,
++  // navigates via URL, or switches rooms any other way, the keyboard
++  // focus position follows so the next arrow press starts from the
++  // correct room.
++  useEffect(() => {
++    if (!selectedRoomId) return;
++    const idx = items.indexOf(selectedRoomId);
++    if (idx >= 0) {
++      setFocusedIndex(idx);
++    }
++  }, [selectedRoomId, items]);
++
++  // Called when the listbox div receives focus (e.g. via Tab or F6).
++  // Always jump to the selected room so keyboard and view are in sync.
++  const handleFocus = useCallback(() => {
++    const selectedIndex = selectedRoomId ? items.indexOf(selectedRoomId) : -1;
++    const idx = selectedIndex >= 0 ? selectedIndex : Math.max(focusedIndex, 0);
++    setFocusedIndex(idx);
++    virtualizer.scrollToIndex(idx, { align: 'auto' });
++  }, [focusedIndex, items, selectedRoomId, virtualizer]);
++
++  const handleKeyDown = useCallback(
++    (evt: React.KeyboardEvent<HTMLDivElement>) => {
++      if (!enabled) return;
++
++      if (isKeyHotkey('arrowdown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? 0 : Math.min(prev + 1, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('arrowup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = prev < 0 ? items.length - 1 : Math.max(prev - 1, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('home', evt)) {
++        evt.preventDefault();
++        setFocusedIndex(0);
++        virtualizer.scrollToIndex(0, { align: 'start' });
++        return;
++      }
++
++      if (isKeyHotkey('end', evt)) {
++        evt.preventDefault();
++        const lastIndex = items.length - 1;
++        setFocusedIndex(lastIndex);
++        virtualizer.scrollToIndex(lastIndex, { align: 'end' });
++        return;
++      }
++
++      if ((isKeyHotkey('enter', evt) || isKeyHotkey('space', evt)) && focusedIndex >= 0) {
++        // Let child buttons (e.g. phone icon) handle their own Enter/Space
++        if (evt.target !== evt.currentTarget) return;
++        evt.preventDefault();
++        const roomId = items[focusedIndex];
++        if (roomId) {
++          onNavigate(roomId);
++        }
++        return;
++      }
++
++      if (isKeyHotkey('pagedown', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.min(prev + 10, items.length - 1);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      if (isKeyHotkey('pageup', evt)) {
++        evt.preventDefault();
++        setFocusedIndex((prev) => {
++          const next = Math.max(prev - 10, 0);
++          virtualizer.scrollToIndex(next, { align: 'auto' });
++          return next;
++        });
++        return;
++      }
++
++      // Single printable character: redirect to search modal (via onTypeChar callback)
++      if (evt.key.length === 1 && !evt.ctrlKey && !evt.altKey && !evt.metaKey && onTypeChar) {
++        evt.preventDefault();
++        onTypeChar(evt.key);
++      }
++    },
++    [enabled, items, focusedIndex, virtualizer, onNavigate, onTypeChar]
++  );
++
++  return {
++    focusedIndex,
++    handleKeyDown,
++    handleFocus,
++    setFocusedIndex,
++  };
++};
+diff --git a/src/app/hooks/useRoomMeta.ts b/src/app/hooks/useRoomMeta.ts
+index 086c3a56f..9f475863f 100644
+--- a/src/app/hooks/useRoomMeta.ts
++++ b/src/app/hooks/useRoomMeta.ts
+@@ -1,11 +1,30 @@
+ import { useEffect, useState } from 'react';
+ import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
+-import { Room, RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
++import { Room, RoomEvent, RoomEventHandlerMap, RoomMemberEvent } from 'matrix-js-sdk';
+ import { StateEvent } from '../../types/matrix/room';
+ import { useStateEvent } from './useStateEvent';
+ 
+ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
+   const avatarEvent = useStateEvent(room, StateEvent.RoomAvatar);
++  // For DMs, member profiles come from lazy-loaded members — trigger load and re-render.
++  const [, setMemberTick] = useState(0);
++  useEffect(() => {
++    if (!dm) return;
++    let cancelled = false;
++    room.loadMembersIfNeeded().then(() => {
++      if (!cancelled) setMemberTick((t) => t + 1);
++    });
++    const onMember = () => { if (!cancelled) setMemberTick((t) => t + 1); };
++    room.on(RoomMemberEvent.Membership, onMember);
++    room.on(RoomMemberEvent.Name, onMember);
++    room.on(RoomMemberEvent.AvatarUrl, onMember);
++    return () => {
++      cancelled = true;
++      room.off(RoomMemberEvent.Membership, onMember);
++      room.off(RoomMemberEvent.Name, onMember);
++      room.off(RoomMemberEvent.AvatarUrl, onMember);
++    };
++  }, [room, dm]);
+ 
+   if (dm) {
+     return room.getAvatarFallbackMember()?.getMxcAvatarUrl();
+diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
+index 725935048..a0129caac 100644
+--- a/src/app/pages/client/ClientNonUIFeatures.tsx
++++ b/src/app/pages/client/ClientNonUIFeatures.tsx
+@@ -1,7 +1,7 @@
+ import { useAtomValue } from 'jotai';
+ import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
+ import { useNavigate } from 'react-router-dom';
+-import { RoomEvent, RoomEventHandlerMap } from 'matrix-js-sdk';
++import { MatrixEvent, Room, RoomEvent, RoomEventHandlerMap, RoomMemberEvent } from 'matrix-js-sdk';
+ import { roomToUnreadAtom, unreadEqual, unreadInfoToUnread } from '../../state/room/roomToUnread';
+ import LogoSVG from '../../../../public/res/svg/cinny.svg';
+ import LogoUnreadSVG from '../../../../public/res/svg/cinny-unread.svg';
+@@ -239,8 +239,49 @@ function MessageNotifications() {
+       }
+     };
+     mx.on(RoomEvent.Timeline, handleTimelineEvent);
++
++    // Reaction to my own message
++    const handleReactionEvent: RoomEventHandlerMap[RoomEvent.Timeline] = (
++      mEvent,
++      room,
++      _toStart,
++      _removed,
++      data
++    ) => {
++      if (!data.liveEvent || mEvent.getType() !== 'm.reaction') return;
++      const rel = mEvent.getContent()['m.relates_to'] as
++        | { rel_type?: string; event_id?: string; key?: string }
++        | undefined;
++      if (rel?.rel_type !== 'm.annotation' || !rel.event_id) return;
++      const targetEvt = room?.findEventById(rel.event_id);
++      if (targetEvt?.getSender() !== mx.getUserId()) return;
++      if (notificationSound) playReactionSound();
++      const reactor = mEvent.getSender() ?? 'Someone';
++      const reactorName = room
++        ? (getMemberDisplayName(room, reactor) ?? getMxIdLocalPart(reactor) ?? reactor)
++        : reactor;
++      announce(`${reactorName} reacted ${rel.key ?? ''} to your message`);
++    };
++    mx.on(RoomEvent.Timeline, handleReactionEvent);
++
++    // Typing sound for current room
++    const handleTyping = (event: MatrixEvent, room: Room) => {
++      if (room.roomId !== selectedRoomId) return;
++      const typingUserIds =
++        (event.getContent() as { user_ids?: string[] }).user_ids ?? [];
++      const othersTyping = typingUserIds.filter((uid) => uid !== mx.getUserId());
++      if (othersTyping.length > 0 && prevTypingCountRef.current === 0) {
++        if (inRoomActivitySound) playTypingSound();
++        announce('Someone is typing');
++      }
++      prevTypingCountRef.current = othersTyping.length;
++    };
++    mx.on(RoomMemberEvent.Typing, handleTyping);
++
+     return () => {
+       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
++      mx.removeListener(RoomEvent.Timeline, handleReactionEvent);
++      mx.removeListener(RoomMemberEvent.Typing, handleTyping);
+     };
+   }, [
+     mx,
+diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
+index 168bda38b..2c685167f 100644
+--- a/src/app/pages/client/SidebarNav.tsx
++++ b/src/app/pages/client/SidebarNav.tsx
+@@ -1,4 +1,4 @@
+-import React, { useEffect, useRef } from 'react';
++import React, { KeyboardEventHandler, useCallback, useEffect, useRef } from 'react';
+ import { Scroll } from 'folds';
+ 
+ import {
+@@ -21,9 +21,46 @@ import { CreateTab } from './sidebar/CreateTab';
+ 
+ export function SidebarNav() {
+   const scrollRef = useRef<HTMLDivElement>(null);
++  const navRef = useRef<HTMLElement>(null);
++
++  // Roving tabindex: only one sidebar button is tabbable at a time (tabIndex=0).
++  // All others get tabIndex=-1 so the sidebar is a single Tab stop. Arrow keys
++  // move focus within it. This matches the WAI-ARIA toolbar pattern.
++  useEffect(() => {
++    const nav = navRef.current;
++    if (!nav) return;
++    const id = setTimeout(() => {
++      const allBtns = Array.from(
++        nav.querySelectorAll<HTMLElement>('button:not([disabled])')
++      );
++      allBtns.forEach((b, i) => b.setAttribute('tabindex', i === 0 ? '0' : '-1'));
++    }, 0);
++    return () => clearTimeout(id);
++  }, []);
++
++  const handleNavKeyDown: KeyboardEventHandler = useCallback((evt) => {
++    if (evt.key !== 'ArrowUp' && evt.key !== 'ArrowDown') return;
++    const nav = navRef.current;
++    if (!nav) return;
++    const buttons = Array.from(
++      nav.querySelectorAll<HTMLElement>('button:not([disabled])')
++    );
++    const current = buttons.indexOf(evt.target as HTMLElement);
++    if (current < 0) return;
++
++    evt.preventDefault();
++    const next = evt.key === 'ArrowDown'
++      ? (current + 1) % buttons.length
++      : (current - 1 + buttons.length) % buttons.length;
++
++    // Move roving tabindex
++    buttons[current]?.setAttribute('tabindex', '-1');
++    buttons[next]?.setAttribute('tabindex', '0');
++    buttons[next]?.focus();
++  }, []);
+ 
+   return (
+-    <Sidebar>
++    <Sidebar as="nav" aria-label="Main navigation" ref={navRef} onKeyDown={handleNavKeyDown}>
+       <SidebarContent
+         scrollable={
+           <Scroll ref={scrollRef} variant="Background" size="0">
+diff --git a/src/app/pages/client/explore/Explore.tsx b/src/app/pages/client/explore/Explore.tsx
+index dae831668..e89105952 100644
+--- a/src/app/pages/client/explore/Explore.tsx
++++ b/src/app/pages/client/explore/Explore.tsx
+@@ -110,7 +110,7 @@ export function AddServer() {
+                 <Text priority="400">Add server name to explore public communities.</Text>
+                 <Box direction="Column" gap="100">
+                   <Text size="L400">Server Name</Text>
+-                  <Input ref={serverInputRef} name="serverInput" variant="Background" required />
++                  <Input ref={serverInputRef} name="serverInput" variant="Background" required aria-label="Server name" />
+                   {exploreState.status === AsyncStatus.Error && (
+                     <Text style={{ color: color.Critical.Main }} size="T300">
+                       Failed to load public rooms. Please try again.
+diff --git a/src/app/pages/client/sidebar/DirectTab.tsx b/src/app/pages/client/sidebar/DirectTab.tsx
+index dcd44e2f7..2e450abf3 100644
+--- a/src/app/pages/client/sidebar/DirectTab.tsx
++++ b/src/app/pages/client/sidebar/DirectTab.tsx
+@@ -93,7 +93,7 @@ export function DirectTab() {
+   };
+   return (
+     <SidebarItem active={directSelected}>
+-      <SidebarItemTooltip tooltip="Direct Messages">
++      <SidebarItemTooltip tooltip="Direct Messages (Alt+D)">
+         {(triggerRef) => (
+           <SidebarAvatar
+             as="button"
+diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
+index 778b729e2..17cd71d5a 100644
+--- a/src/app/pages/client/sidebar/HomeTab.tsx
++++ b/src/app/pages/client/sidebar/HomeTab.tsx
+@@ -95,7 +95,7 @@ export function HomeTab() {
+ 
+   return (
+     <SidebarItem active={homeSelected}>
+-      <SidebarItemTooltip tooltip="Home">
++      <SidebarItemTooltip tooltip="Home (Alt+H)">
+         {(triggerRef) => (
+           <SidebarAvatar
+             as="button"
+diff --git a/src/app/pages/client/sidebar/SearchTab.tsx b/src/app/pages/client/sidebar/SearchTab.tsx
+index 7ceb5c499..5b8a466f6 100644
+--- a/src/app/pages/client/sidebar/SearchTab.tsx
++++ b/src/app/pages/client/sidebar/SearchTab.tsx
+@@ -11,7 +11,7 @@ export function SearchTab() {
+ 
+   return (
+     <SidebarItem active={opened}>
+-      <SidebarItemTooltip tooltip="Search">
++      <SidebarItemTooltip tooltip="Search (Ctrl+K)">
+         {(triggerRef) => (
+           <SidebarAvatar as="button" ref={triggerRef} outlined onClick={open}>
+             <Icon src={Icons.Search} filled={opened} />
+diff --git a/src/app/pages/client/sidebar/SpaceTabs.tsx b/src/app/pages/client/sidebar/SpaceTabs.tsx
+index 6fc528a10..750f4ad14 100644
+--- a/src/app/pages/client/sidebar/SpaceTabs.tsx
++++ b/src/app/pages/client/sidebar/SpaceTabs.tsx
+@@ -522,7 +522,7 @@ function OpenedSpaceFolder({ folder, onClose, children }: OpenedSpaceFolderProps
+     >
+       <SidebarFolderDropTarget ref={aboveTargetRef} position="Top" />
+       <SidebarAvatar size="300">
+-        <IconButton data-id={folder.id} size="300" variant="Background" onClick={onClose}>
++        <IconButton data-id={folder.id} size="300" variant="Background" onClick={onClose} aria-label="Collapse folder">
+           <Icon size="400" src={Icons.ChevronTop} filled />
+         </IconButton>
+       </SidebarAvatar>
+@@ -571,7 +571,7 @@ function ClosedSpaceFolder({
+         >
+           <SidebarItemTooltip tooltip={disabled ? undefined : tooltipName}>
+             {(tooltipRef) => (
+-              <SidebarFolder data-id={folder.id} as="button" ref={tooltipRef} onClick={onOpen}>
++              <SidebarFolder data-id={folder.id} as="button" ref={tooltipRef} aria-label={`${tooltipName} folder, collapsed`} onClick={onOpen}>
+                 {folder.content.map((sId) => {
+                   const space = mx.getRoom(sId);
+                   if (!space) return null;
+diff --git a/src/app/plugins/react-custom-html-parser.tsx b/src/app/plugins/react-custom-html-parser.tsx
+index 961131d9b..4db531881 100644
+--- a/src/app/plugins/react-custom-html-parser.tsx
++++ b/src/app/plugins/react-custom-html-parser.tsx
+@@ -486,12 +486,12 @@ export const getReactCustomHtmlParser = (
+             return (
+               <span className={css.EmoticonBase}>
+                 <span className={css.Emoticon()}>
+-                  <img {...props} className={css.EmoticonImg} src={htmlSrc} />
++                  <img {...props} className={css.EmoticonImg} src={htmlSrc} alt={props.alt || props.title || 'emoji'} />
+                 </span>
+               </span>
+             );
+           }
+-          if (htmlSrc) return <img {...props} className={css.Img} src={htmlSrc} />;
++          if (htmlSrc) return <img {...props} className={css.Img} src={htmlSrc} alt={props.alt || 'image'} />;
+         }
+       }
+ 
+diff --git a/src/app/utils/sounds.ts b/src/app/utils/sounds.ts
+new file mode 100644
+index 000000000..70f6eacf7
+--- /dev/null
++++ b/src/app/utils/sounds.ts
+@@ -0,0 +1,69 @@
++// Shared lazy AudioContext + named tone generators.
++// All sounds are short Web Audio API tones — no asset files needed.
++// Callers are responsible for checking user settings before calling.
++
++let audioCtx: AudioContext | null = null;
++
++function ctx(): AudioContext {
++  if (!audioCtx || audioCtx.state === 'closed') {
++    audioCtx = new AudioContext();
++  }
++  return audioCtx;
++}
++
++function tone(freq: number, dur: number, gain: number, type: OscillatorType = 'sine'): void {
++  try {
++    const c = ctx();
++    // Browsers start AudioContext suspended; resume() is a no-op if already running.
++    void c.resume();
++    const now = c.currentTime;
++    const g = c.createGain();
++    g.connect(c.destination);
++    g.gain.setValueAtTime(0, now);
++    g.gain.linearRampToValueAtTime(gain, now + 0.01);
++    g.gain.setValueAtTime(gain, now + dur - 0.02);
++    g.gain.linearRampToValueAtTime(0, now + dur);
++    const osc = c.createOscillator();
++    osc.type = type;
++    osc.frequency.value = freq;
++    osc.connect(g);
++    osc.start(now);
++    osc.stop(now + dur);
++  } catch {
++    // Audio not supported or blocked by browser
++  }
++}
++
++/** C5->E5 two-tone ascending -- urgent mention alert */
++export function playMentionSound(): void {
++  tone(523.25, 0.12, 0.25);
++  setTimeout(() => tone(659.25, 0.15, 0.3), 120);
++}
++
++/** Single A4 soft beep -- activity in current room */
++export function playCurrentRoomSound(): void {
++  tone(440, 0.08, 0.1);
++}
++
++/** Low Eb4 tick, very quiet -- activity in another room */
++export function playOtherRoomSound(): void {
++  tone(311.13, 0.06, 0.07);
++}
++
++/** Very brief 800Hz click -- someone started typing */
++export function playTypingSound(): void {
++  tone(800, 0.04, 0.05, 'square');
++}
++
++/** A5->C#6 two quick sparkle tones -- reaction received */
++export function playReactionSound(): void {
++  tone(880, 0.08, 0.15);
++  setTimeout(() => tone(1108.73, 0.1, 0.12), 80);
++}
++
++/** A4->C#5->E5 three-step sweep -- reply to your message */
++export function playReplyToMeSound(): void {
++  tone(440, 0.1, 0.15);
++  setTimeout(() => tone(554.37, 0.1, 0.15), 100);
++  setTimeout(() => tone(659.25, 0.12, 0.18), 200);
++}

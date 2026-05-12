@@ -1,0 +1,7 @@
+19530c8d  navigate-unread: open subspace rooms under sidebar-ancestor space
+b91656fa  navigate-unread: fall back to sidebar-ancestor for subspace URLs
+53316889  navigate-unread: stabilize published rooms array by content
+c5b64e66  navigate-unread: cross-bucket jumps must land in target bucket
+e5ce5223  navigate-unread: drop unused firstRoomInBucket/lastRoomInBucket
+cf486a05  navigate-unread: include favorite rooms in Home/Direct published view
+41142fed  navigate-unread: toggle to hide read rooms in sidebar while triaging

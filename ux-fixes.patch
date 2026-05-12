@@ -1,0 +1,1102 @@
+diff --git a/src/app/components/RenderMessageContent.tsx b/src/app/components/RenderMessageContent.tsx
+index 4cfcb7dc1..147208a8d 100644
+--- a/src/app/components/RenderMessageContent.tsx
++++ b/src/app/components/RenderMessageContent.tsx
+@@ -264,5 +264,10 @@ export function RenderMessageContent({
+     return <MBadEncrypted />;
+   }
+ 
+-  return <UnsupportedContent />;
++  const fallbackContent = getContent<{ body?: unknown }>();
++  return (
++    <UnsupportedContent
++      body={typeof fallbackContent?.body === 'string' ? fallbackContent.body : undefined}
++    />
++  );
+ }
+diff --git a/src/app/components/editor/Editor.tsx b/src/app/components/editor/Editor.tsx
+index f7655fea3..efb129fe5 100644
+--- a/src/app/components/editor/Editor.tsx
++++ b/src/app/components/editor/Editor.tsx
+@@ -67,6 +67,7 @@ type CustomEditorProps = {
+   maxHeight?: string;
+   editor: Editor;
+   placeholder?: string;
++  isMarkdown?: boolean;
+   onKeyDown?: KeyboardEventHandler;
+   onKeyUp?: KeyboardEventHandler;
+   onChange?: EditorChangeHandler;
+@@ -83,6 +84,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
+       maxHeight = '50vh',
+       editor,
+       placeholder,
++      isMarkdown,
+       onKeyDown,
+       onKeyUp,
+       onChange,
+@@ -102,10 +104,10 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
+         // Let F6 (section cycling) bubble to the window handler unimpeded.
+         if (evt.key === 'F6') return;
+         onKeyDown?.(evt);
+-        const shortcutToggled = toggleKeyboardShortcut(editor, evt);
++        const shortcutToggled = toggleKeyboardShortcut(editor, evt, isMarkdown);
+         if (shortcutToggled) evt.preventDefault();
+       },
+-      [editor, onKeyDown]
++      [editor, onKeyDown, isMarkdown]
+     );
+ 
+     const renderPlaceholder = useCallback(
+diff --git a/src/app/components/editor/keyboard.ts b/src/app/components/editor/keyboard.ts
+index 19c05bac7..8e30e7c3b 100644
+--- a/src/app/components/editor/keyboard.ts
++++ b/src/app/components/editor/keyboard.ts
+@@ -4,6 +4,30 @@ import { Editor, Element as SlateElement, Range, Transforms } from 'slate';
+ import { isAnyMarkActive, isBlockActive, removeAllMark, toggleBlock, toggleMark } from './utils';
+ import { BlockType, MarkType } from './types';
+ 
++// Markdown delimiters to insert when isMarkdown mode is active.
++const INLINE_MD_DELIMITERS: Partial<Record<MarkType, [string, string]>> = {
++  [MarkType.Bold]: ['**', '**'],
++  [MarkType.Italic]: ['*', '*'],
++  [MarkType.StrikeThrough]: ['~~', '~~'],
++  [MarkType.Code]: ['`', '`'],
++  [MarkType.Spoiler]: ['||', '||'],
++  // Underline has no standard markdown equivalent — skipped.
++};
++
++const insertMarkdownAround = (editor: Editor, [open, close]: [string, string]) => {
++  const { selection } = editor;
++  if (!selection) return;
++  if (Range.isCollapsed(selection)) {
++    Transforms.insertText(editor, open + close);
++    Transforms.move(editor, { distance: close.length, unit: 'character', reverse: true });
++  } else {
++    const [start, end] = Range.edges(selection);
++    // Insert at end first so the start offset isn't shifted.
++    Transforms.insertText(editor, close, { at: end });
++    Transforms.insertText(editor, open, { at: start });
++  }
++};
++
+ export const INLINE_HOTKEYS: Record<string, MarkType> = {
+   'mod+b': MarkType.Bold,
+   'mod+i': MarkType.Italic,
+@@ -28,7 +52,11 @@ const isHeading3 = isKeyHotkey('mod+3');
+ /**
+  * @return boolean true if shortcut is toggled.
+  */
+-export const toggleKeyboardShortcut = (editor: Editor, event: KeyboardEvent<Element>): boolean => {
++export const toggleKeyboardShortcut = (
++  editor: Editor,
++  event: KeyboardEvent<Element>,
++  isMarkdown = false
++): boolean => {
+   if (isKeyHotkey('backspace', event) && editor.selection && Range.isCollapsed(editor.selection)) {
+     const startPoint = Range.start(editor.selection);
+     if (startPoint.offset !== 0) return false;
+@@ -107,7 +135,12 @@ export const toggleKeyboardShortcut = (editor: Editor, event: KeyboardEvent<Elem
+     : INLINE_KEYS.find((hotkey) => {
+         if (isKeyHotkey(hotkey, event)) {
+           event.preventDefault();
+-          toggleMark(editor, INLINE_HOTKEYS[hotkey]);
++          if (isMarkdown) {
++            const delimiters = INLINE_MD_DELIMITERS[INLINE_HOTKEYS[hotkey]];
++            if (delimiters) insertMarkdownAround(editor, delimiters);
++          } else {
++            toggleMark(editor, INLINE_HOTKEYS[hotkey]);
++          }
+           return true;
+         }
+         return false;
+diff --git a/src/app/components/editor/utils.ts b/src/app/components/editor/utils.ts
+index 90c549c84..85c0125a4 100644
+--- a/src/app/components/editor/utils.ts
++++ b/src/app/components/editor/utils.ts
+@@ -249,7 +249,11 @@ export const getPrevWorldRange = (editor: Editor): BaseRange | undefined => {
+     reverse: true,
+     match: (char) => char === ' ',
+   });
+-  return worldStartPoint && Editor.range(editor, worldStartPoint, cursorPoint);
++  if (!worldStartPoint) return undefined;
++  // Don't cross block boundaries — if the found start is in a different top-level
++  // block than the cursor (e.g. after Enter inserted a new paragraph), discard it.
++  if (worldStartPoint.path[0] !== cursorPoint.path[0]) return undefined;
++  return Editor.range(editor, worldStartPoint, cursorPoint);
+ };
+ 
+ export const isEmptyEditor = (editor: Editor): boolean => {
+diff --git a/src/app/components/message/MsgTypeRenderers.tsx b/src/app/components/message/MsgTypeRenderers.tsx
+index abbf354de..5f4d576b8 100644
+--- a/src/app/components/message/MsgTypeRenderers.tsx
++++ b/src/app/components/message/MsgTypeRenderers.tsx
+@@ -49,18 +49,22 @@ export function RedactedContent({ reason }: RedactedContentProps) {
+   );
+ }
+ 
+-export function UnsupportedContent() {
++type FallbackContentProps = {
++  body?: string;
++};
++
++export function UnsupportedContent({ body }: FallbackContentProps) {
+   return (
+     <Text>
+-      <MessageUnsupportedContent />
++      <MessageUnsupportedContent body={body} />
+     </Text>
+   );
+ }
+ 
+-export function BrokenContent() {
++export function BrokenContent({ body }: FallbackContentProps) {
+   return (
+     <Text>
+-      <MessageBrokenContent />
++      <MessageBrokenContent body={body} />
+     </Text>
+   );
+ }
+@@ -79,7 +83,9 @@ type MTextProps = {
+ export function MText({ edited, content, renderBody, renderUrlsPreview, style }: MTextProps) {
+   const { body, formatted_body: customBody } = content;
+ 
+-  if (typeof body !== 'string') return <BrokenContent />;
++  if (typeof body !== 'string') {
++    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
++  }
+   const trimmedBody = trimReplyFromBody(body);
+   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
+   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
+@@ -118,7 +124,9 @@ export function MEmote({
+ }: MEmoteProps) {
+   const { body, formatted_body: customBody } = content;
+ 
+-  if (typeof body !== 'string') return <BrokenContent />;
++  if (typeof body !== 'string') {
++    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
++  }
+   const trimmedBody = trimReplyFromBody(body);
+   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
+   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
+@@ -151,7 +159,9 @@ type MNoticeProps = {
+ export function MNotice({ edited, content, renderBody, renderUrlsPreview }: MNoticeProps) {
+   const { body, formatted_body: customBody } = content;
+ 
+-  if (typeof body !== 'string') return <BrokenContent />;
++  if (typeof body !== 'string') {
++    return <BrokenContent body={typeof customBody === 'string' ? customBody : undefined} />;
++  }
+   const trimmedBody = trimReplyFromBody(body);
+   const urlsMatch = renderUrlsPreview && trimmedBody.match(URL_REG);
+   const urls = urlsMatch ? [...new Set(urlsMatch)] : undefined;
+@@ -193,7 +203,7 @@ export function MImage({ content, renderImageContent, outlined }: MImageProps) {
+   const imgInfo = content?.info;
+   const mxcUrl = content.file?.url ?? content.url;
+   if (typeof mxcUrl !== 'string') {
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+   const height = scaleYDimension(imgInfo?.w || 400, 400, imgInfo?.h || 400);
+ 
+@@ -242,7 +252,7 @@ export function MVideo({ content, renderAsFile, renderVideoContent, outlined }:
+     if (mxcUrl) {
+       return renderAsFile();
+     }
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+ 
+   const height = scaleYDimension(videoInfo.w || 400, 400, videoInfo.h || 400);
+@@ -305,7 +315,7 @@ export function MAudio({ content, renderAsFile, renderAudioContent, outlined }:
+     if (mxcUrl) {
+       return renderAsFile();
+     }
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+ 
+   const filename = content.filename ?? content.body ?? 'Audio';
+@@ -356,7 +366,7 @@ export function MFile({ content, renderFileContent, outlined }: MFileProps) {
+   const mxcUrl = content.file?.url ?? content.url;
+ 
+   if (typeof mxcUrl !== 'string') {
+-    return <BrokenContent />;
++    return <BrokenContent body={content.body ?? content.filename} />;
+   }
+ 
+   return (
+@@ -387,9 +397,11 @@ type MLocationProps = {
+ };
+ export function MLocation({ content }: MLocationProps) {
+   const geoUri = content.geo_uri;
+-  if (typeof geoUri !== 'string') return <BrokenContent />;
++  if (typeof geoUri !== 'string') {
++    return <BrokenContent body={typeof content.body === 'string' ? content.body : undefined} />;
++  }
+   const location = parseGeoUri(geoUri);
+-  if (!location) return <BrokenContent />;
++  if (!location) return <BrokenContent body={geoUri} />;
+ 
+   return (
+     <Box direction="Column" alignItems="Start" gap="100">
+diff --git a/src/app/components/message/Reply.tsx b/src/app/components/message/Reply.tsx
+index 91ef8aa9d..5d474f54e 100644
+--- a/src/app/components/message/Reply.tsx
++++ b/src/app/components/message/Reply.tsx
+@@ -12,6 +12,29 @@ import { scaleSystemEmoji } from '../../plugins/react-custom-html-parser';
+ import { useRoomEvent } from '../../hooks/useRoomEvent';
+ import colorMXID from '../../../util/colorMXID';
+ import { GetMemberPowerTag } from '../../hooks/useMemberPowerTag';
++import { getPerMsgProfile } from '../../state/personas';
++
++/**
++ * Resolve @user:server and !room:server IDs in plain text to display names.
++ */
++const resolveIdsInBody = (text: string, room: Room): string =>
++  text.replace(
++    /(@[a-zA-Z0-9._=/+-]+:[a-zA-Z0-9.-]+)|(![a-zA-Z0-9]+:[a-zA-Z0-9.-]+)/g,
++    (match) => {
++      if (match.startsWith('@')) {
++        const name = getMemberDisplayName(room, match);
++        if (name) return name;
++        const localPart = getMxIdLocalPart(match);
++        return localPart ?? match;
++      }
++      if (match.startsWith('!')) {
++        const mx = room.client;
++        const targetRoom = mx.getRoom(match);
++        if (targetRoom?.name) return targetRoom.name;
++      }
++      return match;
++    }
++  );
+ 
+ type ReplyLayoutProps = {
+   userColor?: string;
+@@ -84,8 +107,13 @@ export const Reply = as<'div', ReplyProps>(
+     );
+     const replyEvent = useRoomEvent(room, replyEventId, getFromLocalTimeline);
+ 
+-    const { body } = replyEvent?.getContent() ?? {};
++    const content = replyEvent?.getContent() ?? {};
++    const { body } = content;
+     const sender = replyEvent?.getSender();
++    const perMsgProfile = getPerMsgProfile(content as Record<string, unknown>);
++    const senderDisplayName = perMsgProfile?.displayname
++      ?? (sender ? getMemberDisplayName(room, sender) : undefined)
++      ?? (sender ? getMxIdLocalPart(sender) : undefined);
+     const powerTag = sender ? getMemberPowerTag?.(sender) : undefined;
+     const tagColor = powerTag?.color ? accessibleTagColors?.get(powerTag.color) : undefined;
+ 
+@@ -98,7 +126,8 @@ export const Reply = as<'div', ReplyProps>(
+     );
+ 
+     const badEncryption = replyEvent?.getContent().msgtype === 'm.bad.encrypted';
+-    const bodyJSX = body ? scaleSystemEmoji(trimReplyFromBody(body)) : fallbackBody;
++    const resolvedBody = body ? resolveIdsInBody(trimReplyFromBody(body), room) : undefined;
++    const bodyJSX = resolvedBody ? scaleSystemEmoji(resolvedBody) : fallbackBody;
+ 
+     return (
+       <Box direction="Row" gap="200" alignItems="Center" {...props} ref={ref}>
+@@ -108,15 +137,15 @@ export const Reply = as<'div', ReplyProps>(
+         <ReplyLayout
+           as="button"
+           aria-label={
+-            sender
+-              ? `Go to original message by ${getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender}`
++            senderDisplayName
++              ? `Go to original message by ${senderDisplayName}`
+               : 'Go to original message'
+           }
+           userColor={usernameColor}
+           username={
+-            sender && (
++            senderDisplayName && (
+               <Text size="T300" truncate>
+-                <b>{getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender)}</b>
++                <b>{senderDisplayName}</b>
+               </Text>
+             )
+           }
+diff --git a/src/app/components/message/content/FallbackContent.tsx b/src/app/components/message/content/FallbackContent.tsx
+index 9edb96784..b6da4f932 100644
+--- a/src/app/components/message/content/FallbackContent.tsx
++++ b/src/app/components/message/content/FallbackContent.tsx
+@@ -17,12 +17,15 @@ export const MessageDeletedContent = as<'div', { children?: never; reason?: stri
+   )
+ );
+ 
+-export const MessageUnsupportedContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+-  <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+-    <Icon size="50" src={Icons.Warning} />
+-    <i>Unsupported message</i>
+-  </Box>
+-));
++export const MessageUnsupportedContent = as<'div', { children?: never; body?: string }>(
++  ({ body, ...props }, ref) => (
++    <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
++      <Icon size="50" src={Icons.Warning} />
++      <i>Unsupported message</i>
++      {body ? `: ${body}` : ' (no body)'}
++    </Box>
++  )
++);
+ 
+ export const MessageFailedContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+   <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+@@ -45,12 +48,15 @@ export const MessageNotDecryptedContent = as<'div', { children?: never }>(({ ...
+   </Box>
+ ));
+ 
+-export const MessageBrokenContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+-  <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+-    <Icon size="50" src={Icons.Warning} />
+-    <i>Broken message</i>
+-  </Box>
+-));
++export const MessageBrokenContent = as<'div', { children?: never; body?: string }>(
++  ({ body, ...props }, ref) => (
++    <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
++      <Icon size="50" src={Icons.Warning} />
++      <i>Broken message</i>
++      {body ? `: ${body}` : ' (no body)'}
++    </Box>
++  )
++);
+ 
+ export const MessageEmptyContent = as<'div', { children?: never }>(({ ...props }, ref) => (
+   <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+diff --git a/src/app/components/url-preview/UrlPreviewCard.tsx b/src/app/components/url-preview/UrlPreviewCard.tsx
+index ee8967af7..658bdcfa7 100644
+--- a/src/app/components/url-preview/UrlPreviewCard.tsx
++++ b/src/app/components/url-preview/UrlPreviewCard.tsx
+@@ -28,7 +28,9 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
+     );
+ 
+     useEffect(() => {
+-      loadPreview();
++      // useAsync re-throws after updating state; suppress unhandled-rejection
++      // warnings since the error is already handled by the AsyncStatus.Error branch.
++      loadPreview().catch(() => undefined);
+     }, [loadPreview]);
+ 
+     if (previewStatus.status === AsyncStatus.Error) return null;
+diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
+index 4da9a96f7..4376cc90c 100644
+--- a/src/app/features/room/RoomInput.tsx
++++ b/src/app/features/room/RoomInput.tsx
+@@ -229,6 +229,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+ 
+     useEffect(() => {
+       Transforms.insertFragment(editor, msgDraft);
++      // Auto-focus the editor when entering a room (skip on mobile to avoid keyboard popup)
++      if (!mobileOrTablet()) {
++        // Small delay to ensure the editor is mounted and ready
++        requestAnimationFrame(() => {
++          try {
++            ReactEditor.focus(editor);
++          } catch {
++            // Editor not yet mounted
++          }
++        });
++      }
+     }, [editor, msgDraft]);
+ 
+     useEffect(
+@@ -554,6 +565,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+           editableName="RoomInput"
+           editor={editor}
+           placeholder="Send a message..."
++          isMarkdown={isMarkdown}
+           onKeyDown={handleKeyDown}
+           onKeyUp={handleKeyUp}
+           onPaste={handlePaste}
+diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
+index 65fd0e2dc..5950e3fa1 100644
+--- a/src/app/features/room/RoomTimeline.tsx
++++ b/src/app/features/room/RoomTimeline.tsx
+@@ -909,6 +909,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+     useCallback(() => roomInputRef.current, [roomInputRef])
+   );
+ 
++  // Stay at bottom when virtual keyboard opens/closes (mobile)
++  useEffect(() => {
++    const vv = window.visualViewport;
++    if (!vv) return;
++    const handler = () => {
++      requestAnimationFrame(() => {
++        const scrollElement = getScrollElement();
++        if (scrollElement && atBottomRef.current) {
++          scrollToBottom(scrollElement);
++        }
++      });
++    };
++    vv.addEventListener('resize', handler);
++    return () => vv.removeEventListener('resize', handler);
++  }, [getScrollElement]);
++
+   const tryAutoMarkAsRead = useCallback(() => {
+     const readUptoEventId = readUptoEventIdRef.current;
+     if (!readUptoEventId) {
+diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
+index a19058d26..4aab60158 100644
+--- a/src/app/features/room/RoomViewHeader.tsx
++++ b/src/app/features/room/RoomViewHeader.tsx
+@@ -55,6 +55,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+ import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
+ import { RoomPinMenu } from './room-pin-menu';
+ import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
++import { RoomSettingsPage } from '../../state/roomSettings';
+ import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
+ import {
+   getRoomNotificationMode,
+@@ -297,7 +298,7 @@ export function RoomViewHeader({ callView }: { callView?: boolean }) {
+   const openSettings = useOpenRoomSettings();
+   const parentSpace = useSpaceOptionally();
+   const handleMemberToggle = () => {
+-    if (callView) {
++    if (isActiveCall) {
+       openSettings(room.roomId, parentSpace?.roomId, RoomSettingsPage.MembersPage);
+       return;
+     }
+diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
+index 9c5b2ec77..c11bdb94e 100644
+--- a/src/app/features/room/message/Message.tsx
++++ b/src/app/features/room/message/Message.tsx
+@@ -736,11 +736,11 @@ export const Message = as<'div', MessageProps>(
+     const useAuthentication = useMediaAuthentication();
+     const senderId = mEvent.getSender() ?? '';
+ 
+-    const [hover, setHover] = useState(false);
+-    const { hoverProps } = useHover({ onHoverChange: setHover });
+-    const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
++    // Hover is now CSS-only (MessageOptionsHidden) to avoid per-message
++    // re-renders on mouse movement. React state is only needed for menus.
+     const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+     const [emojiBoardAnchor, setEmojiBoardAnchor] = useState<RectCords>();
++    const optionsVisible = !!menuAnchor || !!emojiBoardAnchor;
+ 
+     const senderDisplayName =
+       getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
+@@ -783,15 +783,15 @@ export const Message = as<'div', MessageProps>(
+           {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
+         </Box>
+         <Box shrink="No" gap="100">
+-          {messageLayout === MessageLayout.Modern && hover && (
+-            <>
++          {messageLayout === MessageLayout.Modern && (
++            <span className={css.MessageOptionsHidden}>
+               <Text as="span" size="T200" priority="300">
+                 {senderId}
+               </Text>
+               <Text as="span" size="T200" priority="300">
+-                |
++                {' | '}
+               </Text>
+-            </>
++            </span>
+           )}
+           <Time
+             ts={mEvent.getTs()}
+@@ -902,12 +902,10 @@ export const Message = as<'div', MessageProps>(
+         highlight={highlight}
+         selected={!!menuAnchor || !!emojiBoardAnchor}
+         {...props}
+-        {...hoverProps}
+-        {...focusWithinProps}
+         ref={ref}
+       >
+-        {!edit && (hover || !!menuAnchor || !!emojiBoardAnchor) && (
+-          <div className={css.MessageOptionsBase}>
++        {!edit && (
++          <div className={classNames(css.MessageOptionsBase, css.MessageOptionsHidden)} data-options-visible={optionsVisible || undefined}>
+             <Menu className={css.MessageOptionsBar} variant="SurfaceVariant">
+               <Box gap="100">
+                 {canSendReaction && (
+diff --git a/src/app/features/room/message/MessageEditor.tsx b/src/app/features/room/message/MessageEditor.tsx
+index 9a7567aac..adbf55ef2 100644
+--- a/src/app/features/room/message/MessageEditor.tsx
++++ b/src/app/features/room/message/MessageEditor.tsx
+@@ -258,6 +258,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
+         <CustomEditor
+           editor={editor}
+           placeholder="Edit message..."
++          isMarkdown={isMarkdown}
+           onKeyDown={handleKeyDown}
+           onKeyUp={handleKeyUp}
+           bottom={
+diff --git a/src/app/features/room/message/styles.css.ts b/src/app/features/room/message/styles.css.ts
+index 4be501bdc..abc8a5288 100644
+--- a/src/app/features/room/message/styles.css.ts
++++ b/src/app/features/room/message/styles.css.ts
+@@ -4,6 +4,20 @@ import { DefaultReset, config, toRem } from 'folds';
+ export const MessageBase = style({
+   position: 'relative',
+ });
++
++// CSS-only hover for action buttons — avoids React state changes on mouse movement.
++// The options bar is always in the DOM but hidden; :hover or [data-options-visible]
++// makes it visible. This eliminates per-message re-renders on mouseover.
++export const MessageOptionsHidden = style({
++  visibility: 'hidden',
++  pointerEvents: 'none',
++  selectors: {
++    [`${MessageBase}:hover &, ${MessageBase}:focus-within &, &[data-options-visible="true"]`]: {
++      visibility: 'visible',
++      pointerEvents: 'auto',
++    },
++  },
++});
+ export const MessageBaseBubbleCollapsed = style({
+   paddingTop: 0,
+ });
+diff --git a/src/app/features/settings/account/Profile.tsx b/src/app/features/settings/account/Profile.tsx
+index 77646843e..53b71ecd3 100644
+--- a/src/app/features/settings/account/Profile.tsx
++++ b/src/app/features/settings/account/Profile.tsx
+@@ -183,6 +183,30 @@ export function Profile() {
+           // so we have to update the defaults explicitly here
+           setFieldDefaults(fields);
+         }
++
++        // Propagate display name and avatar to joined rooms explicitly.
++        // Some servers don't propagate global profile changes into room
++        // member events for restricted rooms (missing join authorization).
++        // Updating each room's member event directly works around this.
++        const myId = mx.getSafeUserId();
++        const newName = fields.displayname ?? '';
++        const newAvatar = fields.avatar_url ?? '';
++        const joinedRooms = mx.getRooms().filter((r) => r.getMyMembership() === 'join');
++        await Promise.allSettled(
++          joinedRooms.map(async (r) => {
++            const memberEvt = r.currentState.getStateEvents('m.room.member', myId);
++            if (!memberEvt) return;
++            const content = memberEvt.getContent();
++            const needsUpdate =
++              content.displayname !== newName || content.avatar_url !== newAvatar;
++            if (!needsUpdate) return;
++            await mx.sendStateEvent(r.roomId, 'm.room.member' as any, {
++              ...content,
++              displayname: newName,
++              avatar_url: newAvatar || undefined,
++            }, myId);
++          })
++        );
+       },
+       [
+         mx,
+diff --git a/src/app/hooks/useCommands.ts b/src/app/hooks/useCommands.ts
+index c02b0e94e..6541a9c36 100644
+--- a/src/app/hooks/useCommands.ts
++++ b/src/app/hooks/useCommands.ts
+@@ -152,7 +152,9 @@ export enum Command {
+   Ignore = 'ignore',
+   UnIgnore = 'unignore',
+   MyRoomNick = 'myroomnick',
++  ResetNick = 'resetnick',
+   MyRoomAvatar = 'myroomavatar',
++  ResetAvatar = 'resetavatar',
+   ConvertToDm = 'converttodm',
+   ConvertToRoom = 'converttoroom',
+   TableFlip = 'tableflip',
+@@ -375,6 +377,29 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
+           );
+         },
+       },
++      [Command.ResetNick]: {
++        name: Command.ResetNick,
++        description: 'Reset room nick to your global display name.',
++        exe: async () => {
++          const globalName = mx.getUser(mx.getSafeUserId())?.displayName;
++          if (!globalName) return;
++          const mEvent = room
++            .getLiveTimeline()
++            .getState(EventTimeline.FORWARDS)
++            ?.getStateEvents(StateEvent.RoomMember, mx.getSafeUserId());
++          const content = mEvent?.getContent();
++          if (!content) return;
++          await mx.sendStateEvent(
++            room.roomId,
++            StateEvent.RoomMember as any,
++            {
++              ...content,
++              displayname: globalName,
++            },
++            mx.getSafeUserId()
++          );
++        },
++      },
+       [Command.MyRoomAvatar]: {
+         name: Command.MyRoomAvatar,
+         description: 'Change profile picture in current room. Example /myroomavatar mxc://xyzabc',
+@@ -398,6 +423,28 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
+           }
+         },
+       },
++      [Command.ResetAvatar]: {
++        name: Command.ResetAvatar,
++        description: 'Reset room avatar to your global profile picture.',
++        exe: async () => {
++          const globalAvatar = mx.getUser(mx.getSafeUserId())?.avatarUrl;
++          const mEvent = room
++            .getLiveTimeline()
++            .getState(EventTimeline.FORWARDS)
++            ?.getStateEvents(StateEvent.RoomMember, mx.getSafeUserId());
++          const content = mEvent?.getContent();
++          if (!content) return;
++          await mx.sendStateEvent(
++            room.roomId,
++            StateEvent.RoomMember as any,
++            {
++              ...content,
++              avatar_url: globalAvatar ?? undefined,
++            },
++            mx.getSafeUserId()
++          );
++        },
++      },
+       [Command.ConvertToDm]: {
+         name: Command.ConvertToDm,
+         description: 'Convert room to direct message',
+diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
+index b61174da8..97ee91d8d 100644
+--- a/src/app/pages/client/ClientRoot.tsx
++++ b/src/app/pages/client/ClientRoot.tsx
+@@ -37,6 +37,7 @@ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+ import { useSyncState } from '../../hooks/useSyncState';
+ import { stopPropagation } from '../../utils/keyboard';
+ import { SyncStatus } from './SyncStatus';
++import { VersionCheck } from './VersionCheck';
+ import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
+ import { getFallbackSession } from '../../state/sessions';
+ import { AutoDiscovery } from './AutoDiscovery';
+@@ -240,6 +241,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
+       <SpecVersionsProvider value={specVersionsData}>
+         {mx && <SyncStatus mx={mx} />}
++        <VersionCheck />
+         {loading && <ClientRootOptions mx={mx} />}
+         {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
+           <SplashScreen>
+diff --git a/src/app/pages/client/VersionCheck.tsx b/src/app/pages/client/VersionCheck.tsx
+new file mode 100644
+index 000000000..2d4a65bb3
+--- /dev/null
++++ b/src/app/pages/client/VersionCheck.tsx
+@@ -0,0 +1,108 @@
++import React, { useCallback, useEffect, useState } from 'react';
++import { Box, config, Text } from 'folds';
++import { ContainerColor } from '../../styles/ContainerColor.css';
++
++/**
++ * Extracts JS bundle hashes from an HTML string.
++ * Vite produces filenames like `index-D_rwMSSw.js` — the hash changes on every build.
++ */
++function extractBundleHashes(html: string): string[] {
++  const matches = html.matchAll(/\/assets\/((?:index|main)-[A-Za-z0-9_-]+\.js)/g);
++  return Array.from(matches, (m) => m[1]).sort();
++}
++
++// Snapshot the hashes that were in index.html when THIS page loaded.
++// These are baked into the <script> tags the browser executed.
++const CURRENT_SCRIPTS = Array.from(
++  document.querySelectorAll<HTMLScriptElement>('script[src*="/assets/"]'),
++  (s) => {
++    const m = s.src.match(/\/assets\/((?:index|main)-[A-Za-z0-9_-]+\.js)/);
++    return m ? m[1] : '';
++  }
++)
++  .filter(Boolean)
++  .sort();
++
++const CHECK_INTERVAL_MS = 2 * 60 * 1000; // every 2 minutes
++
++export function VersionCheck() {
++  const [updateAvailable, setUpdateAvailable] = useState(false);
++
++  const checkForUpdate = useCallback(async () => {
++    try {
++      // Fetch index.html bypassing all caches
++      const resp = await fetch(`${window.location.origin}${window.location.pathname}`, {
++        cache: 'no-store',
++        headers: { Accept: 'text/html' },
++      });
++      if (!resp.ok) return;
++      const html = await resp.text();
++      const serverHashes = extractBundleHashes(html);
++
++      // Only trigger if our loaded scripts are NOT in the server's latest HTML.
++      // New files existing on the server is fine (old files linger in CDN caches).
++      // We only care when OUR files are stale — i.e., the server no longer
++      // references the scripts we're running.
++      if (
++        CURRENT_SCRIPTS.length > 0 &&
++        serverHashes.length > 0 &&
++        CURRENT_SCRIPTS.some((script) => !serverHashes.includes(script))
++      ) {
++        setUpdateAvailable(true);
++      }
++    } catch {
++      // Network error — skip silently
++    }
++  }, []);
++
++  useEffect(() => {
++    // First check after 30 seconds (let the app stabilize)
++    const initial = setTimeout(checkForUpdate, 30_000);
++    const interval = setInterval(checkForUpdate, CHECK_INTERVAL_MS);
++    return () => {
++      clearTimeout(initial);
++      clearInterval(interval);
++    };
++  }, [checkForUpdate]);
++
++  // Also check on tab wake (visibility change)
++  useEffect(() => {
++    const onVisible = () => {
++      if (!document.hidden) checkForUpdate();
++    };
++    document.addEventListener('visibilitychange', onVisible);
++    return () => document.removeEventListener('visibilitychange', onVisible);
++  }, [checkForUpdate]);
++
++  if (!updateAvailable) return null;
++
++  // Navigate with a cache-busting query param so CDNs (Cloudflare) can't
++  // serve the old cached index.html. A plain reload() uses default cache
++  // behavior and Cloudflare returns the stale page.
++  const hardReload = () => {
++    const base = window.location.pathname + window.location.hash;
++    window.location.replace(`${base}?_cb=${Date.now()}`);
++  };
++
++  return (
++    <Box direction="Column" shrink="No">
++      <Box
++        className={ContainerColor({ variant: 'Success' })}
++        style={{ padding: `${config.space.S100} ${config.space.S200}`, cursor: 'pointer' }}
++        alignItems="Center"
++        justifyContent="Center"
++        gap="200"
++        onClick={hardReload}
++        role="button"
++        tabIndex={0}
++        onKeyDown={(e) => {
++          if (e.key === 'Enter' || e.key === ' ') hardReload();
++        }}
++      >
++        <Text size="L400">
++          A new version is available — click here to reload
++        </Text>
++      </Box>
++    </Box>
++  );
++}
+diff --git a/src/app/state/room/roomToUnread.ts b/src/app/state/room/roomToUnread.ts
+index f7ef1b797..2320c1b19 100644
+--- a/src/app/state/room/roomToUnread.ts
++++ b/src/app/state/room/roomToUnread.ts
+@@ -9,7 +9,7 @@ import {
+   SyncState,
+ } from 'matrix-js-sdk';
+ import { ReceiptContent, ReceiptType } from 'matrix-js-sdk/lib/@types/read_receipts';
+-import { useCallback, useEffect } from 'react';
++import { useCallback, useEffect, useRef } from 'react';
+ import {
+   Membership,
+   NotificationType,
+@@ -39,6 +39,10 @@ export type RoomToUnreadAction =
+       type: 'PUT';
+       unreadInfo: UnreadInfo;
+     }
++  | {
++      type: 'PUT_BATCH';
++      unreadInfos: UnreadInfo[];
++    }
+   | {
+       type: 'DELETE';
+       roomId: string;
+@@ -151,6 +155,23 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
+       );
+       return;
+     }
++    if (action.type === 'PUT_BATCH') {
++      // Single produce() for all rooms — avoids N separate Map clones.
++      set(
++        baseRoomToUnread,
++        produce(get(baseRoomToUnread), (draftRoomToUnread) => {
++          const roomToParents = get(roomToParentsAtom);
++          for (const unreadInfo of action.unreadInfos) {
++            const currentUnread = draftRoomToUnread.get(unreadInfo.roomId);
++            if (currentUnread && unreadEqual(currentUnread, unreadInfoToUnread(unreadInfo))) {
++              continue;
++            }
++            putUnreadInfo(draftRoomToUnread, getAllParents(roomToParents, unreadInfo.roomId), unreadInfo);
++          }
++        })
++      );
++      return;
++    }
+     if (action.type === 'DELETE' && get(baseRoomToUnread).has(action.roomId)) {
+       set(
+         baseRoomToUnread,
+@@ -169,6 +190,8 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
+ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roomToUnreadAtom) => {
+   const setUnreadAtom = useSetAtom(unreadAtom);
+   const roomsNotificationPreferences = useRoomsNotificationPreferencesContext();
++  // Shared between timeline and receipt effects so receipts can cancel pending unread updates.
++  const dirtyRoomsRef = useRef(new Set<string>());
+ 
+   useEffect(() => {
+     setUnreadAtom({
+@@ -196,6 +219,26 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
+   );
+ 
+   useEffect(() => {
++    // Throttled unread updates: collect dirty room IDs and flush at most
++    // every 2 seconds. Without throttling, every incoming event across all
++    // rooms triggers getUnreadInfo + atom comparison + potential re-render
++    // of every sidebar badge — pinning the CPU on busy servers.
++    const dirtyRooms = dirtyRoomsRef.current;
++    let flushTimer: ReturnType<typeof setTimeout> | null = null;
++
++    const flush = () => {
++      flushTimer = null;
++      const infos: UnreadInfo[] = [];
++      dirtyRooms.forEach((roomId) => {
++        const room = mx.getRoom(roomId);
++        if (room) infos.push(getUnreadInfo(room));
++      });
++      dirtyRooms.clear();
++      if (infos.length > 0) {
++        setUnreadAtom({ type: 'PUT_BATCH', unreadInfos: infos });
++      }
++    };
++
+     const handleTimelineEvent = (
+       mEvent: MatrixEvent,
+       room: Room | undefined,
+@@ -212,12 +255,23 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
+         return;
+       }
+ 
+-      if (mEvent.getSender() === mx.getUserId()) return;
+-      setUnreadAtom({ type: 'PUT', unreadInfo: getUnreadInfo(room) });
++      if (mEvent.getSender() === mx.getUserId()) {
++        // Own messages mark the room as read — remove from dirty set
++        // so a pending flush doesn't re-add the unread badge.
++        dirtyRooms.delete(room.roomId);
++        return;
++      }
++      dirtyRooms.add(room.roomId);
++      if (!flushTimer) {
++        flushTimer = setTimeout(flush, 2000);
++      }
+     };
+     mx.on(RoomEvent.Timeline, handleTimelineEvent);
+     return () => {
+       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
++      if (flushTimer) clearTimeout(flushTimer);
++      // Flush remaining dirty rooms on cleanup
++      if (dirtyRooms.size > 0) flush();
+     };
+   }, [mx, setUnreadAtom]);
+ 
+@@ -234,6 +288,9 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
+         )
+       );
+       if (isMyReceipt) {
++        // Clear from pending throttled updates so the flush doesn't re-add
++        // the unread badge after the receipt already cleared it.
++        dirtyRoomsRef.current.delete(room.roomId);
+         setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+       }
+     };
+diff --git a/src/app/state/typingMembers.ts b/src/app/state/typingMembers.ts
+index e94ba9726..3c08e5954 100644
+--- a/src/app/state/typingMembers.ts
++++ b/src/app/state/typingMembers.ts
+@@ -1,4 +1,3 @@
+-import produce from 'immer';
+ import { atom, useSetAtom } from 'jotai';
+ import { MatrixClient, RoomMemberEvent, RoomMemberEventHandlerMap } from 'matrix-js-sdk';
+ import { useEffect } from 'react';
+@@ -6,6 +5,7 @@ import { useSetting } from './hooks/settings';
+ import { settingsAtom } from './settings';
+ 
+ export const TYPING_TIMEOUT_MS = 5000; // 5 seconds
++const CLEANUP_INTERVAL_MS = 3000; // Single interval to sweep expired entries
+ 
+ export type TypingReceipt = {
+   userId: string;
+@@ -24,53 +24,15 @@ type TypingMemberDeleteAction = {
+   roomId: string;
+   userId: string;
+ };
+-export type IRoomIdToTypingMembersAction = TypingMemberPutAction | TypingMemberDeleteAction;
+-
+-const baseRoomIdToTypingMembersAtom = atom<IRoomIdToTypingMembers>(new Map());
+-
+-const putTypingMember = (
+-  roomToMembers: IRoomIdToTypingMembers,
+-  action: TypingMemberPutAction
+-): IRoomIdToTypingMembers => {
+-  let typingMembers = roomToMembers.get(action.roomId) ?? [];
+-
+-  typingMembers = typingMembers.filter((receipt) => receipt.userId !== action.userId);
+-  typingMembers.push({
+-    userId: action.userId,
+-    ts: action.ts,
+-  });
+-  roomToMembers.set(action.roomId, typingMembers);
+-  return roomToMembers;
+-};
+-
+-const deleteTypingMember = (
+-  roomToMembers: IRoomIdToTypingMembers,
+-  action: TypingMemberDeleteAction
+-): IRoomIdToTypingMembers => {
+-  let typingMembers = roomToMembers.get(action.roomId) ?? [];
+-
+-  typingMembers = typingMembers.filter((receipt) => receipt.userId !== action.userId);
+-  if (typingMembers.length === 0) {
+-    roomToMembers.delete(action.roomId);
+-  } else {
+-    roomToMembers.set(action.roomId, typingMembers);
+-  }
+-  return roomToMembers;
++type TypingMemberCleanupAction = {
++  type: 'CLEANUP';
+ };
++export type IRoomIdToTypingMembersAction =
++  | TypingMemberPutAction
++  | TypingMemberDeleteAction
++  | TypingMemberCleanupAction;
+ 
+-const timeoutReceipt = (
+-  roomToMembers: IRoomIdToTypingMembers,
+-  roomId: string,
+-  userId: string,
+-  timeout: number
+-): boolean | undefined => {
+-  const typingMembers = roomToMembers.get(roomId) ?? [];
+-
+-  const target = typingMembers.find((receipt) => receipt.userId === userId);
+-  if (!target) return undefined;
+-
+-  return Date.now() - target.ts >= timeout;
+-};
++const baseRoomIdToTypingMembersAtom = atom<IRoomIdToTypingMembers>(new Map());
+ 
+ export const roomIdToTypingMembersAtom = atom<
+   IRoomIdToTypingMembers,
+@@ -79,47 +41,53 @@ export const roomIdToTypingMembersAtom = atom<
+ >(
+   (get) => get(baseRoomIdToTypingMembersAtom),
+   (get, set, action) => {
+-    const rToTyping = get(baseRoomIdToTypingMembersAtom);
++    const current = get(baseRoomIdToTypingMembersAtom);
+ 
+     if (action.type === 'PUT') {
+-      set(
+-        baseRoomIdToTypingMembersAtom,
+-        produce(rToTyping, (draft) => putTypingMember(draft, action))
+-      );
++      // Mutate in place to avoid Map cloning (the old produce() cloned the
++      // entire Map on every typing event — major GC pressure on busy servers).
++      let members = current.get(action.roomId) ?? [];
++      members = members.filter((r) => r.userId !== action.userId);
++      members.push({ userId: action.userId, ts: action.ts });
++      current.set(action.roomId, members);
++      // Trigger subscribers with the same Map reference — jotai detects the
++      // set() call as an update regardless of reference equality.
++      set(baseRoomIdToTypingMembersAtom, new Map(current));
++      return;
++    }
+ 
+-      // remove typing receipt after some timeout
+-      // to prevent stuck typing members
+-      setTimeout(() => {
+-        const { roomId, userId } = action;
+-        const timeout = timeoutReceipt(
+-          get(baseRoomIdToTypingMembersAtom),
+-          roomId,
+-          userId,
+-          TYPING_TIMEOUT_MS
+-        );
+-        if (timeout) {
+-          set(
+-            baseRoomIdToTypingMembersAtom,
+-            produce(get(baseRoomIdToTypingMembersAtom), (draft) =>
+-              deleteTypingMember(draft, {
+-                type: 'DELETE',
+-                roomId,
+-                userId,
+-              })
+-            )
+-          );
+-        }
+-      }, TYPING_TIMEOUT_MS);
++    if (action.type === 'DELETE') {
++      let members = current.get(action.roomId);
++      if (!members) return;
++      members = members.filter((r) => r.userId !== action.userId);
++      if (members.length === 0) {
++        current.delete(action.roomId);
++      } else {
++        current.set(action.roomId, members);
++      }
++      set(baseRoomIdToTypingMembersAtom, new Map(current));
++      return;
+     }
+ 
+-    if (
+-      action.type === 'DELETE' &&
+-      rToTyping.get(action.roomId)?.find((receipt) => receipt.userId === action.userId)
+-    ) {
+-      set(
+-        baseRoomIdToTypingMembersAtom,
+-        produce(rToTyping, (draft) => deleteTypingMember(draft, action))
+-      );
++    if (action.type === 'CLEANUP') {
++      // Sweep all rooms for expired typing receipts — runs every few seconds
++      // instead of one setTimeout per typing event.
++      const now = Date.now();
++      let changed = false;
++      for (const [roomId, members] of current) {
++        const alive = members.filter((r) => now - r.ts < TYPING_TIMEOUT_MS);
++        if (alive.length !== members.length) {
++          changed = true;
++          if (alive.length === 0) {
++            current.delete(roomId);
++          } else {
++            current.set(roomId, alive);
++          }
++        }
++      }
++      if (changed) {
++        set(baseRoomIdToTypingMembersAtom, new Map(current));
++      }
+     }
+   }
+ );
+@@ -148,8 +116,18 @@ export const useBindRoomIdToTypingMembersAtom = (
+     };
+ 
+     mx.on(RoomMemberEvent.Typing, handleTypingEvent);
++
++    // Single cleanup interval replaces per-event setTimeout.
++    // Before: each typing event created its own timer (hundreds of timers
++    // on busy servers, consuming 8% CPU in TimeoutManager).
++    // After: one interval sweeps expired entries every 3 seconds.
++    const cleanupInterval = setInterval(() => {
++      setTypingMembers({ type: 'CLEANUP' });
++    }, CLEANUP_INTERVAL_MS);
++
+     return () => {
+       mx.removeListener(RoomMemberEvent.Typing, handleTypingEvent);
++      clearInterval(cleanupInterval);
+     };
+   }, [mx, setTypingMembers, hideActivity]);
+ };

@@ -1,0 +1,25 @@
+diff --git a/src/app/hooks/useNavigateUnread.ts b/src/app/hooks/useNavigateUnread.ts
+index 7ed76e62c..a6ddb59f4 100644
+--- a/src/app/hooks/useNavigateUnread.ts
++++ b/src/app/hooks/useNavigateUnread.ts
+@@ -8,6 +8,7 @@ import { mDirectAtom } from '../state/mDirectList';
+ import { roomToParentsAtom } from '../state/room/roomToParents';
+ import { useMatrixClient } from './useMatrixClient';
+ import { getCanonicalAliasOrRoomId } from '../utils/matrix';
++import { getAccountData } from '../utils/room';
+ import {
+   getDirectRoomPath,
+   getHomeRoomPath,
+@@ -39,9 +40,9 @@ type SidebarItem = string | { id: string; content: string[] };
+ 
+ /** Flat ordered list of space IDs from the user's sidebar config. */
+ function getSidebarSpaceIds(mx: MatrixClient): string[] {
+-  const content = mx
+-    .getAccountData(AccountDataEvent.CinnySpaces)
+-    ?.getContent<{ sidebar?: SidebarItem[] }>();
++  const content = getAccountData(mx, AccountDataEvent.CinnySpaces)?.getContent<{
++    sidebar?: SidebarItem[];
++  }>();
+   const sidebar = content?.sidebar ?? [];
+   const ids: string[] = [];
+   sidebar.forEach((item) => {

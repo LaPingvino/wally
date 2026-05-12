@@ -1,27 +1,36 @@
 diff --git a/index.html b/index.html
-index 2eefeee2c..de257cedf 100644
+index 2eefeee2c..418e56b43 100644
 --- a/index.html
 +++ b/index.html
-@@ -4,8 +4,8 @@
+@@ -4,21 +4,21 @@
      <meta charset="UTF-8" />
      <meta http-equiv="X-UA-Compatible" content="IE=edge" />
      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 -    <title>Cinny</title>
 -    <meta name="name" content="Cinny" />
+-    <meta name="author" content="Ajay Bura" />
 +    <title>Wally</title>
 +    <meta name="name" content="Wally" />
-     <meta name="author" content="Ajay Bura" />
++    <meta name="author" content="Joop Kiefte (Wally fork) — based on Cinny by Ajay Bura" />
      <meta
        name="description"
-@@ -16,7 +16,7 @@
-       content="cinny, cinnyapp, cinnychat, matrix, matrix client, matrix.org, element"
+       content="A Matrix client where you can enjoy the conversation using simple, elegant and secure interface protected by e2ee with the power of open source."
+     />
+     <meta
+       name="keywords"
+-      content="cinny, cinnyapp, cinnychat, matrix, matrix client, matrix.org, element"
++      content="wally, matrix, matrix client, matrix.org, element, cinny"
      />
  
 -    <meta property="og:title" content="Cinny" />
+-    <meta property="og:url" content="https://cinny.in" />
+-    <meta property="og:image" content="https://cinny.in/assets/favicon-48x48.png" />
 +    <meta property="og:title" content="Wally" />
-     <meta property="og:url" content="https://cinny.in" />
-     <meta property="og:image" content="https://cinny.in/assets/favicon-48x48.png" />
++    <meta property="og:url" content="https://wukkie.uk" />
++    <meta property="og:image" content="./public/favicon.ico" />
      <meta
+       property="og:description"
+       content="A Matrix client where you can enjoy the conversation using simple, elegant and secure interface protected by e2ee with the power of open source."
 @@ -29,8 +29,8 @@
  
      <link rel="manifest" href="/manifest.json" />
@@ -34,7 +43,7 @@ index 2eefeee2c..de257cedf 100644
      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
  
 diff --git a/public/manifest.json b/public/manifest.json
-index acdcd0042..3a029796b 100644
+index acdcd0042..2103dbb14 100644
 --- a/public/manifest.json
 +++ b/public/manifest.json
 @@ -1,7 +1,7 @@
@@ -44,133 +53,10 @@ index acdcd0042..3a029796b 100644
 -  "description": "Yet another matrix client",
 +  "name": "Wally",
 +  "short_name": "Wally",
-+  "description": "A Cinny fork with Element Call, accessibility, and more",
++  "description": "Wally — a Matrix client with Element Call, accessibility, and more",
    "dir": "auto",
    "lang": "en-US",
    "display": "standalone",
-diff --git a/public/res/svg/cinny-highlight.svg b/public/res/svg/cinny-highlight.svg
-index d59b42a17..e0109c20b 100644
---- a/public/res/svg/cinny-highlight.svg
-+++ b/public/res/svg/cinny-highlight.svg
-@@ -1,13 +1,25 @@
- <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
--<g clip-path="url(#clip0_2707_1961)">
--<path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="white"/>
--<path d="M10 6.39999C10 6.67614 9.77614 6.89999 9.5 6.89999C9.22386 6.89999 9 6.67614 9 6.39999C9 6.12385 9.22386 5.89999 9.5 5.89999C9.77614 5.89999 10 6.12385 10 6.39999Z" fill="black"/>
--<path fill-rule="evenodd" clip-rule="evenodd" d="M9 0C4 0 0 4 0 9C0 14 4 18 9 18C9.63967 18 10.263 17.9345 10.8636 17.8099C10.3186 17.0091 10 16.0417 10 15C10 12.2386 12.2386 10 15 10C16.0417 10 17.0091 10.3186 17.8099 10.8636C17.9345 10.263 18 9.63967 18 9C18 4 14 0 9 0ZM1.2 10.8L4.7 8.5V8.2C4.7 6.4 6 5 7.8 4.8H8.2C9.4 4.8 10.5 5.4 11.1 6.4C11.4 6.3 11.7 6.3 12 6.3C12.4 6.3 12.8 6.3 13.2 6.4C13.9 6.6 14.6 6.9 15.2 7.3C14.6 7.1 14 7 13.3 7C12.1 7 11.1 7.4 10.4 8.4C9.7 9.3 9.3 10.4 9.3 11.6C9.3 13.1 8.9 14.5 8 15.8C7.93744 15.8834 7.87923 15.9625 7.82356 16.0381C7.6123 16.325 7.43739 16.5626 7.2 16.8C4.2 16.1 1.9 13.8 1.2 10.8Z" fill="black"/>
--<path d="M18 15C18 16.6569 16.6569 18 15 18C13.3431 18 12 16.6569 12 15C12 13.3431 13.3431 12 15 12C16.6569 12 18 13.3431 18 15Z" fill="#45B83B"/>
--</g>
--<defs>
--<clipPath id="clip0_2707_1961">
--<rect width="18" height="18" fill="white"/>
--</clipPath>
--</defs>
-+  <defs>
-+    <mask id="wally-cube-cut-h" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
-+      <rect x="0" y="0" width="18" height="18" fill="black"/>
-+      <polygon points="4.2,5.2 13.0,5.2 14.0,4.2 5.2,4.2" fill="white"/>
-+      <rect x="4.2" y="5.2" width="8.8" height="8.8" fill="white"/>
-+      <line x1="3.9" y1="7.5" x2="13.3" y2="7.7" stroke="black" stroke-width="0.35"/>
-+      <line x1="3.9" y1="9.9" x2="13.3" y2="9.7" stroke="black" stroke-width="0.35"/>
-+      <line x1="3.9" y1="12.0" x2="13.3" y2="12.1" stroke="black" stroke-width="0.35"/>
-+      <line x1="6.6" y1="5.2" x2="6.8" y2="7.5" stroke="black" stroke-width="0.3"/>
-+      <line x1="9.4" y1="7.7" x2="9.2" y2="9.9" stroke="black" stroke-width="0.3"/>
-+      <line x1="11.0" y1="9.8" x2="11.2" y2="12.0" stroke="black" stroke-width="0.3"/>
-+      <line x1="7.8" y1="12.1" x2="7.6" y2="14.3" stroke="black" stroke-width="0.3"/>
-+      <line x1="4.0" y1="5.2" x2="13.3" y2="5.2" stroke="black" stroke-width="0.3"/>
-+    </mask>
-+  </defs>
-+  <!-- Notched circle body (corner cut out for badge), from original -->
-+  <path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="#FFFFFF" stroke="#000000" stroke-width="0.6"/>
-+  <!-- Compacted trash cube -->
-+  <rect x="0" y="0" width="18" height="18" fill="#000000" mask="url(#wally-cube-cut-h)"/>
-+  <!-- Eye dot -->
-+  <circle cx="10.5" cy="3.3" r="0.5" fill="#000000"/>
-+  <!-- Highlight badge (green) -->
-+  <circle cx="15" cy="15" r="3" fill="#45B83B"/>
- </svg>
-diff --git a/public/res/svg/cinny-unread.svg b/public/res/svg/cinny-unread.svg
-index be3013751..8a40d4d7c 100644
---- a/public/res/svg/cinny-unread.svg
-+++ b/public/res/svg/cinny-unread.svg
-@@ -1,13 +1,21 @@
- <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
--<g clip-path="url(#clip0_2707_2015)">
--<path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="white"/>
--<path d="M10 6.39999C10 6.67614 9.77614 6.89999 9.5 6.89999C9.22386 6.89999 9 6.67614 9 6.39999C9 6.12385 9.22386 5.89999 9.5 5.89999C9.77614 5.89999 10 6.12385 10 6.39999Z" fill="black"/>
--<path fill-rule="evenodd" clip-rule="evenodd" d="M9 0C4 0 0 4 0 9C0 14 4 18 9 18C9.63967 18 10.263 17.9345 10.8636 17.8099C10.3186 17.0091 10 16.0417 10 15C10 12.2386 12.2386 10 15 10C16.0417 10 17.0091 10.3186 17.8099 10.8636C17.9345 10.263 18 9.63967 18 9C18 4 14 0 9 0ZM1.2 10.8L4.7 8.5V8.2C4.7 6.4 6 5 7.8 4.8H8.2C9.4 4.8 10.5 5.4 11.1 6.4C11.4 6.3 11.7 6.3 12 6.3C12.4 6.3 12.8 6.3 13.2 6.4C13.9 6.6 14.6 6.9 15.2 7.3C14.6 7.1 14 7 13.3 7C12.1 7 11.1 7.4 10.4 8.4C9.7 9.3 9.3 10.4 9.3 11.6C9.3 13.1 8.9 14.5 8 15.8C7.93744 15.8834 7.87923 15.9625 7.82356 16.0381C7.6123 16.325 7.43739 16.5626 7.2 16.8C4.2 16.1 1.9 13.8 1.2 10.8Z" fill="black"/>
--<path d="M18 15C18 16.6569 16.6569 18 15 18C13.3431 18 12 16.6569 12 15C12 13.3431 13.3431 12 15 12C16.6569 12 18 13.3431 18 15Z" fill="#989898"/>
--</g>
--<defs>
--<clipPath id="clip0_2707_2015">
--<rect width="18" height="18" fill="white"/>
--</clipPath>
--</defs>
-+  <defs>
-+    <mask id="wally-cube-cut-u" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
-+      <rect x="0" y="0" width="18" height="18" fill="black"/>
-+      <polygon points="4.2,5.2 13.0,5.2 14.0,4.2 5.2,4.2" fill="white"/>
-+      <rect x="4.2" y="5.2" width="8.8" height="8.8" fill="white"/>
-+      <line x1="3.9" y1="7.5" x2="13.3" y2="7.7" stroke="black" stroke-width="0.35"/>
-+      <line x1="3.9" y1="9.9" x2="13.3" y2="9.7" stroke="black" stroke-width="0.35"/>
-+      <line x1="3.9" y1="12.0" x2="13.3" y2="12.1" stroke="black" stroke-width="0.35"/>
-+      <line x1="6.6" y1="5.2" x2="6.8" y2="7.5" stroke="black" stroke-width="0.3"/>
-+      <line x1="9.4" y1="7.7" x2="9.2" y2="9.9" stroke="black" stroke-width="0.3"/>
-+      <line x1="11.0" y1="9.8" x2="11.2" y2="12.0" stroke="black" stroke-width="0.3"/>
-+      <line x1="7.8" y1="12.1" x2="7.6" y2="14.3" stroke="black" stroke-width="0.3"/>
-+      <line x1="4.0" y1="5.2" x2="13.3" y2="5.2" stroke="black" stroke-width="0.3"/>
-+    </mask>
-+  </defs>
-+  <path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="#FFFFFF" stroke="#000000" stroke-width="0.6"/>
-+  <rect x="0" y="0" width="18" height="18" fill="#000000" mask="url(#wally-cube-cut-u)"/>
-+  <circle cx="10.5" cy="3.3" r="0.5" fill="#000000"/>
-+  <circle cx="15" cy="15" r="3" fill="#989898"/>
- </svg>
-diff --git a/public/res/svg/cinny.svg b/public/res/svg/cinny.svg
-index 8701d67b7..b8a32ffd0 100644
---- a/public/res/svg/cinny.svg
-+++ b/public/res/svg/cinny.svg
-@@ -1,19 +1,20 @@
--<!-- Generator: Adobe Illustrator 18.0.0, SVG Export Plug-In  -->
--<svg version="1.1"
--	 xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:a="http://ns.adobe.com/AdobeSVGViewerExtensions/3.0/"
--	 x="0px" y="0px" width="18px" height="18px" viewBox="0 0 18 18" enable-background="new 0 0 18 18" xml:space="preserve">
--<defs>
--</defs>
--<g>
--	<g>
--		<circle fill="#FFFFFF" cx="9" cy="9" r="8.5"/>
--	</g>
--	<g>
--		<path d="M9,0C4,0,0,4,0,9c0,5,4,9,9,9c5,0,9-4,9-9C18,4,14,0,9,0z M1.2,10.8l3.5-2.3c0-0.1,0-0.2,0-0.3c0-1.8,1.3-3.2,3.1-3.4
--			c0.1,0,0.2,0,0.4,0c1.2,0,2.3,0.6,2.9,1.6c0.3-0.1,0.6-0.1,0.9-0.1c0.4,0,0.8,0,1.2,0.1c0.7,0.2,1.4,0.5,2,0.9
--			C14.6,7.1,14,7,13.3,7c-1.2,0-2.2,0.4-2.9,1.4c-0.7,0.9-1.1,2-1.1,3.2c0,1.5-0.4,2.9-1.3,4.2c-0.3,0.4-0.5,0.7-0.8,1
--			C4.2,16.1,1.9,13.8,1.2,10.8z"/>
--		<circle cx="9.5" cy="6.4" r="0.5"/>
--	</g>
--</g>
--</svg>
-\ No newline at end of file
-+<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-+  <defs>
-+    <mask id="wally-cube-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
-+      <rect x="0" y="0" width="18" height="18" fill="black"/>
-+      <polygon points="4.2,5.2 13.0,5.2 14.0,4.2 5.2,4.2" fill="white"/>
-+      <rect x="4.2" y="5.2" width="8.8" height="8.8" fill="white"/>
-+      <line x1="3.9" y1="7.5" x2="13.3" y2="7.7" stroke="black" stroke-width="0.35"/>
-+      <line x1="3.9" y1="9.9" x2="13.3" y2="9.7" stroke="black" stroke-width="0.35"/>
-+      <line x1="3.9" y1="12.0" x2="13.3" y2="12.1" stroke="black" stroke-width="0.35"/>
-+      <line x1="6.6" y1="5.2" x2="6.8" y2="7.5" stroke="black" stroke-width="0.3"/>
-+      <line x1="9.4" y1="7.7" x2="9.2" y2="9.9" stroke="black" stroke-width="0.3"/>
-+      <line x1="11.0" y1="9.8" x2="11.2" y2="12.0" stroke="black" stroke-width="0.3"/>
-+      <line x1="7.8" y1="12.1" x2="7.6" y2="14.3" stroke="black" stroke-width="0.3"/>
-+      <line x1="4.0" y1="5.2" x2="13.3" y2="5.2" stroke="black" stroke-width="0.3"/>
-+    </mask>
-+  </defs>
-+  <circle cx="9" cy="9" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="1"/>
-+  <rect x="0" y="0" width="18" height="18" fill="#000000" mask="url(#wally-cube-cut)"/>
-+  <circle cx="10.5" cy="3.3" r="0.5" fill="#000000"/>
-+</svg>
 diff --git a/src/app/components/splash-screen/SplashScreen.tsx b/src/app/components/splash-screen/SplashScreen.tsx
 index 27adadbad..0d1e28774 100644
 --- a/src/app/components/splash-screen/SplashScreen.tsx
@@ -185,7 +71,7 @@ index 27adadbad..0d1e28774 100644
        </Box>
      </Box>
 diff --git a/src/app/features/settings/about/About.tsx b/src/app/features/settings/about/About.tsx
-index f536d12ef..00f87c323 100644
+index c035138ee..ee8321c60 100644
 --- a/src/app/features/settings/about/About.tsx
 +++ b/src/app/features/settings/about/About.tsx
 @@ -39,22 +39,22 @@ export function About({ requestClose }: AboutProps) {
@@ -215,11 +101,38 @@ index f536d12ef..00f87c323 100644
                        rel="noreferrer noopener"
                        target="_blank"
                        variant="Secondary"
+diff --git a/src/app/features/settings/notifications/SystemNotification.tsx b/src/app/features/settings/notifications/SystemNotification.tsx
+index a87879295..bfc4c1fa3 100644
+--- a/src/app/features/settings/notifications/SystemNotification.tsx
++++ b/src/app/features/settings/notifications/SystemNotification.tsx
+@@ -27,7 +27,7 @@ function EmailNotification() {
+             device_display_name: email,
+             lang: 'en',
+             data: {
+-              brand: 'Cinny',
++              brand: 'Wally',
+             },
+             append: true,
+           });
 diff --git a/src/app/pages/auth/AuthFooter.tsx b/src/app/pages/auth/AuthFooter.tsx
-index 7e509d1ee..0b31ff1f9 100644
+index 7e509d1ee..330be16dc 100644
 --- a/src/app/pages/auth/AuthFooter.tsx
 +++ b/src/app/pages/auth/AuthFooter.tsx
-@@ -17,9 +17,6 @@ export function AuthFooter() {
+@@ -5,21 +5,18 @@ import * as css from './styles.css';
+ export function AuthFooter() {
+   return (
+     <Box className={css.AuthFooter} justifyContent="Center" gap="400" wrap="Wrap">
+-      <Text as="a" size="T300" href="https://cinny.in" target="_blank" rel="noreferrer">
++      <Text as="a" size="T300" href="https://codeberg.org/lapingvino/cinny" target="_blank" rel="noreferrer">
+         About
+       </Text>
+       <Text
+         as="a"
+         size="T300"
+-        href="https://github.com/ajbura/cinny/releases"
++        href="https://codeberg.org/lapingvino/cinny/releases"
+         target="_blank"
+         rel="noreferrer"
        >
          v4.11.1
        </Text>
@@ -244,8 +157,87 @@ index 3943f42d1..8b3da2db3 100644
              </Box>
            </Header>
            <Box className={css.AuthCardContent} direction="Column">
+diff --git a/src/app/pages/auth/login/PasswordLoginForm.tsx b/src/app/pages/auth/login/PasswordLoginForm.tsx
+index 62f46dd2c..92a3491b2 100644
+--- a/src/app/pages/auth/login/PasswordLoginForm.tsx
++++ b/src/app/pages/auth/login/PasswordLoginForm.tsx
+@@ -133,7 +133,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
+         user: username,
+       },
+       password,
+-      initial_device_display_name: 'Cinny Web',
++      initial_device_display_name: 'Wally',
+     });
+   };
+ 
+@@ -151,7 +151,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
+         user: mxIdUsername,
+       },
+       password,
+-      initial_device_display_name: 'Cinny Web',
++      initial_device_display_name: 'Wally',
+     });
+   };
+   const handleEmailLogin = (email: string, password: string) => {
+@@ -163,7 +163,7 @@ export function PasswordLoginForm({ defaultUsername, defaultEmail }: PasswordLog
+         address: email,
+       },
+       password,
+-      initial_device_display_name: 'Cinny Web',
++      initial_device_display_name: 'Wally',
+     });
+   };
+ 
+diff --git a/src/app/pages/auth/login/TokenLogin.tsx b/src/app/pages/auth/login/TokenLogin.tsx
+index 761d5dc53..87a9e3015 100644
+--- a/src/app/pages/auth/login/TokenLogin.tsx
++++ b/src/app/pages/auth/login/TokenLogin.tsx
+@@ -57,7 +57,7 @@ export function TokenLogin({ token }: TokenLoginProps) {
+     startLogin(baseUrl, {
+       type: 'm.login.token',
+       token,
+-      initial_device_display_name: 'Cinny Web',
++      initial_device_display_name: 'Wally',
+     });
+   }, [baseUrl, token, startLogin]);
+ 
+diff --git a/src/app/pages/auth/register/PasswordRegisterForm.tsx b/src/app/pages/auth/register/PasswordRegisterForm.tsx
+index 9f1734229..818a397c6 100644
+--- a/src/app/pages/auth/register/PasswordRegisterForm.tsx
++++ b/src/app/pages/auth/register/PasswordRegisterForm.tsx
+@@ -109,7 +109,7 @@ function RegisterUIAFlow({
+         auth: authDict,
+         password,
+         username,
+-        initial_device_display_name: 'Cinny Web',
++        initial_device_display_name: 'Wally',
+       });
+     },
+     [onRegister, formData]
+@@ -250,7 +250,7 @@ export function PasswordRegisterForm({
+       auth: {
+         session: authData.session,
+       },
+-      initial_device_display_name: 'Cinny Web',
++      initial_device_display_name: 'Wally',
+     });
+   };
+ 
+diff --git a/src/app/pages/client/AddAccountDialog.tsx b/src/app/pages/client/AddAccountDialog.tsx
+index 16f78b3e7..9d0cb0c57 100644
+--- a/src/app/pages/client/AddAccountDialog.tsx
++++ b/src/app/pages/client/AddAccountDialog.tsx
+@@ -49,7 +49,7 @@ export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
+           type: 'm.login.password',
+           identifier: { type: 'm.id.user', user: username },
+           password,
+-          initial_device_display_name: 'Cinny Web',
++          initial_device_display_name: 'Wally',
+         });
+         return { baseUrl: result.baseUrl, response: result.response };
+       },
 diff --git a/src/app/pages/client/WelcomePage.tsx b/src/app/pages/client/WelcomePage.tsx
-index b3ec2eb44..e11eb5f5d 100644
+index b3ec2eb44..872ce492c 100644
 --- a/src/app/pages/client/WelcomePage.tsx
 +++ b/src/app/pages/client/WelcomePage.tsx
 @@ -3,6 +3,34 @@ import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
@@ -283,7 +275,7 @@ index b3ec2eb44..e11eb5f5d 100644
  export function WelcomePage() {
    return (
      <Page>
-@@ -14,11 +42,11 @@ export function WelcomePage() {
+@@ -14,13 +42,13 @@ export function WelcomePage() {
        >
          <PageHeroSection>
            <PageHero
@@ -294,10 +286,13 @@ index b3ec2eb44..e11eb5f5d 100644
              subTitle={
                <span>
 -                Yet another matrix client.{' '}
-+                A Cinny fork.{' '}
++                A Matrix client, forked from Cinny.{' '}
                  <a
-                   href="https://github.com/cinnyapp/cinny/releases"
+-                  href="https://github.com/cinnyapp/cinny/releases"
++                  href="https://codeberg.org/lapingvino/cinny/releases"
                    target="_blank"
+                   rel="noreferrer noopener"
+                 >
 @@ -29,31 +57,68 @@ export function WelcomePage() {
                </span>
              }
@@ -391,3 +386,16 @@ index b3ec2eb44..e11eb5f5d 100644
                </Box>
              </Box>
            </PageHero>
+diff --git a/src/widget.tsx b/src/widget.tsx
+index f961cc4d1..a1c548a83 100644
+--- a/src/widget.tsx
++++ b/src/widget.tsx
+@@ -87,7 +87,7 @@ Content:
+         }</pre>
+         <p style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
+           Or use the{' '}
+-          <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>cinny fork</a>'s
++          <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>Wally</a>'s
+           built-in "Enable widget" button in the issue board toolbar.
+           Also see{' '}
+           <a href="https://github.com/lapingvino/matrix-issue-widget" style={{ color: '#1976d2' }}>matrix-issue-widget on GitHub</a>.
