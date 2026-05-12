@@ -46,7 +46,7 @@ export function WelcomePage() {
             title="Welcome to Wally"
             subTitle={
               <span>
-                A Matrix client, forked from Cinny.{' '}
+                A stubborn Matrix client.{' '}
                 <a
                   href="https://codeberg.org/lapingvino/cinny/releases"
                   target="_blank"
