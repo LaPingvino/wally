@@ -1,1 +1,2 @@
 c312a5d6  branding: replace Cinny C-mark with compacted trash cube (Wally pun)
+4879c942  branding: rename cinny_*/cinny-* storage keys and DOM IDs to wally_*/wally-*, with one-shot legacy-key migration on boot
