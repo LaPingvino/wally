@@ -45,7 +45,7 @@ export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
           type: 'm.login.password',
           identifier: { type: 'm.id.user', user: username },
           password,
-          initial_device_display_name: 'Cinny Web',
+          initial_device_display_name: 'Wally',
         });
         return { baseUrl: result.baseUrl, response: result.response };
       },

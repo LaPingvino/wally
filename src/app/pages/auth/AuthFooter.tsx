@@ -5,13 +5,13 @@ import * as css from './styles.css';
 export function AuthFooter() {
   return (
     <Box className={css.AuthFooter} justifyContent="Center" gap="400" wrap="Wrap">
-      <Text as="a" size="T300" href="https://cinny.in" target="_blank" rel="noreferrer">
+      <Text as="a" size="T300" href="https://codeberg.org/lapingvino/cinny" target="_blank" rel="noreferrer">
         About
       </Text>
       <Text
         as="a"
         size="T300"
-        href="https://github.com/ajbura/cinny/releases"
+        href="https://codeberg.org/lapingvino/cinny/releases"
         target="_blank"
         rel="noreferrer"
       >
