@@ -639,7 +639,18 @@ export function CallNavStatus() {
     );
   }
 
-  // Active call
+  // Active call — render call chrome on its own row and unread/mention
+  // nav on a second row so the two never overlap regardless of how wide
+  // the call controls are with mic/camera toggles.
+  const navRow = (visibleNav.length > 0 || hideReadRooms) && (
+    <Box className={css.Actions} direction="Row" alignItems="Center" gap="100" role="toolbar" aria-label="Unread and mention navigation">
+      {hideReadButton}
+      {visibleNav.map((item) => (
+        <NavIconButton key={item.key} item={item} />
+      ))}
+    </Box>
+  );
+
   return (
     <Box direction="Column" shrink="No" ref={setBarEl}>
       <Line variant="Surface" size="300" />
@@ -741,11 +752,8 @@ export function CallNavStatus() {
             </TooltipProvider>
           </>
         )}
-        {(visibleNav.length > 0 || hideReadRooms) && hideReadButton}
-        {visibleNav.map((item) => (
-          <NavIconButton key={item.key} item={item} />
-        ))}
       </Box>
+      {navRow}
     </Box>
   );
 }
