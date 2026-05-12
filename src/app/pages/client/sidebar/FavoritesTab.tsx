@@ -8,8 +8,8 @@ import {
   SidebarItemBadge,
   SidebarItemTooltip,
 } from '../../../components/sidebar';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { allRoomsThrottled } from '../../../state/room-list/roomList';
+import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { getFavoritesPath } from '../../pathUtils';
 import { useFavoritesSelected } from '../../../hooks/router/useFavoritesSelected';
@@ -19,9 +19,9 @@ import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
 export function FavoritesTab() {
   const navigate = useNavigate();
   const favoritesSelected = useFavoritesSelected();
-  const allRooms = useAtomValue(allRoomsAtom);
+  const allRooms = useAtomValue(allRoomsThrottled.out);
   const favoriteRoomIds = useFavoriteRooms(allRooms);
-  const favoriteUnread = useRoomsUnread(favoriteRoomIds, roomToUnreadAtom);
+  const favoriteUnread = useRoomsUnread(favoriteRoomIds, roomToUnreadThrottled.out);
 
   return (
     <SidebarItem active={favoritesSelected}>

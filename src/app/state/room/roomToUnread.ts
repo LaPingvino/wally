@@ -26,6 +26,7 @@ import {
   isNotificationEvent,
 } from '../../utils/room';
 import { roomToParentsAtom } from './roomToParents';
+import { makeThrottledAtom } from '../throttledAtom';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
@@ -185,6 +186,17 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
       );
     }
   }
+);
+
+/**
+ * Throttled read-only view of roomToUnreadAtom. Sidebar / always-mounted
+ * consumers should read this instead of the raw atom so unread map
+ * updates don't drive frame-rate re-renders. See throttledAtom.ts.
+ */
+export const roomToUnreadThrottled = makeThrottledAtom(
+  roomToUnreadAtom,
+  'roomToUnread',
+  100
 );
 
 export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roomToUnreadAtom) => {

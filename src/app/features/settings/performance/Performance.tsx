@@ -6,6 +6,10 @@ import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { syncBatchStats, resetSyncBatchStats } from '../../../state/syncBatchScheduler';
+import {
+  throttledFlushStats,
+  resetThrottledFlushStats,
+} from '../../../state/throttledAtom';
 import { Membership } from '../../../../types/matrix/room';
 import { getMDirects } from '../../../utils/room';
 import { bytesToSize } from '../../../utils/common';
@@ -59,6 +63,7 @@ export function Performance({ requestClose }: PerformanceProps) {
 
   const handleReset = useCallback(() => {
     resetSyncBatchStats();
+    resetThrottledFlushStats();
     setTick((t) => t + 1);
   }, []);
 
@@ -106,6 +111,12 @@ export function Performance({ requestClose }: PerformanceProps) {
 
   // Sort event keys by count
   const sortedKeys = Array.from(eventsByKey.entries()).sort((a, b) => b[1] - a[1]);
+
+  // Throttled-atom flush stats (one row per wrapped atom)
+  const throttledElapsed = now - throttledFlushStats.resetAt;
+  const throttledRows = Array.from(throttledFlushStats.flushes.entries()).sort(
+    (a, b) => b[1] - a[1]
+  );
 
   return (
     <Page>
@@ -160,6 +171,31 @@ export function Performance({ requestClose }: PerformanceProps) {
                       </Button>
                     }
                   />
+                </SequenceCard>
+              </Box>
+
+              {/* Throttled-atom flush rates */}
+              <Box direction="Column" gap="100">
+                <Text size="L400">Throttled Atom Flushes</Text>
+                <SequenceCard
+                  className={SequenceCardStyle}
+                  variant="SurfaceVariant"
+                  direction="Column"
+                >
+                  {throttledRows.length === 0 ? (
+                    <SettingTile
+                      title="No flushes yet"
+                      description="Throttled-atom drivers haven't pushed an update since last reset."
+                    />
+                  ) : (
+                    throttledRows.map(([name, count]) => (
+                      <SettingTile
+                        key={name}
+                        title={name}
+                        description={`${formatNumber(count)} flushes (${formatRate(count, throttledElapsed)})`}
+                      />
+                    ))
+                  )}
                 </SequenceCard>
               </Box>
 

@@ -56,12 +56,24 @@ export function VersionCheck() {
   }, []);
 
   useEffect(() => {
+    // Self-rescheduling chain instead of setInterval: if a fetch is slow
+    // (Cloudflare hiccup, network stall), the next check won't pile on
+    // top of an in-flight one. We only schedule the next tick once the
+    // previous fetch has fully completed.
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      try {
+        await checkForUpdate();
+      } finally {
+        if (!cancelled) timer = setTimeout(tick, CHECK_INTERVAL_MS);
+      }
+    };
     // First check after 30 seconds (let the app stabilize)
-    const initial = setTimeout(checkForUpdate, 30_000);
-    const interval = setInterval(checkForUpdate, CHECK_INTERVAL_MS);
+    timer = setTimeout(tick, 30_000);
     return () => {
-      clearTimeout(initial);
-      clearInterval(interval);
+      cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, [checkForUpdate]);
 

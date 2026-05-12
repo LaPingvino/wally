@@ -27,6 +27,10 @@ import { playCurrentRoomSound, playReactionSound, playTypingSound } from '../../
 import { announce } from '../../utils/announce';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
+import { useThrottledAtomDriver } from '../../state/throttledAtom';
+import { roomToUnreadThrottled } from '../../state/room/roomToUnread';
+import { roomToParentsThrottled } from '../../state/room/roomToParents';
+import { allRoomsThrottled } from '../../state/room-list/roomList';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SyncState } from 'matrix-js-sdk';
@@ -158,7 +162,7 @@ function CryptoCheckpointManager() {
       // Snapshot before checkpoint so the blob's identity is recorded in
       // the log next to the `checkpoint_written` event.
       await snapshotDeviceKeys('pre_checkpoint');
-      checkpointCryptoStores().catch((e) => {
+      await checkpointCryptoStores().catch((e) => {
         console.warn('Crypto checkpoint failed:', e);
       });
     };
@@ -188,20 +192,36 @@ function CryptoCheckpointManager() {
       userId: mx.getUserId(),
     });
 
-    // Periodic checkpoint.
-    const interval = setInterval(doCheckpoint, CHECKPOINT_INTERVAL);
+    // Periodic checkpoint, self-rescheduling. We don't want two
+    // checkpoints racing into the rust crypto store — overlapping writes
+    // can corrupt the store or drop device keys. setTimeout chain
+    // guarantees the next run only starts after the previous one
+    // (snapshot + checkpoint) has fully completed.
+    let cancelled = false;
+    let checkpointTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleCheckpoint = () => {
+      checkpointTimer = setTimeout(async () => {
+        try {
+          await doCheckpoint();
+        } finally {
+          if (!cancelled) scheduleCheckpoint();
+        }
+      }, CHECKPOINT_INTERVAL);
+    };
+    scheduleCheckpoint();
 
     // Best-effort checkpoint right before the tab is hidden / discarded —
     // catches the case where the OS is about to kill us. pagehide is
     // sync-only, so we kick off the async work and let the browser keep
     // the tab alive long enough; if it doesn't, we lost at most a few
     // minutes vs. nothing. Idempotent against the periodic interval.
-    const onPageHide = () => doCheckpoint();
+    const onPageHide = () => { void doCheckpoint(); };
     window.addEventListener('pagehide', onPageHide);
 
     return () => {
       mx.off('sync' as any, onSync);
-      clearInterval(interval);
+      cancelled = true;
+      if (checkpointTimer) clearTimeout(checkpointTimer);
       window.removeEventListener('pagehide', onPageHide);
     };
   }, [mx]);
@@ -518,9 +538,22 @@ function BackgroundBackfillFeature() {
   return null;
 }
 
+/**
+ * Mounts the throttled-atom drivers near the app shell. Each driver
+ * subscribes to its source atom and trailing-edge-flushes the cache,
+ * capping downstream re-renders at the configured rate.
+ */
+function ThrottledAtomDrivers() {
+  useThrottledAtomDriver(roomToUnreadThrottled);
+  useThrottledAtomDriver(roomToParentsThrottled);
+  useThrottledAtomDriver(allRoomsThrottled);
+  return null;
+}
+
 export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
   return (
     <>
+      <ThrottledAtomDrivers />
       <SessionHealthMonitor />
       <CryptoCheckpointManager />
       <MemoryWatchdog />

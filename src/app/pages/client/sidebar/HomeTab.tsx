@@ -6,9 +6,9 @@ import FocusTrap from 'focus-trap-react';
 import { useOrphanRooms } from '../../../state/hooks/roomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { mDirectAtom } from '../../../state/mDirectList';
-import { roomToParentsAtom } from '../../../state/room/roomToParents';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { roomToParentsThrottled } from '../../../state/room/roomToParents';
+import { allRoomsThrottled } from '../../../state/room-list/roomList';
+import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
 import { getHomePath, joinPathComponent } from '../../pathUtils';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import {
@@ -33,7 +33,7 @@ type HomeMenuProps = {
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const orphanRooms = useHomeRooms();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const unread = useRoomsUnread(orphanRooms, roomToUnreadThrottled.out);
   const mx = useMatrixClient();
   const [roomSortOrder, setRoomSortOrder] = useSetting(settingsAtom, 'roomSortOrder');
 
@@ -100,9 +100,9 @@ export function HomeTab() {
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
 
   const mDirects = useAtomValue(mDirectAtom);
-  const roomToParents = useAtomValue(roomToParentsAtom);
-  const orphanRooms = useOrphanRooms(mx, allRoomsAtom, mDirects, roomToParents);
-  const homeUnread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const roomToParents = useAtomValue(roomToParentsThrottled.out);
+  const orphanRooms = useOrphanRooms(mx, allRoomsThrottled.out, mDirects, roomToParents);
+  const homeUnread = useRoomsUnread(orphanRooms, roomToUnreadThrottled.out);
   const homeSelected = useHomeSelected();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 

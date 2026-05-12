@@ -9,8 +9,8 @@ import {
   SidebarItemTooltip,
 } from '../../../components/sidebar';
 import { allInvitesAtom } from '../../../state/room-list/inviteList';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { allRoomsThrottled } from '../../../state/room-list/roomList';
+import { roomToUnreadThrottled } from '../../../state/room/roomToUnread';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import {
   getInboxInvitesPath,
@@ -31,8 +31,8 @@ export function InboxTab() {
   const inboxSelected = useInboxSelected();
   const allInvites = useAtomValue(allInvitesAtom);
   const inviteCount = allInvites.length;
-  const allRooms = useAtomValue(allRoomsAtom);
-  const allUnread = useRoomsUnread(allRooms, roomToUnreadAtom);
+  const allRooms = useAtomValue(allRoomsThrottled.out);
+  const allUnread = useRoomsUnread(allRooms, roomToUnreadThrottled.out);
   const hasHighlight = (allUnread?.highlight ?? 0) > 0;
   const hasUnread = (allUnread?.total ?? 0) > 0;
 
