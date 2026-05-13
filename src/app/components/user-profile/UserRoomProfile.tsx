@@ -23,6 +23,14 @@ import { CreatorChip } from './CreatorChip';
 import { getDirectCreatePath, withSearchParam } from '../../pages/pathUtils';
 import { DirectCreateSearchParams } from '../../pages/paths';
 import { useExtendedProfile } from '../../hooks/useExtendedProfile';
+import {
+  ensureBotDmRoom,
+  findBridgeBotInRoom,
+  sendStartChatCommand,
+} from '../../utils/bridges';
+import { useAtomValue } from 'jotai';
+import { mDirectAtom } from '../../state/mDirectList';
+import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 
 type UserRoomProfileProps = {
   userId: string;
@@ -83,6 +91,28 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     navigate(withSearchParam(getDirectCreatePath(), directSearchParam));
   };
 
+  const mDirects = useAtomValue(mDirectAtom);
+  const { navigateRoom } = useRoomNavigate();
+  const bridgeMatch = useMemo(
+    () => (userId !== myUserId ? findBridgeBotInRoom(room, userId) : null),
+    [room, userId, myUserId]
+  );
+
+  const handleBridgedChat = async () => {
+    if (!bridgeMatch) return;
+    closeUserRoomProfile();
+    try {
+      const botRoomId = await ensureBotDmRoom(mx, mDirects, bridgeMatch.botUserId);
+      await sendStartChatCommand(mx, botRoomId, bridgeMatch.ghostUserId);
+      navigateRoom(botRoomId);
+    } catch (err) {
+      // Bot DM creation or message send failed — surface in console; the user
+      // can retry by clicking again.
+      // eslint-disable-next-line no-console
+      console.error('bridged-chat: failed to start chat via bridge', err);
+    }
+  };
+
   return (
     <Box direction="Column">
       <UserHero
@@ -102,9 +132,11 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
                   fill="Solid"
                   radii="300"
                   before={<Icon size="50" src={Icons.Message} filled />}
-                  onClick={handleMessage}
+                  onClick={bridgeMatch ? handleBridgedChat : handleMessage}
                 >
-                  <Text size="B300">Message</Text>
+                  <Text size="B300">
+                    {bridgeMatch ? `Chat via ${bridgeMatch.protocolName}` : 'Message'}
+                  </Text>
                 </Button>
               </Box>
             )}
