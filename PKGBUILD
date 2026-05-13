@@ -2,14 +2,14 @@
 # Fork maintainer: Joop Kiefte <ikojba@gmail.com>
 _pkgname=cinny-web
 pkgname="${_pkgname}-git"
-pkgver=r1847.0d5a1b92
+pkgver=r1855.4879c942
 pkgrel=1
 pkgdesc="Yet another matrix client — web version (with Element Call, accessibility, issue tracker, and other patches)"
 arch=('any')
-url="https://codeberg.org/lapingvino/cinny"
+url="https://codeberg.org/lapingvino/wally"
 license=('AGPL3')
 makedepends=('git' 'npm' 'yarn')
-source=("${_pkgname}::git+https://codeberg.org/lapingvino/cinny#branch=main"
+source=("${_pkgname}::git+https://codeberg.org/lapingvino/wally#branch=main"
         "noto-emoji-bahai::https://github.com/LaPingvino/noto-emoji-bahai/releases/download/v0.0.1-bahai/NotoColorEmoji.ttf"
         )
 sha256sums=('SKIP'
