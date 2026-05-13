@@ -107,3 +107,80 @@ export const compareRoomsEqual = (a: string[], b: string[]) => {
   if (a.length !== b.length) return false;
   return a.every((roomId, roomIdIndex) => roomId === b[roomIdIndex]);
 };
+
+// A room counts as a "probable broken invite" when the SDK has it in the
+// store but cannot determine our membership from invite_state — typically
+// because the inviting server delivered a malformed m.room.member event
+// (e.g., Continuwuity Apr 13–May 1 regression stripped type/state_key from
+// federated invites). Such rooms have getMyMembership() === 'leave' and no
+// m.room.member state event for our user. We surface them as invites so
+// the user can act on them even when the SDK can't reconstruct state.
+export const isProbableBrokenInvite = (mx: MatrixClient, room: Room): boolean => {
+  const myUserId = mx.getUserId();
+  if (!myUserId) return false;
+  const myMembership = room.getMyMembership() as Membership;
+  if (
+    myMembership === Membership.Join ||
+    myMembership === Membership.Invite ||
+    myMembership === Membership.Ban ||
+    myMembership === Membership.Knock
+  ) {
+    return false;
+  }
+  const memberEvent = room.currentState.getStateEvents('m.room.member', myUserId);
+  return !memberEvent;
+};
+
+// Augments a rooms atom with rooms that pass isProbableBrokenInvite.
+// PUT-only: removal from the atom is left to the regular membership-based
+// binder, which fires on MyMembership transitions to join/leave/ban.
+export const useBindBrokenInvitesAtom = (
+  mx: MatrixClient,
+  roomsAtom: WritableAtom<string[], [RoomsAction], undefined>
+) => {
+  const setRoomsAtom = useSetAtom(roomsAtom);
+
+  useEffect(() => {
+    const scheduler = new SyncBatchScheduler();
+    const pendingPuts = new Set<string>();
+
+    const scheduleFlush = () => {
+      scheduler.enqueue('broken-invites', () => {
+        if (pendingPuts.size === 0) return;
+        setRoomsAtom({
+          type: 'PUT_BATCH',
+          puts: Array.from(pendingPuts),
+          deletes: [],
+        });
+        pendingPuts.clear();
+      });
+    };
+
+    const checkRoom = (room: Room) => {
+      if (isProbableBrokenInvite(mx, room)) {
+        pendingPuts.add(room.roomId);
+        scheduleFlush();
+      }
+    };
+
+    const rescanAll = () => {
+      mx.getRooms().forEach(checkRoom);
+    };
+
+    const handleSync: ClientEventHandlerMap[ClientEvent.Sync] = (state) => {
+      if (state === SyncState.Prepared || state === SyncState.Catchup) rescanAll();
+    };
+
+    const handleAddRoom = (room: Room) => checkRoom(room);
+
+    rescanAll();
+
+    mx.on(ClientEvent.Sync, handleSync);
+    mx.on(ClientEvent.Room, handleAddRoom);
+    return () => {
+      mx.removeListener(ClientEvent.Sync, handleSync);
+      mx.removeListener(ClientEvent.Room, handleAddRoom);
+      scheduler.dispose();
+    };
+  }, [mx, setRoomsAtom]);
+};
