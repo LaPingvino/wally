@@ -1,5 +1,6 @@
 import React, { forwardRef, MouseEventHandler, useEffect, useMemo } from 'react';
 import { MatrixError, Room } from 'matrix-js-sdk';
+import { isInaccessibleChildRoom } from './accessibility';
 import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
 import { Box, config, Text } from 'folds';
 import {
@@ -101,12 +102,17 @@ export const SpaceHierarchy = forwardRef<HTMLDivElement, SpaceHierarchyProps>(
 
     let childItems = roomItems?.filter((i) => !subspaces.has(i.roomId));
     if (!spacePermissions?.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId())) {
-      // hide unknown rooms for normal user
-      childItems = childItems?.filter((i) => {
-        const forbidden = error instanceof MatrixError ? error.errcode === 'M_FORBIDDEN' : false;
-        const inaccessibleRoom = !rooms.get(i.roomId) && !fetching && (error ? forbidden : true);
-        return !inaccessibleRoom;
-      });
+      // hide unknown rooms for normal user — but never hide rooms the user
+      // has joined, even if the server's /hierarchy response omits them.
+      childItems = childItems?.filter(
+        (i) =>
+          !isInaccessibleChildRoom({
+            inHierarchy: rooms.has(i.roomId),
+            joined: allJoinedRooms.has(i.roomId),
+            fetching,
+            error,
+          })
+      );
     }
 
     return (
