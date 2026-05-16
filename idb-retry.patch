@@ -179,7 +179,7 @@ index a9474c317..0d887b71d 100644
 +  return false;
  };
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index b255c2088..8cdee70ba 100644
+index b255c2088..a7087c2e1 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -82,6 +82,7 @@ export const logoutClient = async (mx: MatrixClient) => {
@@ -235,7 +235,7 @@ index b255c2088..8cdee70ba 100644
 +    data[SECONDARY_SESSIONS_KEY] = localStorage.getItem(SECONDARY_SESSIONS_KEY);
 +
 +    // Only back up if we actually have a session.
-+    if (!data.cinny_access_token || !data.cinny_user_id) return;
++    if (!data.wally_access_token || !data.wally_user_id) return;
 +
 +    const cache = await caches.open(SESSION_BACKUP_CACHE);
 +    await cache.put(SESSION_BACKUP_KEY, new Response(JSON.stringify(data)));
@@ -255,7 +255,7 @@ index b255c2088..8cdee70ba 100644
 +    if (!resp) return false;
 +
 +    const data = await resp.json();
-+    if (!data.cinny_access_token || !data.cinny_user_id) return false;
++    if (!data.wally_access_token || !data.wally_user_id) return false;
 +
 +    for (const key of SESSION_LS_KEYS) {
 +      const val = data[key];

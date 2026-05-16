@@ -382,6 +382,127 @@ index ee8967af7..658bdcfa7 100644
      }, [loadPreview]);
  
      if (previewStatus.status === AsyncStatus.Error) return null;
+diff --git a/src/app/features/lobby/SpaceHierarchy.tsx b/src/app/features/lobby/SpaceHierarchy.tsx
+index 280b8a5a2..cc01c13ea 100644
+--- a/src/app/features/lobby/SpaceHierarchy.tsx
++++ b/src/app/features/lobby/SpaceHierarchy.tsx
+@@ -1,5 +1,6 @@
+ import React, { forwardRef, MouseEventHandler, useEffect, useMemo } from 'react';
+ import { MatrixError, Room } from 'matrix-js-sdk';
++import { isInaccessibleChildRoom } from './accessibility';
+ import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
+ import { Box, config, Text } from 'folds';
+ import {
+@@ -101,12 +102,17 @@ export const SpaceHierarchy = forwardRef<HTMLDivElement, SpaceHierarchyProps>(
+ 
+     let childItems = roomItems?.filter((i) => !subspaces.has(i.roomId));
+     if (!spacePermissions?.stateEvent(StateEvent.SpaceChild, mx.getSafeUserId())) {
+-      // hide unknown rooms for normal user
+-      childItems = childItems?.filter((i) => {
+-        const forbidden = error instanceof MatrixError ? error.errcode === 'M_FORBIDDEN' : false;
+-        const inaccessibleRoom = !rooms.get(i.roomId) && !fetching && (error ? forbidden : true);
+-        return !inaccessibleRoom;
+-      });
++      // hide unknown rooms for normal user — but never hide rooms the user
++      // has joined, even if the server's /hierarchy response omits them.
++      childItems = childItems?.filter(
++        (i) =>
++          !isInaccessibleChildRoom({
++            inHierarchy: rooms.has(i.roomId),
++            joined: allJoinedRooms.has(i.roomId),
++            fetching,
++            error,
++          })
++      );
+     }
+ 
+     return (
+diff --git a/src/app/features/lobby/__tests__/SpaceHierarchy.test.ts b/src/app/features/lobby/__tests__/SpaceHierarchy.test.ts
+new file mode 100644
+index 000000000..5fd52fc76
+--- /dev/null
++++ b/src/app/features/lobby/__tests__/SpaceHierarchy.test.ts
+@@ -0,0 +1,51 @@
++/**
++ * Regression tests for the space-lobby visibility filter.
++ *
++ * Bug: on a space whose /hierarchy response omits child rooms (observed on
++ * nexy7574.co.uk / Conduwuit-family servers), non-admin users saw only the
++ * rooms that the server happened to return — even rooms they were already
++ * joined to went missing. The fix: never hide a joined room.
++ */
++
++import { describe, it, expect } from 'vitest';
++import { MatrixError } from 'matrix-js-sdk';
++import { isInaccessibleChildRoom } from '../accessibility';
++
++describe('isInaccessibleChildRoom', () => {
++  const base = { inHierarchy: false, joined: false, fetching: false, error: null };
++
++  it('treats still-loading as accessible (avoid flicker)', () => {
++    expect(isInaccessibleChildRoom({ ...base, fetching: true })).toBe(false);
++  });
++
++  it('shows rooms present in /hierarchy', () => {
++    expect(isInaccessibleChildRoom({ ...base, inHierarchy: true })).toBe(false);
++  });
++
++  it('shows joined rooms even when /hierarchy omits them (regression)', () => {
++    expect(isInaccessibleChildRoom({ ...base, joined: true })).toBe(false);
++  });
++
++  it('hides rooms the user has not joined and that /hierarchy omits', () => {
++    expect(isInaccessibleChildRoom(base)).toBe(true);
++  });
++
++  it('hides on explicit M_FORBIDDEN when not joined', () => {
++    const err = new MatrixError({ errcode: 'M_FORBIDDEN', error: 'no' });
++    expect(isInaccessibleChildRoom({ ...base, error: err })).toBe(true);
++  });
++
++  it('shows on non-forbidden MatrixError (server flaky, do not hide)', () => {
++    const err = new MatrixError({ errcode: 'M_UNKNOWN', error: 'oops' });
++    expect(isInaccessibleChildRoom({ ...base, error: err })).toBe(false);
++  });
++
++  it('shows on generic non-Matrix error (network etc.)', () => {
++    expect(isInaccessibleChildRoom({ ...base, error: new Error('network') })).toBe(false);
++  });
++
++  it('joined wins over M_FORBIDDEN — joined rooms are always visible', () => {
++    const err = new MatrixError({ errcode: 'M_FORBIDDEN', error: 'no' });
++    expect(isInaccessibleChildRoom({ ...base, joined: true, error: err })).toBe(false);
++  });
++});
+diff --git a/src/app/features/lobby/accessibility.ts b/src/app/features/lobby/accessibility.ts
+new file mode 100644
+index 000000000..98afe4b02
+--- /dev/null
++++ b/src/app/features/lobby/accessibility.ts
+@@ -0,0 +1,23 @@
++import { MatrixError } from 'matrix-js-sdk';
++
++// Decide whether a child room listed in the space's m.space.child state
++// should be hidden because the user cannot access it.
++//
++// A child the user has joined is always accessible regardless of what
++// /hierarchy returns. Some servers (e.g. Conduwuit/Continuwuity) have
++// returned partial /hierarchy responses that omit rooms the user is already
++// in; without the `joined` clause, only the rooms the server happened to
++// include would appear in the lobby — leaving joined rooms invisible.
++export const isInaccessibleChildRoom = (params: {
++  inHierarchy: boolean;
++  joined: boolean;
++  fetching: boolean;
++  error: Error | null;
++}): boolean => {
++  if (params.fetching) return false;
++  if (params.inHierarchy) return false;
++  if (params.joined) return false;
++  if (params.error && !(params.error instanceof MatrixError)) return false;
++  if (params.error instanceof MatrixError && params.error.errcode !== 'M_FORBIDDEN') return false;
++  return true;
++};
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
 index 4da9a96f7..4376cc90c 100644
 --- a/src/app/features/room/RoomInput.tsx
@@ -660,7 +781,7 @@ index c02b0e94e..6541a9c36 100644
          name: Command.ConvertToDm,
          description: 'Convert room to direct message',
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
-index b61174da8..97ee91d8d 100644
+index b61174da8..116bee08f 100644
 --- a/src/app/pages/client/ClientRoot.tsx
 +++ b/src/app/pages/client/ClientRoot.tsx
 @@ -37,6 +37,7 @@ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
@@ -671,7 +792,23 @@ index b61174da8..97ee91d8d 100644
  import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
  import { getFallbackSession } from '../../state/sessions';
  import { AutoDiscovery } from './AutoDiscovery';
-@@ -240,6 +241,7 @@ export function ClientRoot({ children }: ClientRootProps) {
+@@ -115,6 +116,15 @@ function ClientRootOptions({ mx }: { mx?: MatrixClient }) {
+           >
+             <Menu>
+               <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++                <MenuItem
++                  onClick={() => window.location.reload()}
++                  size="300"
++                  radii="300"
++                >
++                  <Text as="span" size="T300" truncate>
++                    Reload
++                  </Text>
++                </MenuItem>
+                 {mx && (
+                   <MenuItem onClick={() => clearCacheAndReload(mx)} size="300" radii="300">
+                     <Text as="span" size="T300" truncate>
+@@ -240,6 +250,7 @@ export function ClientRoot({ children }: ClientRootProps) {
      <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
        <SpecVersionsProvider value={specVersionsData}>
          {mx && <SyncStatus mx={mx} />}

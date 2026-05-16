@@ -27,8 +27,8 @@ matching `.skipped` file lists the commits that were dropped, so
 you can apply those manually from the per-family branch.
 
 - `accessibility.patch` — partial (32/56 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat; see `accessibility.skipped`
-- `idb-retry.patch` — partial (4/18 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (20/63 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry; see `ux-fixes.skipped`
+- `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility; see `idb-retry.skipped`
+- `ux-fixes.patch` — partial (22/65 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/8 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `branding.patch` — partial (10/12 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry, ux-fixes, navigate-unread; see `branding.skipped`
 
@@ -40,4 +40,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-13T19:22:19Z_
+_Generated 2026-05-16T11:09:39Z_
