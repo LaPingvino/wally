@@ -208,7 +208,7 @@ export const backupSessionToCache = async (): Promise<void> => {
     data[SECONDARY_SESSIONS_KEY] = localStorage.getItem(SECONDARY_SESSIONS_KEY);
 
     // Only back up if we actually have a session.
-    if (!data.cinny_access_token || !data.cinny_user_id) return;
+    if (!data.wally_access_token || !data.wally_user_id) return;
 
     const cache = await caches.open(SESSION_BACKUP_CACHE);
     await cache.put(SESSION_BACKUP_KEY, new Response(JSON.stringify(data)));
@@ -228,7 +228,7 @@ export const restoreSessionFromCache = async (): Promise<boolean> => {
     if (!resp) return false;
 
     const data = await resp.json();
-    if (!data.cinny_access_token || !data.cinny_user_id) return false;
+    if (!data.wally_access_token || !data.wally_user_id) return false;
 
     for (const key of SESSION_LS_KEYS) {
       const val = data[key];
