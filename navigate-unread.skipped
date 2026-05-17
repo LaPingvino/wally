@@ -5,3 +5,4 @@ c5b64e66  navigate-unread: cross-bucket jumps must land in target bucket
 e5ce5223  navigate-unread: drop unused firstRoomInBucket/lastRoomInBucket
 cf486a05  navigate-unread: include favorite rooms in Home/Direct published view
 41142fed  navigate-unread: toggle to hide read rooms in sidebar while triaging
+c96d7982  navigate-unread: configurable visibility for the bottom unread-nav bar
