@@ -6,11 +6,14 @@ import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import CinnySVG from '../../../../../public/res/svg/cinny.svg';
 import { APP_VERSION } from '../../../version';
+import { clearCacheAndReload } from '../../../../client/initMatrix';
+import { useMatrixClient } from '../../../hooks/useMatrixClient';
 
 type AboutProps = {
   requestClose: () => void;
 };
 export function About({ requestClose }: AboutProps) {
+  const mx = useMatrixClient();
   return (
     <Page>
       <PageHeader outlined={false}>
@@ -64,6 +67,32 @@ export function About({ requestClose }: AboutProps) {
                     </Button>
                   </Box>
                 </Box>
+              </Box>
+              <Box direction="Column" gap="100">
+                <Text size="L400">Options</Text>
+                <SequenceCard
+                  className={SequenceCardStyle}
+                  variant="SurfaceVariant"
+                  direction="Column"
+                  gap="400"
+                >
+                  <SettingTile
+                    title="Clear Cache & Reload"
+                    description="Clear all your locally stored data and reload from server."
+                    after={
+                      <Button
+                        onClick={() => clearCacheAndReload(mx)}
+                        variant="Secondary"
+                        fill="Soft"
+                        size="300"
+                        radii="300"
+                        outlined
+                      >
+                        <Text size="B300">Clear Cache</Text>
+                      </Button>
+                    }
+                  />
+                </SequenceCard>
               </Box>
               <Box direction="Column" gap="100">
                 <Text size="L400">Credits</Text>
