@@ -66,6 +66,11 @@ export interface Settings {
   perMessageProfiles: boolean;
   captionPosition: 'before' | 'after';
   hideBlockedUserReactions: boolean;
+  // Controls the bottom unread-navigation bar under the room list:
+  //   'always' — visible whenever there's unread content
+  //   'onNav'  — hidden until the user explicitly invokes Prev/Next Unread (default)
+  //   'never'  — hidden for unread; still appears for active/incoming calls
+  unreadNavBar: 'always' | 'onNav' | 'never';
 }
 
 const defaultSettings: Settings = {
@@ -112,6 +117,7 @@ const defaultSettings: Settings = {
   perMessageProfiles: false,
   captionPosition: 'before',
   hideBlockedUserReactions: false,
+  unreadNavBar: 'onNav',
 };
 
 export const getSettings = () => {

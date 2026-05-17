@@ -25,6 +25,7 @@ import {
   Scroll,
   Switch,
   Text,
+  color,
   toRem,
 } from 'folds';
 import { isKeyHotkey } from 'is-hotkey';
@@ -1090,6 +1091,59 @@ function Messages() {
 type GeneralProps = {
   requestClose: () => void;
 };
+const navSelectStyle: React.CSSProperties = {
+  padding: `2px ${config.space.S200}`,
+  borderRadius: config.radii.R300,
+  border: `1px solid ${color.Surface.ContainerLine}`,
+  background: color.Surface.Container,
+  color: 'inherit',
+  font: 'inherit',
+  fontSize: '0.85em',
+};
+
+const UNREAD_NAV_BAR_LABELS: Record<'always' | 'onNav' | 'never', string> = {
+  always: 'Always show',
+  onNav: 'Only while navigating',
+  never: 'Never show',
+};
+
+function SelectUnreadNavBar() {
+  const [unreadNavBar, setUnreadNavBar] = useSetting(settingsAtom, 'unreadNavBar');
+  return (
+    <select
+      style={navSelectStyle}
+      value={unreadNavBar ?? 'onNav'}
+      onChange={(e) =>
+        setUnreadNavBar(e.target.value as 'always' | 'onNav' | 'never')
+      }
+      aria-label="Unread navigation bar visibility"
+    >
+      {(Object.entries(UNREAD_NAV_BAR_LABELS) as ['always' | 'onNav' | 'never', string][]).map(
+        ([val, label]) => (
+          <option key={val} value={val}>
+            {label}
+          </option>
+        )
+      )}
+    </select>
+  );
+}
+
+function Navigation() {
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Navigation</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Unread Navigation Bar"
+          description="The bar under the room list with Prev/Next-unread shortcuts. Active or incoming calls always force-show it."
+          after={<SelectUnreadNavBar />}
+        />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 export function General({ requestClose }: GeneralProps) {
   return (
     <Page>
@@ -1115,6 +1169,7 @@ export function General({ requestClose }: GeneralProps) {
               <DateAndTime />
               <Editor />
               <Messages />
+              <Navigation />
             </Box>
           </PageContent>
         </Scroll>

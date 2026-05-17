@@ -436,6 +436,7 @@ export function CallNavStatus() {
   // functions. Active/incoming calls override dismiss (urgent).
   const [dismissed, setDismissed] = useAtom(bottomBarDismissedAtom);
   const handleDismissBar = useCallback(() => setDismissed(true), [setDismissed]);
+  const unreadNavBarMode = useAtomValue(settingsAtom).unreadNavBar ?? 'onNav';
 
   // ── Hide-read-rooms toggle ──
   // Filters the sidebar list to only unread (and selected) rooms so
@@ -452,7 +453,12 @@ export function CallNavStatus() {
   // otherwise the user has no UI to toggle it back off.
   const hasContent = hasCall || hasNav || hideReadRooms;
   if (!hasContent) return null;
-  if (dismissed && !hasCall) return null;
+  // Calls always force-show the bar regardless of the unread-nav-bar setting.
+  if (!hasCall) {
+    if (unreadNavBarMode === 'never') return null;
+    if (unreadNavBarMode === 'onNav' && dismissed) return null;
+    // 'always' falls through and renders.
+  }
 
   // Responsive truncation: reserve space for call chrome + dismiss button,
   // then fit as many nav items as possible from the priority-ordered list.
@@ -462,9 +468,12 @@ export function CallNavStatus() {
     ? Math.max(1, Math.floor(remainingForNav / NAV_ITEM_WIDTH))
     : 1;
   const visibleNav = allNavItems.slice(0, maxVisibleNav);
-  // Dismiss button is shown only when the bar has no active/incoming call —
-  // during a call, hangup / per-call dismiss are the real actions.
-  const showDismiss = !hasActiveCall && incomingCalls.length === 0;
+  // Dismiss button is shown only when the bar has no active/incoming call
+  // (call → hangup / per-call dismiss are the real actions) and when the
+  // setting actually honors dismissal ('onNav'; in 'always' mode pressing
+  // X would be a no-op).
+  const showDismiss =
+    !hasActiveCall && incomingCalls.length === 0 && unreadNavBarMode === 'onNav';
 
   const hideReadButton = (
     <TooltipProvider
