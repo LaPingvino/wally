@@ -394,7 +394,6 @@ export function RoomNavItem({
         id={optionId}
         data-hover={!!menuAnchor}
         onContextMenu={handleContextMenu}
-        style={focused ? { outline: '2px solid', outlineOffset: '-2px', borderRadius: '12px' } : undefined}
         {...hoverProps}
         {...focusWithinProps}
       >
