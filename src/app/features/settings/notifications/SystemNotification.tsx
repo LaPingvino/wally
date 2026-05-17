@@ -239,6 +239,7 @@ export function SystemNotification() {
     'isNotificationSounds'
   );
   const [inRoomActivitySound, setInRoomActivitySound] = useSetting(settingsAtom, 'inRoomActivitySound');
+  const [reactionToMeSound, setReactionToMeSound] = useSetting(settingsAtom, 'reactionToMeSound');
   const [callAutoJoin, setCallAutoJoin] = useSetting(settingsAtom, 'callAutoJoin');
   const [inboxUnreadNotifications, setInboxUnreadNotifications] = useSetting(settingsAtom, 'inboxUnreadNotifications');
 
@@ -298,6 +299,11 @@ export function SystemNotification() {
           title="In-Room Activity Sounds"
           description="Play a soft beep for messages in the current room, and a click when someone starts typing."
           after={<Switch value={inRoomActivitySound} onChange={setInRoomActivitySound} />}
+        />
+        <SettingTile
+          title="Reactions To My Messages"
+          description="Play a sparkle when someone reacts to a message you sent, in any room."
+          after={<Switch value={reactionToMeSound} onChange={setReactionToMeSound} />}
         />
       </SequenceCard>
       <SequenceCard

@@ -49,6 +49,7 @@ export interface Settings {
   showNotifications: boolean;
   isNotificationSounds: boolean;
   inRoomActivitySound: boolean;
+  reactionToMeSound: boolean;
   inboxUnreadNotifications: boolean;
   // Minimum seconds between inbox unread notifications (0 = ~1s debounce only)
   inboxNotifBatchDelay: number;
@@ -101,6 +102,7 @@ const defaultSettings: Settings = {
   showNotifications: true,
   isNotificationSounds: true,
   inRoomActivitySound: true,
+  reactionToMeSound: true,
   inboxUnreadNotifications: false,
   inboxNotifBatchDelay: 60,
   callRingScope: 'nonVoice',

@@ -347,6 +347,7 @@ function MessageNotifications() {
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
   const [inRoomActivitySound] = useSetting(settingsAtom, 'inRoomActivitySound');
+  const [reactionToMeSound] = useSetting(settingsAtom, 'reactionToMeSound');
   const prevTypingCountRef = useRef(0);
 
   const navigate = useNavigate();
@@ -484,7 +485,7 @@ function MessageNotifications() {
       if (rel?.rel_type !== 'm.annotation' || !rel.event_id) return;
       const targetEvt = room?.findEventById(rel.event_id);
       if (targetEvt?.getSender() !== mx.getUserId()) return;
-      if (notificationSound) playReactionSound();
+      if (reactionToMeSound) playReactionSound();
       const reactor = mEvent.getSender() ?? 'Someone';
       const reactorName = room
         ? (getMemberDisplayName(room, reactor) ?? getMxIdLocalPart(reactor) ?? reactor)
@@ -523,6 +524,7 @@ function MessageNotifications() {
     selectedRoomId,
     useAuthentication,
     inRoomActivitySound,
+    reactionToMeSound,
   ]);
 
   return (
