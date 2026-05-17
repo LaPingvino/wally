@@ -780,6 +780,24 @@ index c02b0e94e..6541a9c36 100644
        [Command.ConvertToDm]: {
          name: Command.ConvertToDm,
          description: 'Convert room to direct message',
+diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
+index 64ae01046..38dfbc490 100644
+--- a/src/app/pages/client/ClientNonUIFeatures.tsx
++++ b/src/app/pages/client/ClientNonUIFeatures.tsx
+@@ -272,6 +272,13 @@ function MessageNotifications() {
+         return;
+       }
+ 
++      // Honor per-room push rules: 'mentions only' rooms must not raise a
++      // desktop notification on every message. getPushActionsForEvent
++      // resolves rule actions (override + room + content + underride) into
++      // a final notify boolean for THIS event.
++      const pushActions = mx.getPushActionsForEvent(mEvent);
++      if (!pushActions?.notify) return;
++
+       const sender = mEvent.getSender();
+       const eventId = mEvent.getId();
+       if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
 diff --git a/src/app/pages/client/ClientRoot.tsx b/src/app/pages/client/ClientRoot.tsx
 index b61174da8..116bee08f 100644
 --- a/src/app/pages/client/ClientRoot.tsx
