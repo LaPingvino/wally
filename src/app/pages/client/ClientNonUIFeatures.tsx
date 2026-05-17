@@ -414,6 +414,13 @@ function MessageNotifications() {
         return;
       }
 
+      // Honor per-room push rules: 'mentions only' rooms must not raise a
+      // desktop notification on every message. getPushActionsForEvent
+      // resolves rule actions (override + room + content + underride) into
+      // a final notify boolean for THIS event.
+      const pushActions = mx.getPushActionsForEvent(mEvent);
+      if (!pushActions?.notify) return;
+
       const sender = mEvent.getSender();
       const eventId = mEvent.getId();
       if (!sender || !eventId || mEvent.getSender() === mx.getUserId()) return;
