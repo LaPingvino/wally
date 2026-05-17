@@ -26,7 +26,7 @@ patch. The `.patch` ships the cleanly-applicable subset; the
 matching `.skipped` file lists the commits that were dropped, so
 you can apply those manually from the per-family branch.
 
-- `accessibility.patch` — partial (32/57 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat; see `accessibility.skipped`
+- `accessibility.patch` — partial (32/58 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat; see `accessibility.skipped`
 - `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility; see `idb-retry.skipped`
 - `ux-fixes.patch` — partial (23/68 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/9 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
@@ -40,4 +40,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-17T15:35:47Z_
+_Generated 2026-05-17T18:05:09Z_

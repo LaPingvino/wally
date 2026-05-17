@@ -23,3 +23,4 @@ f115ade7  accessibility: migrate remaining 20 dialogs to native <dialog> — ful
 78bb8847  accessibility: revert to useNavArrowKeys for room list — works with mixed content (favorites, categories, lobby)
 1585d2c5  accessibility: migrate remaining dialog overlays to NativeDialog
 673736cc  accessibility: drop redundant outline ring on room-nav items
+ea14defd  accessibility: separate toggle for reaction-to-me sound
