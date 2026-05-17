@@ -229,7 +229,13 @@ export function useNavigateUnread() {
       else if (homeOrphanSet.has(id)) bucket = HOME_BUCKET;
       else bucket = findSidebarSpaceForRoom(id, roomToParents, sidebarSet);
 
-      if (bucket && buckets.has(bucket)) buckets.get(bucket)!.push(id);
+      // Fallback: a room with space parents but no sidebar-pinned ancestor
+      // (space joined but not in the sidebar tabs, or roomToParents missing
+      // the link) would otherwise be invisible to unread counting. Bucket
+      // it as HOME so it still gets counted and is reachable via Prev/Next.
+      if (!bucket) bucket = HOME_BUCKET;
+
+      if (buckets.has(bucket)) buckets.get(bucket)!.push(id);
     }
 
     // Sort each bucket with the current sort order.
