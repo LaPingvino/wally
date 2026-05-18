@@ -130,6 +130,7 @@ import { useAccessiblePowerTagColors, useGetMemberPowerTag } from '../../hooks/u
 import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
+import { useRoomNoticeInboxOnly } from '../../state/room/noticeMode';
 
 const TimelineFloat = as<'div', css.TimelineFloatVariants>(
   ({ position, className, ...props }, ref) => (
@@ -550,6 +551,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   const direct = useIsDirectRoom();
   const [hideMembershipEvents] = useSetting(settingsAtom, 'hideMembershipEvents');
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
+  const noticeInboxOnly = useRoomNoticeInboxOnly(room);
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [urlPreview] = useSetting(settingsAtom, 'urlPreview');
   const [encUrlPreview] = useSetting(settingsAtom, 'encUrlPreview');
@@ -1249,6 +1251,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   >(
     {
       [MessageEvent.RoomMessage]: (mEventId, mEvent, item, timelineSet, collapse) => {
+        // Per-room "notices to inbox only" override: if this room is
+        // flagged, skip rendering m.notice messages inline. They remain
+        // visible via the Notices inbox tab.
+        if (noticeInboxOnly && mEvent.getContent().msgtype === 'm.notice') {
+          return null;
+        }
         const reactionRelations = getEventReactions(timelineSet, mEventId);
         const reactions = reactionRelations && reactionRelations.getSortedAnnotationsByKey();
         const hasReactions = reactions && reactions.length > 0;

@@ -58,6 +58,10 @@ import {
   RoomNotificationMode,
 } from '../../hooks/useRoomsNotificationPreferences';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
+import {
+  useRoomNoticeInboxOnly,
+  useSetRoomNoticeInboxOnly,
+} from '../../state/room/noticeMode';
 import { getRoomCreatorsForRoomId, useRoomCreators } from '../../hooks/useRoomCreators';
 import { getRoomPermissionsAPI, useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
@@ -86,6 +90,12 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const handleMarkAsRead = () => {
       markAsRead(mx, room.roomId, hideActivity);
       requestClose();
+    };
+
+    const noticeInboxOnly = useRoomNoticeInboxOnly(room);
+    const setNoticeInboxOnly = useSetRoomNoticeInboxOnly(mx, room.roomId);
+    const handleToggleNoticeInboxOnly = () => {
+      void setNoticeInboxOnly(!noticeInboxOnly);
     };
 
     const handleInvite = () => {
@@ -158,6 +168,22 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               </MenuItem>
             )}
           </RoomNotificationModeSwitcher>
+          <MenuItem
+            onClick={handleToggleNoticeInboxOnly}
+            size="300"
+            after={<Icon size="100" src={Icons.Info} filled={noticeInboxOnly} />}
+            radii="300"
+            aria-pressed={noticeInboxOnly}
+            title={
+              noticeInboxOnly
+                ? 'Notices from this room appear only in the Notices inbox'
+                : 'Notices from this room appear inline in the timeline'
+            }
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              {noticeInboxOnly ? 'Show notices inline' : 'Notices to inbox only'}
+            </Text>
+          </MenuItem>
           <MenuItem
             onClick={handleToggleFavorite}
             size="300"
