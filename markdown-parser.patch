@@ -298,10 +298,10 @@ index 37c71a661..9baa4f742 100644
  };
 diff --git a/src/app/plugins/markdown/markdownit.test.ts b/src/app/plugins/markdown/markdownit.test.ts
 new file mode 100644
-index 000000000..63d7ec545
+index 000000000..1d227ca36
 --- /dev/null
 +++ b/src/app/plugins/markdown/markdownit.test.ts
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,173 @@
 +import { describe, expect, it } from 'vitest';
 +import { parseBlockMD } from './block/parser';
 +import { parseInlineMD } from './inline/parser';
@@ -447,6 +447,22 @@ index 000000000..63d7ec545
 +  });
 +});
 +
++describe('regression: pre-escaped content in code spans (K900)', () => {
++  // Callers escape text via sanitizeText before invoking the parser, so
++  // code_inline / fence content arrives already HTML-encoded. The renderer
++  // must NOT re-escape, or `" "` typed in inline code renders as the literal
++  // string `&quot; &quot;` (or, in some cases, with whitespace mangled).
++  it('inline code does not double-escape entities', () => {
++    expect(parseInlineMD('`&quot; &quot;`')).toBe(
++      '<code data-md="`">&quot; &quot;</code>'
++    );
++  });
++  it('fenced code does not double-escape entities', () => {
++    expect(parseBlockMD('```\n&quot; &quot;\n```\n')).toContain('&quot; &quot;');
++    expect(parseBlockMD('```\n&quot; &quot;\n```\n')).not.toContain('&amp;quot;');
++  });
++});
++
 +describe('regression: ordered list edge cases', () => {
 +  it('does not match alphabetic ordered list (k.)', () => {
 +    const result = parseBlockMD('k. word\n');
@@ -461,10 +477,10 @@ index 000000000..63d7ec545
 +});
 diff --git a/src/app/plugins/markdown/markdownit.ts b/src/app/plugins/markdown/markdownit.ts
 new file mode 100644
-index 000000000..0361c6bb1
+index 000000000..49fd1e168
 --- /dev/null
 +++ b/src/app/plugins/markdown/markdownit.ts
-@@ -0,0 +1,225 @@
+@@ -0,0 +1,228 @@
 +import MarkdownIt from 'markdown-it';
 +import type Token from 'markdown-it/lib/token.mjs';
 +
@@ -631,10 +647,14 @@ index 000000000..0361c6bb1
 +
 +  const escapeHtml = md.utils.escapeHtml;
 +
++  // Callers (editor output.ts) pre-escape text via sanitizeText before
++  // handing it to the parser, so code_inline / fence content is already
++  // HTML-safe. Re-escaping here would double-encode entities (e.g. `" "`
++  // typed in inline code rendered as literal `&quot; &quot;`).
 +  md.renderer.rules.code_inline = (tokens, idx) => {
 +    const t = tokens[idx];
 +    const fence = t.markup || '`';
-+    return `<code data-md="${fence}">${escapeHtml(t.content)}</code>`;
++    return `<code data-md="${fence}">${t.content}</code>`;
 +  };
 +
 +  md.renderer.rules.fence = (tokens, idx) => {
@@ -645,8 +665,7 @@ index 000000000..0361c6bb1
 +    const filename = info && info !== lang ? info : '';
 +    const classAttr = lang ? ` class="language-${escapeHtml(lang)}"` : '';
 +    const labelAttr = filename ? ` data-label="${escapeHtml(filename)}"` : '';
-+    const escaped = escapeHtml(t.content);
-+    return `<pre data-md="${fence}"><code${classAttr}${labelAttr}>${escaped}</code></pre>\n`;
++    return `<pre data-md="${fence}"><code${classAttr}${labelAttr}>${t.content}</code></pre>\n`;
 +  };
 +
 +  md.renderer.rules.heading_open = (tokens, idx) => {
