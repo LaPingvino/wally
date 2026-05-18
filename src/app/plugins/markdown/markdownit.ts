@@ -164,10 +164,14 @@ const buildMarkdownIt = (): MarkdownIt => {
 
   const escapeHtml = md.utils.escapeHtml;
 
+  // Callers (editor output.ts) pre-escape text via sanitizeText before
+  // handing it to the parser, so code_inline / fence content is already
+  // HTML-safe. Re-escaping here would double-encode entities (e.g. `" "`
+  // typed in inline code rendered as literal `&quot; &quot;`).
   md.renderer.rules.code_inline = (tokens, idx) => {
     const t = tokens[idx];
     const fence = t.markup || '`';
-    return `<code data-md="${fence}">${escapeHtml(t.content)}</code>`;
+    return `<code data-md="${fence}">${t.content}</code>`;
   };
 
   md.renderer.rules.fence = (tokens, idx) => {
@@ -178,8 +182,7 @@ const buildMarkdownIt = (): MarkdownIt => {
     const filename = info && info !== lang ? info : '';
     const classAttr = lang ? ` class="language-${escapeHtml(lang)}"` : '';
     const labelAttr = filename ? ` data-label="${escapeHtml(filename)}"` : '';
-    const escaped = escapeHtml(t.content);
-    return `<pre data-md="${fence}"><code${classAttr}${labelAttr}>${escaped}</code></pre>\n`;
+    return `<pre data-md="${fence}"><code${classAttr}${labelAttr}>${t.content}</code></pre>\n`;
   };
 
   md.renderer.rules.heading_open = (tokens, idx) => {

@@ -143,6 +143,22 @@ describe('GFM-style additions', () => {
   });
 });
 
+describe('regression: pre-escaped content in code spans (K900)', () => {
+  // Callers escape text via sanitizeText before invoking the parser, so
+  // code_inline / fence content arrives already HTML-encoded. The renderer
+  // must NOT re-escape, or `" "` typed in inline code renders as the literal
+  // string `&quot; &quot;` (or, in some cases, with whitespace mangled).
+  it('inline code does not double-escape entities', () => {
+    expect(parseInlineMD('`&quot; &quot;`')).toBe(
+      '<code data-md="`">&quot; &quot;</code>'
+    );
+  });
+  it('fenced code does not double-escape entities', () => {
+    expect(parseBlockMD('```\n&quot; &quot;\n```\n')).toContain('&quot; &quot;');
+    expect(parseBlockMD('```\n&quot; &quot;\n```\n')).not.toContain('&amp;quot;');
+  });
+});
+
 describe('regression: ordered list edge cases', () => {
   it('does not match alphabetic ordered list (k.)', () => {
     const result = parseBlockMD('k. word\n');
