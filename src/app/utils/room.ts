@@ -204,6 +204,14 @@ export const isNotificationEvent = (mEvent: MatrixEvent) => {
   if (mEvent.isRedacted()) return false;
   if (mEvent.getRelation()?.rel_type === 'm.replace') return false;
 
+  // m.notice is for automated/bot output (heisenbridge IRC logs, wallops,
+  // issue-tracker status events). The spec says clients should not notify
+  // on them; we also keep them out of unread counts so chatty bots don't
+  // light up the room list.
+  if (eType === 'm.room.message' && mEvent.getContent().msgtype === MsgType.Notice) {
+    return false;
+  }
+
   return true;
 };
 

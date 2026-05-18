@@ -80,6 +80,7 @@ export const _NOTIFICATIONS_PATH = 'notifications/';
 export const _INVITES_PATH = 'invites/';
 export const _UNREAD_PATH = 'unread/';
 export const _ACTIVITY_PATH = 'activity/';
+export const _NOTICES_PATH = 'notices/';
 export const INBOX_PATH = '/inbox/';
 export type InboxNotificationsPathSearchParams = {
   only?: string;
@@ -88,6 +89,7 @@ export const INBOX_NOTIFICATIONS_PATH = `/inbox/${_NOTIFICATIONS_PATH}`;
 export const INBOX_INVITES_PATH = `/inbox/${_INVITES_PATH}`;
 export const INBOX_UNREAD_PATH = `/inbox/${_UNREAD_PATH}`;
 export const INBOX_ACTIVITY_PATH = `/inbox/${_ACTIVITY_PATH}`;
+export const INBOX_NOTICES_PATH = `/inbox/${_NOTICES_PATH}`;
 
 export const SPACE_SETTINGS_PATH = '/space-settings/';
 
