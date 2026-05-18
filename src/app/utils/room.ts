@@ -19,6 +19,7 @@ import {
 } from 'matrix-js-sdk';
 import { CryptoBackend } from 'matrix-js-sdk/lib/common-crypto/CryptoBackend';
 import { AccountDataEvent } from '../../types/matrix/accountData';
+import { readSettingsSync } from '../state/settings';
 import {
   IRoomCreateContent,
   Membership,
@@ -206,9 +207,14 @@ export const isNotificationEvent = (mEvent: MatrixEvent) => {
 
   // m.notice is for automated/bot output (heisenbridge IRC logs, wallops,
   // issue-tracker status events). The spec says clients should not notify
-  // on them; we also keep them out of unread counts so chatty bots don't
-  // light up the room list.
-  if (eType === 'm.room.message' && mEvent.getContent().msgtype === MsgType.Notice) {
+  // on them. By default we also keep them out of unread counts so chatty
+  // bots don't light up the room list — flip `noticesMarkUnread` in
+  // Notifications settings to opt back into the spec-default behavior.
+  if (
+    eType === 'm.room.message' &&
+    mEvent.getContent().msgtype === MsgType.Notice &&
+    !readSettingsSync().noticesMarkUnread
+  ) {
     return false;
   }
 

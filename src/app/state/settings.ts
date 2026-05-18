@@ -38,6 +38,11 @@ export interface Settings {
   //   true  → m.notice messages are suppressed from the timeline and
   //           only appear via the Notices inbox tab
   noticeInboxOnlyDefault: boolean;
+  // When false (default), m.notice messages never bump room unread or
+  // notification counts. When true, they count like normal messages
+  // for unread purposes (notifications still respect push rules, which
+  // default to silent for m.notice).
+  noticesMarkUnread: boolean;
 
   isPeopleDrawer: boolean;
   memberSortFilterIndex: number;
@@ -92,6 +97,7 @@ const defaultSettings: Settings = {
   pageZoom: 100,
   hideActivity: false,
   noticeInboxOnlyDefault: false,
+  noticesMarkUnread: false,
 
   isPeopleDrawer: true,
   memberSortFilterIndex: 0,
@@ -150,10 +156,17 @@ export const setSettings = (settings: Settings) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 };
 
-const baseSettings = atom<Settings>(getSettings());
+// Module-level cache so hot-path, non-React code (atom selectors,
+// isNotificationEvent in tight loops over event lists) can read the
+// current settings without parsing localStorage on every call.
+let cachedSettings: Settings = getSettings();
+export const readSettingsSync = (): Settings => cachedSettings;
+
+const baseSettings = atom<Settings>(cachedSettings);
 export const settingsAtom = atom<Settings, [Settings], undefined>(
   (get) => get(baseSettings),
   (get, set, update) => {
+    cachedSettings = update;
     set(baseSettings, update);
     setSettings(update);
   }

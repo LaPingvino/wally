@@ -19,6 +19,10 @@ function NoticesSection() {
     settingsAtom,
     'noticeInboxOnlyDefault'
   );
+  const [noticesMarkUnread, setNoticesMarkUnread] = useSetting(
+    settingsAtom,
+    'noticesMarkUnread'
+  );
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Notices</Text>
@@ -36,6 +40,17 @@ function NoticesSection() {
               variant="Primary"
               value={noticeInboxOnlyDefault}
               onChange={setNoticeInboxOnlyDefault}
+            />
+          }
+        />
+        <SettingTile
+          title="Notices mark rooms as unread"
+          description="When on, m.notice messages bump unread counts and the room sidebar dot. When off (default), chatty bots and bridge logs stay quiet — they're visible in the Notices inbox but don't draw your eye."
+          after={
+            <Switch
+              variant="Primary"
+              value={noticesMarkUnread}
+              onChange={setNoticesMarkUnread}
             />
           }
         />
