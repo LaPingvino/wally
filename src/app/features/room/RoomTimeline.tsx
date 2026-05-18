@@ -130,7 +130,7 @@ import { useAccessiblePowerTagColors, useGetMemberPowerTag } from '../../hooks/u
 import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
-import { useRoomNoticeInboxOnly } from '../../state/room/noticeMode';
+import { useEffectiveNoticeInboxOnly } from '../../state/room/noticeMode';
 
 const TimelineFloat = as<'div', css.TimelineFloatVariants>(
   ({ position, className, ...props }, ref) => (
@@ -551,7 +551,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   const direct = useIsDirectRoom();
   const [hideMembershipEvents] = useSetting(settingsAtom, 'hideMembershipEvents');
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
-  const noticeInboxOnly = useRoomNoticeInboxOnly(room);
+  const noticeInboxOnly = useEffectiveNoticeInboxOnly(room);
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [urlPreview] = useSetting(settingsAtom, 'urlPreview');
   const [encUrlPreview] = useSetting(settingsAtom, 'encUrlPreview');

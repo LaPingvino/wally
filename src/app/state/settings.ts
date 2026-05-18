@@ -32,6 +32,12 @@ export interface Settings {
   twitterEmoji?: boolean; // deprecated, kept for migration
   pageZoom: number;
   hideActivity: boolean;
+  // Global default for m.notice routing. Per-room override in room
+  // account data (`eu.kiefte.wally.notice_mode`) wins when set.
+  //   false → m.notice messages render inline in the timeline (default)
+  //   true  → m.notice messages are suppressed from the timeline and
+  //           only appear via the Notices inbox tab
+  noticeInboxOnlyDefault: boolean;
 
   isPeopleDrawer: boolean;
   memberSortFilterIndex: number;
@@ -85,6 +91,7 @@ const defaultSettings: Settings = {
   emojiFont: EmojiFont.System,
   pageZoom: 100,
   hideActivity: false,
+  noticeInboxOnlyDefault: false,
 
   isPeopleDrawer: true,
   memberSortFilterIndex: 0,

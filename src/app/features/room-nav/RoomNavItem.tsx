@@ -59,9 +59,11 @@ import {
 } from '../../hooks/useRoomsNotificationPreferences';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
 import {
-  useRoomNoticeInboxOnly,
-  useSetRoomNoticeInboxOnly,
+  useEffectiveNoticeInboxOnly,
+  useRoomNoticeOverride,
+  useSetRoomNoticeOverride,
 } from '../../state/room/noticeMode';
+import { RoomNoticeModeSwitcher } from '../../components/RoomNoticeModeSwitcher';
 import { getRoomCreatorsForRoomId, useRoomCreators } from '../../hooks/useRoomCreators';
 import { getRoomPermissionsAPI, useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
@@ -92,10 +94,11 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       requestClose();
     };
 
-    const noticeInboxOnly = useRoomNoticeInboxOnly(room);
-    const setNoticeInboxOnly = useSetRoomNoticeInboxOnly(mx, room.roomId);
-    const handleToggleNoticeInboxOnly = () => {
-      void setNoticeInboxOnly(!noticeInboxOnly);
+    const noticeOverride = useRoomNoticeOverride(room);
+    const effectiveNoticeInboxOnly = useEffectiveNoticeInboxOnly(room);
+    const setNoticeOverride = useSetRoomNoticeOverride(mx, room.roomId);
+    const handleSetNoticeOverride = (override: boolean | undefined) => {
+      void setNoticeOverride(override);
     };
 
     const handleInvite = () => {
@@ -168,22 +171,32 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               </MenuItem>
             )}
           </RoomNotificationModeSwitcher>
-          <MenuItem
-            onClick={handleToggleNoticeInboxOnly}
-            size="300"
-            after={<Icon size="100" src={Icons.Info} filled={noticeInboxOnly} />}
-            radii="300"
-            aria-pressed={noticeInboxOnly}
-            title={
-              noticeInboxOnly
-                ? 'Notices from this room appear only in the Notices inbox'
-                : 'Notices from this room appear inline in the timeline'
-            }
-          >
-            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-              {noticeInboxOnly ? 'Show notices inline' : 'Notices to inbox only'}
-            </Text>
-          </MenuItem>
+          <RoomNoticeModeSwitcher override={noticeOverride} onChange={handleSetNoticeOverride}>
+            {(handleOpen, opened) => (
+              <MenuItem
+                size="300"
+                after={
+                  <Icon size="100" src={Icons.Info} filled={effectiveNoticeInboxOnly} />
+                }
+                radii="300"
+                aria-pressed={opened}
+                onClick={handleOpen}
+                title={
+                  noticeOverride === undefined
+                    ? `Notices: follow global default (currently ${
+                        effectiveNoticeInboxOnly ? 'inbox only' : 'inline'
+                      })`
+                    : noticeOverride
+                    ? 'Notices: always inbox-only for this room'
+                    : 'Notices: always inline for this room'
+                }
+              >
+                <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                  Notices
+                </Text>
+              </MenuItem>
+            )}
+          </RoomNoticeModeSwitcher>
           <MenuItem
             onClick={handleToggleFavorite}
             size="300"

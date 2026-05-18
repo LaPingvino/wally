@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, IconButton, Icon, Icons, Scroll } from 'folds';
+import { Box, Switch, Text, IconButton, Icon, Icons, Scroll } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SystemNotification } from './SystemNotification';
 import { AllMessagesNotifications } from './AllMessages';
@@ -8,10 +8,42 @@ import { KeywordMessagesNotifications } from './KeywordMessages';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
+import { useSetting } from '../../../state/hooks/settings';
+import { settingsAtom } from '../../../state/settings';
 
 type NotificationsProps = {
   requestClose: () => void;
 };
+function NoticesSection() {
+  const [noticeInboxOnlyDefault, setNoticeInboxOnlyDefault] = useSetting(
+    settingsAtom,
+    'noticeInboxOnlyDefault'
+  );
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Notices</Text>
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
+        <SettingTile
+          title="Default: notices in inbox only"
+          description="When on, m.notice messages (heisenbridge logs, wallops, bot status, the issue tracker) are hidden from room timelines and visible only via the Notices inbox tab. Each room can override this from its context menu."
+          after={
+            <Switch
+              variant="Primary"
+              value={noticeInboxOnlyDefault}
+              onChange={setNoticeInboxOnlyDefault}
+            />
+          }
+        />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 export function Notifications({ requestClose }: NotificationsProps) {
   return (
     <Page>
@@ -37,6 +69,7 @@ export function Notifications({ requestClose }: NotificationsProps) {
               <AllMessagesNotifications />
               <SpecialMessagesNotifications />
               <KeywordMessagesNotifications />
+              <NoticesSection />
               <Box direction="Column" gap="100">
                 <Text size="L400">Block Messages</Text>
                 <SequenceCard

@@ -1,55 +1,75 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MatrixClient, MatrixEvent, Room, RoomEvent } from 'matrix-js-sdk';
+import { useAtomValue } from 'jotai';
+import { selectAtom } from 'jotai/utils';
+import { settingsAtom } from '../settings';
 
-// Per-room account data event type for the Wally "where do m.notice
+// Per-room account data event for the Wally "where do m.notice
 // messages appear" toggle.
-//   - absent or { inbox_only: false } → inline in timeline (default)
-//   - { inbox_only: true }            → suppressed from timeline,
-//                                       only visible via the Notices inbox
+//   absent or { inbox_only: undefined } → follow global default
+//   { inbox_only: false }                → force inline in timeline
+//   { inbox_only: true }                 → suppress from timeline,
+//                                          only visible in Notices inbox
+//
+// Notices remain visible in the Notices inbox regardless of mode.
 export const NOTICE_MODE_EVENT = 'eu.kiefte.wally.notice_mode';
 
 export type NoticeModeContent = {
   inbox_only?: boolean;
 };
 
-export const getRoomNoticeInboxOnly = (room: Room): boolean => {
+export const getRoomNoticeOverride = (room: Room): boolean | undefined => {
   const ev = room.getAccountData(NOTICE_MODE_EVENT);
   const content = ev?.getContent<NoticeModeContent>();
-  return content?.inbox_only === true;
+  return content?.inbox_only;
 };
 
-export const setRoomNoticeInboxOnly = async (
+export const setRoomNoticeOverride = async (
   mx: MatrixClient,
   roomId: string,
-  inboxOnly: boolean
+  override: boolean | undefined
 ): Promise<void> => {
-  // Empty content (vs deleting the event, which the spec doesn't support
-  // cleanly) is enough to revert to the default. Keeping the event around
-  // also lets other clients distinguish "explicitly default" from "never set."
-  await mx.setRoomAccountData(roomId, NOTICE_MODE_EVENT, { inbox_only: inboxOnly });
+  // Writing an empty object reverts to "follow global default"; the
+  // Matrix spec has no clean way to delete an account-data event, so
+  // we store the cleared state as an empty content.
+  const content: NoticeModeContent = override === undefined ? {} : { inbox_only: override };
+  await mx.setRoomAccountData(roomId, NOTICE_MODE_EVENT, content);
 };
 
-export const useRoomNoticeInboxOnly = (room: Room): boolean => {
-  const [inboxOnly, setInboxOnly] = useState(() => getRoomNoticeInboxOnly(room));
+const subscribeNoticeOverride = (room: Room, listener: () => void): (() => void) => {
+  const handler = (event: MatrixEvent) => {
+    if (event.getType() === NOTICE_MODE_EVENT) listener();
+  };
+  room.on(RoomEvent.AccountData, handler);
+  return () => {
+    room.off(RoomEvent.AccountData, handler);
+  };
+};
+
+export const useRoomNoticeOverride = (room: Room): boolean | undefined => {
+  const [override, setOverride] = useState<boolean | undefined>(() => getRoomNoticeOverride(room));
 
   useEffect(() => {
-    setInboxOnly(getRoomNoticeInboxOnly(room));
-    const handler = (event: MatrixEvent) => {
-      if (event.getType() === NOTICE_MODE_EVENT) {
-        setInboxOnly(getRoomNoticeInboxOnly(room));
-      }
-    };
-    room.on(RoomEvent.AccountData, handler);
-    return () => {
-      room.off(RoomEvent.AccountData, handler);
-    };
+    setOverride(getRoomNoticeOverride(room));
+    return subscribeNoticeOverride(room, () => setOverride(getRoomNoticeOverride(room)));
   }, [room]);
 
-  return inboxOnly;
+  return override;
 };
 
-export const useSetRoomNoticeInboxOnly = (
+const noticeInboxOnlyDefaultAtom = selectAtom(settingsAtom, (s) => s.noticeInboxOnlyDefault);
+
+export const useEffectiveNoticeInboxOnly = (room: Room): boolean => {
+  const override = useRoomNoticeOverride(room);
+  const globalDefault = useAtomValue(noticeInboxOnlyDefaultAtom);
+  return override ?? globalDefault;
+};
+
+export const useSetRoomNoticeOverride = (
   mx: MatrixClient,
   roomId: string
-): ((inboxOnly: boolean) => Promise<void>) =>
-  useCallback((inboxOnly: boolean) => setRoomNoticeInboxOnly(mx, roomId, inboxOnly), [mx, roomId]);
+): ((override: boolean | undefined) => Promise<void>) =>
+  useCallback(
+    (override: boolean | undefined) => setRoomNoticeOverride(mx, roomId, override),
+    [mx, roomId]
+  );
