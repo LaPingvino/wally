@@ -28,6 +28,8 @@ import {
   findBridgeBotInRoom,
   sendStartChatCommand,
 } from '../../utils/bridges';
+import { useAtomValue } from 'jotai';
+import { mDirectAtom } from '../../state/mDirectList';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 
 type UserRoomProfileProps = {
@@ -89,6 +91,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     navigate(withSearchParam(getDirectCreatePath(), directSearchParam));
   };
 
+  const mDirects = useAtomValue(mDirectAtom);
   const { navigateRoom } = useRoomNavigate();
   const bridgeMatch = useMemo(
     () => (userId !== myUserId ? findBridgeBotInRoom(room, userId) : null),
@@ -99,7 +102,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     if (!bridgeMatch) return;
     closeUserRoomProfile();
     try {
-      const botRoomId = await ensureBotDmRoom(mx, bridgeMatch.botUserId);
+      const botRoomId = await ensureBotDmRoom(mx, mDirects, bridgeMatch.botUserId);
       await sendStartChatCommand(mx, botRoomId, bridgeMatch.ghostUserId);
       navigateRoom(botRoomId);
     } catch (err) {
