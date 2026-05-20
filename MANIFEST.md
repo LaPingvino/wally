@@ -16,7 +16,6 @@ stack at `codeberg.org/lapingvino/wally` (branch `main`).
 - `invite-resilience.patch` — independent (applies to vanilla cinny)
 - `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience
 - `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker
-- `bridged-chat.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account
 
 ## Partial patches
 
@@ -26,11 +25,12 @@ patch. The `.patch` ships the cleanly-applicable subset; the
 matching `.skipped` file lists the commits that were dropped, so
 you can apply those manually from the per-family branch.
 
-- `accessibility.patch` — partial (32/58 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat; see `accessibility.skipped`
-- `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (23/68 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry; see `ux-fixes.skipped`
-- `navigate-unread.patch` — partial (1/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
-- `branding.patch` — partial (10/12 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, bridged-chat, accessibility, idb-retry, ux-fixes, navigate-unread; see `branding.skipped`
+- `accessibility.patch` — partial (32/58 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account; see `accessibility.skipped`
+- `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
+- `ux-fixes.patch` — partial (23/68 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
+- `navigate-unread.patch` — partial (1/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
+- `bridged-chat.patch` — partial (3/4 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `bridged-chat.skipped`
+- `branding.patch` — partial (10/12 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat; see `branding.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
 
@@ -40,4 +40,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-20T22:13:09Z_
+_Generated 2026-05-20T22:18:41Z_
