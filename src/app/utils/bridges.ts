@@ -83,44 +83,66 @@ export const findBridgeBotInRoom = (
   return null;
 };
 
-// A bridge **management** DM is a room where the only other joined member is
-// the bridgebot itself. Portal rooms (per-contact DMs) are usually also marked
-// as m.direct AND often have the bridgebot as a member, so a naive
-// "m.direct + bot is member" check picks up portals — which causes start-chat
-// commands to be sent into a random contact's portal instead of the management
-// room. Require the bot to be the *only* other joined member to disambiguate.
-const isManagementDmWithBot = (
-  room: Room,
-  myUserId: string | null,
-  botUserId: string
-): boolean => {
-  if (room.getMyMembership() !== Membership.Join) return false;
-  if (!room.getMember(botUserId)) return false;
-  const joined = room.getMembersWithMembership(Membership.Join);
-  const others = joined.filter((m) => m.userId !== myUserId);
+// Finding the bridge **management** DM by membership shape alone is fragile:
+// m.direct is set on portals too, and "the only other member is the bot" also
+// matches abandoned portals where the ghost has left. The strongest signal is
+// behavioural: in a management DM the user has *talked to the bot*, so the
+// bot has authored many timeline messages. In portals the bot is silent
+// except for error notices, so its message count there is ~0.
+//
+// We score every joined room that has the bot as a joined member by the
+// number of bot-authored m.room.message events in its recent live timeline,
+// and pick the highest. Ties / all-zero falls back to a strict me+bot shape
+// check so a brand-new management DM (no messages yet) still resolves.
+
+const BOT_MESSAGE_SCAN_LIMIT = 200;
+
+const countBotMessages = (room: Room, botUserId: string): number => {
+  const events = room.getLiveTimeline().getEvents();
+  let count = 0;
+  const start = Math.max(0, events.length - BOT_MESSAGE_SCAN_LIMIT);
+  for (let i = events.length - 1; i >= start; i -= 1) {
+    const ev = events[i];
+    if (ev.getType() !== 'm.room.message') continue;
+    if (ev.getSender() === botUserId) count += 1;
+  }
+  return count;
+};
+
+const isJustMeAndBot = (room: Room, myUserId: string | null, botUserId: string): boolean => {
+  const others = room
+    .getMembersWithMembership(Membership.Join)
+    .filter((m) => m.userId !== myUserId);
   return others.length === 1 && others[0].userId === botUserId;
 };
 
-export const findBotDmRoom = (
-  mx: MatrixClient,
-  mDirects: Set<string>,
-  botUserId: string
-): Room | undefined => {
+export const findBotDmRoom = (mx: MatrixClient, botUserId: string): Room | undefined => {
   const myUserId = mx.getUserId();
-  for (const roomId of mDirects) {
-    const room = mx.getRoom(roomId);
-    if (!room) continue;
-    if (isManagementDmWithBot(room, myUserId, botUserId)) return room;
+  const candidates = mx.getRooms().filter(
+    (r) =>
+      r.getMyMembership() === Membership.Join &&
+      r.getMember(botUserId)?.membership === Membership.Join
+  );
+
+  let best: Room | undefined;
+  let bestScore = 0;
+  for (const r of candidates) {
+    const score = countBotMessages(r, botUserId);
+    if (score > bestScore) {
+      bestScore = score;
+      best = r;
+    }
   }
-  return mx.getRooms().find((r) => isManagementDmWithBot(r, myUserId, botUserId));
+  if (best) return best;
+
+  return candidates.find((r) => isJustMeAndBot(r, myUserId, botUserId));
 };
 
 export const ensureBotDmRoom = async (
   mx: MatrixClient,
-  mDirects: Set<string>,
   botUserId: string
 ): Promise<string> => {
-  const existing = findBotDmRoom(mx, mDirects, botUserId);
+  const existing = findBotDmRoom(mx, botUserId);
   if (existing) return existing.roomId;
 
   const result = await mx.createRoom({
