@@ -40,4 +40,4 @@ set; fetch the per-family branch on Codeberg:
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 
-_Generated 2026-05-18T15:52:27Z_
+_Generated 2026-05-20T21:58:31Z_
