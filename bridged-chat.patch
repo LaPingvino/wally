@@ -1,8 +1,8 @@
 diff --git a/src/app/components/user-profile/UserRoomProfile.tsx b/src/app/components/user-profile/UserRoomProfile.tsx
-index 748261a79..7eac32e3f 100644
+index 748261a79..077406e30 100644
 --- a/src/app/components/user-profile/UserRoomProfile.tsx
 +++ b/src/app/components/user-profile/UserRoomProfile.tsx
-@@ -23,6 +23,14 @@ import { CreatorChip } from './CreatorChip';
+@@ -23,6 +23,12 @@ import { CreatorChip } from './CreatorChip';
  import { getDirectCreatePath, withSearchParam } from '../../pages/pathUtils';
  import { DirectCreateSearchParams } from '../../pages/paths';
  import { useExtendedProfile } from '../../hooks/useExtendedProfile';
@@ -11,17 +11,14 @@ index 748261a79..7eac32e3f 100644
 +  findBridgeBotInRoom,
 +  sendStartChatCommand,
 +} from '../../utils/bridges';
-+import { useAtomValue } from 'jotai';
-+import { mDirectAtom } from '../../state/mDirectList';
 +import { useRoomNavigate } from '../../hooks/useRoomNavigate';
  
  type UserRoomProfileProps = {
    userId: string;
-@@ -83,6 +91,28 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
+@@ -83,6 +89,27 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
      navigate(withSearchParam(getDirectCreatePath(), directSearchParam));
    };
  
-+  const mDirects = useAtomValue(mDirectAtom);
 +  const { navigateRoom } = useRoomNavigate();
 +  const bridgeMatch = useMemo(
 +    () => (userId !== myUserId ? findBridgeBotInRoom(room, userId) : null),
@@ -32,7 +29,7 @@ index 748261a79..7eac32e3f 100644
 +    if (!bridgeMatch) return;
 +    closeUserRoomProfile();
 +    try {
-+      const botRoomId = await ensureBotDmRoom(mx, mDirects, bridgeMatch.botUserId);
++      const botRoomId = await ensureBotDmRoom(mx, bridgeMatch.botUserId);
 +      await sendStartChatCommand(mx, botRoomId, bridgeMatch.ghostUserId);
 +      navigateRoom(botRoomId);
 +    } catch (err) {
@@ -46,7 +43,7 @@ index 748261a79..7eac32e3f 100644
    return (
      <Box direction="Column">
        <UserHero
-@@ -102,9 +132,11 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
+@@ -102,9 +129,11 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
                    fill="Solid"
                    radii="300"
                    before={<Icon size="50" src={Icons.Message} filled />}
@@ -62,10 +59,10 @@ index 748261a79..7eac32e3f 100644
              )}
 diff --git a/src/app/utils/bridges.ts b/src/app/utils/bridges.ts
 new file mode 100644
-index 000000000..61607e621
+index 000000000..5f771a79b
 --- /dev/null
 +++ b/src/app/utils/bridges.ts
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,136 @@
 +// Generic bridge-bot discovery for mautrix-style bridges.
 +// We don't keep a per-bridge registry: most mautrix bridges (bridgev2) ship
 +// ghosts with mxids like @<protocol>_<id>:<server> and a bridgebot whose
@@ -151,12 +148,11 @@ index 000000000..61607e621
 +  return null;
 +};
 +
-+// A bridge **management** DM is a room where the only other joined member is
-+// the bridgebot itself. Portal rooms (per-contact DMs) are usually also marked
-+// as m.direct AND often have the bridgebot as a member, so a naive
-+// "m.direct + bot is member" check picks up portals — which causes start-chat
-+// commands to be sent into a random contact's portal instead of the management
-+// room. Require the bot to be the *only* other joined member to disambiguate.
++// A bridge **management** DM is a joined room whose only other joined member
++// is the bridgebot. m.direct is not a reliable signal: portal rooms are
++// usually flagged m.direct too, so filtering by that picks up portals (which
++// then routes start-chat into a random contact's chat). Membership shape is
++// the authoritative check.
 +const isManagementDmWithBot = (
 +  room: Room,
 +  myUserId: string | null,
@@ -164,31 +160,25 @@ index 000000000..61607e621
 +): boolean => {
 +  if (room.getMyMembership() !== Membership.Join) return false;
 +  if (!room.getMember(botUserId)) return false;
-+  const joined = room.getMembersWithMembership(Membership.Join);
-+  const others = joined.filter((m) => m.userId !== myUserId);
++  const others = room
++    .getMembersWithMembership(Membership.Join)
++    .filter((m) => m.userId !== myUserId);
 +  return others.length === 1 && others[0].userId === botUserId;
 +};
 +
 +export const findBotDmRoom = (
 +  mx: MatrixClient,
-+  mDirects: Set<string>,
 +  botUserId: string
 +): Room | undefined => {
 +  const myUserId = mx.getUserId();
-+  for (const roomId of mDirects) {
-+    const room = mx.getRoom(roomId);
-+    if (!room) continue;
-+    if (isManagementDmWithBot(room, myUserId, botUserId)) return room;
-+  }
 +  return mx.getRooms().find((r) => isManagementDmWithBot(r, myUserId, botUserId));
 +};
 +
 +export const ensureBotDmRoom = async (
 +  mx: MatrixClient,
-+  mDirects: Set<string>,
 +  botUserId: string
 +): Promise<string> => {
-+  const existing = findBotDmRoom(mx, mDirects, botUserId);
++  const existing = findBotDmRoom(mx, botUserId);
 +  if (existing) return existing.roomId;
 +
 +  const result = await mx.createRoom({
