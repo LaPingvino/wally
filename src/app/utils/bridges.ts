@@ -83,25 +83,36 @@ export const findBridgeBotInRoom = (
   return null;
 };
 
+// A bridge **management** DM is a room where the only other joined member is
+// the bridgebot itself. Portal rooms (per-contact DMs) are usually also marked
+// as m.direct AND often have the bridgebot as a member, so a naive
+// "m.direct + bot is member" check picks up portals — which causes start-chat
+// commands to be sent into a random contact's portal instead of the management
+// room. Require the bot to be the *only* other joined member to disambiguate.
+const isManagementDmWithBot = (
+  room: Room,
+  myUserId: string | null,
+  botUserId: string
+): boolean => {
+  if (room.getMyMembership() !== Membership.Join) return false;
+  if (!room.getMember(botUserId)) return false;
+  const joined = room.getMembersWithMembership(Membership.Join);
+  const others = joined.filter((m) => m.userId !== myUserId);
+  return others.length === 1 && others[0].userId === botUserId;
+};
+
 export const findBotDmRoom = (
   mx: MatrixClient,
   mDirects: Set<string>,
   botUserId: string
 ): Room | undefined => {
+  const myUserId = mx.getUserId();
   for (const roomId of mDirects) {
     const room = mx.getRoom(roomId);
     if (!room) continue;
-    if (room.getMyMembership() !== Membership.Join) continue;
-    if (room.getMember(botUserId)) return room;
+    if (isManagementDmWithBot(room, myUserId, botUserId)) return room;
   }
-  return mx
-    .getRooms()
-    .find(
-      (r) =>
-        r.getMyMembership() === Membership.Join &&
-        r.getMembers().length <= 2 &&
-        r.getMember(botUserId)
-    );
+  return mx.getRooms().find((r) => isManagementDmWithBot(r, myUserId, botUserId));
 };
 
 export const ensureBotDmRoom = async (
