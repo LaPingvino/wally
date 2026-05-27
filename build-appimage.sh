@@ -179,6 +179,7 @@ sed \
 # Path differs between forks: Cinny/Wally ship the android chrome icon,
 # Sable keeps a logo PNG under public/res/logo/.
 ICON_CANDIDATES=(
+  "public/res/logo/logo-512x512.png"
   "public/res/android/android-chrome-512x512.png"
   "public/res/logo/cinny-logo-512x512.png"
 )
