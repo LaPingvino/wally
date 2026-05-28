@@ -39,5 +39,6 @@ set; fetch the per-family branch on Codeberg:
 
 - `widgets-support` — `git fetch codeberg widgets-support`
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
+- `settings-sync` — `git fetch codeberg settings-sync`
 
-_Generated 2026-05-20T22:18:41Z_
+_Generated 2026-05-28T09:44:53Z_
