@@ -83,6 +83,10 @@ export interface Settings {
   //   'onNav'  — hidden until the user explicitly invokes Prev/Next Unread (default)
   //   'never'  — hidden for unread; still appears for active/incoming calls
   unreadNavBar: 'always' | 'onNav' | 'never';
+
+  // Cross-device settings sync via Matrix account data
+  // (`eu.kiefte.wally.settings`). Device-local: never synced itself.
+  settingsSyncEnabled: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -133,6 +137,8 @@ const defaultSettings: Settings = {
   captionPosition: 'before',
   hideBlockedUserReactions: false,
   unreadNavBar: 'onNav',
+
+  settingsSyncEnabled: false,
 };
 
 export const getSettings = () => {

@@ -32,8 +32,17 @@ import { isKeyHotkey } from 'is-hotkey';
 import FocusTrap from 'focus-trap-react';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useSetting } from '../../../state/hooks/settings';
 import { DateFormat, EmojiFont, MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
+import {
+  settingsSyncLastSyncedAtom,
+  settingsSyncStatusAtom,
+} from '../../../hooks/useSettingsSync';
+import {
+  exportSettingsAsJson,
+  importSettingsFromJson,
+} from '../../../utils/settingsSync';
 import { SettingTile } from '../../../components/setting-tile';
 import { KeySymbol } from '../../../utils/key-symbol';
 import { isMacOS } from '../../../utils/user-agent';
@@ -1129,6 +1138,87 @@ function SelectUnreadNavBar() {
   );
 }
 
+function SettingsSync() {
+  const [syncEnabled, setSyncEnabled] = useSetting(settingsAtom, 'settingsSyncEnabled');
+  const lastSynced = useAtomValue(settingsSyncLastSyncedAtom);
+  const status = useAtomValue(settingsSyncStatusAtom);
+  const settings = useAtomValue(settingsAtom);
+  const setSettings = useSetAtom(settingsAtom);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleExport = () => {
+    exportSettingsAsJson(settings);
+  };
+
+  const handleImport = async () => {
+    setImportError(null);
+    const merged = await importSettingsFromJson(settings);
+    if (!merged) {
+      setImportError('Could not import: invalid file or unsupported version.');
+      return;
+    }
+    setSettings(merged);
+  };
+
+  let statusText: string;
+  if (!syncEnabled) {
+    statusText = 'Disabled';
+  } else if (status === 'syncing') {
+    statusText = 'Syncing…';
+  } else if (status === 'error') {
+    statusText = 'Sync failed';
+  } else if (lastSynced) {
+    statusText = `Last synced ${dayjs(lastSynced).format('HH:mm:ss')}`;
+  } else {
+    statusText = 'Waiting…';
+  }
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Settings Sync</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Sync preferences across devices"
+          description={`Stores your preferences in Matrix account data (eu.kiefte.wally.settings) so they follow you to other sessions. Device-local settings (zoom, drawer state, notification permission, developer tools) stay local. ${statusText}.`}
+          after={<Switch variant="Primary" value={syncEnabled} onChange={setSyncEnabled} />}
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Export / Import"
+          description={
+            importError ?? 'Save your preferences to a JSON file, or restore from one.'
+          }
+          after={
+            <Box gap="200">
+              <Button
+                size="300"
+                variant="Secondary"
+                outlined
+                fill="Soft"
+                radii="300"
+                onClick={handleExport}
+              >
+                <Text size="T300">Export</Text>
+              </Button>
+              <Button
+                size="300"
+                variant="Secondary"
+                outlined
+                fill="Soft"
+                radii="300"
+                onClick={handleImport}
+              >
+                <Text size="T300">Import</Text>
+              </Button>
+            </Box>
+          }
+        />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 function Navigation() {
   return (
     <Box direction="Column" gap="100">
@@ -1170,6 +1260,7 @@ export function General({ requestClose }: GeneralProps) {
               <Editor />
               <Messages />
               <Navigation />
+              <SettingsSync />
             </Box>
           </PageContent>
         </Scroll>

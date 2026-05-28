@@ -27,6 +27,7 @@ import { playCurrentRoomSound, playReactionSound, playTypingSound } from '../../
 import { announce } from '../../utils/announce';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useBackgroundBackfill } from '../../hooks/useBackgroundBackfill';
+import { useSettingsSyncEffect } from '../../hooks/useSettingsSync';
 import { useFavoriteRoomsDriver } from '../../hooks/useFavoriteRooms';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -544,6 +545,11 @@ function BackgroundBackfillFeature() {
   return null;
 }
 
+function SettingsSyncFeature() {
+  useSettingsSyncEffect();
+  return null;
+}
+
 function GlobalDrivers() {
   useFavoriteRoomsDriver();
   return null;
@@ -562,6 +568,7 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <InviteNotifications />
       <MessageNotifications />
       <BackgroundBackfillFeature />
+      <SettingsSyncFeature />
       {children}
     </>
   );

@@ -17,6 +17,8 @@ export enum AccountDataEvent {
   CrossSigningSelf = 'm.cross_signing.self',
   CrossSigningUser = 'm.cross_signing.user',
   MegolmBackupV1 = 'm.megolm_backup.v1',
+
+  WallySettings = 'eu.kiefte.wally.settings',
 }
 
 export type MDirectContent = Record<string, string[]>;
