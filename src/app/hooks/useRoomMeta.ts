@@ -40,18 +40,31 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   return avatarMxc;
 };
 
-/** Get the display name for a DM room directly from loaded members, bypassing room.name. */
+/**
+ * Display name for a DM room, preferring a loaded member's real display name but
+ * falling back to the SDK's room.name (which resolves DM names from the
+ * sliding-sync heroes summary) when members aren't loaded yet.
+ *
+ * History: this member-based path was a workaround for an OLDER SDK that didn't
+ * recalculate room.name for DMs after lazy member load — it relied on full sync
+ * having every member present. Under sliding sync the members are MISSING until
+ * inflation, so a bare membership stub (no displayname → `name` is just the
+ * mxid) would override a perfectly good hero-based room.name with an mxid. We
+ * therefore only trust a member when it actually has a `rawDisplayName`; for
+ * everything else room.name is the reliable source now that the SDK equalizes it.
+ */
 const getDmName = (room: Room): string => {
   // For 2-person DMs getAvatarFallbackMember() gives the other member directly.
   const fallbackMember = room.getAvatarFallbackMember();
-  if (fallbackMember) return fallbackMember.name;
+  if (fallbackMember?.rawDisplayName) return fallbackMember.name;
 
-  // Group DMs: compute name from other joined/invited members (room.name won't be recalculated).
+  // Group DMs: compute name from other members that have a real display name.
   const others = room
     .getMembers()
-    .filter((m) => m.userId !== room.myUserId && (m.membership === 'join' || m.membership === 'invite'));
+    .filter((m) => m.userId !== room.myUserId && (m.membership === 'join' || m.membership === 'invite'))
+    .filter((m) => m.rawDisplayName);
 
-  if (others.length === 0) return room.name;
+  if (others.length === 0) return room.name; // not loaded yet → trust heroes
   if (others.length === 1) return others[0].name;
   if (others.length === 2) return `${others[0].name} and ${others[1].name}`;
   return `${others[0].name} and ${others.length - 1} others`;
