@@ -263,6 +263,24 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
   const readUpToId = room.getEventReadUpTo(userId);
   const events = room.getLiveTimeline().getEvents();
 
+  // The client-side walk below counts unread by scanning the loaded timeline back
+  // to the read marker — accurate ONLY when the loaded timeline actually reaches
+  // that marker. Under sliding sync (timeline_limit 1) the loaded timeline is
+  // tiny, so it can't see the unread events and would report 0 — which makes ALL
+  // unreads vanish after a sync RESET (useSyncState recomputes every room). When
+  // we can't walk to the marker, fall back to the server's notification counts:
+  // they're computed over full history and already exclude member/state events
+  // that don't notify (see getUnreadNotificationCount). Full sync still uses the
+  // walk, preserving the activity-patch behaviour (ignore notice/state/member).
+  const canWalk = !!readUpToId && events.some((e) => e.getId() === readUpToId);
+  if (!canWalk) {
+    return {
+      roomId: room.roomId,
+      total: Math.max(0, room.getUnreadNotificationCount(NotificationCountType.Total) ?? 0),
+      highlight: Math.max(0, room.getUnreadNotificationCount(NotificationCountType.Highlight) ?? 0),
+    };
+  }
+
   let total = 0;
   let highlight = 0;
   for (let i = events.length - 1; i >= 0; i -= 1) {
