@@ -41,30 +41,30 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
 };
 
 /**
- * Display name for a DM room, preferring a loaded member's real display name but
- * falling back to the SDK's room.name (which resolves DM names from the
- * sliding-sync heroes summary) when members aren't loaded yet.
+ * Display name for a DM room directly from members, bypassing room.name.
  *
- * History: this member-based path was a workaround for an OLDER SDK that didn't
- * recalculate room.name for DMs after lazy member load — it relied on full sync
- * having every member present. Under sliding sync the members are MISSING until
- * inflation, so a bare membership stub (no displayname → `name` is just the
- * mxid) would override a perfectly good hero-based room.name with an mxid. We
- * therefore only trust a member when it actually has a `rawDisplayName`; for
- * everything else room.name is the reliable source now that the SDK equalizes it.
+ * Why bypass room.name: for DMs the SDK's room.name can read badly — it can
+ * include YOU ("me, other") and bridge bots (e.g. the mautrix-whatsapp bot), and
+ * it isn't always recalculated after lazy member load. getAvatarFallbackMember()
+ * instead returns the single OTHER real person: it filters out functional
+ * members (bridge bots) and PREFERS the sliding-sync heroes summary, so it
+ * resolves the right name even when m.room.member events aren't loaded yet
+ * (members can be 0 under sliding sync). So we trust it as-is — even when the
+ * hero has no displayname (its .name is then the mxid, which is still the right
+ * person), do NOT fall back to room.name there or the bad "me, other + bot" name
+ * comes back (regression we hit, restored here).
  */
 const getDmName = (room: Room): string => {
   // For 2-person DMs getAvatarFallbackMember() gives the other member directly.
   const fallbackMember = room.getAvatarFallbackMember();
-  if (fallbackMember?.rawDisplayName) return fallbackMember.name;
+  if (fallbackMember) return fallbackMember.name;
 
-  // Group DMs: compute name from other members that have a real display name.
+  // Group DMs: compute name from other joined/invited members (room.name won't be recalculated).
   const others = room
     .getMembers()
-    .filter((m) => m.userId !== room.myUserId && (m.membership === 'join' || m.membership === 'invite'))
-    .filter((m) => m.rawDisplayName);
+    .filter((m) => m.userId !== room.myUserId && (m.membership === 'join' || m.membership === 'invite'));
 
-  if (others.length === 0) return room.name; // not loaded yet → trust heroes
+  if (others.length === 0) return room.name;
   if (others.length === 1) return others[0].name;
   if (others.length === 2) return `${others[0].name} and ${others[1].name}`;
   return `${others[0].name} and ${others.length - 1} others`;
