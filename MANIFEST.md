@@ -41,4 +41,4 @@ set; fetch the per-family branch on Codeberg:
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `settings-sync` — `git fetch codeberg settings-sync`
 
-_Generated 2026-05-30T12:15:58Z_
+_Generated 2026-05-30T12:46:18Z_
