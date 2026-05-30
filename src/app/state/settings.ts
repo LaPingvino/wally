@@ -87,6 +87,14 @@ export interface Settings {
   // Cross-device settings sync via Matrix account data
   // (`eu.kiefte.wally.settings`). Device-local: never synced itself.
   settingsSyncEnabled: boolean;
+
+  // Sync transport. true (default) = classic /sync — the battle-tested path
+  // that delivers full membership, to_device and device-list updates reliably.
+  // false = opt into MSC4186 simplified sliding sync (faster initial load on
+  // huge accounts, but the JS SDK's support is still maturing: lean
+  // required_state can miss joiners and cause UTDs / list churn). Device-local;
+  // applied at startClient, so a change needs a reload to take effect.
+  useClassicSync: boolean;
 }
 
 const defaultSettings: Settings = {
@@ -139,6 +147,7 @@ const defaultSettings: Settings = {
   unreadNavBar: 'onNav',
 
   settingsSyncEnabled: false,
+  useClassicSync: true,
 };
 
 export const getSettings = () => {

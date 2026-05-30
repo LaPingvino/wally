@@ -5,6 +5,7 @@ import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import { removeSecondarySession } from '../app/state/sessions';
 import { logFailureEvent } from './diagnostics';
+import { readSettingsSync } from '../app/state/settings';
 
 type Session = {
   baseUrl: string;
@@ -113,6 +114,14 @@ function installMatrixRTCLogFilter(): void {
 }
 
 export const startClient = async (mx: MatrixClient) => {
+  // Sync transport. Default = classic /sync: it delivers full room membership,
+  // to_device and device-list updates reliably, which keeps E2EE correct (the
+  // SDK's sliding-sync path uses a lean required_state that can miss a joiner
+  // and leave them out of the megolm recipient set → UTDs) and the room list
+  // stable. Sliding sync is opt-in via Settings for faster initial load on huge
+  // accounts. autoSlidingSync:false forces classic even where the server
+  // advertises MSC4186.
+  const useClassicSync = readSettingsSync().useClassicSync;
   // Prioritise a fast initial sync over a fully-populated cache. The flag
   // implies `lazyLoadMembers: true` and `initialSyncLimit: 1`, plus the
   // SDK's lazy-tolerant code paths so things like thread bootstrap, on-demand
@@ -120,6 +129,7 @@ export const startClient = async (mx: MatrixClient) => {
   // populates incrementally through pagination.
   await mx.startClient({
     fullLazyLoading: true,
+    autoSlidingSync: !useClassicSync,
   });
 };
 

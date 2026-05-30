@@ -1138,6 +1138,28 @@ function SelectUnreadNavBar() {
   );
 }
 
+function SyncTransport() {
+  const [useClassicSync, setUseClassicSync] = useSetting(settingsAtom, 'useClassicSync');
+  const handleChange = (value: boolean) => {
+    setUseClassicSync(value);
+    // The sync transport is chosen once, at startClient — reload so the change
+    // actually takes effect (the setting is persisted synchronously first).
+    window.location.reload();
+  };
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Sync</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Use classic sync (recommended)"
+          description="Classic /sync delivers full room membership, encryption keys and device updates reliably. Turn this off to try sliding sync (MSC4186) for a faster initial load on very large accounts — but its support is still maturing and can cause rooms flickering in and out, unread glitches, or messages that fail to decrypt. Changing this reloads the app."
+          after={<Switch variant="Primary" value={useClassicSync} onChange={handleChange} />}
+        />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 function SettingsSync() {
   const [syncEnabled, setSyncEnabled] = useSetting(settingsAtom, 'settingsSyncEnabled');
   const lastSynced = useAtomValue(settingsSyncLastSyncedAtom);
@@ -1260,6 +1282,7 @@ export function General({ requestClose }: GeneralProps) {
               <Editor />
               <Messages />
               <Navigation />
+              <SyncTransport />
               <SettingsSync />
             </Box>
           </PageContent>
