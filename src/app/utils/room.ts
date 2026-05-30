@@ -221,6 +221,25 @@ export const isNotificationEvent = (mEvent: MatrixEvent) => {
   return true;
 };
 
+/**
+ * Timestamp of the last CONVERSATIONAL event in a room — the newest event that
+ * passes isNotificationEvent (real message / encrypted / sticker / create),
+ * ignoring state events like member changes and eu.kiefte.issue edits. This is
+ * what activity sorting should use: getLastActiveTimestamp() returns the ts of
+ * the last timeline event of ANY type, so a room floats to the top just because
+ * an issue was edited or an avatar changed (e.g. ganza, whose last real message
+ * was months before its latest issue-state edit). Falls back to
+ * getLastActiveTimestamp() when no conversational event is loaded (e.g. sliding
+ * sync only loaded a tiny timeline) so ordering still has something to go on.
+ */
+export const getLastMeaningfulTimestamp = (room: Room): number => {
+  const events = room.getLiveTimeline().getEvents();
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    if (isNotificationEvent(events[i])) return events[i].getTs();
+  }
+  return room.getLastActiveTimestamp();
+};
+
 export const roomHaveNotification = (room: Room): boolean => {
   const total = room.getUnreadNotificationCount(NotificationCountType.Total);
   const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);

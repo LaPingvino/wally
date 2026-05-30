@@ -1,4 +1,5 @@
 import { MatrixClient } from 'matrix-js-sdk';
+import { getLastMeaningfulTimestamp } from './room';
 
 export type SortFunc<T> = (a: T, b: T) => number;
 
@@ -8,9 +9,12 @@ export const factoryRoomIdByActivity =
     const room1 = mx.getRoom(a);
     const room2 = mx.getRoom(b);
 
+    // Sort by last CONVERSATIONAL activity, not raw getLastActiveTimestamp():
+    // the latter counts member/state/eu.kiefte.issue events, so editing an issue
+    // (state event) re-floats a room to the top even with no new message.
     return (
-      (room2?.getLastActiveTimestamp() ?? Number.MIN_SAFE_INTEGER) -
-      (room1?.getLastActiveTimestamp() ?? Number.MIN_SAFE_INTEGER)
+      (room2 ? getLastMeaningfulTimestamp(room2) : Number.MIN_SAFE_INTEGER) -
+      (room1 ? getLastMeaningfulTimestamp(room1) : Number.MIN_SAFE_INTEGER)
     );
   };
 
