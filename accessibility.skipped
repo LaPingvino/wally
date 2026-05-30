@@ -24,3 +24,4 @@ f115ade7  accessibility: migrate remaining 20 dialogs to native <dialog> — ful
 1585d2c5  accessibility: migrate remaining dialog overlays to NativeDialog
 673736cc  accessibility: drop redundant outline ring on room-nav items
 ea14defd  accessibility: separate toggle for reaction-to-me sound
+ed262fe5  accessibility: fall back to heroes-based room.name when DM members not loaded
