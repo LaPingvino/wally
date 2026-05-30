@@ -63,6 +63,19 @@ function scoreRoom(room: Room, ctx: SchedulerContext, target: number): number {
   if (highlight > 0) score += 30;
   else if (total > 0) score += 20;
 
+  // A room that shows as unread but whose READ MARKER isn't in the loaded
+  // timeline is "vitally missing" information: we can't tell whether it's truly
+  // unread or a stale server count (read elsewhere, outside the sliding window).
+  // Prioritise loading it back to the marker so unread state becomes verifiable
+  // (and a stale count can self-correct). This is what makes "read but still
+  // shows" rooms resolve instead of lingering.
+  if (total > 0) {
+    const me = room.client.getUserId();
+    const readUpTo = me ? room.getEventReadUpTo(me) : null;
+    const markerLoaded = !!readUpTo && room.getLiveTimeline().getEvents().some((e) => e.getId() === readUpTo);
+    if (!markerLoaded) score += 25;
+  }
+
   // Recent activity → user more likely to navigate here.
   const lastActivity = room.getLastActiveTimestamp();
   if (lastActivity) {
