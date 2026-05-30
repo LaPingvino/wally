@@ -25,7 +25,7 @@ patch. The `.patch` ships the cleanly-applicable subset; the
 matching `.skipped` file lists the commits that were dropped, so
 you can apply those manually from the per-family branch.
 
-- `accessibility.patch` — partial (32/59 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account; see `accessibility.skipped`
+- `accessibility.patch` — partial (32/60 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account; see `accessibility.skipped`
 - `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
 - `ux-fixes.patch` — partial (23/68 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
@@ -41,4 +41,4 @@ set; fetch the per-family branch on Codeberg:
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `settings-sync` — `git fetch codeberg settings-sync`
 
-_Generated 2026-05-30T13:54:43Z_
+_Generated 2026-05-30T14:14:44Z_
