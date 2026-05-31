@@ -44,3 +44,4 @@ ea0cbc35  ux-fixes: prev/next reads the displayed list from the page, not a reco
 db3a84c1  ux-fixes: restore Clear Cache tile on About page
 ced4387b  ux-fixes: bottom unread-nav bar stays hidden until user engages nav
 3d93cc64  ux-fixes: add sync-transport toggle, default to classic /sync
+33aac989  ux-fixes: do not stack classic lazy-loading on top of sliding sync
