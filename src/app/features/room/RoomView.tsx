@@ -36,6 +36,10 @@ import { useRoomName } from '../../hooks/useRoomMeta';
 import { playReactionSound, playReplyToMeSound } from '../../utils/sounds';
 import { subscribeRoom } from '../../../client/slidingSyncRooms';
 
+// Depth the opened room is backfilled to immediately on open — a touch deeper
+// than the sliding-sync subscription's 50 so initial scrollback is ready.
+const ON_OPEN_BACKFILL_TARGET = 80;
+
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
   const { code } = evt;
@@ -94,8 +98,27 @@ export function RoomView({ eventId }: { eventId?: string }) {
   // Opening a room subscribes it in sliding sync so the server inflates its
   // timeline (limit 50) + sender members, instead of leaving it at the lean
   // list's timeline_limit:1. No-op under classic sync.
+  //
+  // Also kick an immediate on-open backfill so a cold room (one the lean list
+  // only delivered ~1 event for) fills RIGHT NOW instead of flashing empty
+  // until the next sliding-sync poll lands or the background scheduler gets to
+  // it — and a bit deeper than the lean 50, so scrollback is ready. This reuses
+  // the fork's tested backgroundBackfill primitive (the same one the scheduler
+  // drives), NOT cinny's virtual paginator, so there's no timeline-rendering
+  // risk; the SDK serialises pagination per timeline, so it cooperates with the
+  // scheduler rather than double-fetching. No-op on an SDK without the fork.
   useEffect(() => {
     subscribeRoom(mx, roomId);
+    const r = mx.getRoom(roomId);
+    if (r && r.getLiveTimeline().getEvents().length < ON_OPEN_BACKFILL_TARGET) {
+      (
+        r as unknown as {
+          backgroundBackfill?: (o: { targetDepth: number; chunkSize?: number }) => Promise<void>;
+        }
+      ).backgroundBackfill?.({ targetDepth: ON_OPEN_BACKFILL_TARGET, chunkSize: 8 })?.catch(() => {
+        /* aborted / unsupported — non-fatal */
+      });
+    }
   }, [mx, roomId]);
 
   useEffect(() => {
