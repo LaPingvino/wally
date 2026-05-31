@@ -17,11 +17,25 @@ export const useRoomMembers = (mx: MatrixClient, roomId: string): RoomMember[] =
 
     if (room) {
       setMembers(room.getMembers());
-      room.loadMembersIfNeeded().then(() => {
-        loadingMembers = false;
-        if (disposed) return;
-        updateMemberList();
-      });
+      // Under sliding sync, loadMembersIfNeeded is a no-op (lazyLoadMembers is
+      // off, so membersPromise is pre-resolved) and the roster only ever holds
+      // $LAZY senders — bridged-group members show as mxids and @-mention
+      // autocomplete is empty. forceLoadMembers (fork) hits /members directly.
+      const ss = (mx as unknown as { getSlidingSync?: () => unknown }).getSlidingSync?.();
+      const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
+      const loaded = ss && forceable.forceLoadMembers
+        ? forceable.forceLoadMembers()
+        : room.loadMembersIfNeeded();
+      loaded
+        .then(() => {
+          loadingMembers = false;
+          if (disposed) return;
+          updateMemberList();
+        })
+        .catch(() => {
+          // Don't leave the list stuck on "loading" if /members fails.
+          loadingMembers = false;
+        });
     }
 
     mx.on(RoomMemberEvent.Membership, updateMemberList);
