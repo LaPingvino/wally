@@ -11,13 +11,14 @@ import { useMatrixClient } from './useMatrixClient';
 import { useSelectedRoom } from './router/useSelectedRoom';
 
 // Per-room target depth measured against `room.getLiveTimeline().getEvents().length`.
-// Background rooms aim for a small "feels populated" cushion. The currently
-// selected room gets a much deeper prefetch so opening it lands on a usable
-// scrollback. With the threads drawer open, we go deeper still — the user is
-// looking for thread roots that may sit far back, and thread aggregation only
-// works once the root events are in the timeline.
+// Every room aims for the same small "feels populated" cushion. The current
+// room is no longer DEEP-prefetched here — subscribe-on-open (the sliding-sync
+// per-room subscription at timeline_limit 50) inflates it server-side, so this
+// scheduler just gives it top PRIORITY (see scoreRoom) to reach the cushion
+// first. With the threads drawer open we go deeper — the user is hunting thread
+// roots that may sit far back, and thread aggregation only works once the root
+// events are in the timeline.
 const TARGET_BACKGROUND = 50;
-const TARGET_SELECTED = 200;
 const TARGET_THREADS_OPEN = 500;
 
 // roomId of the room whose threads drawer is currently open (or null).
@@ -43,7 +44,6 @@ type Score = { room: Room; score: number; target: number };
 
 function targetFor(room: Room, ctx: SchedulerContext): number {
   if (room.roomId === ctx.threadsRoomId) return TARGET_THREADS_OPEN;
-  if (room.roomId === ctx.currentRoomId) return TARGET_SELECTED;
   return TARGET_BACKGROUND;
 }
 
@@ -52,6 +52,10 @@ function scoreRoom(room: Room, ctx: SchedulerContext, target: number): number {
   if (eventCount >= target) return -1;
 
   let score = 0;
+  // The open room gets top priority so it reaches the cushion FIRST — this is
+  // the on-open focused backfill: it covers the brief gap before the
+  // subscribe-on-open poll lands, and classic sync (no subscription) entirely.
+  // Depth comes from TARGET_BACKGROUND now, not a deep 200-event prefetch.
   if (room.roomId === ctx.currentRoomId) score += 100;
   // Threads drawer open implies the user is actively hunting thread roots
   // in this room — push it past everything else, including a different
