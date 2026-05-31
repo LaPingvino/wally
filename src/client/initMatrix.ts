@@ -122,13 +122,29 @@ export const startClient = async (mx: MatrixClient) => {
   // accounts. autoSlidingSync:false forces classic even where the server
   // advertises MSC4186.
   const useClassicSync = readSettingsSync().useClassicSync;
-  // Prioritise a fast initial sync over a fully-populated cache. The flag
-  // implies `lazyLoadMembers: true` and `initialSyncLimit: 1`, plus the
-  // SDK's lazy-tolerant code paths so things like thread bootstrap, on-demand
-  // thread-root fetching, and aggregations behave correctly while history
-  // populates incrementally through pagination.
+  // Will sliding sync actually run? Only when it isn't forced off AND the
+  // server advertises MSC4186 (the SDK does the same check internally).
+  let willSlide = false;
+  if (!useClassicSync) {
+    try {
+      willSlide = await (
+        mx as unknown as { serverSupportsSimplifiedSlidingSync?: () => Promise<boolean> }
+      ).serverSupportsSimplifiedSlidingSync?.() ?? false;
+    } catch {
+      willSlide = false;
+    }
+  }
+  // Don't stack cinny's classic lazy-loading ON TOP of sliding sync. On the
+  // CLASSIC path, fullLazyLoading (= lazyLoadMembers + initialSyncLimit:1) is
+  // the right call: fast initial sync, history fills via pagination. But on the
+  // SLIDING path those same flags fight it — initialSyncLimit:1 truncates the
+  // timeline so a chat opens at only its latest event, and lazyLoadMembers
+  // leaves the roster lean, so a room (worst case a bridged group with many
+  // members) comes up INCOMPLETE. Sliding sync already has its own laziness —
+  // lean room list + per-room subscriptions at timeline_limit 50 + $LAZY
+  // members + window growth — so let it do the job and don't pass these.
   await mx.startClient({
-    fullLazyLoading: true,
+    ...(willSlide ? {} : { fullLazyLoading: true }),
     autoSlidingSync: !useClassicSync,
   });
 };
