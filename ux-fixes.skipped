@@ -46,3 +46,4 @@ ced4387b  ux-fixes: bottom unread-nav bar stays hidden until user engages nav
 3d93cc64  ux-fixes: add sync-transport toggle, default to classic /sync
 33aac989  ux-fixes: do not stack classic lazy-loading on top of sliding sync
 8bfa47df  ux-fixes: subscribe to a room on open so sliding sync inflates it
+3f46840f  ux-fixes: simplify backfill — current room rides subscribe-on-open, not a deep prefetch
