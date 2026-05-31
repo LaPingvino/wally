@@ -780,6 +780,41 @@ index c02b0e94e..6541a9c36 100644
        [Command.ConvertToDm]: {
          name: Command.ConvertToDm,
          description: 'Convert room to direct message',
+diff --git a/src/app/hooks/useRoomMembers.ts b/src/app/hooks/useRoomMembers.ts
+index df369011b..14fd8d44f 100644
+--- a/src/app/hooks/useRoomMembers.ts
++++ b/src/app/hooks/useRoomMembers.ts
+@@ -17,11 +17,25 @@ export const useRoomMembers = (mx: MatrixClient, roomId: string): RoomMember[] =
+ 
+     if (room) {
+       setMembers(room.getMembers());
+-      room.loadMembersIfNeeded().then(() => {
+-        loadingMembers = false;
+-        if (disposed) return;
+-        updateMemberList();
+-      });
++      // Under sliding sync, loadMembersIfNeeded is a no-op (lazyLoadMembers is
++      // off, so membersPromise is pre-resolved) and the roster only ever holds
++      // $LAZY senders — bridged-group members show as mxids and @-mention
++      // autocomplete is empty. forceLoadMembers (fork) hits /members directly.
++      const ss = (mx as unknown as { getSlidingSync?: () => unknown }).getSlidingSync?.();
++      const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
++      const loaded = ss && forceable.forceLoadMembers
++        ? forceable.forceLoadMembers()
++        : room.loadMembersIfNeeded();
++      loaded
++        .then(() => {
++          loadingMembers = false;
++          if (disposed) return;
++          updateMemberList();
++        })
++        .catch(() => {
++          // Don't leave the list stuck on "loading" if /members fails.
++          loadingMembers = false;
++        });
+     }
+ 
+     mx.on(RoomMemberEvent.Membership, updateMemberList);
 diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
 index 64ae01046..38dfbc490 100644
 --- a/src/app/pages/client/ClientNonUIFeatures.tsx
