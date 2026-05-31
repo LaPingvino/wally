@@ -34,6 +34,7 @@ import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { announce } from '../../utils/announce';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { playReactionSound, playReplyToMeSound } from '../../utils/sounds';
+import { subscribeRoom } from '../../../client/slidingSyncRooms';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -89,6 +90,13 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const direct = useIsDirectRoom();
   const roomDisplayName = useRoomName(room, direct);
   const unread = useRoomUnread(roomId, roomToUnreadAtom);
+
+  // Opening a room subscribes it in sliding sync so the server inflates its
+  // timeline (limit 50) + sender members, instead of leaving it at the lean
+  // list's timeline_limit:1. No-op under classic sync.
+  useEffect(() => {
+    subscribeRoom(mx, roomId);
+  }, [mx, roomId]);
 
   useEffect(() => {
     const roomType = room.isCallRoom()
