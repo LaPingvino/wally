@@ -100,7 +100,7 @@
     "linkifyjs": "4.3.2",
     "livekit-client": "2.18.0",
     "markdown-it": "14.1.1",
-    "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#200282bac7170916efdf4087c7d5287214954238",
+    "matrix-js-sdk": "github:LaPingvino/matrix-js-sdk#849bc0c2bd59a4c20450b887f3e7c35f43e372c7",
     "matrix-widget-api": "1.13.0",
     "millify": "6.1.0",
     "pdfjs-dist": "4.2.67",
