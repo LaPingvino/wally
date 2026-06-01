@@ -31,7 +31,7 @@ import {
   NavItemContent,
 } from '../../../components/nav';
 import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
-import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
+import { getCanonicalAliasOrRoomId, guessAndConvertDMs } from '../../../utils/matrix';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
@@ -81,6 +81,22 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
     requestClose();
   };
 
+  const [guessing, setGuessing] = useState(false);
+  const handleGuessDMs = async () => {
+    if (guessing) return;
+    setGuessing(true);
+    try {
+      // Tags every joined 1:1 (two-member, non-space) room that isn't already a
+      // DM. The list inflates in place as m.direct updates — that's the feedback.
+      const converted = await guessAndConvertDMs(mx);
+      // eslint-disable-next-line no-console
+      console.info(`[Wally] Guess DMs: tagged ${converted.length} room(s) as direct`);
+    } finally {
+      setGuessing(false);
+      requestClose();
+    }
+  };
+
   return (
     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
@@ -124,6 +140,18 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
             Mark as Read
+          </Text>
+        </MenuItem>
+        <Line variant="Surface" size="300" />
+        <MenuItem
+          onClick={handleGuessDMs}
+          size="300"
+          after={<Icon size="100" src={guessing ? Icons.Bulb : Icons.User} />}
+          radii="300"
+          aria-disabled={guessing}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            {guessing ? 'Guessing…' : 'Guess & convert DMs'}
           </Text>
         </MenuItem>
       </Box>

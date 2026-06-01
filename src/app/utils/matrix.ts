@@ -303,6 +303,59 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
   await commitMDirect(mx, userIdToRoomIds);
 };
 
+// Find joined 1:1 rooms (two members, not a space) that aren't tagged as direct
+// and tag them, rebuilding m.direct from the rooms you're actually in. This both
+// looks like a feature ("guess my DMs") and recovers an m.direct that the earlier
+// sliding-sync clobber bug wiped: the DM ROOMS survive even though their mapping
+// was overwritten. Group chats (>2 joined) are left alone. Written as ONE merged
+// account-data update (not N round-trips) through the server-authoritative
+// committer, so it accumulates correctly and the list inflates immediately.
+// dryRun returns the candidates without writing (for a preview).
+export const guessAndConvertDMs = async (
+  mx: MatrixClient,
+  dryRun = false
+): Promise<{ roomId: string; userId: string }[]> => {
+  const self = mx.getUserId();
+  const merged = await readMDirect(mx);
+  const tagged = new Set<string>();
+  Object.values(merged).forEach((ids) => ids.forEach((id) => tagged.add(id)));
+
+  const candidates: { roomId: string; userId: string }[] = [];
+  // eslint-disable-next-line no-restricted-syntax
+  for (const room of mx.getRooms()) {
+    if (room.getMyMembership() !== Membership.Join) continue;
+    if (room.isSpaceRoom()) continue;
+    if (tagged.has(room.roomId)) continue;
+    if (room.getJoinedMemberCount() !== 2) continue;
+
+    let partner = room.guessDMUserId();
+    if (!partner || partner === self) {
+      // Lean roster under sliding sync — heroes alone didn't resolve the other
+      // member, so force a full /members fetch and try again.
+      const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await (forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded());
+      } catch {
+        /* fall through — guess again with whatever we have */
+      }
+      partner = room.guessDMUserId();
+    }
+    if (!partner || partner === self) continue;
+    candidates.push({ roomId: room.roomId, userId: partner });
+  }
+
+  if (!dryRun && candidates.length > 0) {
+    for (const { roomId, userId } of candidates) {
+      const list = merged[userId] || [];
+      if (!list.includes(roomId)) list.push(roomId);
+      merged[userId] = list;
+    }
+    await commitMDirect(mx, merged);
+  }
+  return candidates;
+};
+
 export const mxcUrlToHttp = (
   mx: MatrixClient,
   mxcUrl: string,
