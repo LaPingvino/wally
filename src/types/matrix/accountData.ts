@@ -14,8 +14,8 @@ export enum AccountDataEvent {
   SecretStorageDefaultKey = 'm.secret_storage.default_key',
 
   CrossSigningMaster = 'm.cross_signing.master',
-  CrossSigningSelf = 'm.cross_signing.self',
-  CrossSigningUser = 'm.cross_signing.user',
+  CrossSigningSelf = 'm.cross_signing.self_signing',
+  CrossSigningUser = 'm.cross_signing.user_signing',
   MegolmBackupV1 = 'm.megolm_backup.v1',
 
   WallySettings = 'eu.kiefte.wally.settings',
