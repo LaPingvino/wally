@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { MatrixClient } from 'matrix-js-sdk';
 import {
+  Badge,
   Box,
   Button,
   Checkbox,
@@ -15,31 +16,35 @@ import {
 } from 'folds';
 import { NativeDialog } from '../NativeDialog';
 import * as dialogCss from '../NativeDialog.css';
-import { DmCandidate, detectDmCandidates, tagDmRooms } from '../../utils/matrix';
+import { DmRow, detectDmReshape, reshapeDm } from '../../utils/matrix';
 
 type GuessDMDialogProps = {
   mx: MatrixClient;
   onClose: () => void;
 };
 
-// Two-step DM reshaper: detect every joined 1:1 (native or bridged) that isn't
-// tagged as direct, group the candidates by the bridge bot they came through, and
-// let the user toggle rooms individually or a whole bridge at once before writing.
-// This sidesteps unavoidable ambiguity (e.g. a bridge whose room shape is exactly
-// a 1:1) by putting the decision in the user's hands instead of guessing.
+// Two-way DM reshaper. Lists every joined 1:1 (native or bridged) — both untagged
+// candidates AND rooms already tagged as direct — grouped by the bridge bot they
+// came through. A checkbox means "this is a Direct Message": check a candidate to
+// convert it to a DM, uncheck a current DM to convert it back to a room. Apply
+// writes the adds and removes in one shot. Groups can be toggled wholesale, so
+// flicking a whole bridge on or off (e.g. an IRC group that looks like 1:1s) is one
+// click — sidestepping detection ambiguity by leaving the decision to the user.
 export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
-  const [candidates, setCandidates] = useState<DmCandidate[]>([]);
+  const [rows, setRows] = useState<DmRow[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let disposed = false;
     (async () => {
-      const found = await detectDmCandidates(mx);
+      const found = await detectDmReshape(mx);
       if (disposed) return;
-      setCandidates(found);
-      setSelected(new Set(found.map((c) => c.roomId))); // default: all on
+      setRows(found);
+      // Default = the suggested final state: candidates ON (convert), current DMs
+      // ON (stay). The user unchecks what shouldn't be a DM.
+      setSelected(new Set(found.map((r) => r.roomId)));
       setLoading(false);
     })();
     return () => {
@@ -48,14 +53,14 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
   }, [mx]);
 
   const groups = useMemo(() => {
-    const m = new Map<string, { label: string; items: DmCandidate[] }>();
-    candidates.forEach((c) => {
-      const g = m.get(c.groupKey) ?? { label: c.groupLabel, items: [] };
-      g.items.push(c);
-      m.set(c.groupKey, g);
+    const m = new Map<string, { label: string; items: DmRow[] }>();
+    rows.forEach((r) => {
+      const g = m.get(r.groupKey) ?? { label: r.groupLabel, items: [] };
+      g.items.push(r);
+      m.set(r.groupKey, g);
     });
     return [...m.entries()];
-  }, [candidates]);
+  }, [rows]);
 
   const toggleRoom = (roomId: string) =>
     setSelected((prev) => {
@@ -65,7 +70,7 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
       return next;
     });
 
-  const toggleGroup = (items: DmCandidate[]) =>
+  const toggleGroup = (items: DmRow[]) =>
     setSelected((prev) => {
       const next = new Set(prev);
       const allOn = items.every((i) => next.has(i.roomId));
@@ -73,15 +78,19 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
       return next;
     });
 
-  const selectedCount = selected.size;
+  const addCount = rows.filter((r) => !r.currentlyDM && selected.has(r.roomId)).length;
+  const removeCount = rows.filter((r) => r.currentlyDM && !selected.has(r.roomId)).length;
 
   const apply = async () => {
     setApplying(true);
-    const picks = candidates
-      .filter((c) => selected.has(c.roomId))
-      .map((c) => ({ roomId: c.roomId, partnerUserId: c.partnerUserId }));
+    const add = rows
+      .filter((r) => !r.currentlyDM && selected.has(r.roomId))
+      .map((r) => ({ roomId: r.roomId, partnerUserId: r.partnerUserId }));
+    const removeRoomIds = rows
+      .filter((r) => r.currentlyDM && !selected.has(r.roomId))
+      .map((r) => r.roomId);
     try {
-      await tagDmRooms(mx, picks);
+      await reshapeDm(mx, add, removeRoomIds);
     } finally {
       setApplying(false);
       onClose();
@@ -115,8 +124,15 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
           </Box>
         )}
 
-        {!loading && candidates.length === 0 && (
-          <Text size="T300">No untagged 1:1 chats found — your DM list is already complete.</Text>
+        {!loading && rows.length === 0 && (
+          <Text size="T300">No 1:1 chats found.</Text>
+        )}
+
+        {!loading && rows.length > 0 && (
+          <Text size="T200" priority="300">
+            Checked = Direct Message. Check a chat to convert it to a DM; uncheck a current DM to
+            turn it back into a room.
+          </Text>
         )}
 
         {!loading &&
@@ -138,24 +154,29 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
                     </Text>
                   </Box>
                 </Box>
-                {group.items.map((c) => (
-                  <Box key={c.roomId} alignItems="Center" gap="200" style={{ paddingLeft: config.space.S400 }}>
+                {group.items.map((r) => (
+                  <Box key={r.roomId} alignItems="Center" gap="200" style={{ paddingLeft: config.space.S400 }}>
                     <Checkbox
-                      checked={selected.has(c.roomId)}
-                      onClick={() => toggleRoom(c.roomId)}
+                      checked={selected.has(r.roomId)}
+                      onClick={() => toggleRoom(r.roomId)}
                       size="50"
                       variant="Primary"
                     />
                     <Box grow="Yes" direction="Column">
                       <Text size="T300" truncate>
-                        {c.partnerName}
+                        {r.partnerName}
                       </Text>
-                      {c.roomName !== c.partnerName && (
+                      {r.roomName !== r.partnerName && (
                         <Text size="T200" priority="300" truncate>
-                          {c.roomName}
+                          {r.roomName}
                         </Text>
                       )}
                     </Box>
+                    {r.currentlyDM && (
+                      <Badge variant="Secondary" fill="Soft" size="400">
+                        <Text size="L400">DM</Text>
+                      </Badge>
+                    )}
                   </Box>
                 ))}
               </Box>
@@ -166,19 +187,28 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
       <Box
         direction="Row"
         gap="200"
-        justifyContent="End"
+        alignItems="Center"
         style={{ padding: config.space.S400, borderTopWidth: '1px' }}
       >
+        <Box grow="Yes">
+          {!loading && (addCount > 0 || removeCount > 0) && (
+            <Text size="T200" priority="300">
+              {addCount > 0 && `+${addCount} to DMs`}
+              {addCount > 0 && removeCount > 0 && ', '}
+              {removeCount > 0 && `−${removeCount} to rooms`}
+            </Text>
+          )}
+        </Box>
         <Button onClick={onClose} variant="Secondary" fill="Soft" disabled={applying}>
           <Text size="B400">Cancel</Text>
         </Button>
         <Button
           onClick={apply}
           variant="Primary"
-          disabled={loading || applying || selectedCount === 0}
+          disabled={loading || applying || (addCount === 0 && removeCount === 0)}
           before={applying ? <Spinner size="100" variant="Primary" /> : undefined}
         >
-          <Text size="B400">Convert {selectedCount}</Text>
+          <Text size="B400">Apply</Text>
         </Button>
       </Box>
     </NativeDialog>

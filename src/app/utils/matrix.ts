@@ -328,7 +328,7 @@ const isMyPuppet = (member: RoomMember, myDisplayName: string | null): boolean =
   return name === myDisplayName.toLowerCase();
 };
 
-export type DmCandidate = {
+export type DmRow = {
   roomId: string;
   roomName: string;
   partnerUserId: string;
@@ -336,71 +336,115 @@ export type DmCandidate = {
   // Grouping: the bridge bot's mxid, or 'native' for an un-bridged 1:1.
   groupKey: string;
   groupLabel: string;
+  // true = already tagged in m.direct (uncheck to convert back to a room);
+  // false = a candidate (check to convert to a DM).
+  currentlyDM: boolean;
 };
 
-// Detect joined 1:1 rooms that aren't yet tagged as direct, WITHOUT writing.
-// A DM is any non-space room where, after excluding the bridge bot and your own
-// puppet, exactly ONE real person remains — so native 1:1s AND bridged 1:1s (which
-// carry an extra bot, and sometimes a puppet of you) both qualify, while group
-// chats (2+ real people) don't. Each candidate carries the bot it came through so
-// the UI can group + let you toggle a whole bridge on/off. The list inflates
-// m.direct, which also recovers the mapping the sliding-sync clobber bug wiped.
-export const detectDmCandidates = async (mx: MatrixClient): Promise<DmCandidate[]> => {
+// Force a full member fetch for a small room so bot/puppet classification works
+// even under the lean sliding-sync roster. No-op-safe; bounded by the caller.
+const ensureRoster = async (room: Room): Promise<void> => {
+  const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
+  try {
+    await (forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded());
+  } catch {
+    /* classify with whatever roster we have */
+  }
+};
+
+// Find the bridge bot in a room's roster (for grouping), if any.
+const roomBridgeBot = (room: Room, self: string | null): RoomMember | undefined =>
+  room.getJoinedMembers().find((m) => m.userId !== self && isBridgeBotMember(m));
+
+// Detect the full reshape picture WITHOUT writing: every joined 1:1 that ISN'T
+// tagged as direct (candidate, currentlyDM:false) AND every room that IS tagged
+// (currentlyDM:true, so the UI can offer to convert it back). Each row carries the
+// bridge bot it came through so the dialog can group + toggle a whole bridge.
+//
+// A candidate DM is any non-space room where, after excluding the bridge bot and
+// your own puppet, exactly ONE real person remains — native 1:1s and bridged 1:1s
+// both qualify; group chats (2+ real people) don't.
+export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
   const self = mx.getUserId();
   const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
   const merged = await readMDirect(mx);
-  const tagged = new Set<string>();
-  Object.values(merged).forEach((ids) => ids.forEach((id) => tagged.add(id)));
+  const taggedToUser = new Map<string, string>();
+  Object.entries(merged).forEach(([userId, ids]) =>
+    (ids || []).forEach((id) => taggedToUser.set(id, userId))
+  );
 
-  const candidates: DmCandidate[] = [];
+  const rows: DmRow[] = [];
+
+  // Candidates: joined, non-space, not already tagged, shaped like a 1:1.
   // eslint-disable-next-line no-restricted-syntax
   for (const room of mx.getRooms()) {
     if (room.getMyMembership() !== Membership.Join) continue;
     if (room.isSpaceRoom()) continue;
-    if (tagged.has(room.roomId)) continue;
-    // DMs are small (you + one person + maybe a bot + maybe your puppet). Bound
-    // the /members fetch cost — a room with many members can't be a 1:1.
+    if (taggedToUser.has(room.roomId)) continue;
     const count = room.getJoinedMemberCount();
-    if (count < 2 || count > 8) continue;
+    if (count < 2 || count > 8) continue; // a 1:1 is small; bound the /members cost
 
-    // Need the full roster + display names to classify bots/puppets — a lean
-    // sliding-sync room only knows $LAZY senders, so force a /members fetch.
-    const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      await (forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded());
-    } catch {
-      /* classify with whatever roster we have */
-    }
-
+    // eslint-disable-next-line no-await-in-loop
+    await ensureRoster(room);
     const others = room.getJoinedMembers().filter((m) => m.userId !== self);
     const bot = others.find((m) => isBridgeBotMember(m));
     const realOthers = others.filter((m) => !isBridgeBotMember(m) && !isMyPuppet(m, myDisplayName));
     if (realOthers.length !== 1) continue;
 
     const partner = realOthers[0];
-    candidates.push({
+    rows.push({
       roomId: room.roomId,
       roomName: room.name || room.roomId,
       partnerUserId: partner.userId,
       partnerName: partner.name || partner.userId,
       groupKey: bot ? bot.userId : 'native',
       groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
+      currentlyDM: false,
     });
   }
-  return candidates;
+
+  // Current DMs: everything already in m.direct, so the user can batch-untag.
+  // eslint-disable-next-line no-restricted-syntax
+  for (const [roomId, userId] of taggedToUser) {
+    const room = mx.getRoom(roomId);
+    let roomName = roomId;
+    let partnerName = userId;
+    let groupKey = 'native';
+    let groupLabel = 'Direct chats';
+    if (room) {
+      roomName = room.name || roomId;
+      const count = room.getJoinedMemberCount();
+      // eslint-disable-next-line no-await-in-loop
+      if (count >= 2 && count <= 8) await ensureRoster(room);
+      const bot = roomBridgeBot(room, self);
+      if (bot) {
+        groupKey = bot.userId;
+        groupLabel = bot.rawDisplayName || bot.name || bot.userId;
+      }
+      partnerName = room.getMember(userId)?.name || userId;
+    }
+    rows.push({ roomId, roomName, partnerUserId: userId, partnerName, groupKey, groupLabel, currentlyDM: true });
+  }
+
+  return rows;
 };
 
-// Apply a chosen subset of detected candidates: tag each room in m.direct under
-// its partner, in ONE merged server-authoritative write so it accumulates and the
-// DM list inflates immediately.
-export const tagDmRooms = async (
+// Apply a reshape in ONE merged, server-authoritative write: tag the rooms in
+// `add` under their partner, untag the rooms in `removeRoomIds`. The single write
+// means it accumulates correctly and the DM list updates immediately.
+export const reshapeDm = async (
   mx: MatrixClient,
-  picks: { roomId: string; partnerUserId: string }[]
+  add: { roomId: string; partnerUserId: string }[],
+  removeRoomIds: string[]
 ): Promise<void> => {
-  if (picks.length === 0) return;
+  if (add.length === 0 && removeRoomIds.length === 0) return;
   const merged = await readMDirect(mx);
-  for (const { roomId, partnerUserId } of picks) {
+  const removeSet = new Set(removeRoomIds);
+  Object.keys(merged).forEach((userId) => {
+    merged[userId] = (merged[userId] || []).filter((id) => !removeSet.has(id));
+    if (merged[userId].length === 0) delete merged[userId];
+  });
+  for (const { roomId, partnerUserId } of add) {
     const list = merged[partnerUserId] || [];
     if (!list.includes(roomId)) list.push(roomId);
     merged[partnerUserId] = list;
