@@ -31,7 +31,8 @@ import {
   NavItemContent,
 } from '../../../components/nav';
 import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
-import { getCanonicalAliasOrRoomId, guessAndConvertDMs } from '../../../utils/matrix';
+import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
+import { GuessDMDialog } from '../../../components/guess-dm/GuessDMDialog';
 import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
@@ -67,8 +68,10 @@ import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
 
 type DirectMenuProps = {
   requestClose: () => void;
+  onGuessDMs: () => void;
 };
-const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
+const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(
+  ({ requestClose, onGuessDMs }, ref) => {
   const mx = useMatrixClient();
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const orphanRooms = useDirectRooms();
@@ -81,20 +84,9 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
     requestClose();
   };
 
-  const [guessing, setGuessing] = useState(false);
-  const handleGuessDMs = async () => {
-    if (guessing) return;
-    setGuessing(true);
-    try {
-      // Tags every joined 1:1 (two-member, non-space) room that isn't already a
-      // DM. The list inflates in place as m.direct updates — that's the feedback.
-      const converted = await guessAndConvertDMs(mx);
-      // eslint-disable-next-line no-console
-      console.info(`[Wally] Guess DMs: tagged ${converted.length} room(s) as direct`);
-    } finally {
-      setGuessing(false);
-      requestClose();
-    }
+  const handleGuessDMs = () => {
+    requestClose();
+    onGuessDMs();
   };
 
   return (
@@ -146,21 +138,23 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
         <MenuItem
           onClick={handleGuessDMs}
           size="300"
-          after={<Icon size="100" src={guessing ? Icons.Bulb : Icons.User} />}
+          after={<Icon size="100" src={Icons.User} />}
           radii="300"
-          aria-disabled={guessing}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-            {guessing ? 'Guessing…' : 'Guess & convert DMs'}
+            Guess &amp; convert DMs
           </Text>
         </MenuItem>
       </Box>
     </Menu>
   );
-});
+  }
+);
 
 function DirectHeader() {
+  const mx = useMatrixClient();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  const [guessOpen, setGuessOpen] = useState(false);
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     const cords = evt.currentTarget.getBoundingClientRect();
@@ -203,10 +197,14 @@ function DirectHeader() {
               escapeDeactivates: stopPropagation,
             }}
           >
-            <DirectMenu requestClose={() => setMenuAnchor(undefined)} />
+            <DirectMenu
+              requestClose={() => setMenuAnchor(undefined)}
+              onGuessDMs={() => setGuessOpen(true)}
+            />
           </FocusTrap>
         }
       />
+      {guessOpen && <GuessDMDialog mx={mx} onClose={() => setGuessOpen(false)} />}
     </>
   );
 }

@@ -308,45 +308,51 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
 const DM_BRIDGE_KEYWORDS = ['bridge', 'bot', 'relay'];
 const DM_GHOST_LOCALPART_RE = /^([a-z][a-z0-9]+)_/;
 
-// A joined member that should NOT count as the human you are talking to: a bridge
-// bot, or your OWN bridge puppet — double-puppeting adds a protocol ghost that
-// posts as you (the "bot version of you"). Excluding both lets a bridged 1:1
-// (you + the remote person's ghost + the protocol bot [+ your own puppet]) still
-// read as a DM with exactly one real other person.
-const isDmBridgeHelper = (member: RoomMember, myDisplayName: string | null): boolean => {
+// A bridge bot member (the protocol bot in a portal), used both to exclude it
+// from the human count AND to GROUP candidates by which bridge they came through.
+const isBridgeBotMember = (member: RoomMember): boolean => {
   const local = getMxIdLocalPart(member.userId)?.toLowerCase() ?? '';
   if (DM_BRIDGE_KEYWORDS.some((k) => local === k || local.endsWith(k))) return true;
   const name = (member.rawDisplayName ?? member.name ?? '').toLowerCase();
-  if (DM_BRIDGE_KEYWORDS.some((k) => name.includes(k))) return true;
-  // Your own puppet: a protocol ghost (localpart like `signal_…`) whose display
-  // name is your display name.
-  if (DM_GHOST_LOCALPART_RE.test(local) && myDisplayName && name === myDisplayName.toLowerCase()) {
-    return true;
-  }
-  return false;
+  return DM_BRIDGE_KEYWORDS.some((k) => name.includes(k));
 };
 
-// Find joined 1:1 rooms that aren't tagged as direct and tag them, rebuilding
-// m.direct from the rooms you're actually in. Looks like a feature ("guess my
-// DMs") and recovers an m.direct the earlier sliding-sync clobber bug wiped: the
-// DM ROOMS survive even though their mapping was overwritten. A DM is any non-space
-// room where, after excluding bridge bots and your own puppet, exactly ONE real
-// person remains — so native 1:1s AND bridged 1:1s (which carry an extra bot, and
-// sometimes a puppet of you) both qualify, while group chats (2+ real people) don't.
-// Written as ONE merged account-data update through the server-authoritative
-// committer, so it accumulates correctly and the list inflates immediately.
-// dryRun returns the candidates without writing (for a preview).
-export const guessAndConvertDMs = async (
-  mx: MatrixClient,
-  dryRun = false
-): Promise<{ roomId: string; userId: string }[]> => {
+// Your OWN bridge puppet: double-puppeting adds a protocol ghost (localpart like
+// `signal_…`) that posts as you (the "bot version of you"). Its display name is
+// your display name. Excluded from the human count too.
+const isMyPuppet = (member: RoomMember, myDisplayName: string | null): boolean => {
+  if (!myDisplayName) return false;
+  const local = getMxIdLocalPart(member.userId)?.toLowerCase() ?? '';
+  if (!DM_GHOST_LOCALPART_RE.test(local)) return false;
+  const name = (member.rawDisplayName ?? member.name ?? '').toLowerCase();
+  return name === myDisplayName.toLowerCase();
+};
+
+export type DmCandidate = {
+  roomId: string;
+  roomName: string;
+  partnerUserId: string;
+  partnerName: string;
+  // Grouping: the bridge bot's mxid, or 'native' for an un-bridged 1:1.
+  groupKey: string;
+  groupLabel: string;
+};
+
+// Detect joined 1:1 rooms that aren't yet tagged as direct, WITHOUT writing.
+// A DM is any non-space room where, after excluding the bridge bot and your own
+// puppet, exactly ONE real person remains — so native 1:1s AND bridged 1:1s (which
+// carry an extra bot, and sometimes a puppet of you) both qualify, while group
+// chats (2+ real people) don't. Each candidate carries the bot it came through so
+// the UI can group + let you toggle a whole bridge on/off. The list inflates
+// m.direct, which also recovers the mapping the sliding-sync clobber bug wiped.
+export const detectDmCandidates = async (mx: MatrixClient): Promise<DmCandidate[]> => {
   const self = mx.getUserId();
   const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
   const merged = await readMDirect(mx);
   const tagged = new Set<string>();
   Object.values(merged).forEach((ids) => ids.forEach((id) => tagged.add(id)));
 
-  const candidates: { roomId: string; userId: string }[] = [];
+  const candidates: DmCandidate[] = [];
   // eslint-disable-next-line no-restricted-syntax
   for (const room of mx.getRooms()) {
     if (room.getMyMembership() !== Membership.Join) continue;
@@ -367,23 +373,39 @@ export const guessAndConvertDMs = async (
       /* classify with whatever roster we have */
     }
 
-    const realOthers = room
-      .getJoinedMembers()
-      .filter((m) => m.userId !== self && !isDmBridgeHelper(m, myDisplayName));
-    if (realOthers.length === 1) {
-      candidates.push({ roomId: room.roomId, userId: realOthers[0].userId });
-    }
-  }
+    const others = room.getJoinedMembers().filter((m) => m.userId !== self);
+    const bot = others.find((m) => isBridgeBotMember(m));
+    const realOthers = others.filter((m) => !isBridgeBotMember(m) && !isMyPuppet(m, myDisplayName));
+    if (realOthers.length !== 1) continue;
 
-  if (!dryRun && candidates.length > 0) {
-    for (const { roomId, userId } of candidates) {
-      const list = merged[userId] || [];
-      if (!list.includes(roomId)) list.push(roomId);
-      merged[userId] = list;
-    }
-    await commitMDirect(mx, merged);
+    const partner = realOthers[0];
+    candidates.push({
+      roomId: room.roomId,
+      roomName: room.name || room.roomId,
+      partnerUserId: partner.userId,
+      partnerName: partner.name || partner.userId,
+      groupKey: bot ? bot.userId : 'native',
+      groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
+    });
   }
   return candidates;
+};
+
+// Apply a chosen subset of detected candidates: tag each room in m.direct under
+// its partner, in ONE merged server-authoritative write so it accumulates and the
+// DM list inflates immediately.
+export const tagDmRooms = async (
+  mx: MatrixClient,
+  picks: { roomId: string; partnerUserId: string }[]
+): Promise<void> => {
+  if (picks.length === 0) return;
+  const merged = await readMDirect(mx);
+  for (const { roomId, partnerUserId } of picks) {
+    const list = merged[partnerUserId] || [];
+    if (!list.includes(roomId)) list.push(roomId);
+    merged[partnerUserId] = list;
+  }
+  await commitMDirect(mx, merged);
 };
 
 export const mxcUrlToHttp = (
