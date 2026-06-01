@@ -2,6 +2,7 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
 
 import { cryptoCallbacks } from './secretStorageKeys';
 import { seedAccountData } from './seedAccountData';
+import { installVerificationTracer } from './verifyTrace';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import { removeSecondarySession } from '../app/state/sessions';
@@ -153,6 +154,10 @@ export const startClient = async (mx: MatrixClient) => {
   // seed the types cinny reads (secret-storage/cross-signing → encryption +
   // verification, space order, settings, emoji) straight from the server.
   if (willSlide) seedAccountData(mx);
+
+  // Live SAS-verification tracer + window.wallyClient handle (see verifyTrace).
+  // Cheap, logging-only; invaluable for the "emoji never show" stall.
+  installVerificationTracer(mx);
 };
 
 export const clearCacheAndReload = async (mx: MatrixClient) => {
