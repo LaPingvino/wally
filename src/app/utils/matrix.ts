@@ -4,6 +4,7 @@ import {
   encryptAttachment,
 } from 'browser-encrypt-attachment';
 import {
+  ClientEvent,
   EventTimeline,
   MatrixClient,
   MatrixError,
@@ -225,16 +226,46 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
   return member1?.userId ?? myUserId;
 };
 
+// Read the AUTHORITATIVE m.direct before mutating it. Under sliding sync the
+// LOCAL copy is unreliable: Continuwuity only re-pushes account data that changed
+// since the persisted pos (none on a restored pos), and setAccountData reflects
+// locally only once the server echoes it back a poll later. So merging against the
+// local copy means successive tags each read the SAME stale base and CLOBBER each
+// other — only the last survives. That is the "DM list went 0→1 and never inflates"
+// bug: every /converttodm overwrote the previous instead of accumulating. Fetch
+// from the server so the merge is always against current truth.
+const readMDirect = async (mx: MatrixClient): Promise<Record<string, string[]>> => {
+  try {
+    const fromServer = await mx.getAccountDataFromServer(AccountDataEvent.Direct as any);
+    if (fromServer && typeof fromServer === 'object')
+      return structuredClone(fromServer) as unknown as Record<string, string[]>;
+  } catch {
+    /* not reachable — fall back to the local copy */
+  }
+  const local = mx.getAccountData(AccountDataEvent.Direct as any);
+  return local ? (structuredClone(local.getContent()) as Record<string, string[]>) : {};
+};
+
+// Persist m.direct AND reflect it in the local store immediately, so the DM list
+// inflates right now instead of waiting on a sliding-sync account_data echo that
+// Continuwuity may delay or (on a restored pos) never send.
+const commitMDirect = async (
+  mx: MatrixClient,
+  content: Record<string, string[]>
+): Promise<void> => {
+  await mx.setAccountData(AccountDataEvent.Direct as any, content as any);
+  const prev = mx.getAccountData(AccountDataEvent.Direct as any);
+  const ev = new MatrixEvent({ type: AccountDataEvent.Direct, content });
+  mx.store.storeAccountDataEvents([ev]);
+  mx.emit(ClientEvent.AccountData, ev, prev ?? undefined);
+};
+
 export const addRoomIdToMDirect = async (
   mx: MatrixClient,
   roomId: string,
   userId: string
 ): Promise<void> => {
-  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
-  let userIdToRoomIds: Record<string, string[]> = {};
-
-  if (typeof mDirectsEvent !== 'undefined')
-    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
+  const userIdToRoomIds = await readMDirect(mx);
 
   // remove it from the lists of any others users
   // (it can only be a DM room for one person)
@@ -255,15 +286,11 @@ export const addRoomIdToMDirect = async (
   }
   userIdToRoomIds[userId] = roomIds;
 
-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
+  await commitMDirect(mx, userIdToRoomIds);
 };
 
 export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> => {
-  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
-  let userIdToRoomIds: Record<string, string[]> = {};
-
-  if (typeof mDirectsEvent !== 'undefined')
-    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
+  const userIdToRoomIds = await readMDirect(mx);
 
   Object.keys(userIdToRoomIds).forEach((targetUserId) => {
     const roomIds = userIdToRoomIds[targetUserId];
@@ -273,7 +300,7 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
     }
   });
 
-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
+  await commitMDirect(mx, userIdToRoomIds);
 };
 
 export const mxcUrlToHttp = (
