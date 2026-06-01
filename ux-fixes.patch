@@ -128,10 +128,10 @@ index 90c549c84..85c0125a4 100644
  export const isEmptyEditor = (editor: Editor): boolean => {
 diff --git a/src/app/components/guess-dm/GuessDMDialog.tsx b/src/app/components/guess-dm/GuessDMDialog.tsx
 new file mode 100644
-index 000000000..9a5c4bfc0
+index 000000000..487761e55
 --- /dev/null
 +++ b/src/app/components/guess-dm/GuessDMDialog.tsx
-@@ -0,0 +1,216 @@
+@@ -0,0 +1,222 @@
 +import React, { useEffect, useMemo, useState } from 'react';
 +import { MatrixClient } from 'matrix-js-sdk';
 +import {
@@ -176,9 +176,10 @@ index 000000000..9a5c4bfc0
 +      const found = await detectDmReshape(mx);
 +      if (disposed) return;
 +      setRows(found);
-+      // Default = the suggested final state: candidates ON (convert), current DMs
-+      // ON (stay). The user unchecks what shouldn't be a DM.
-+      setSelected(new Set(found.map((r) => r.roomId)));
++      // Default = the suggested final state: candidates ON (convert), valid current
++      // DMs ON (stay), but MISTAGGED current DMs (a group, a bot, or only your own
++      // alt as partner) OFF — so Apply cleans them up. The user can override either way.
++      setSelected(new Set(found.filter((r) => (r.currentlyDM ? r.valid : true)).map((r) => r.roomId)));
 +      setLoading(false);
 +    })();
 +    return () => {
@@ -306,9 +307,14 @@ index 000000000..9a5c4bfc0
 +                        </Text>
 +                      )}
 +                    </Box>
-+                    {r.currentlyDM && (
++                    {r.currentlyDM && r.valid && (
 +                      <Badge variant="Secondary" fill="Soft" size="400">
 +                        <Text size="L400">DM</Text>
++                      </Badge>
++                    )}
++                    {r.currentlyDM && !r.valid && (
++                      <Badge variant="Critical" fill="Soft" size="400">
++                        <Text size="L400">not 1:1</Text>
 +                      </Badge>
 +                    )}
 +                  </Box>
@@ -1594,7 +1600,7 @@ index e94ba9726..3c08e5954 100644
    }, [mx, setTypingMembers, hideActivity]);
  };
 diff --git a/src/app/utils/matrix.ts b/src/app/utils/matrix.ts
-index 4c86c4e26..86ff70ad9 100644
+index 4c86c4e26..17d5a00d2 100644
 --- a/src/app/utils/matrix.ts
 +++ b/src/app/utils/matrix.ts
 @@ -4,6 +4,7 @@ import {
@@ -1675,7 +1681,7 @@ index 4c86c4e26..86ff70ad9 100644
  
    Object.keys(userIdToRoomIds).forEach((targetUserId) => {
      const roomIds = userIdToRoomIds[targetUserId];
-@@ -273,7 +300,156 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
+@@ -273,7 +300,199 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
      }
    });
  
@@ -1708,6 +1714,13 @@ index 4c86c4e26..86ff70ad9 100644
 +  return name === myDisplayName.toLowerCase();
 +};
 +
++// Another of YOUR OWN accounts (same Matrix localpart, different server) — e.g.
++// @joop:poliglota for @joop:chat.kiefte. It isn't a conversation partner, so a
++// room whose only other member is your alt is NOT a DM (it's why community rooms
++// like "Aligatorejo" got mistagged as DMs named after yourself).
++const isMyAccount = (member: RoomMember, selfLocalpart: string | undefined): boolean =>
++  !!selfLocalpart && getMxIdLocalPart(member.userId) === selfLocalpart;
++
 +export type DmRow = {
 +  roomId: string;
 +  roomName: string;
@@ -1719,6 +1732,10 @@ index 4c86c4e26..86ff70ad9 100644
 +  // true = already tagged in m.direct (uncheck to convert back to a room);
 +  // false = a candidate (check to convert to a DM).
 +  currentlyDM: boolean;
++  // false = does NOT look like a real 1:1 (a group, a bot, or only your own alt
++  // is the "partner"). Mistagged current DMs get this so the dialog can suggest
++  // removing them; candidates are only ever added when this is true.
++  valid: boolean;
 +};
 +
 +// Force a full member fetch for a small room so bot/puppet classification works
@@ -1746,12 +1763,27 @@ index 4c86c4e26..86ff70ad9 100644
 +// both qualify; group chats (2+ real people) don't.
 +export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
 +  const self = mx.getUserId();
++  const selfLocalpart = self ? getMxIdLocalPart(self) : undefined;
 +  const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
 +  const merged = await readMDirect(mx);
 +  const taggedToUser = new Map<string, string>();
 +  Object.entries(merged).forEach(([userId, ids]) =>
 +    (ids || []).forEach((id) => taggedToUser.set(id, userId))
 +  );
++
++  // The real conversation partners in a room: joined members minus yourself, the
++  // bridge bot, your own puppet, and your other accounts (alts). A clean DM has
++  // exactly one.
++  const realHumans = (room: Room): RoomMember[] =>
++    room
++      .getJoinedMembers()
++      .filter(
++        (m) =>
++          m.userId !== self &&
++          !isBridgeBotMember(m) &&
++          !isMyPuppet(m, myDisplayName) &&
++          !isMyAccount(m, selfLocalpart)
++      );
 +
 +  const rows: DmRow[] = [];
 +
@@ -1766,12 +1798,11 @@ index 4c86c4e26..86ff70ad9 100644
 +
 +    // eslint-disable-next-line no-await-in-loop
 +    await ensureRoster(room);
-+    const others = room.getJoinedMembers().filter((m) => m.userId !== self);
-+    const bot = others.find((m) => isBridgeBotMember(m));
-+    const realOthers = others.filter((m) => !isBridgeBotMember(m) && !isMyPuppet(m, myDisplayName));
-+    if (realOthers.length !== 1) continue;
++    const humans = realHumans(room);
++    if (humans.length !== 1) continue;
 +
-+    const partner = realOthers[0];
++    const partner = humans[0];
++    const bot = roomBridgeBot(room, self);
 +    rows.push({
 +      roomId: room.roomId,
 +      roomName: room.name || room.roomId,
@@ -1780,30 +1811,48 @@ index 4c86c4e26..86ff70ad9 100644
 +      groupKey: bot ? bot.userId : 'native',
 +      groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
 +      currentlyDM: false,
++      valid: true,
 +    });
 +  }
 +
-+  // Current DMs: everything already in m.direct, so the user can batch-untag.
++  // Current DMs: everything already in m.direct, so the user can review + untag.
++  // Mark whether each STILL looks like a real 1:1 — mistags (a group, a bot, or a
++  // room whose only "partner" is your own alt) come back valid:false so the dialog
++  // can suggest removing them.
 +  // eslint-disable-next-line no-restricted-syntax
 +  for (const [roomId, userId] of taggedToUser) {
 +    const room = mx.getRoom(roomId);
-+    let roomName = roomId;
-+    let partnerName = userId;
-+    let groupKey = 'native';
-+    let groupLabel = 'Direct chats';
-+    if (room) {
-+      roomName = room.name || roomId;
-+      const count = room.getJoinedMemberCount();
-+      // eslint-disable-next-line no-await-in-loop
-+      if (count >= 2 && count <= 8) await ensureRoster(room);
-+      const bot = roomBridgeBot(room, self);
-+      if (bot) {
-+        groupKey = bot.userId;
-+        groupLabel = bot.rawDisplayName || bot.name || bot.userId;
-+      }
-+      partnerName = room.getMember(userId)?.name || userId;
++    if (!room) {
++      // Tagged room we're no longer in / don't hold — surface it so it can be cleared.
++      rows.push({
++        roomId,
++        roomName: roomId,
++        partnerUserId: userId,
++        partnerName: userId,
++        groupKey: 'native',
++        groupLabel: 'Direct chats',
++        currentlyDM: true,
++        valid: false,
++      });
++      continue;
 +    }
-+    rows.push({ roomId, roomName, partnerUserId: userId, partnerName, groupKey, groupLabel, currentlyDM: true });
++    const count = room.getJoinedMemberCount();
++    // eslint-disable-next-line no-await-in-loop
++    if (count >= 2 && count <= 8) await ensureRoster(room);
++    const humans = realHumans(room);
++    const valid = humans.length === 1;
++    const partner = valid ? humans[0] : undefined;
++    const bot = roomBridgeBot(room, self);
++    rows.push({
++      roomId,
++      roomName: room.name || roomId,
++      partnerUserId: partner?.userId ?? userId,
++      partnerName: partner?.name ?? room.getMember(userId)?.name ?? userId,
++      groupKey: bot ? bot.userId : 'native',
++      groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
++      currentlyDM: true,
++      valid,
++    });
 +  }
 +
 +  return rows;
