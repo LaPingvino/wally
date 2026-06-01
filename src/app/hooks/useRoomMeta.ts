@@ -3,6 +3,7 @@ import { RoomJoinRulesEventContent } from 'matrix-js-sdk/lib/types';
 import { Room, RoomEvent, RoomEventHandlerMap, RoomStateEvent } from 'matrix-js-sdk';
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEvent } from './useStateEvent';
+import { dmRealHumans } from '../utils/matrix';
 
 // Load a DM's members so its partner resolves for name + avatar. ALWAYS force a
 // full /members fetch — not only under sliding sync. loadMembersIfNeeded() returns
@@ -68,6 +69,14 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
  * comes back (regression we hit, restored here).
  */
 const getDmName = (room: Room): string => {
+  // A DM name should only override room.name when the room is genuinely a 1:1.
+  // If more than one real human is present (bridge bots / your puppet / your alts
+  // excluded), it's a group — often a stale or mistagged m.direct entry — so trust
+  // its room name. Without this, getAvatarFallbackMember() prefers the m.direct
+  // "partner" and the title SWAPS from the group name to that one member once their
+  // membership loads (e.g. "English 🇬🇧" → "Gustavo").
+  if (dmRealHumans(room.client, room).length > 1) return room.name;
+
   // For 2-person DMs getAvatarFallbackMember() gives the other member directly.
   const fallbackMember = room.getAvatarFallbackMember();
   if (fallbackMember) return fallbackMember.name;

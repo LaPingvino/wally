@@ -375,29 +375,33 @@ const roomBridgeBot = (room: Room, self: string | null): RoomMember | undefined 
 // A candidate DM is any non-space room where, after excluding the bridge bot and
 // your own puppet, exactly ONE real person remains — native 1:1s and bridged 1:1s
 // both qualify; group chats (2+ real people) don't.
-export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
+// The real conversation partners in a room: joined members minus yourself, the
+// bridge bot, your own puppet, and your other accounts (alts). A clean DM has
+// exactly one; more means it's actually a group (and tagging it as a DM is a mistake).
+export const dmRealHumans = (mx: MatrixClient, room: Room): RoomMember[] => {
   const self = mx.getUserId();
   const selfLocalpart = self ? getMxIdLocalPart(self) : undefined;
   const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
+  return room
+    .getJoinedMembers()
+    .filter(
+      (m) =>
+        m.userId !== self &&
+        !isBridgeBotMember(m) &&
+        !isMyPuppet(m, myDisplayName) &&
+        !isMyAccount(m, selfLocalpart)
+    );
+};
+
+export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
+  const self = mx.getUserId();
   const merged = await readMDirect(mx);
   const taggedToUser = new Map<string, string>();
   Object.entries(merged).forEach(([userId, ids]) =>
     (ids || []).forEach((id) => taggedToUser.set(id, userId))
   );
 
-  // The real conversation partners in a room: joined members minus yourself, the
-  // bridge bot, your own puppet, and your other accounts (alts). A clean DM has
-  // exactly one.
-  const realHumans = (room: Room): RoomMember[] =>
-    room
-      .getJoinedMembers()
-      .filter(
-        (m) =>
-          m.userId !== self &&
-          !isBridgeBotMember(m) &&
-          !isMyPuppet(m, myDisplayName) &&
-          !isMyAccount(m, selfLocalpart)
-      );
+  const realHumans = (room: Room): RoomMember[] => dmRealHumans(mx, room);
 
   const rows: DmRow[] = [];
 
