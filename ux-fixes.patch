@@ -126,6 +126,198 @@ index 90c549c84..85c0125a4 100644
  };
  
  export const isEmptyEditor = (editor: Editor): boolean => {
+diff --git a/src/app/components/guess-dm/GuessDMDialog.tsx b/src/app/components/guess-dm/GuessDMDialog.tsx
+new file mode 100644
+index 000000000..197565971
+--- /dev/null
++++ b/src/app/components/guess-dm/GuessDMDialog.tsx
+@@ -0,0 +1,186 @@
++import React, { useEffect, useMemo, useState } from 'react';
++import { MatrixClient } from 'matrix-js-sdk';
++import {
++  Box,
++  Button,
++  Checkbox,
++  config,
++  Header,
++  Icon,
++  IconButton,
++  Icons,
++  Line,
++  Spinner,
++  Text,
++} from 'folds';
++import { NativeDialog } from '../NativeDialog';
++import * as dialogCss from '../NativeDialog.css';
++import { DmCandidate, detectDmCandidates, tagDmRooms } from '../../utils/matrix';
++
++type GuessDMDialogProps = {
++  mx: MatrixClient;
++  onClose: () => void;
++};
++
++// Two-step DM reshaper: detect every joined 1:1 (native or bridged) that isn't
++// tagged as direct, group the candidates by the bridge bot they came through, and
++// let the user toggle rooms individually or a whole bridge at once before writing.
++// This sidesteps unavoidable ambiguity (e.g. a bridge whose room shape is exactly
++// a 1:1) by putting the decision in the user's hands instead of guessing.
++export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
++  const [loading, setLoading] = useState(true);
++  const [applying, setApplying] = useState(false);
++  const [candidates, setCandidates] = useState<DmCandidate[]>([]);
++  const [selected, setSelected] = useState<Set<string>>(new Set());
++
++  useEffect(() => {
++    let disposed = false;
++    (async () => {
++      const found = await detectDmCandidates(mx);
++      if (disposed) return;
++      setCandidates(found);
++      setSelected(new Set(found.map((c) => c.roomId))); // default: all on
++      setLoading(false);
++    })();
++    return () => {
++      disposed = true;
++    };
++  }, [mx]);
++
++  const groups = useMemo(() => {
++    const m = new Map<string, { label: string; items: DmCandidate[] }>();
++    candidates.forEach((c) => {
++      const g = m.get(c.groupKey) ?? { label: c.groupLabel, items: [] };
++      g.items.push(c);
++      m.set(c.groupKey, g);
++    });
++    return [...m.entries()];
++  }, [candidates]);
++
++  const toggleRoom = (roomId: string) =>
++    setSelected((prev) => {
++      const next = new Set(prev);
++      if (next.has(roomId)) next.delete(roomId);
++      else next.add(roomId);
++      return next;
++    });
++
++  const toggleGroup = (items: DmCandidate[]) =>
++    setSelected((prev) => {
++      const next = new Set(prev);
++      const allOn = items.every((i) => next.has(i.roomId));
++      items.forEach((i) => (allOn ? next.delete(i.roomId) : next.add(i.roomId)));
++      return next;
++    });
++
++  const selectedCount = selected.size;
++
++  const apply = async () => {
++    setApplying(true);
++    const picks = candidates
++      .filter((c) => selected.has(c.roomId))
++      .map((c) => ({ roomId: c.roomId, partnerUserId: c.partnerUserId }));
++    try {
++      await tagDmRooms(mx, picks);
++    } finally {
++      setApplying(false);
++      onClose();
++    }
++  };
++
++  return (
++    <NativeDialog open onClose={onClose} className={dialogCss.NativeDialog}>
++      <Header
++        style={{ borderBottomWidth: '1px', paddingInline: config.space.S400 }}
++        variant="Surface"
++        size="500"
++      >
++        <Box grow="Yes">
++          <Text size="H4">Guess &amp; convert DMs</Text>
++        </Box>
++        <IconButton size="300" radii="300" onClick={onClose}>
++          <Icon src={Icons.Cross} />
++        </IconButton>
++      </Header>
++
++      <Box
++        direction="Column"
++        gap="200"
++        style={{ padding: config.space.S400, maxHeight: '60vh', overflowY: 'auto', minWidth: '20rem' }}
++      >
++        {loading && (
++          <Box direction="Row" gap="200" alignItems="Center">
++            <Spinner variant="Secondary" size="200" />
++            <Text size="T300">Scanning your rooms…</Text>
++          </Box>
++        )}
++
++        {!loading && candidates.length === 0 && (
++          <Text size="T300">No untagged 1:1 chats found — your DM list is already complete.</Text>
++        )}
++
++        {!loading &&
++          groups.map(([key, group], gi) => {
++            const allOn = group.items.every((i) => selected.has(i.roomId));
++            return (
++              <Box key={key} direction="Column" gap="100">
++                {gi > 0 && <Line variant="Surface" size="300" />}
++                <Box alignItems="Center" gap="200" style={{ paddingBlock: config.space.S100 }}>
++                  <Checkbox
++                    checked={allOn}
++                    onClick={() => toggleGroup(group.items)}
++                    size="50"
++                    variant="Primary"
++                  />
++                  <Box grow="Yes">
++                    <Text size="T200" priority="300">
++                      {group.label} ({group.items.length})
++                    </Text>
++                  </Box>
++                </Box>
++                {group.items.map((c) => (
++                  <Box key={c.roomId} alignItems="Center" gap="200" style={{ paddingLeft: config.space.S400 }}>
++                    <Checkbox
++                      checked={selected.has(c.roomId)}
++                      onClick={() => toggleRoom(c.roomId)}
++                      size="50"
++                      variant="Primary"
++                    />
++                    <Box grow="Yes" direction="Column">
++                      <Text size="T300" truncate>
++                        {c.partnerName}
++                      </Text>
++                      {c.roomName !== c.partnerName && (
++                        <Text size="T200" priority="300" truncate>
++                          {c.roomName}
++                        </Text>
++                      )}
++                    </Box>
++                  </Box>
++                ))}
++              </Box>
++            );
++          })}
++      </Box>
++
++      <Box
++        direction="Row"
++        gap="200"
++        justifyContent="End"
++        style={{ padding: config.space.S400, borderTopWidth: '1px' }}
++      >
++        <Button onClick={onClose} variant="Secondary" fill="Soft" disabled={applying}>
++          <Text size="B400">Cancel</Text>
++        </Button>
++        <Button
++          onClick={apply}
++          variant="Primary"
++          disabled={loading || applying || selectedCount === 0}
++          before={applying ? <Spinner size="100" variant="Primary" /> : undefined}
++        >
++          <Text size="B400">Convert {selectedCount}</Text>
++        </Button>
++      </Box>
++    </NativeDialog>
++  );
++}
 diff --git a/src/app/components/message/MsgTypeRenderers.tsx b/src/app/components/message/MsgTypeRenderers.tsx
 index abbf354de..5f4d576b8 100644
 --- a/src/app/components/message/MsgTypeRenderers.tsx
@@ -984,42 +1176,42 @@ index 000000000..2d4a65bb3
 +  );
 +}
 diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
-index 04edf1090..120e744df 100644
+index 04edf1090..0888d2184 100644
 --- a/src/app/pages/client/direct/Direct.tsx
 +++ b/src/app/pages/client/direct/Direct.tsx
-@@ -30,7 +30,7 @@ import {
-   NavItemContent,
+@@ -31,6 +31,7 @@ import {
  } from '../../../components/nav';
  import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
--import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
-+import { getCanonicalAliasOrRoomId, guessAndConvertDMs } from '../../../utils/matrix';
+ import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
++import { GuessDMDialog } from '../../../components/guess-dm/GuessDMDialog';
  import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
  import { VirtualTile } from '../../../components/virtualizer';
  import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
-@@ -67,6 +67,22 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+@@ -54,8 +55,10 @@ import { useDirectCreateSelected } from '../../../hooks/router/useDirectSelected
+ 
+ type DirectMenuProps = {
+   requestClose: () => void;
++  onGuessDMs: () => void;
+ };
+-const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
++const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(
++  ({ requestClose, onGuessDMs }, ref) => {
+   const mx = useMatrixClient();
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+   const orphanRooms = useDirectRooms();
+@@ -67,6 +70,11 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
      requestClose();
    };
  
-+  const [guessing, setGuessing] = useState(false);
-+  const handleGuessDMs = async () => {
-+    if (guessing) return;
-+    setGuessing(true);
-+    try {
-+      // Tags every joined 1:1 (two-member, non-space) room that isn't already a
-+      // DM. The list inflates in place as m.direct updates — that's the feedback.
-+      const converted = await guessAndConvertDMs(mx);
-+      // eslint-disable-next-line no-console
-+      console.info(`[Wally] Guess DMs: tagged ${converted.length} room(s) as direct`);
-+    } finally {
-+      setGuessing(false);
-+      requestClose();
-+    }
++  const handleGuessDMs = () => {
++    requestClose();
++    onGuessDMs();
 +  };
 +
    return (
      <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
        <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-@@ -81,6 +97,18 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+@@ -81,13 +89,27 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
              Mark as Read
            </Text>
          </MenuItem>
@@ -1027,17 +1219,43 @@ index 04edf1090..120e744df 100644
 +        <MenuItem
 +          onClick={handleGuessDMs}
 +          size="300"
-+          after={<Icon size="100" src={guessing ? Icons.Bulb : Icons.User} />}
++          after={<Icon size="100" src={Icons.User} />}
 +          radii="300"
-+          aria-disabled={guessing}
 +        >
 +          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
-+            {guessing ? 'Guessing…' : 'Guess & convert DMs'}
++            Guess &amp; convert DMs
 +          </Text>
 +        </MenuItem>
        </Box>
      </Menu>
    );
+-});
++  }
++);
+ 
+ function DirectHeader() {
++  const mx = useMatrixClient();
+   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
++  const [guessOpen, setGuessOpen] = useState(false);
+ 
+   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+     const cords = evt.currentTarget.getBoundingClientRect();
+@@ -130,10 +152,14 @@ function DirectHeader() {
+               escapeDeactivates: stopPropagation,
+             }}
+           >
+-            <DirectMenu requestClose={() => setMenuAnchor(undefined)} />
++            <DirectMenu
++              requestClose={() => setMenuAnchor(undefined)}
++              onGuessDMs={() => setGuessOpen(true)}
++            />
+           </FocusTrap>
+         }
+       />
++      {guessOpen && <GuessDMDialog mx={mx} onClose={() => setGuessOpen(false)} />}
+     </>
+   );
+ }
 diff --git a/src/app/state/room/roomToUnread.ts b/src/app/state/room/roomToUnread.ts
 index f7ef1b797..2320c1b19 100644
 --- a/src/app/state/room/roomToUnread.ts
@@ -1346,7 +1564,7 @@ index e94ba9726..3c08e5954 100644
    }, [mx, setTypingMembers, hideActivity]);
  };
 diff --git a/src/app/utils/matrix.ts b/src/app/utils/matrix.ts
-index 4c86c4e26..b2e7b86a9 100644
+index 4c86c4e26..89de7ecc0 100644
 --- a/src/app/utils/matrix.ts
 +++ b/src/app/utils/matrix.ts
 @@ -4,6 +4,7 @@ import {
@@ -1427,7 +1645,7 @@ index 4c86c4e26..b2e7b86a9 100644
  
    Object.keys(userIdToRoomIds).forEach((targetUserId) => {
      const roomIds = userIdToRoomIds[targetUserId];
-@@ -273,7 +300,90 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
+@@ -273,7 +300,112 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
      }
    });
  
@@ -1440,45 +1658,51 @@ index 4c86c4e26..b2e7b86a9 100644
 +const DM_BRIDGE_KEYWORDS = ['bridge', 'bot', 'relay'];
 +const DM_GHOST_LOCALPART_RE = /^([a-z][a-z0-9]+)_/;
 +
-+// A joined member that should NOT count as the human you are talking to: a bridge
-+// bot, or your OWN bridge puppet — double-puppeting adds a protocol ghost that
-+// posts as you (the "bot version of you"). Excluding both lets a bridged 1:1
-+// (you + the remote person's ghost + the protocol bot [+ your own puppet]) still
-+// read as a DM with exactly one real other person.
-+const isDmBridgeHelper = (member: RoomMember, myDisplayName: string | null): boolean => {
++// A bridge bot member (the protocol bot in a portal), used both to exclude it
++// from the human count AND to GROUP candidates by which bridge they came through.
++const isBridgeBotMember = (member: RoomMember): boolean => {
 +  const local = getMxIdLocalPart(member.userId)?.toLowerCase() ?? '';
 +  if (DM_BRIDGE_KEYWORDS.some((k) => local === k || local.endsWith(k))) return true;
 +  const name = (member.rawDisplayName ?? member.name ?? '').toLowerCase();
-+  if (DM_BRIDGE_KEYWORDS.some((k) => name.includes(k))) return true;
-+  // Your own puppet: a protocol ghost (localpart like `signal_…`) whose display
-+  // name is your display name.
-+  if (DM_GHOST_LOCALPART_RE.test(local) && myDisplayName && name === myDisplayName.toLowerCase()) {
-+    return true;
-+  }
-+  return false;
++  return DM_BRIDGE_KEYWORDS.some((k) => name.includes(k));
 +};
 +
-+// Find joined 1:1 rooms that aren't tagged as direct and tag them, rebuilding
-+// m.direct from the rooms you're actually in. Looks like a feature ("guess my
-+// DMs") and recovers an m.direct the earlier sliding-sync clobber bug wiped: the
-+// DM ROOMS survive even though their mapping was overwritten. A DM is any non-space
-+// room where, after excluding bridge bots and your own puppet, exactly ONE real
-+// person remains — so native 1:1s AND bridged 1:1s (which carry an extra bot, and
-+// sometimes a puppet of you) both qualify, while group chats (2+ real people) don't.
-+// Written as ONE merged account-data update through the server-authoritative
-+// committer, so it accumulates correctly and the list inflates immediately.
-+// dryRun returns the candidates without writing (for a preview).
-+export const guessAndConvertDMs = async (
-+  mx: MatrixClient,
-+  dryRun = false
-+): Promise<{ roomId: string; userId: string }[]> => {
++// Your OWN bridge puppet: double-puppeting adds a protocol ghost (localpart like
++// `signal_…`) that posts as you (the "bot version of you"). Its display name is
++// your display name. Excluded from the human count too.
++const isMyPuppet = (member: RoomMember, myDisplayName: string | null): boolean => {
++  if (!myDisplayName) return false;
++  const local = getMxIdLocalPart(member.userId)?.toLowerCase() ?? '';
++  if (!DM_GHOST_LOCALPART_RE.test(local)) return false;
++  const name = (member.rawDisplayName ?? member.name ?? '').toLowerCase();
++  return name === myDisplayName.toLowerCase();
++};
++
++export type DmCandidate = {
++  roomId: string;
++  roomName: string;
++  partnerUserId: string;
++  partnerName: string;
++  // Grouping: the bridge bot's mxid, or 'native' for an un-bridged 1:1.
++  groupKey: string;
++  groupLabel: string;
++};
++
++// Detect joined 1:1 rooms that aren't yet tagged as direct, WITHOUT writing.
++// A DM is any non-space room where, after excluding the bridge bot and your own
++// puppet, exactly ONE real person remains — so native 1:1s AND bridged 1:1s (which
++// carry an extra bot, and sometimes a puppet of you) both qualify, while group
++// chats (2+ real people) don't. Each candidate carries the bot it came through so
++// the UI can group + let you toggle a whole bridge on/off. The list inflates
++// m.direct, which also recovers the mapping the sliding-sync clobber bug wiped.
++export const detectDmCandidates = async (mx: MatrixClient): Promise<DmCandidate[]> => {
 +  const self = mx.getUserId();
 +  const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
 +  const merged = await readMDirect(mx);
 +  const tagged = new Set<string>();
 +  Object.values(merged).forEach((ids) => ids.forEach((id) => tagged.add(id)));
 +
-+  const candidates: { roomId: string; userId: string }[] = [];
++  const candidates: DmCandidate[] = [];
 +  // eslint-disable-next-line no-restricted-syntax
 +  for (const room of mx.getRooms()) {
 +    if (room.getMyMembership() !== Membership.Join) continue;
@@ -1499,23 +1723,39 @@ index 4c86c4e26..b2e7b86a9 100644
 +      /* classify with whatever roster we have */
 +    }
 +
-+    const realOthers = room
-+      .getJoinedMembers()
-+      .filter((m) => m.userId !== self && !isDmBridgeHelper(m, myDisplayName));
-+    if (realOthers.length === 1) {
-+      candidates.push({ roomId: room.roomId, userId: realOthers[0].userId });
-+    }
-+  }
++    const others = room.getJoinedMembers().filter((m) => m.userId !== self);
++    const bot = others.find((m) => isBridgeBotMember(m));
++    const realOthers = others.filter((m) => !isBridgeBotMember(m) && !isMyPuppet(m, myDisplayName));
++    if (realOthers.length !== 1) continue;
 +
-+  if (!dryRun && candidates.length > 0) {
-+    for (const { roomId, userId } of candidates) {
-+      const list = merged[userId] || [];
-+      if (!list.includes(roomId)) list.push(roomId);
-+      merged[userId] = list;
-+    }
-+    await commitMDirect(mx, merged);
++    const partner = realOthers[0];
++    candidates.push({
++      roomId: room.roomId,
++      roomName: room.name || room.roomId,
++      partnerUserId: partner.userId,
++      partnerName: partner.name || partner.userId,
++      groupKey: bot ? bot.userId : 'native',
++      groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
++    });
 +  }
 +  return candidates;
++};
++
++// Apply a chosen subset of detected candidates: tag each room in m.direct under
++// its partner, in ONE merged server-authoritative write so it accumulates and the
++// DM list inflates immediately.
++export const tagDmRooms = async (
++  mx: MatrixClient,
++  picks: { roomId: string; partnerUserId: string }[]
++): Promise<void> => {
++  if (picks.length === 0) return;
++  const merged = await readMDirect(mx);
++  for (const { roomId, partnerUserId } of picks) {
++    const list = merged[partnerUserId] || [];
++    if (!list.includes(roomId)) list.push(roomId);
++    merged[partnerUserId] = list;
++  }
++  await commitMDirect(mx, merged);
  };
  
  export const mxcUrlToHttp = (
