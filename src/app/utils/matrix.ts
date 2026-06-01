@@ -328,6 +328,13 @@ const isMyPuppet = (member: RoomMember, myDisplayName: string | null): boolean =
   return name === myDisplayName.toLowerCase();
 };
 
+// Another of YOUR OWN accounts (same Matrix localpart, different server) — e.g.
+// @joop:poliglota for @joop:chat.kiefte. It isn't a conversation partner, so a
+// room whose only other member is your alt is NOT a DM (it's why community rooms
+// like "Aligatorejo" got mistagged as DMs named after yourself).
+const isMyAccount = (member: RoomMember, selfLocalpart: string | undefined): boolean =>
+  !!selfLocalpart && getMxIdLocalPart(member.userId) === selfLocalpart;
+
 export type DmRow = {
   roomId: string;
   roomName: string;
@@ -339,6 +346,10 @@ export type DmRow = {
   // true = already tagged in m.direct (uncheck to convert back to a room);
   // false = a candidate (check to convert to a DM).
   currentlyDM: boolean;
+  // false = does NOT look like a real 1:1 (a group, a bot, or only your own alt
+  // is the "partner"). Mistagged current DMs get this so the dialog can suggest
+  // removing them; candidates are only ever added when this is true.
+  valid: boolean;
 };
 
 // Force a full member fetch for a small room so bot/puppet classification works
@@ -366,12 +377,27 @@ const roomBridgeBot = (room: Room, self: string | null): RoomMember | undefined 
 // both qualify; group chats (2+ real people) don't.
 export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
   const self = mx.getUserId();
+  const selfLocalpart = self ? getMxIdLocalPart(self) : undefined;
   const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
   const merged = await readMDirect(mx);
   const taggedToUser = new Map<string, string>();
   Object.entries(merged).forEach(([userId, ids]) =>
     (ids || []).forEach((id) => taggedToUser.set(id, userId))
   );
+
+  // The real conversation partners in a room: joined members minus yourself, the
+  // bridge bot, your own puppet, and your other accounts (alts). A clean DM has
+  // exactly one.
+  const realHumans = (room: Room): RoomMember[] =>
+    room
+      .getJoinedMembers()
+      .filter(
+        (m) =>
+          m.userId !== self &&
+          !isBridgeBotMember(m) &&
+          !isMyPuppet(m, myDisplayName) &&
+          !isMyAccount(m, selfLocalpart)
+      );
 
   const rows: DmRow[] = [];
 
@@ -386,12 +412,11 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
 
     // eslint-disable-next-line no-await-in-loop
     await ensureRoster(room);
-    const others = room.getJoinedMembers().filter((m) => m.userId !== self);
-    const bot = others.find((m) => isBridgeBotMember(m));
-    const realOthers = others.filter((m) => !isBridgeBotMember(m) && !isMyPuppet(m, myDisplayName));
-    if (realOthers.length !== 1) continue;
+    const humans = realHumans(room);
+    if (humans.length !== 1) continue;
 
-    const partner = realOthers[0];
+    const partner = humans[0];
+    const bot = roomBridgeBot(room, self);
     rows.push({
       roomId: room.roomId,
       roomName: room.name || room.roomId,
@@ -400,30 +425,48 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
       groupKey: bot ? bot.userId : 'native',
       groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
       currentlyDM: false,
+      valid: true,
     });
   }
 
-  // Current DMs: everything already in m.direct, so the user can batch-untag.
+  // Current DMs: everything already in m.direct, so the user can review + untag.
+  // Mark whether each STILL looks like a real 1:1 — mistags (a group, a bot, or a
+  // room whose only "partner" is your own alt) come back valid:false so the dialog
+  // can suggest removing them.
   // eslint-disable-next-line no-restricted-syntax
   for (const [roomId, userId] of taggedToUser) {
     const room = mx.getRoom(roomId);
-    let roomName = roomId;
-    let partnerName = userId;
-    let groupKey = 'native';
-    let groupLabel = 'Direct chats';
-    if (room) {
-      roomName = room.name || roomId;
-      const count = room.getJoinedMemberCount();
-      // eslint-disable-next-line no-await-in-loop
-      if (count >= 2 && count <= 8) await ensureRoster(room);
-      const bot = roomBridgeBot(room, self);
-      if (bot) {
-        groupKey = bot.userId;
-        groupLabel = bot.rawDisplayName || bot.name || bot.userId;
-      }
-      partnerName = room.getMember(userId)?.name || userId;
+    if (!room) {
+      // Tagged room we're no longer in / don't hold — surface it so it can be cleared.
+      rows.push({
+        roomId,
+        roomName: roomId,
+        partnerUserId: userId,
+        partnerName: userId,
+        groupKey: 'native',
+        groupLabel: 'Direct chats',
+        currentlyDM: true,
+        valid: false,
+      });
+      continue;
     }
-    rows.push({ roomId, roomName, partnerUserId: userId, partnerName, groupKey, groupLabel, currentlyDM: true });
+    const count = room.getJoinedMemberCount();
+    // eslint-disable-next-line no-await-in-loop
+    if (count >= 2 && count <= 8) await ensureRoster(room);
+    const humans = realHumans(room);
+    const valid = humans.length === 1;
+    const partner = valid ? humans[0] : undefined;
+    const bot = roomBridgeBot(room, self);
+    rows.push({
+      roomId,
+      roomName: room.name || roomId,
+      partnerUserId: partner?.userId ?? userId,
+      partnerName: partner?.name ?? room.getMember(userId)?.name ?? userId,
+      groupKey: bot ? bot.userId : 'native',
+      groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
+      currentlyDM: true,
+      valid,
+    });
   }
 
   return rows;

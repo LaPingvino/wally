@@ -42,9 +42,10 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
       const found = await detectDmReshape(mx);
       if (disposed) return;
       setRows(found);
-      // Default = the suggested final state: candidates ON (convert), current DMs
-      // ON (stay). The user unchecks what shouldn't be a DM.
-      setSelected(new Set(found.map((r) => r.roomId)));
+      // Default = the suggested final state: candidates ON (convert), valid current
+      // DMs ON (stay), but MISTAGGED current DMs (a group, a bot, or only your own
+      // alt as partner) OFF — so Apply cleans them up. The user can override either way.
+      setSelected(new Set(found.filter((r) => (r.currentlyDM ? r.valid : true)).map((r) => r.roomId)));
       setLoading(false);
     })();
     return () => {
@@ -176,9 +177,14 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
                         </Text>
                       )}
                     </Box>
-                    {r.currentlyDM && (
+                    {r.currentlyDM && r.valid && (
                       <Badge variant="Secondary" fill="Soft" size="400">
                         <Text size="L400">DM</Text>
+                      </Badge>
+                    )}
+                    {r.currentlyDM && !r.valid && (
+                      <Badge variant="Critical" fill="Soft" size="400">
+                        <Text size="L400">not 1:1</Text>
                       </Badge>
                     )}
                   </Box>
