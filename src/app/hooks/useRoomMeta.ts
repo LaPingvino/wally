@@ -4,18 +4,17 @@ import { Room, RoomEvent, RoomEventHandlerMap, RoomStateEvent } from 'matrix-js-
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEvent } from './useStateEvent';
 
-// Load a DM's members so its partner resolves for name + avatar. Under sliding
-// sync loadMembersIfNeeded() is a NO-OP (lazyLoadMembers is off, so membersPromise
-// is pre-resolved), which leaves the roster at $LAZY senders only — so the DM
+// Load a DM's members so its partner resolves for name + avatar. ALWAYS force a
+// full /members fetch — not only under sliding sync. loadMembersIfNeeded() returns
+// early once the lazy roster is "loaded", which is true even when only the
+// heroes/recent senders are present (sliding sync leaves it at $LAZY; classic lazy
+// loading leaves a partner who hasn't spoken recently out). Either way the DM
 // partner is missing and the name/avatar fall back to the mxid ("the other side
-// seems missing"). forceLoadMembers (fork) hits /members regardless. Same idiom as
-// useRoomMembers; cast because the published .d.ts lags the method.
+// seems missing"). forceLoadMembers (fork) hits /members regardless and caches, so
+// repeat calls are cheap. Cast because the published .d.ts lags the method.
 const loadDmMembers = (room: Room): Promise<unknown> => {
-  const ss = (room.client as unknown as { getSlidingSync?: () => unknown }).getSlidingSync?.();
   const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
-  return ss && forceable.forceLoadMembers
-    ? forceable.forceLoadMembers()
-    : room.loadMembersIfNeeded();
+  return forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded();
 };
 
 export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
