@@ -4,6 +4,20 @@ import { Room, RoomEvent, RoomEventHandlerMap, RoomStateEvent } from 'matrix-js-
 import { StateEvent } from '../../types/matrix/room';
 import { useStateEvent } from './useStateEvent';
 
+// Load a DM's members so its partner resolves for name + avatar. Under sliding
+// sync loadMembersIfNeeded() is a NO-OP (lazyLoadMembers is off, so membersPromise
+// is pre-resolved), which leaves the roster at $LAZY senders only — so the DM
+// partner is missing and the name/avatar fall back to the mxid ("the other side
+// seems missing"). forceLoadMembers (fork) hits /members regardless. Same idiom as
+// useRoomMembers; cast because the published .d.ts lags the method.
+const loadDmMembers = (room: Room): Promise<unknown> => {
+  const ss = (room.client as unknown as { getSlidingSync?: () => unknown }).getSlidingSync?.();
+  const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
+  return ss && forceable.forceLoadMembers
+    ? forceable.forceLoadMembers()
+    : room.loadMembersIfNeeded();
+};
+
 export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   const avatarEvent = useStateEvent(room, StateEvent.RoomAvatar);
   // For DMs, member profiles come from lazy-loaded members — trigger load and re-render.
@@ -22,7 +36,7 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
         if (!cancelled) setMemberTick((t) => t + 1);
       });
     };
-    room.loadMembersIfNeeded().then(() => { onMember(); });
+    loadDmMembers(room).then(() => { onMember(); }).catch(() => { /* keep fallback */ });
     room.on(RoomStateEvent.Members, onMember);
     return () => {
       cancelled = true;
@@ -105,7 +119,7 @@ export const useRoomName = (room: Room, dm?: boolean): string => {
         if (!cancelled) setName(getDmName(room));
       });
     };
-    room.loadMembersIfNeeded().then(() => { onMember(); });
+    loadDmMembers(room).then(() => { onMember(); }).catch(() => { /* keep fallback */ });
     room.on(RoomStateEvent.Members, onMember);
     return () => {
       cancelled = true;

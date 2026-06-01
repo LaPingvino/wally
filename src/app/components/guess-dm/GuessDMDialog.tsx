@@ -99,23 +99,27 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
 
   return (
     <NativeDialog open onClose={onClose} className={dialogCss.NativeDialog}>
-      <Header
-        style={{ borderBottomWidth: '1px', paddingInline: config.space.S400 }}
-        variant="Surface"
-        size="500"
-      >
-        <Box grow="Yes">
-          <Text size="H4">Guess &amp; convert DMs</Text>
-        </Box>
-        <IconButton size="300" radii="300" onClick={onClose}>
-          <Icon src={Icons.Cross} />
-        </IconButton>
-      </Header>
+      <Box direction="Column" style={{ maxHeight: '80vh', minWidth: '22rem', maxWidth: '90vw' }}>
+      <Box shrink="No">
+        <Header
+          style={{ borderBottomWidth: '1px', paddingInline: config.space.S400 }}
+          variant="Surface"
+          size="500"
+        >
+          <Box grow="Yes">
+            <Text size="H4">Guess &amp; convert DMs</Text>
+          </Box>
+          <IconButton size="300" radii="300" onClick={onClose}>
+            <Icon src={Icons.Cross} />
+          </IconButton>
+        </Header>
+      </Box>
 
       <Box
+        grow="Yes"
         direction="Column"
         gap="200"
-        style={{ padding: config.space.S400, maxHeight: '60vh', overflowY: 'auto', minWidth: '20rem' }}
+        style={{ padding: config.space.S400, minHeight: 0, overflowY: 'auto' }}
       >
         {loading && (
           <Box direction="Row" gap="200" alignItems="Center">
@@ -139,7 +143,7 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
           groups.map(([key, group], gi) => {
             const allOn = group.items.every((i) => selected.has(i.roomId));
             return (
-              <Box key={key} direction="Column" gap="100">
+              <Box key={key} shrink="No" direction="Column" gap="100">
                 {gi > 0 && <Line variant="Surface" size="300" />}
                 <Box alignItems="Center" gap="200" style={{ paddingBlock: config.space.S100 }}>
                   <Checkbox
@@ -155,7 +159,7 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
                   </Box>
                 </Box>
                 {group.items.map((r) => (
-                  <Box key={r.roomId} alignItems="Center" gap="200" style={{ paddingLeft: config.space.S400 }}>
+                  <Box key={r.roomId} shrink="No" alignItems="Center" gap="200" style={{ paddingLeft: config.space.S400, minHeight: '1.75rem' }}>
                     <Checkbox
                       checked={selected.has(r.roomId)}
                       onClick={() => toggleRoom(r.roomId)}
@@ -185,6 +189,7 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
       </Box>
 
       <Box
+        shrink="No"
         direction="Row"
         gap="200"
         alignItems="Center"
@@ -210,6 +215,7 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
         >
           <Text size="B400">Apply</Text>
         </Button>
+      </Box>
       </Box>
     </NativeDialog>
   );
