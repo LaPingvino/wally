@@ -983,6 +983,61 @@ index 000000000..2d4a65bb3
 +    </Box>
 +  );
 +}
+diff --git a/src/app/pages/client/direct/Direct.tsx b/src/app/pages/client/direct/Direct.tsx
+index 04edf1090..120e744df 100644
+--- a/src/app/pages/client/direct/Direct.tsx
++++ b/src/app/pages/client/direct/Direct.tsx
+@@ -30,7 +30,7 @@ import {
+   NavItemContent,
+ } from '../../../components/nav';
+ import { getDirectCreatePath, getDirectRoomPath } from '../../pathUtils';
+-import { getCanonicalAliasOrRoomId } from '../../../utils/matrix';
++import { getCanonicalAliasOrRoomId, guessAndConvertDMs } from '../../../utils/matrix';
+ import { useSelectedRoom } from '../../../hooks/router/useSelectedRoom';
+ import { VirtualTile } from '../../../components/virtualizer';
+ import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
+@@ -67,6 +67,22 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+     requestClose();
+   };
+ 
++  const [guessing, setGuessing] = useState(false);
++  const handleGuessDMs = async () => {
++    if (guessing) return;
++    setGuessing(true);
++    try {
++      // Tags every joined 1:1 (two-member, non-space) room that isn't already a
++      // DM. The list inflates in place as m.direct updates — that's the feedback.
++      const converted = await guessAndConvertDMs(mx);
++      // eslint-disable-next-line no-console
++      console.info(`[Wally] Guess DMs: tagged ${converted.length} room(s) as direct`);
++    } finally {
++      setGuessing(false);
++      requestClose();
++    }
++  };
++
+   return (
+     <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+@@ -81,6 +97,18 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
+             Mark as Read
+           </Text>
+         </MenuItem>
++        <Line variant="Surface" size="300" />
++        <MenuItem
++          onClick={handleGuessDMs}
++          size="300"
++          after={<Icon size="100" src={guessing ? Icons.Bulb : Icons.User} />}
++          radii="300"
++          aria-disabled={guessing}
++        >
++          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
++            {guessing ? 'Guessing…' : 'Guess & convert DMs'}
++          </Text>
++        </MenuItem>
+       </Box>
+     </Menu>
+   );
 diff --git a/src/app/state/room/roomToUnread.ts b/src/app/state/room/roomToUnread.ts
 index f7ef1b797..2320c1b19 100644
 --- a/src/app/state/room/roomToUnread.ts
@@ -1290,6 +1345,150 @@ index e94ba9726..3c08e5954 100644
      };
    }, [mx, setTypingMembers, hideActivity]);
  };
+diff --git a/src/app/utils/matrix.ts b/src/app/utils/matrix.ts
+index 4c86c4e26..0eb559fd6 100644
+--- a/src/app/utils/matrix.ts
++++ b/src/app/utils/matrix.ts
+@@ -4,6 +4,7 @@ import {
+   encryptAttachment,
+ } from 'browser-encrypt-attachment';
+ import {
++  ClientEvent,
+   EventTimeline,
+   MatrixClient,
+   MatrixError,
+@@ -225,16 +226,46 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
+   return member1?.userId ?? myUserId;
+ };
+ 
++// Read the AUTHORITATIVE m.direct before mutating it. Under sliding sync the
++// LOCAL copy is unreliable: Continuwuity only re-pushes account data that changed
++// since the persisted pos (none on a restored pos), and setAccountData reflects
++// locally only once the server echoes it back a poll later. So merging against the
++// local copy means successive tags each read the SAME stale base and CLOBBER each
++// other — only the last survives. That is the "DM list went 0→1 and never inflates"
++// bug: every /converttodm overwrote the previous instead of accumulating. Fetch
++// from the server so the merge is always against current truth.
++const readMDirect = async (mx: MatrixClient): Promise<Record<string, string[]>> => {
++  try {
++    const fromServer = await mx.getAccountDataFromServer(AccountDataEvent.Direct as any);
++    if (fromServer && typeof fromServer === 'object')
++      return structuredClone(fromServer) as unknown as Record<string, string[]>;
++  } catch {
++    /* not reachable — fall back to the local copy */
++  }
++  const local = mx.getAccountData(AccountDataEvent.Direct as any);
++  return local ? (structuredClone(local.getContent()) as Record<string, string[]>) : {};
++};
++
++// Persist m.direct AND reflect it in the local store immediately, so the DM list
++// inflates right now instead of waiting on a sliding-sync account_data echo that
++// Continuwuity may delay or (on a restored pos) never send.
++const commitMDirect = async (
++  mx: MatrixClient,
++  content: Record<string, string[]>
++): Promise<void> => {
++  await mx.setAccountData(AccountDataEvent.Direct as any, content as any);
++  const prev = mx.getAccountData(AccountDataEvent.Direct as any);
++  const ev = new MatrixEvent({ type: AccountDataEvent.Direct, content });
++  mx.store.storeAccountDataEvents([ev]);
++  mx.emit(ClientEvent.AccountData, ev, prev ?? undefined);
++};
++
+ export const addRoomIdToMDirect = async (
+   mx: MatrixClient,
+   roomId: string,
+   userId: string
+ ): Promise<void> => {
+-  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
+-  let userIdToRoomIds: Record<string, string[]> = {};
+-
+-  if (typeof mDirectsEvent !== 'undefined')
+-    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
++  const userIdToRoomIds = await readMDirect(mx);
+ 
+   // remove it from the lists of any others users
+   // (it can only be a DM room for one person)
+@@ -255,15 +286,11 @@ export const addRoomIdToMDirect = async (
+   }
+   userIdToRoomIds[userId] = roomIds;
+ 
+-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
++  await commitMDirect(mx, userIdToRoomIds);
+ };
+ 
+ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> => {
+-  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
+-  let userIdToRoomIds: Record<string, string[]> = {};
+-
+-  if (typeof mDirectsEvent !== 'undefined')
+-    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
++  const userIdToRoomIds = await readMDirect(mx);
+ 
+   Object.keys(userIdToRoomIds).forEach((targetUserId) => {
+     const roomIds = userIdToRoomIds[targetUserId];
+@@ -273,7 +300,60 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
+     }
+   });
+ 
+-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
++  await commitMDirect(mx, userIdToRoomIds);
++};
++
++// Find joined 1:1 rooms (two members, not a space) that aren't tagged as direct
++// and tag them, rebuilding m.direct from the rooms you're actually in. This both
++// looks like a feature ("guess my DMs") and recovers an m.direct that the earlier
++// sliding-sync clobber bug wiped: the DM ROOMS survive even though their mapping
++// was overwritten. Group chats (>2 joined) are left alone. Written as ONE merged
++// account-data update (not N round-trips) through the server-authoritative
++// committer, so it accumulates correctly and the list inflates immediately.
++// dryRun returns the candidates without writing (for a preview).
++export const guessAndConvertDMs = async (
++  mx: MatrixClient,
++  dryRun = false
++): Promise<{ roomId: string; userId: string }[]> => {
++  const self = mx.getUserId();
++  const merged = await readMDirect(mx);
++  const tagged = new Set<string>();
++  Object.values(merged).forEach((ids) => ids.forEach((id) => tagged.add(id)));
++
++  const candidates: { roomId: string; userId: string }[] = [];
++  // eslint-disable-next-line no-restricted-syntax
++  for (const room of mx.getRooms()) {
++    if (room.getMyMembership() !== Membership.Join) continue;
++    if (room.isSpaceRoom()) continue;
++    if (tagged.has(room.roomId)) continue;
++    if (room.getJoinedMemberCount() !== 2) continue;
++
++    let partner = room.guessDMUserId();
++    if (!partner || partner === self) {
++      // Lean roster under sliding sync — heroes alone didn't resolve the other
++      // member, so force a full /members fetch and try again.
++      const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
++      try {
++        // eslint-disable-next-line no-await-in-loop
++        await (forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded());
++      } catch {
++        /* fall through — guess again with whatever we have */
++      }
++      partner = room.guessDMUserId();
++    }
++    if (!partner || partner === self) continue;
++    candidates.push({ roomId: room.roomId, userId: partner });
++  }
++
++  if (!dryRun && candidates.length > 0) {
++    for (const { roomId, userId } of candidates) {
++      const list = merged[userId] || [];
++      if (!list.includes(roomId)) list.push(roomId);
++      merged[userId] = list;
++    }
++    await commitMDirect(mx, merged);
++  }
++  return candidates;
+ };
+ 
+ export const mxcUrlToHttp = (
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
 index a7087c2e1..f0b834ee1 100644
 --- a/src/client/initMatrix.ts
