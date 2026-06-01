@@ -303,12 +303,37 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
   await commitMDirect(mx, userIdToRoomIds);
 };
 
-// Find joined 1:1 rooms (two members, not a space) that aren't tagged as direct
-// and tag them, rebuilding m.direct from the rooms you're actually in. This both
-// looks like a feature ("guess my DMs") and recovers an m.direct that the earlier
-// sliding-sync clobber bug wiped: the DM ROOMS survive even though their mapping
-// was overwritten. Group chats (>2 joined) are left alone. Written as ONE merged
-// account-data update (not N round-trips) through the server-authoritative
+// Bridge-aware DM detection. Kept local rather than importing from utils/bridges
+// because bridges.ts imports from THIS module (a cycle). Mirrors its heuristics.
+const DM_BRIDGE_KEYWORDS = ['bridge', 'bot', 'relay'];
+const DM_GHOST_LOCALPART_RE = /^([a-z][a-z0-9]+)_/;
+
+// A joined member that should NOT count as the human you are talking to: a bridge
+// bot, or your OWN bridge puppet — double-puppeting adds a protocol ghost that
+// posts as you (the "bot version of you"). Excluding both lets a bridged 1:1
+// (you + the remote person's ghost + the protocol bot [+ your own puppet]) still
+// read as a DM with exactly one real other person.
+const isDmBridgeHelper = (member: RoomMember, myDisplayName: string | null): boolean => {
+  const local = getMxIdLocalPart(member.userId)?.toLowerCase() ?? '';
+  if (DM_BRIDGE_KEYWORDS.some((k) => local === k || local.endsWith(k))) return true;
+  const name = (member.rawDisplayName ?? member.name ?? '').toLowerCase();
+  if (DM_BRIDGE_KEYWORDS.some((k) => name.includes(k))) return true;
+  // Your own puppet: a protocol ghost (localpart like `signal_…`) whose display
+  // name is your display name.
+  if (DM_GHOST_LOCALPART_RE.test(local) && myDisplayName && name === myDisplayName.toLowerCase()) {
+    return true;
+  }
+  return false;
+};
+
+// Find joined 1:1 rooms that aren't tagged as direct and tag them, rebuilding
+// m.direct from the rooms you're actually in. Looks like a feature ("guess my
+// DMs") and recovers an m.direct the earlier sliding-sync clobber bug wiped: the
+// DM ROOMS survive even though their mapping was overwritten. A DM is any non-space
+// room where, after excluding bridge bots and your own puppet, exactly ONE real
+// person remains — so native 1:1s AND bridged 1:1s (which carry an extra bot, and
+// sometimes a puppet of you) both qualify, while group chats (2+ real people) don't.
+// Written as ONE merged account-data update through the server-authoritative
 // committer, so it accumulates correctly and the list inflates immediately.
 // dryRun returns the candidates without writing (for a preview).
 export const guessAndConvertDMs = async (
@@ -316,6 +341,7 @@ export const guessAndConvertDMs = async (
   dryRun = false
 ): Promise<{ roomId: string; userId: string }[]> => {
   const self = mx.getUserId();
+  const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
   const merged = await readMDirect(mx);
   const tagged = new Set<string>();
   Object.values(merged).forEach((ids) => ids.forEach((id) => tagged.add(id)));
@@ -326,23 +352,27 @@ export const guessAndConvertDMs = async (
     if (room.getMyMembership() !== Membership.Join) continue;
     if (room.isSpaceRoom()) continue;
     if (tagged.has(room.roomId)) continue;
-    if (room.getJoinedMemberCount() !== 2) continue;
+    // DMs are small (you + one person + maybe a bot + maybe your puppet). Bound
+    // the /members fetch cost — a room with many members can't be a 1:1.
+    const count = room.getJoinedMemberCount();
+    if (count < 2 || count > 8) continue;
 
-    let partner = room.guessDMUserId();
-    if (!partner || partner === self) {
-      // Lean roster under sliding sync — heroes alone didn't resolve the other
-      // member, so force a full /members fetch and try again.
-      const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        await (forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded());
-      } catch {
-        /* fall through — guess again with whatever we have */
-      }
-      partner = room.guessDMUserId();
+    // Need the full roster + display names to classify bots/puppets — a lean
+    // sliding-sync room only knows $LAZY senders, so force a /members fetch.
+    const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await (forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded());
+    } catch {
+      /* classify with whatever roster we have */
     }
-    if (!partner || partner === self) continue;
-    candidates.push({ roomId: room.roomId, userId: partner });
+
+    const realOthers = room
+      .getJoinedMembers()
+      .filter((m) => m.userId !== self && !isDmBridgeHelper(m, myDisplayName));
+    if (realOthers.length === 1) {
+      candidates.push({ roomId: room.roomId, userId: realOthers[0].userId });
+    }
   }
 
   if (!dryRun && candidates.length > 0) {
