@@ -1,6 +1,7 @@
 import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from 'matrix-js-sdk';
 
 import { cryptoCallbacks } from './secretStorageKeys';
+import { seedAccountData } from './seedAccountData';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import { removeSecondarySession } from '../app/state/sessions';
@@ -147,6 +148,11 @@ export const startClient = async (mx: MatrixClient) => {
     ...(willSlide ? {} : { fullLazyLoading: true }),
     autoSlidingSync: !useClassicSync,
   });
+
+  // Sliding sync doesn't redeliver global account-data on a restored pos, so
+  // seed the types cinny reads (secret-storage/cross-signing → encryption +
+  // verification, space order, settings, emoji) straight from the server.
+  if (willSlide) seedAccountData(mx);
 };
 
 export const clearCacheAndReload = async (mx: MatrixClient) => {
