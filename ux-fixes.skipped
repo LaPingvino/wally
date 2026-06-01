@@ -48,3 +48,4 @@ ced4387b  ux-fixes: bottom unread-nav bar stays hidden until user engages nav
 8bfa47df  ux-fixes: subscribe to a room on open so sliding sync inflates it
 3f46840f  ux-fixes: simplify backfill — current room rides subscribe-on-open, not a deep prefetch
 2bc09750  ux-fixes: immediate on-open backfill so a cold room does not flash empty
+03ff6136  ux-fixes: DM partner loads under sliding sync + readable reshaper dialog
