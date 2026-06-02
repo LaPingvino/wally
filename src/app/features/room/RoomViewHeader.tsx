@@ -588,7 +588,7 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
 
   const pinnedEvents = useRoomPinnedEvents(room);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
-  const name = useRoomName(room, direct);
+  const name = useRoomName(room);
   const topic = useRoomTopic(room);
   const avatarMxc = useRoomAvatar(room, direct);
   const avatarUrl = avatarMxc

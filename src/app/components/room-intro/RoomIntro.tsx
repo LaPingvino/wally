@@ -32,7 +32,7 @@ export const RoomIntro = as<'div', RoomIntroProps>(({ room, ...props }, ref) => 
   const createEvent = getStateEvent(room, StateEvent.RoomCreate);
   const isDirect = mDirects.has(room.roomId);
   const avatarMxc = useRoomAvatar(room, isDirect);
-  const name = useRoomName(room, isDirect);
+  const name = useRoomName(room);
   const topic = useRoomTopic(room);
   const avatarHttpUrl = avatarMxc ? mxcUrlToHttp(mx, avatarMxc, useAuthentication) : undefined;
 

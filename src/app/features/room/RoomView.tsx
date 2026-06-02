@@ -92,7 +92,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
   const direct = useIsDirectRoom();
-  const roomDisplayName = useRoomName(room, direct);
+  const roomDisplayName = useRoomName(room);
   const unread = useRoomUnread(roomId, roomToUnreadAtom);
 
   // Opening a room subscribes it in sliding sync so the server inflates its

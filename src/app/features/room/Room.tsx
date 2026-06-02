@@ -10,7 +10,7 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { PowerLevelsContextProvider, usePowerLevels } from '../../hooks/usePowerLevels';
-import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
+import { useRoom } from '../../hooks/useRoom';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { useKeyDown } from '../../hooks/useKeyDown';
 import { markAsRead } from '../../utils/notifications';
@@ -38,8 +38,7 @@ export function Room() {
   const { eventId } = useParams();
   const room = useRoom();
   const mx = useMatrixClient();
-  const direct = useIsDirectRoom();
-  const roomDisplayName = useRoomName(room, direct);
+  const roomDisplayName = useRoomName(room);
 
   const [isDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
