@@ -13,9 +13,19 @@ import { dmRealHumans } from '../utils/matrix';
 // partner is missing and the name/avatar fall back to the mxid ("the other side
 // seems missing"). forceLoadMembers (fork) hits /members regardless and caches, so
 // repeat calls are cheap. Cast because the published .d.ts lags the method.
+// One in-flight /members fetch per room, SHARED across hooks (name + avatar) and
+// re-renders. Without this every DM row fired forceLoadMembers twice on every
+// render — a request storm that left the top rows resolving late ("names resolve
+// on scroll"). Cleared on failure so it can retry.
+const memberLoads = new Map<string, Promise<unknown>>();
 const loadDmMembers = (room: Room): Promise<unknown> => {
+  const cached = memberLoads.get(room.roomId);
+  if (cached) return cached;
   const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
-  return forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded();
+  const p = forceable.forceLoadMembers ? forceable.forceLoadMembers() : room.loadMembersIfNeeded();
+  memberLoads.set(room.roomId, p);
+  p.catch(() => memberLoads.delete(room.roomId));
+  return p;
 };
 
 export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
@@ -36,7 +46,9 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
         if (!cancelled) setMemberTick((t) => t + 1);
       });
     };
-    loadDmMembers(room).then(() => { onMember(); }).catch(() => { /* keep fallback */ });
+    // Refresh DIRECTLY when the load completes (not via the rAF, which a re-render
+    // can cancel before it fires — that left top rows stuck until a scroll remount).
+    loadDmMembers(room).then(() => { if (!cancelled) setMemberTick((t) => t + 1); }).catch(() => {});
     room.on(RoomStateEvent.Members, onMember);
     return () => {
       cancelled = true;
@@ -127,7 +139,9 @@ export const useRoomName = (room: Room, dm?: boolean): string => {
         if (!cancelled) setName(getDmName(room));
       });
     };
-    loadDmMembers(room).then(() => { onMember(); }).catch(() => { /* keep fallback */ });
+    // Refresh DIRECTLY when the load completes (not via the rAF, which a re-render
+    // can cancel before it fires — that left top rows stuck until a scroll remount).
+    loadDmMembers(room).then(() => { if (!cancelled) setName(getDmName(room)); }).catch(() => {});
     room.on(RoomStateEvent.Members, onMember);
     return () => {
       cancelled = true;
