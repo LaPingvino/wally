@@ -54,3 +54,5 @@ e47cf328  ux-fixes: a group's DM title can't be hijacked by an m.direct "partner
 83cd7453  ux-fixes: DM name/avatar resolve on load, not on scroll
 ebf5cdb5  ux-fixes: don't resolve a DM title until the roster is loaded (fix "too early")
 b6d8abb5  ux-fixes: drop client-side DM name/avatar, trust the SDK
+78e3c52b  ux-fixes: exclude your own bridge ghost from DM detection (frequency-based)
+0f425a22  ux-fixes: detect "DM with yourself" as a default-off candidate
