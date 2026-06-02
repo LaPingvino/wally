@@ -42,10 +42,13 @@ export function GuessDMDialog({ mx, onClose }: GuessDMDialogProps) {
       const found = await detectDmReshape(mx);
       if (disposed) return;
       setRows(found);
-      // Default = the suggested final state: candidates ON (convert), valid current
-      // DMs ON (stay), but MISTAGGED current DMs (a group, a bot, or only your own
-      // alt as partner) OFF — so Apply cleans them up. The user can override either way.
-      setSelected(new Set(found.filter((r) => (r.currentlyDM ? r.valid : true)).map((r) => r.roomId)));
+      // Default = the suggested final state: candidates default to r.defaultOn (real
+      // 1:1s ON, "DM with yourself" candidates OFF), valid current DMs ON (stay), but
+      // MISTAGGED current DMs (a group, a bot, or only your own alt as partner) OFF —
+      // so Apply cleans them up. The user can override either way.
+      setSelected(
+        new Set(found.filter((r) => (r.currentlyDM ? r.valid : r.defaultOn)).map((r) => r.roomId))
+      );
       setLoading(false);
     })();
     return () => {

@@ -410,6 +410,11 @@ export type DmRow = {
   // is the "partner"). Mistagged current DMs get this so the dialog can suggest
   // removing them; candidates are only ever added when this is true.
   valid: boolean;
+  // Whether a CANDIDATE row should be pre-checked in the dialog. Real 1:1s default
+  // on; a "DM with yourself" (note to self, or a single shared puppet like our
+  // PMP-patched IRC — every other member is your own ghost) is detected but default
+  // OFF, so it's offered without being auto-converted. (Current DMs use `valid`.)
+  defaultOn: boolean;
 };
 
 // Force a full member fetch for a small room so bot/puppet classification works
@@ -464,6 +469,9 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
   );
 
   const realHumans = (room: Room): RoomMember[] => dmRealHumans(mx, room);
+  const myGhosts = myBridgeGhostIds(mx);
+  const ownGhostIn = (room: Room): RoomMember | undefined =>
+    room.getJoinedMembers().find((m) => myGhosts.has(m.userId));
 
   const rows: DmRow[] = [];
 
@@ -479,9 +487,25 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
     // eslint-disable-next-line no-await-in-loop
     await ensureRoster(room);
     const humans = realHumans(room);
-    if (humans.length !== 1) continue;
 
-    const partner = humans[0];
+    // A clean 1:1 (one real human) is a candidate, default ON. A room with NO real
+    // human but one of your own ghosts is a "DM with yourself" (note to self, or a
+    // single shared puppet like PMP-patched IRC) — still a real DM, but default OFF
+    // so it isn't auto-converted. Anything else (a group, or an empty/abandoned
+    // portal with no ghost) is not a candidate.
+    const ownGhost = ownGhostIn(room);
+    let partner: RoomMember;
+    let defaultOn: boolean;
+    if (humans.length === 1) {
+      partner = humans[0];
+      defaultOn = true;
+    } else if (humans.length === 0 && ownGhost) {
+      partner = ownGhost;
+      defaultOn = false;
+    } else {
+      continue;
+    }
+
     const bot = roomBridgeBot(room, self);
     rows.push({
       roomId: room.roomId,
@@ -492,6 +516,7 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
       groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
       currentlyDM: false,
       valid: true,
+      defaultOn,
     });
   }
 
@@ -513,6 +538,7 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
         groupLabel: 'Direct chats',
         currentlyDM: true,
         valid: false,
+        defaultOn: false,
       });
       continue;
     }
@@ -520,8 +546,13 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
     // eslint-disable-next-line no-await-in-loop
     if (count >= 2 && count <= 8) await ensureRoster(room);
     const humans = realHumans(room);
-    const valid = humans.length === 1;
-    const partner = valid ? humans[0] : undefined;
+    // An existing self-DM (note to self / single shared puppet) is still valid — we
+    // don't auto-untag it — even though it has no "real human" once your own ghost
+    // is excluded. Only a group / bot / alt-only tag is the mistag we offer to clear.
+    const ownGhost = ownGhostIn(room);
+    const selfDm = humans.length === 0 && !!ownGhost;
+    const valid = humans.length === 1 || selfDm;
+    const partner = humans.length === 1 ? humans[0] : selfDm ? ownGhost : undefined;
     const bot = roomBridgeBot(room, self);
     rows.push({
       roomId,
@@ -532,6 +563,7 @@ export const detectDmReshape = async (mx: MatrixClient): Promise<DmRow[]> => {
       groupLabel: bot ? bot.rawDisplayName || bot.name || bot.userId : 'Direct chats',
       currentlyDM: true,
       valid,
+      defaultOn: valid,
     });
   }
 
