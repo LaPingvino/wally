@@ -346,6 +346,55 @@ const isMyPuppet = (member: RoomMember, myDisplayName: string | null): boolean =
 const isMyAccount = (member: RoomMember, selfLocalpart: string | undefined): boolean =>
   !!selfLocalpart && getMxIdLocalPart(member.userId) === selfLocalpart;
 
+// YOUR OWN bridge puppet on a network. mautrix puts a protocol ghost for your own
+// account (e.g. @signal_<your-uuid>) in every portal, displayed under your NETWORK
+// profile name — which often differs from your Matrix name, so isMyPuppet()'s
+// name match misses it (e.g. ghost "Joop Kiefte" vs Matrix "Joop Kiefte 🟙 (…)").
+// Left unexcluded it counts as a second human, so every bridged 1:1 looks like a
+// group ([you, bot, your-ghost, their-ghost]) and the reshaper skips it.
+//
+// Identify it WITHOUT trusting the display name: you are in every conversation on a
+// network, so your own ghost co-occurs with you in far more rooms than any single
+// contact's ghost. Per protocol prefix (signal_, whatsappmeta_, …) the ghost you
+// share the most rooms with is yours — provided it clears a small floor (so a
+// single-chat network can't misfire) and there's no tie for the top (ambiguous →
+// exclude none rather than risk dropping a real contact). Degrades safely: a user
+// with no separate own-ghost has no dominant ghost, so nothing is excluded and
+// native/bridged 1:1s still resolve. Memoized per client (membership changes slowly).
+const myGhostCache = new WeakMap<MatrixClient, { ts: number; ids: Set<string> }>();
+export const myBridgeGhostIds = (mx: MatrixClient): Set<string> => {
+  const cached = myGhostCache.get(mx);
+  if (cached && Date.now() - cached.ts < 30_000) return cached.ids;
+
+  const self = mx.getUserId();
+  const perGhost = new Map<string, number>(); // ghost mxid -> # of your rooms it's in
+  mx.getRooms().forEach((room) => {
+    const joined = room.getJoinedMembers();
+    if (!joined.some((m) => m.userId === self)) return;
+    joined.forEach((m) => {
+      const local = getMxIdLocalPart(m.userId)?.toLowerCase() ?? '';
+      if (!DM_GHOST_LOCALPART_RE.test(local)) return;
+      perGhost.set(m.userId, (perGhost.get(m.userId) ?? 0) + 1);
+    });
+  });
+
+  // Per protocol prefix, keep the single most-frequent ghost (tracking ties).
+  const bestByPrefix = new Map<string, { id: string; n: number; tie: boolean }>();
+  perGhost.forEach((n, id) => {
+    const prefix = (getMxIdLocalPart(id)?.toLowerCase() ?? '').match(DM_GHOST_LOCALPART_RE)?.[1] ?? '';
+    const cur = bestByPrefix.get(prefix);
+    if (!cur || n > cur.n) bestByPrefix.set(prefix, { id, n, tie: false });
+    else if (n === cur.n) cur.tie = true;
+  });
+
+  const ids = new Set<string>();
+  bestByPrefix.forEach(({ id, n, tie }) => {
+    if (n >= 2 && !tie) ids.add(id);
+  });
+  myGhostCache.set(mx, { ts: Date.now(), ids });
+  return ids;
+};
+
 export type DmRow = {
   roomId: string;
   roomName: string;
@@ -393,6 +442,7 @@ export const dmRealHumans = (mx: MatrixClient, room: Room): RoomMember[] => {
   const self = mx.getUserId();
   const selfLocalpart = self ? getMxIdLocalPart(self) : undefined;
   const myDisplayName = self ? (mx.getUser(self)?.displayName ?? null) : null;
+  const myGhosts = myBridgeGhostIds(mx);
   return room
     .getJoinedMembers()
     .filter(
@@ -400,6 +450,7 @@ export const dmRealHumans = (mx: MatrixClient, room: Room): RoomMember[] => {
         m.userId !== self &&
         !isBridgeBotMember(m) &&
         !isMyPuppet(m, myDisplayName) &&
+        !myGhosts.has(m.userId) &&
         !isMyAccount(m, selfLocalpart)
     );
 };
