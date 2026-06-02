@@ -194,6 +194,16 @@ export const getDMRoomFor = (mx: MatrixClient, userId: string): Room | undefined
 };
 
 export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
+  // Prefer the single real human — bridge bot, your own puppet, and your alts
+  // excluded — via dmRealHumans(), the SAME identity primitive the reshaper uses.
+  // Routing both through it means /converttodm, invite-accept, and the reshaper
+  // always file a room under the same user, and a future fix to "who's a real
+  // human" fixes all of them at once. Without this the oldest-joined heuristic
+  // below files bridged DMs under the bridge BOT (it usually joins first) — the
+  // m.direct mistag that the removed getDmName patch used to paper over.
+  const humans = dmRealHumans(room.client, room);
+  if (humans.length === 1) return humans[0].userId;
+
   const getOldestMember = (members: RoomMember[]): RoomMember | undefined => {
     let oldestMemberTs: number | undefined;
     let oldestMember: RoomMember | undefined;
@@ -215,7 +225,8 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
     return oldestMember;
   };
 
-  // Pick the joined user who's been here longest (and isn't us),
+  // Fallback (a group, or no clean single human): the joined user who's been here
+  // longest (and isn't us).
   const member = getOldestMember(room.getJoinedMembers());
   if (member) return member.userId;
 
