@@ -53,3 +53,4 @@ a0c198dd  ux-fixes: always force-load DM members for naming (not only sliding sy
 e47cf328  ux-fixes: a group's DM title can't be hijacked by an m.direct "partner"
 83cd7453  ux-fixes: DM name/avatar resolve on load, not on scroll
 ebf5cdb5  ux-fixes: don't resolve a DM title until the roster is loaded (fix "too early")
+b6d8abb5  ux-fixes: drop client-side DM name/avatar, trust the SDK
