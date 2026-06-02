@@ -51,3 +51,4 @@ ced4387b  ux-fixes: bottom unread-nav bar stays hidden until user engages nav
 03ff6136  ux-fixes: DM partner loads under sliding sync + readable reshaper dialog
 a0c198dd  ux-fixes: always force-load DM members for naming (not only sliding sync)
 e47cf328  ux-fixes: a group's DM title can't be hijacked by an m.direct "partner"
+83cd7453  ux-fixes: DM name/avatar resolve on load, not on scroll
