@@ -1,3 +1,159 @@
+diff --git a/src/app/components/DeviceVerification.tsx b/src/app/components/DeviceVerification.tsx
+index d2502ccf7..0490024f7 100644
+--- a/src/app/components/DeviceVerification.tsx
++++ b/src/app/components/DeviceVerification.tsx
+@@ -4,7 +4,7 @@ import {
+   VerificationRequest,
+   Verifier,
+ } from 'matrix-js-sdk/lib/crypto-api';
+-import React, { CSSProperties, useCallback, useEffect, useState } from 'react';
++import React, { CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+ import { VerificationMethod } from 'matrix-js-sdk/lib/types';
+ import {
+   Box,
+@@ -116,12 +116,38 @@ function AutoVerificationStart({ onStart }: VerificationStartProps) {
+   );
+ }
+ 
+-function CompareEmoji({ sasData }: { sasData: ShowSasCallbacks }) {
+-  const [confirmState, confirm] = useAsyncCallback(useCallback(() => sasData.confirm(), [sasData]));
++function CompareEmoji({
++  sasData,
++  onConfirmStart,
++}: {
++  sasData: ShowSasCallbacks;
++  onConfirmStart: () => void;
++}) {
++  const [confirmState, confirm] = useAsyncCallback(
++    useCallback(() => {
++      // Mark confirmed BEFORE the async confirm so the dialog's close/backdrop
++      // handler can no longer cancel a match that's already affirmed.
++      onConfirmStart();
++      return sasData.confirm();
++    }, [sasData, onConfirmStart])
++  );
+ 
+   const confirming =
+     confirmState.status === AsyncStatus.Loading || confirmState.status === AsyncStatus.Success;
+ 
++  // Once "They Match" is pressed, REMOVE the mismatch control entirely (not merely
++  // disable it). m.mismatched_sas is only ever produced by an explicit mismatch()
++  // call; leaving that button mounted during the completion window let a stray tap
++  // turn an affirmed match into a cancel — the "They match cancels" bug.
++  if (confirming) {
++    return (
++      <Box direction="Column" gap="400">
++        <Text>You confirmed the emoji match. Finishing verification…</Text>
++        <WaitingMessage message="Waiting for the other device to confirm..." />
++      </Box>
++    );
++  }
++
+   return (
+     <Box direction="Column" gap="400">
+       <Text>Confirm the emoji below are displayed on both devices, in the same order:</Text>
+@@ -150,20 +176,19 @@ function CompareEmoji({ sasData }: { sasData: ShowSasCallbacks }) {
+         ))}
+       </Box>
+       <Box direction="Column" gap="200">
+-        <Button
+-          variant="Primary"
+-          fill="Soft"
+-          onClick={confirm}
+-          disabled={confirming}
+-          before={confirming && <Spinner size="100" variant="Primary" />}
+-        >
++        {/* "They Match" is the prominent Solid primary; "Do not Match" is a distinct
++            Critical/None button so it can't be hit by accident as a look-alike. */}
++        <Button variant="Primary" fill="Solid" onClick={confirm}>
+           <Text size="B400">They Match</Text>
+         </Button>
+         <Button
+-          variant="Primary"
+-          fill="Soft"
+-          onClick={() => sasData.mismatch()}
+-          disabled={confirming}
++          variant="Critical"
++          fill="None"
++          onClick={() => {
++            // eslint-disable-next-line no-console
++            console.warn('[wally][verify] "Do not Match" pressed — sending m.mismatched_sas');
++            sasData.mismatch();
++          }}
+         >
+           <Text size="B400">Do not Match</Text>
+         </Button>
+@@ -175,8 +200,9 @@ function CompareEmoji({ sasData }: { sasData: ShowSasCallbacks }) {
+ type SasVerificationProps = {
+   verifier: Verifier;
+   onCancel: () => void;
++  onConfirmStart: () => void;
+ };
+-function SasVerification({ verifier, onCancel }: SasVerificationProps) {
++function SasVerification({ verifier, onCancel, onConfirmStart }: SasVerificationProps) {
+   const [sasData, setSasData] = useState<ShowSasCallbacks>();
+ 
+   useVerifierShowSas(verifier, setSasData);
+@@ -186,8 +212,18 @@ function SasVerification({ verifier, onCancel }: SasVerificationProps) {
+     verifier.verify();
+   }, [verifier]);
+ 
++  useEffect(() => {
++    if (sasData) {
++      // eslint-disable-next-line no-console
++      console.warn(
++        '[wally][verify] SAS emoji:',
++        (sasData.sas.emoji ?? []).map(([, name]) => name).join(' ')
++      );
++    }
++  }, [sasData]);
++
+   if (sasData) {
+-    return <CompareEmoji sasData={sasData} />;
++    return <CompareEmoji sasData={sasData} onConfirmStart={onConfirmStart} />;
+   }
+ 
+   return (
+@@ -233,14 +269,26 @@ type DeviceVerificationProps = {
+ };
+ export function DeviceVerification({ request, onExit }: DeviceVerificationProps) {
+   const phase = useVerificationRequestPhase(request);
++  // Set the moment "They Match" is pressed. After that, closing the dialog must
++  // NOT call request.cancel() — the verification is completing and a cancel here
++  // would abort an affirmed match.
++  const confirmedRef = useRef(false);
+ 
+   const handleCancel = useCallback(() => {
++    if (confirmedRef.current) {
++      onExit();
++      return;
++    }
+     if (request.phase !== VerificationPhase.Done && request.phase !== VerificationPhase.Cancelled) {
+       request.cancel();
+     }
+     onExit();
+   }, [request, onExit]);
+ 
++  const handleConfirmStart = useCallback(() => {
++    confirmedRef.current = true;
++  }, []);
++
+   const handleAccept = useCallback(() => request.accept(), [request]);
+   const handleStart = useCallback(async () => {
+     await request.startVerification(VerificationMethod.Sas);
+@@ -280,7 +328,11 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
+                 ))}
+               {phase === VerificationPhase.Started &&
+                 (request.verifier ? (
+-                  <SasVerification verifier={request.verifier} onCancel={handleCancel} />
++                  <SasVerification
++                    verifier={request.verifier}
++                    onCancel={handleCancel}
++                    onConfirmStart={handleConfirmStart}
++                  />
+                 ) : (
+                   <VerificationUnexpected
+                     message="Unexpected Error! Verification is started but verifier is missing."
 diff --git a/src/app/components/RenderMessageContent.tsx b/src/app/components/RenderMessageContent.tsx
 index 4cfcb7dc1..147208a8d 100644
 --- a/src/app/components/RenderMessageContent.tsx
