@@ -81,13 +81,17 @@ export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
  * comes back (regression we hit, restored here).
  */
 const getDmName = (room: Room): string => {
-  // A DM name should only override room.name when the room is genuinely a 1:1.
-  // If more than one real human is present (bridge bots / your puppet / your alts
-  // excluded), it's a group — often a stale or mistagged m.direct entry — so trust
-  // its room name. Without this, getAvatarFallbackMember() prefers the m.direct
-  // "partner" and the title SWAPS from the group name to that one member once their
-  // membership loads (e.g. "English 🇬🇧" → "Gustavo").
-  if (dmRealHumans(room.client, room).length > 1) return room.name;
+  // A DM name should only override room.name when the room is genuinely a 1:1 —
+  // and we can only KNOW that once the full member roster is loaded. At first paint
+  // a group's roster is only partial: the m.direct "partner" is known but the other
+  // members aren't, so dmRealHumans() reads 1 and the title wrongly resolves to that
+  // partner ("Gustavo") BEFORE enough members load to reveal it's a group (the
+  // "resolves too early" bug). So: until the joined roster is fully loaded (loaded
+  // count >= the summary's joined count), AND whenever more than one real human is
+  // present (bots / your puppet / your alts excluded), trust the room's own name.
+  // The member-load effect re-runs this once /members lands.
+  const fullyLoaded = room.getJoinedMembers().length >= room.getJoinedMemberCount();
+  if (!fullyLoaded || dmRealHumans(room.client, room).length > 1) return room.name;
 
   // For 2-person DMs getAvatarFallbackMember() gives the other member directly.
   const fallbackMember = room.getAvatarFallbackMember();
