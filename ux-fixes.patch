@@ -1756,7 +1756,7 @@ index e94ba9726..3c08e5954 100644
    }, [mx, setTypingMembers, hideActivity]);
  };
 diff --git a/src/app/utils/matrix.ts b/src/app/utils/matrix.ts
-index 4c86c4e26..17d5a00d2 100644
+index 4c86c4e26..cce5947ce 100644
 --- a/src/app/utils/matrix.ts
 +++ b/src/app/utils/matrix.ts
 @@ -4,6 +4,7 @@ import {
@@ -1767,7 +1767,34 @@ index 4c86c4e26..17d5a00d2 100644
    EventTimeline,
    MatrixClient,
    MatrixError,
-@@ -225,16 +226,46 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
+@@ -193,6 +194,16 @@ export const getDMRoomFor = (mx: MatrixClient, userId: string): Room | undefined
+ };
+ 
+ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
++  // Prefer the single real human — bridge bot, your own puppet, and your alts
++  // excluded — via dmRealHumans(), the SAME identity primitive the reshaper uses.
++  // Routing both through it means /converttodm, invite-accept, and the reshaper
++  // always file a room under the same user, and a future fix to "who's a real
++  // human" fixes all of them at once. Without this the oldest-joined heuristic
++  // below files bridged DMs under the bridge BOT (it usually joins first) — the
++  // m.direct mistag that the removed getDmName patch used to paper over.
++  const humans = dmRealHumans(room.client, room);
++  if (humans.length === 1) return humans[0].userId;
++
+   const getOldestMember = (members: RoomMember[]): RoomMember | undefined => {
+     let oldestMemberTs: number | undefined;
+     let oldestMember: RoomMember | undefined;
+@@ -214,7 +225,8 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
+     return oldestMember;
+   };
+ 
+-  // Pick the joined user who's been here longest (and isn't us),
++  // Fallback (a group, or no clean single human): the joined user who's been here
++  // longest (and isn't us).
+   const member = getOldestMember(room.getJoinedMembers());
+   if (member) return member.userId;
+ 
+@@ -225,16 +237,46 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
    return member1?.userId ?? myUserId;
  };
  
@@ -1819,7 +1846,7 @@ index 4c86c4e26..17d5a00d2 100644
  
    // remove it from the lists of any others users
    // (it can only be a DM room for one person)
-@@ -255,15 +286,11 @@ export const addRoomIdToMDirect = async (
+@@ -255,15 +297,11 @@ export const addRoomIdToMDirect = async (
    }
    userIdToRoomIds[userId] = roomIds;
  
@@ -1837,7 +1864,7 @@ index 4c86c4e26..17d5a00d2 100644
  
    Object.keys(userIdToRoomIds).forEach((targetUserId) => {
      const roomIds = userIdToRoomIds[targetUserId];
-@@ -273,7 +300,199 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
+@@ -273,7 +311,199 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
      }
    });
  
