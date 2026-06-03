@@ -172,10 +172,13 @@ export function VerifyOtherDeviceTile({ crypto, deviceId }: VerifyOtherDeviceTil
   });
 
   const requestVerification = useAsync<VerificationRequest, Error, []>(
-    useCallback(() => {
-      const requestPromise = crypto.requestDeviceVerification(mx.getSafeUserId(), deviceId);
-      return requestPromise;
-    }, [mx, crypto, deviceId]),
+    // The SDK sweeps stale/abandoned self-verification flows out of the OlmMachine
+    // inside requestDeviceVerification (RustCrypto.cancelStaleToDeviceVerifications),
+    // so a fresh attempt always starts from a clean slate.
+    useCallback(
+      () => crypto.requestDeviceVerification(mx.getSafeUserId(), deviceId),
+      [mx, crypto, deviceId]
+    ),
     setRequestState
   );
 

@@ -297,6 +297,26 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
     confirmedRef.current = true;
   }, []);
 
+  // Deterministic teardown. If this dialog goes away while the flow is still
+  // live — navigate-away, the parent swapping in a new request, or a plain
+  // unmount — cancel the request NOW instead of leaving it for the 10-min
+  // reaper. A lingering flow is precisely what the other device later aborts
+  // with m.timeout (its SAS state self-cancels once an event lands >60s after
+  // the previous one). A confirmed match or an already-terminal request is
+  // left untouched.
+  useEffect(
+    () => () => {
+      if (confirmedRef.current) return;
+      if (
+        request.phase !== VerificationPhase.Done &&
+        request.phase !== VerificationPhase.Cancelled
+      ) {
+        request.cancel();
+      }
+    },
+    [request]
+  );
+
   // Start the SAS at most once. Under sliding sync, late/reordered to-device
   // delivery can bounce the phase (Ready → Started → Ready …), re-mounting
   // AutoVerificationStart; without this guard each mount would call
@@ -362,7 +382,9 @@ export function ReceiveSelfDeviceVerification() {
   // When a new verification request arrives while one is still live, cancel the
   // stale one before adopting the new. Repeated/retried requests (common under
   // sliding sync's delayed to-device delivery) would otherwise leave multiple
-  // overlapping flows in flight, which collide into spurious cancels.
+  // overlapping flows in flight, which collide into spurious cancels. (The SDK
+  // also sweeps the OlmMachine for untracked zombies on every request created or
+  // received — see RustCrypto.cancelStaleToDeviceVerifications.)
   const handleNewRequest = useCallback((newRequest: VerificationRequest) => {
     setRequest((prev) => {
       if (
