@@ -1,15 +1,17 @@
 import React, { FormEventHandler, useCallback, useState } from 'react';
-import { Box, Button, Header, Input, Scroll, Spinner, Text, color, config } from 'folds';
+import { Box, Button, Header, Input, Scroll, Spinner, Text, color } from 'folds';
 import { useParams, useSearchParams } from 'react-router-dom';
 import classNames from 'classnames';
 import * as css from './auth/styles.css';
 import * as PatternsCss from '../styles/Patterns.css';
 import CinnySVG from '../../../public/res/svg/cinny.svg';
 import { AuthFooter } from './auth/AuthFooter';
+import { GuestCallView } from '../features/call/GuestCallView';
 
 type JoinResponse = {
   session_id: string;
-  ec_url: string;
+  /** Legacy Element Call URL — no longer used; guests now join LiveKit directly. */
+  ec_url?: string;
   livekit_url: string;
   token: string;
 };
@@ -18,7 +20,7 @@ type JoinState =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'success'; ecUrl: string };
+  | { status: 'success'; livekitUrl: string; token: string; displayName: string };
 
 export function GuestJoin() {
   const { roomId } = useParams();
@@ -73,14 +75,18 @@ export function GuestJoin() {
         }
 
         const data: JoinResponse = await res.json();
-        if (!data.ec_url) {
-          setJoinState({ status: 'error', message: 'No call URL returned from server.' });
+        if (!data.livekit_url || !data.token) {
+          setJoinState({ status: 'error', message: 'No call credentials returned from server.' });
           return;
         }
 
-        setJoinState({ status: 'success', ecUrl: data.ec_url });
-        // Redirect to the Element Call URL
-        window.location.href = data.ec_url;
+        // Join LiveKit directly in a native guest view (no Element Call).
+        setJoinState({
+          status: 'success',
+          livekitUrl: data.livekit_url,
+          token: data.token,
+          displayName: name,
+        });
       } catch (err) {
         setJoinState({
           status: 'error',
@@ -90,6 +96,19 @@ export function GuestJoin() {
     },
     [endpoint, decodedRoomId, displayName]
   );
+
+  if (joinState.status === 'success') {
+    return (
+      <Box style={{ height: '100%', width: '100%' }}>
+        <GuestCallView
+          livekitUrl={joinState.livekitUrl}
+          token={joinState.token}
+          displayName={joinState.displayName}
+          onLeave={() => setJoinState({ status: 'idle' })}
+        />
+      </Box>
+    );
+  }
 
   return (
     <Scroll variant="Background" visibility="Hover" size="300" hideTrack>
@@ -146,7 +165,7 @@ export function GuestJoin() {
                         setDisplayName(e.target.value)
                       }
                       autoFocus
-                      disabled={joinState.status === 'loading' || joinState.status === 'success'}
+                      disabled={joinState.status === 'loading'}
                     />
                   </Box>
 
@@ -156,30 +175,11 @@ export function GuestJoin() {
                     </Text>
                   )}
 
-                  {joinState.status === 'success' && (
-                    <Text size="T300" style={{ color: color.Success.Main }}>
-                      Joining call... If you are not redirected,{' '}
-                      <a
-                        href={joinState.ecUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: 'inherit', textDecoration: 'underline' }}
-                      >
-                        click here
-                      </a>
-                      .
-                    </Text>
-                  )}
-
                   <Button
                     type="submit"
                     variant="Primary"
                     size="400"
-                    disabled={
-                      !endpoint ||
-                      joinState.status === 'loading' ||
-                      joinState.status === 'success'
-                    }
+                    disabled={!endpoint || joinState.status === 'loading'}
                   >
                     {joinState.status === 'loading' ? (
                       <Spinner size="100" variant="Secondary" fill="Soft" />
