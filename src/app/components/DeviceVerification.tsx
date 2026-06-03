@@ -196,18 +196,29 @@ function CompareEmoji({
 
 type SasVerificationProps = {
   verifier: Verifier;
+  initiatedByMe: boolean;
   onCancel: () => void;
   onConfirmStart: () => void;
 };
-function SasVerification({ verifier, onCancel, onConfirmStart }: SasVerificationProps) {
+function SasVerification({ verifier, initiatedByMe, onCancel, onConfirmStart }: SasVerificationProps) {
   const [sasData, setSasData] = useState<ShowSasCallbacks>();
 
   useVerifierShowSas(verifier, setSasData);
   useVerifierCancel(verifier, onCancel);
 
   useEffect(() => {
-    verifier.verify();
-  }, [verifier]);
+    // Only the RESPONDER drives the verifier with verify() — verify() sends
+    // m.key.verification.accept, which is the receiver's message. The INITIATOR
+    // already began the SAS via request.startVerification(); having it also call
+    // verify()/accept() is an out-of-protocol second drive that makes the
+    // initiator's crypto core cancel its OWN (visually-matching) SAS with
+    // m.mismatched_sas. The emoji still arrive on the initiator via the ShowSas
+    // listener above, which fires from the core's change callback independently
+    // of verify().
+    if (!initiatedByMe) {
+      verifier.verify();
+    }
+  }, [verifier, initiatedByMe]);
 
   useEffect(() => {
     if (sasData) {
@@ -286,8 +297,16 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
     confirmedRef.current = true;
   }, []);
 
+  // Start the SAS at most once. Under sliding sync, late/reordered to-device
+  // delivery can bounce the phase (Ready → Started → Ready …), re-mounting
+  // AutoVerificationStart; without this guard each mount would call
+  // startVerification() again, stacking overlapping SAS transactions that the
+  // crypto core then cancels.
+  const startedRef = useRef(false);
   const handleAccept = useCallback(() => request.accept(), [request]);
   const handleStart = useCallback(async () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
     await request.startVerification(VerificationMethod.Sas);
   }, [request]);
 
@@ -318,6 +337,7 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
                 (request.verifier ? (
                   <SasVerification
                     verifier={request.verifier}
+                    initiatedByMe={request.initiatedByMe}
                     onCancel={handleCancel}
                     onConfirmStart={handleConfirmStart}
                   />
@@ -339,7 +359,25 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
 export function ReceiveSelfDeviceVerification() {
   const [request, setRequest] = useState<VerificationRequest>();
 
-  useVerificationRequestReceived(setRequest);
+  // When a new verification request arrives while one is still live, cancel the
+  // stale one before adopting the new. Repeated/retried requests (common under
+  // sliding sync's delayed to-device delivery) would otherwise leave multiple
+  // overlapping flows in flight, which collide into spurious cancels.
+  const handleNewRequest = useCallback((newRequest: VerificationRequest) => {
+    setRequest((prev) => {
+      if (
+        prev &&
+        prev !== newRequest &&
+        prev.phase !== VerificationPhase.Done &&
+        prev.phase !== VerificationPhase.Cancelled
+      ) {
+        prev.cancel();
+      }
+      return newRequest;
+    });
+  }, []);
+
+  useVerificationRequestReceived(handleNewRequest);
 
   const handleExit = useCallback(() => {
     setRequest(undefined);
