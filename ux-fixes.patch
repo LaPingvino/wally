@@ -1,5 +1,5 @@
 diff --git a/src/app/components/DeviceVerification.tsx b/src/app/components/DeviceVerification.tsx
-index d2502ccf7..0490024f7 100644
+index d2502ccf7..7bc1c6e71 100644
 --- a/src/app/components/DeviceVerification.tsx
 +++ b/src/app/components/DeviceVerification.tsx
 @@ -4,7 +4,7 @@ import {
@@ -83,21 +83,37 @@ index d2502ccf7..0490024f7 100644
          >
            <Text size="B400">Do not Match</Text>
          </Button>
-@@ -175,8 +200,9 @@ function CompareEmoji({ sasData }: { sasData: ShowSasCallbacks }) {
+@@ -174,20 +199,42 @@ function CompareEmoji({ sasData }: { sasData: ShowSasCallbacks }) {
+ 
  type SasVerificationProps = {
    verifier: Verifier;
++  initiatedByMe: boolean;
    onCancel: () => void;
 +  onConfirmStart: () => void;
  };
 -function SasVerification({ verifier, onCancel }: SasVerificationProps) {
-+function SasVerification({ verifier, onCancel, onConfirmStart }: SasVerificationProps) {
++function SasVerification({ verifier, initiatedByMe, onCancel, onConfirmStart }: SasVerificationProps) {
    const [sasData, setSasData] = useState<ShowSasCallbacks>();
  
    useVerifierShowSas(verifier, setSasData);
-@@ -186,8 +212,18 @@ function SasVerification({ verifier, onCancel }: SasVerificationProps) {
-     verifier.verify();
-   }, [verifier]);
+   useVerifierCancel(verifier, onCancel);
  
+   useEffect(() => {
+-    verifier.verify();
+-  }, [verifier]);
++    // Only the RESPONDER drives the verifier with verify() — verify() sends
++    // m.key.verification.accept, which is the receiver's message. The INITIATOR
++    // already began the SAS via request.startVerification(); having it also call
++    // verify()/accept() is an out-of-protocol second drive that makes the
++    // initiator's crypto core cancel its OWN (visually-matching) SAS with
++    // m.mismatched_sas. The emoji still arrive on the initiator via the ShowSas
++    // listener above, which fires from the core's change callback independently
++    // of verify().
++    if (!initiatedByMe) {
++      verifier.verify();
++    }
++  }, [verifier, initiatedByMe]);
++
 +  useEffect(() => {
 +    if (sasData) {
 +      // eslint-disable-next-line no-console
@@ -107,14 +123,14 @@ index d2502ccf7..0490024f7 100644
 +      );
 +    }
 +  }, [sasData]);
-+
+ 
    if (sasData) {
 -    return <CompareEmoji sasData={sasData} />;
 +    return <CompareEmoji sasData={sasData} onConfirmStart={onConfirmStart} />;
    }
  
    return (
-@@ -233,14 +269,26 @@ type DeviceVerificationProps = {
+@@ -233,16 +280,36 @@ type DeviceVerificationProps = {
  };
  export function DeviceVerification({ request, onExit }: DeviceVerificationProps) {
    const phase = useVerificationRequestPhase(request);
@@ -138,22 +154,60 @@ index d2502ccf7..0490024f7 100644
 +    confirmedRef.current = true;
 +  }, []);
 +
++  // Start the SAS at most once. Under sliding sync, late/reordered to-device
++  // delivery can bounce the phase (Ready → Started → Ready …), re-mounting
++  // AutoVerificationStart; without this guard each mount would call
++  // startVerification() again, stacking overlapping SAS transactions that the
++  // crypto core then cancels.
++  const startedRef = useRef(false);
    const handleAccept = useCallback(() => request.accept(), [request]);
    const handleStart = useCallback(async () => {
++    if (startedRef.current) return;
++    startedRef.current = true;
      await request.startVerification(VerificationMethod.Sas);
-@@ -280,7 +328,11 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
+   }, [request]);
+ 
+@@ -280,7 +347,12 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
                  ))}
                {phase === VerificationPhase.Started &&
                  (request.verifier ? (
 -                  <SasVerification verifier={request.verifier} onCancel={handleCancel} />
 +                  <SasVerification
 +                    verifier={request.verifier}
++                    initiatedByMe={request.initiatedByMe}
 +                    onCancel={handleCancel}
 +                    onConfirmStart={handleConfirmStart}
 +                  />
                  ) : (
                    <VerificationUnexpected
                      message="Unexpected Error! Verification is started but verifier is missing."
+@@ -302,7 +374,25 @@ export function DeviceVerification({ request, onExit }: DeviceVerificationProps)
+ export function ReceiveSelfDeviceVerification() {
+   const [request, setRequest] = useState<VerificationRequest>();
+ 
+-  useVerificationRequestReceived(setRequest);
++  // When a new verification request arrives while one is still live, cancel the
++  // stale one before adopting the new. Repeated/retried requests (common under
++  // sliding sync's delayed to-device delivery) would otherwise leave multiple
++  // overlapping flows in flight, which collide into spurious cancels.
++  const handleNewRequest = useCallback((newRequest: VerificationRequest) => {
++    setRequest((prev) => {
++      if (
++        prev &&
++        prev !== newRequest &&
++        prev.phase !== VerificationPhase.Done &&
++        prev.phase !== VerificationPhase.Cancelled
++      ) {
++        prev.cancel();
++      }
++      return newRequest;
++    });
++  }, []);
++
++  useVerificationRequestReceived(handleNewRequest);
+ 
+   const handleExit = useCallback(() => {
+     setRequest(undefined);
 diff --git a/src/app/components/RenderMessageContent.tsx b/src/app/components/RenderMessageContent.tsx
 index 4cfcb7dc1..147208a8d 100644
 --- a/src/app/components/RenderMessageContent.tsx
