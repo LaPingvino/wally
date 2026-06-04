@@ -32,12 +32,12 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
   const dbNames = getSessionDbNames(session);
 
   const indexedDBStore = new IndexedDBStore({
-    indexedDB: global.indexedDB,
-    localStorage: global.localStorage,
+    indexedDB: globalThis.indexedDB,
+    localStorage: globalThis.localStorage,
     dbName: dbNames.sync,
   });
 
-  const legacyCryptoStore = new IndexedDBCryptoStore(global.indexedDB, dbNames.crypto);
+  const legacyCryptoStore = new IndexedDBCryptoStore(globalThis.indexedDB, dbNames.crypto);
 
   const mx = createClient({
     baseUrl: session.baseUrl,
