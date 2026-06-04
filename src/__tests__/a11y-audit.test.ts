@@ -8,6 +8,7 @@
  * - Native `<dialog>` is used instead of custom overlays for modal dialogs
  * - Landmark roles exist for screen reader navigation
  */
+/// <reference types="node" />
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';

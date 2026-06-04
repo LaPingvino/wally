@@ -6,7 +6,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-import EventEmitter from 'events';
+import { EventEmitter } from 'events';
 import {
   ClientEvent,
   Direction,

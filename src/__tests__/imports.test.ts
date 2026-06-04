@@ -5,12 +5,12 @@
  *   import { Box } from 'folds'  // <-- Button accidentally omitted
  *   ...
  *   <Button>...</Button>         // <-- ReferenceError at runtime
- * will build and ship fine but crash for users.  Running `tsc --noEmit` would catch it, but
- * tsc has pre-existing API-mismatch errors from the deps upgrade that we haven't fixed yet.
- *
- * These tests focus specifically on the "Cannot find name" class of error — undefined JSX
- * component names — which is the most likely cause of a sudden ReferenceError in production.
+ * will build and ship fine but crash for users.  The deploy now runs `tsc --noEmit` as a gate
+ * (the tree is at 0 errors), so this is a second, faster guard focused specifically on the
+ * "Cannot find name" class of error — undefined JSX component names — which is the most likely
+ * cause of a sudden ReferenceError in production.
  */
+/// <reference types="node" />
 import { execSync } from 'child_process';
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'path';
