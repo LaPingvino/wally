@@ -47,7 +47,6 @@ export const initClient = async (session: Session): Promise<MatrixClient> => {
     cryptoStore: legacyCryptoStore,
     deviceId: session.deviceId,
     timelineSupport: true,
-    threadSupport: true,
     cryptoCallbacks: cryptoCallbacks as any,
     verificationMethods: ['m.sas.v1'],
   });
@@ -146,6 +145,14 @@ export const startClient = async (mx: MatrixClient) => {
   // lean room list + per-room subscriptions at timeline_limit 50 + $LAZY
   // members + window growth — so let it do the job and don't pass these.
   await mx.startClient({
+    // threadSupport gates SDK thread tracking (room.getThreads / createThreadsTimelineSets,
+    // used by ThreadsDrawer + RoomTimeline). It belongs on startClient — it's an
+    // IStartClientOpts field that sets this.clientOpts, which supportsThreads() reads;
+    // on createClient it was silently dropped, so the Threads drawer was always empty.
+    // Safe on classic sync; under sliding sync the fork already routes timeline events
+    // through thread-aware addLiveEvents, with cinny's timeline-scan fallback for
+    // out-of-window roots.
+    threadSupport: true,
     ...(willSlide ? {} : { fullLazyLoading: true }),
     autoSlidingSync: !useClassicSync,
   });
