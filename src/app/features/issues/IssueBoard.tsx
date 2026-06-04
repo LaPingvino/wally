@@ -535,7 +535,7 @@ function IssueThreadView({
     <Box direction="Column" style={{ border: '1px solid ' + color.Surface.ContainerLine, borderRadius: config.radii.R300, overflow: 'hidden' }}>
       <Box alignItems="Center" style={{ justifyContent: 'space-between', padding: config.space.S100 + ' ' + config.space.S200, background: color.SurfaceVariant.Container, borderBottom: '1px solid ' + color.Surface.ContainerLine }}>
         <Text size="T200" priority="300">{threadReplies.length} {threadReplies.length === 1 ? 'reply' : 'replies'}</Text>
-        <IconButton size="200" onClick={onClose} radii="300" aria-label="Collapse thread">
+        <IconButton size="300" onClick={onClose} radii="300" aria-label="Collapse thread">
           <Icon src={Icons.Cross} size="50" />
         </IconButton>
       </Box>
@@ -551,7 +551,7 @@ function IssueThreadView({
             const time = e.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
             const isRoot = e.getId() === threadRootId;
             return (
-              <Box key={e.getId()} direction="Column" gap="50"
+              <Box key={e.getId()} direction="Column" gap="100"
                 style={{ paddingBottom: config.space.S100, borderBottom: isRoot ? '1px solid ' + color.Surface.ContainerLine : undefined }}>
                 <Box gap="100" alignItems="Center">
                   <Text size="T200" style={{ fontWeight: 600 }}>{displayName(sender)}</Text>

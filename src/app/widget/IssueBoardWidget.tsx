@@ -1138,8 +1138,13 @@ export function IssueBoardWidget({ widgetApi }: Props) {
 
   const doSave = useCallback(async (stateKey: string, content: IssueContent) => {
     setIssues(prev => {
+      const existing = prev.find(i => i.stateKey === stateKey);
       const rest = prev.filter(i => i.stateKey !== stateKey);
-      return [...rest, { stateKey, eventId: '', content, sender: userId, ts: Date.now() }];
+      // Preserve the original creator on edit; a brand-new issue's creator is us.
+      return [
+        ...rest,
+        { stateKey, eventId: '', content, sender: userId, creatorId: existing?.creatorId ?? userId, ts: Date.now() },
+      ];
     });
     setEditing(null);
     await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, content);
@@ -1174,6 +1179,11 @@ export function IssueBoardWidget({ widgetApi }: Props) {
       sender: userId,
       origin_server_ts: Date.now(),
       content: content as any,
+      // Required by IRoomEvent. This is an optimistic local echo (replaced by the
+      // real event on the next read); the widget has no room_id in scope and
+      // nothing reads these, so empty placeholders satisfy the shape.
+      room_id: '',
+      unsigned: {},
     };
     setComments(prev => [...prev, tempEvent]);
     await (widgetApi as any).sendRoomEvent('m.room.message', content);
