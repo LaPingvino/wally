@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index b6e78b612..1bdfbd519 100644
+index b6e78b612..479c27093 100644
 --- a/package.json
 +++ b/package.json
 @@ -15,7 +15,8 @@
@@ -20,6 +20,15 @@ index b6e78b612..1bdfbd519 100644
      "@esbuild-plugins/node-globals-polyfill": "0.2.3",
      "@rollup/plugin-inject": "5.0.3",
      "@rollup/plugin-wasm": "6.1.1",
+@@ -159,7 +161,7 @@
+     "prettier": "2.8.8",
+     "semantic-release": "25.0.3",
+     "typescript": "5.9.3",
+-    "vite": "5.4.21",
++    "vite": "npm:rolldown-vite@7.3.1",
+     "vite-plugin-pwa": "0.20.5",
+     "vite-plugin-static-copy": "1.0.6",
+     "vite-plugin-top-level-await": "1.6.0",
 diff --git a/src/app/components/DeviceVerification.tsx b/src/app/components/DeviceVerification.tsx
 index d2502ccf7..f3e6d269f 100644
 --- a/src/app/components/DeviceVerification.tsx
