@@ -842,6 +842,28 @@ index ee8967af7..658bdcfa7 100644
      }, [loadPreview]);
  
      if (previewStatus.status === AsyncStatus.Error) return null;
+diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
+index 402c1d095..21ff11110 100644
+--- a/src/app/features/issues/IssueBoard.tsx
++++ b/src/app/features/issues/IssueBoard.tsx
+@@ -538,7 +538,7 @@ function IssueThreadView({
+     <Box direction="Column" style={{ border: '1px solid ' + color.Surface.ContainerLine, borderRadius: config.radii.R300, overflow: 'hidden' }}>
+       <Box alignItems="Center" style={{ justifyContent: 'space-between', padding: config.space.S100 + ' ' + config.space.S200, background: color.SurfaceVariant.Container, borderBottom: '1px solid ' + color.Surface.ContainerLine }}>
+         <Text size="T200" priority="300">{threadReplies.length} {threadReplies.length === 1 ? 'reply' : 'replies'}</Text>
+-        <IconButton size="200" onClick={onClose} radii="300" aria-label="Collapse thread">
++        <IconButton size="300" onClick={onClose} radii="300" aria-label="Collapse thread">
+           <Icon src={Icons.Cross} size="50" />
+         </IconButton>
+       </Box>
+@@ -554,7 +554,7 @@ function IssueThreadView({
+             const time = e.getDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) ?? '';
+             const isRoot = e.getId() === threadRootId;
+             return (
+-              <Box key={e.getId()} direction="Column" gap="50"
++              <Box key={e.getId()} direction="Column" gap="100"
+                 style={{ paddingBottom: config.space.S100, borderBottom: isRoot ? '1px solid ' + color.Surface.ContainerLine : undefined }}>
+                 <Box gap="100" alignItems="Center">
+                   <Text size="T200" style={{ fontWeight: 600 }}>{displayName(sender)}</Text>
 diff --git a/src/app/features/lobby/SpaceHierarchy.tsx b/src/app/features/lobby/SpaceHierarchy.tsx
 index 280b8a5a2..cc01c13ea 100644
 --- a/src/app/features/lobby/SpaceHierarchy.tsx
@@ -1096,10 +1118,27 @@ index 9c5b2ec77..c11bdb94e 100644
                <Box gap="100">
                  {canSendReaction && (
 diff --git a/src/app/features/room/message/MessageEditor.tsx b/src/app/features/room/message/MessageEditor.tsx
-index 9a7567aac..adbf55ef2 100644
+index 9a7567aac..8e63d89b1 100644
 --- a/src/app/features/room/message/MessageEditor.tsx
 +++ b/src/app/features/room/message/MessageEditor.tsx
-@@ -258,6 +258,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
+@@ -22,6 +22,7 @@ import {
+ import { Editor, Transforms } from 'slate';
+ import { ReactEditor } from 'slate-react';
+ import { IContent, IMentions, MatrixEvent, RelationType, Room } from 'matrix-js-sdk';
++import type { RoomMessageEventContent } from 'matrix-js-sdk/lib/@types/events';
+ import { isKeyHotkey } from 'is-hotkey';
+ import {
+   AUTOCOMPLETE_PREFIXES,
+@@ -153,7 +154,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
+           },
+         };
+ 
+-        return mx.sendMessage(roomId, content);
++        return mx.sendMessage(roomId, content as RoomMessageEventContent);
+       }, [mx, editor, roomId, mEvent, isMarkdown, getPrevBodyAndFormattedBody])
+     );
+ 
+@@ -258,6 +259,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
          <CustomEditor
            editor={editor}
            placeholder="Edit message..."
@@ -2316,6 +2355,37 @@ index 4c86c4e26..cce5947ce 100644
  };
  
  export const mxcUrlToHttp = (
+diff --git a/src/app/widget/IssueBoardWidget.tsx b/src/app/widget/IssueBoardWidget.tsx
+index e9fc38020..43ca49739 100644
+--- a/src/app/widget/IssueBoardWidget.tsx
++++ b/src/app/widget/IssueBoardWidget.tsx
+@@ -1138,8 +1138,13 @@ export function IssueBoardWidget({ widgetApi }: Props) {
+ 
+   const doSave = useCallback(async (stateKey: string, content: IssueContent) => {
+     setIssues(prev => {
++      const existing = prev.find(i => i.stateKey === stateKey);
+       const rest = prev.filter(i => i.stateKey !== stateKey);
+-      return [...rest, { stateKey, eventId: '', content, sender: userId, ts: Date.now() }];
++      // Preserve the original creator on edit; a brand-new issue's creator is us.
++      return [
++        ...rest,
++        { stateKey, eventId: '', content, sender: userId, creatorId: existing?.creatorId ?? userId, ts: Date.now() },
++      ];
+     });
+     setEditing(null);
+     await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, content);
+@@ -1174,6 +1179,11 @@ export function IssueBoardWidget({ widgetApi }: Props) {
+       sender: userId,
+       origin_server_ts: Date.now(),
+       content: content as any,
++      // Required by IRoomEvent. This is an optimistic local echo (replaced by the
++      // real event on the next read); the widget has no room_id in scope and
++      // nothing reads these, so empty placeholders satisfy the shape.
++      room_id: '',
++      unsigned: {},
+     };
+     setComments(prev => [...prev, tempEvent]);
+     await (widgetApi as any).sendRoomEvent('m.room.message', content);
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
 index a7087c2e1..f0b834ee1 100644
 --- a/src/client/initMatrix.ts
