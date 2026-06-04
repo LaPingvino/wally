@@ -143,7 +143,7 @@ export function AddAccountDialog({ onClose }: AddAccountDialogProps) {
               size="500"
               outlined
               defaultValue={server}
-              onChange={(e) => setServer(e.target.value.trim() || defaultServer)}
+              onChange={(e) => setServer((e.target as HTMLInputElement).value.trim() || defaultServer)}
             />
           </Box>
 
