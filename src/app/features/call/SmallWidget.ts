@@ -15,7 +15,6 @@ import {
   MatrixClient,
   MatrixEvent,
   MatrixEventEvent,
-  Room,
 } from 'matrix-js-sdk';
 import {
   ClientWidgetApi,
@@ -30,81 +29,6 @@ import {
 import { CinnyWidget } from './CinnyWidget';
 import { SmallWidgetDriver } from './SmallWidgetDriver';
 import { callDebug } from './callDebug';
-
-/**
- * Returns the appropriate EC `intent` and `callIntent` URL params for a room.
- * - Voice rooms (`isCallRoom()`): `join_existing` intent, `audio` callType (persistent channel).
- * - DM rooms (≤2 joined members): `start_call` intent, `video` callType (1:1 video call).
- * - Group rooms: `start_call` intent, `audio` callType.
- */
-export function getCallIntentParams(room: Room | null | undefined): {
-  intent: 'join_existing' | 'start_call';
-  callIntentParam: 'audio' | 'video';
-} {
-  const isVoiceRoom = room?.isCallRoom() ?? false;
-  // Require room to be non-null: unknown/missing room should not be treated as a DM.
-  const isDmRoom = room != null && !isVoiceRoom && room.currentState.getJoinedMemberCount() <= 2;
-  return {
-    intent: isVoiceRoom ? 'join_existing' : 'start_call',
-    callIntentParam: isDmRoom ? 'video' : 'audio',
-  };
-}
-
-/**
- * Generates the URL for the Element Call widget.
- * @param mx - The MatrixClient instance.
- * @param roomId - The ID of the room.
- * @returns The generated URL object.
- */
-export const getWidgetUrl = (
-  mx: MatrixClient,
-  roomId: string,
-  elementCallUrl: string,
-  widgetId: string,
-  setParams: any,
-): URL => {
-  const baseUrl = window.location.origin;
-  // When no custom URL is configured, use the bundled @element-hq/element-call-embedded
-  // (copied to /public/element-call/ during build by vite-plugin-static-copy).
-  // The /room path suffix is only needed for call.element.io's path-based router;
-  // the embedded build uses query params (embed=true) to reach room view directly.
-  const url = elementCallUrl
-    ? new URL(`${elementCallUrl}/room`)
-    : new URL('/public/element-call/index.html', baseUrl);
-
-  const params = new URLSearchParams({
-    embed: 'true',
-    widgetId,
-    appPrompt: 'false',
-    returnToLobby: setParams.returnToLobby ?? 'true',
-    perParticipantE2EE: setParams.perParticipantE2EE ?? 'false',
-    callIntent: setParams.callIntent ?? 'video',
-    header: 'none',
-    confineToRoom: 'true',
-    theme: setParams.theme ?? 'dark',
-    userId: mx.getUserId()!,
-    deviceId: mx.getDeviceId()!,
-    roomId,
-    baseUrl: mx.baseUrl!,
-    parentUrl: window.location.origin,
-  });
-  // intent controls defaults: 'join_existing' = show lobby + correct callIntent/audio defaults.
-  // Default case (no intent) triggers appPrompt=true + confineToRoom=false — wrong for widget mode.
-  if (setParams.intent) {
-    params.set('intent', setParams.intent);
-  }
-  // skipLobby URL param (in gje(m)) overrides the intent-derived value in the final merge.
-  // Pass true to skip the lobby regardless of intent; omit to let intent decide.
-  if (setParams.skipLobby !== undefined) {
-    params.set('skipLobby', String(setParams.skipLobby));
-  }
-
-  const replacedParams = params.toString().replace(/%24/g, '$');
-  url.search = `?${replacedParams}`;
-
-  callDebug('widget', 'getWidgetUrl', url.toString());
-  return url;
-};
 
 export interface IApp extends IWidget {
   client: MatrixClient;
@@ -160,7 +84,7 @@ export class SmallWidget extends EventEmitter {
       this.mockWidget,
       WidgetKind.Room,
       true,
-      this.roomId,
+      this.roomId
     );
     this.iframe = iframe;
     this.messaging = new ClientWidgetApi(this.mockWidget, iframe, driver);
@@ -233,7 +157,7 @@ export class SmallWidget extends EventEmitter {
           // sends UpdateAlwaysOnScreen(false) to release sticky mode).
           this.messaging.transport.reply(ev.detail, {});
         }
-      },
+      }
     );
 
     return this.messaging;
@@ -361,7 +285,11 @@ export class SmallWidget extends EventEmitter {
       } else {
         const raw = ev.getEffectiveEvent();
         if (ev.getType() === 'org.matrix.msc3401.call.member' || ev.getType() === 'm.call.member') {
-          callDebug('sfu', 'feedEvent call.member', { type: ev.getType(), sender: ev.getSender(), roomId: ev.getRoomId() });
+          callDebug('sfu', 'feedEvent call.member', {
+            type: ev.getType(),
+            sender: ev.getSender(),
+            roomId: ev.getRoomId(),
+          });
         }
         this.messaging.feedEvent(raw as IRoomEvent, this.roomId ?? '').catch(() => null);
       }
@@ -384,61 +312,6 @@ export class SmallWidget extends EventEmitter {
   }
 }
 
-/**
- * Creates the data object for the widget.
- * @param client - The MatrixClient instance.
- * @param roomId - The ID of the room.
- * @param currentData - Existing widget data.
- * @param overwriteData - Data to merge or overwrite.
- * @returns The final widget data object.
- */
-export const getWidgetData = (
-  client: MatrixClient,
-  roomId: string,
-  currentData: object,
-  overwriteData: object,
-  rtcFoci?: unknown[],
-): IWidgetData => {
-  // Always false — per-participant E2EE requires the LiveKit SFU to be provisioned for it.
-  // Passing true on a standard SFU causes EC to throw "e2ee not configured" on connect.
-  // The SFU/JWT service controls E2EE at the room level, not us.
-  const perParticipantE2EE = false;
-
-  // Pass the LiveKit foci from .well-known/matrix/client explicitly so EC
-  // doesn't have to re-fetch .well-known itself (which can fail if the server
-  // domain differs from the homeserver URL, or due to CORS in the iframe).
-  // Prefer the rtcFoci argument (from Cinny's AutoDiscoveryInfo) over the SDK's
-  // getClientWellKnown() which may be empty/stale.
-  let fociPreferred: unknown[];
-  if (rtcFoci && rtcFoci.length > 0) {
-    fociPreferred = rtcFoci;
-  } else {
-    const wellKnown = client.getClientWellKnown() as Record<string, unknown> | undefined;
-    fociPreferred = (wellKnown?.['org.matrix.msc4143.rtc_foci'] as unknown[]) ?? [];
-  }
-  callDebug('focus', 'getWidgetData fociPreferred', fociPreferred);
-
-  return {
-    ...currentData,
-    fociPreferred,
-    ...overwriteData,
-    perParticipantE2EE,
-  };
-};
-
-/**
- * Creates a virtual widget definition (IApp).
- * @param client - MatrixClient instance.
- * @param id - Widget ID.
- * @param creatorUserId - User ID of the creator.
- * @param name - Widget display name.
- * @param type - Widget type (e.g., 'm.call').
- * @param url - Widget URL.
- * @param waitForIframeLoad - Whether to wait for iframe load signal.
- * @param data - Widget data.
- * @param roomId - Room ID.
- * @returns The IApp widget definition.
- */
 export const createVirtualWidget = (
   client: MatrixClient,
   id: string,
@@ -448,7 +321,7 @@ export const createVirtualWidget = (
   url: URL,
   waitForIframeLoad: boolean,
   data: IWidgetData,
-  roomId: string,
+  roomId: string
 ): IApp => ({
   client,
   id,
