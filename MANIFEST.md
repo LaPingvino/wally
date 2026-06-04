@@ -27,7 +27,7 @@ you can apply those manually from the per-family branch.
 
 - `accessibility.patch` — partial (32/60 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account; see `accessibility.skipped`
 - `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (40/103 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
+- `ux-fixes.patch` — partial (42/106 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `bridged-chat.patch` — partial (3/4 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `bridged-chat.skipped`
 - `branding.patch` — partial (10/12 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat; see `branding.skipped`
@@ -41,4 +41,4 @@ set; fetch the per-family branch on Codeberg:
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `settings-sync` — `git fetch codeberg settings-sync`
 
-_Generated 2026-06-04T19:53:45Z_
+_Generated 2026-06-04T20:18:25Z_
