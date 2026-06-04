@@ -2635,3 +2635,17 @@ index 7608e5578..b18c937d7 100644
    },
    "exclude": ["node_modules", "dist"],
    "include": ["src"]
+diff --git a/vite.config.js b/vite.config.js
+index 19d282c21..69df92fe6 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -129,7 +129,8 @@ export default defineConfig({
+   },
+   build: {
+     outDir: 'dist',
+-    sourcemap: true,
++    sourcemap: false,
++    reportCompressedSize: false,
+     copyPublicDir: false,
+     rollupOptions: {
+       plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],
