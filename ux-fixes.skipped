@@ -56,3 +56,4 @@ ebf5cdb5  ux-fixes: don't resolve a DM title until the roster is loaded (fix "to
 b6d8abb5  ux-fixes: drop client-side DM name/avatar, trust the SDK
 78e3c52b  ux-fixes: exclude your own bridge ghost from DM detection (frequency-based)
 0f425a22  ux-fixes: detect "DM with yourself" as a default-off candidate
+1a8e1ff1  ux-fixes: tighten account-data event-type typing
