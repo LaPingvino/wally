@@ -77,7 +77,7 @@ export function CompactUploadCardRenderer({
       {upload.status === UploadStatus.Success ? (
         <>
           <Text size="H6" truncate>
-            {file.name}
+            {file instanceof File ? file.name : 'attachment'}
           </Text>
           <Icon style={{ color: color.Success.Main }} src={Icons.Check} size="100" />
         </>

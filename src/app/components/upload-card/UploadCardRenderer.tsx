@@ -206,7 +206,7 @@ export function UploadCardRenderer({
       }
     >
       <Text size="H6" truncate>
-        {file.name}
+        {file instanceof File ? file.name : 'attachment'}
       </Text>
       {upload.status === UploadStatus.Success && (
         <Icon style={{ color: color.Success.Main }} src={Icons.Check} size="100" />

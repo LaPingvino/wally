@@ -122,7 +122,7 @@ export const ImagePackContent = as<'div', ImagePackContentProps>(
           info: getImageInfo(imgEl, data.file),
         };
         const image = PackImageReader.fromPackImage(
-          getFileNameWithoutExt(data.file.name),
+          getFileNameWithoutExt(data.file instanceof File ? data.file.name : 'sticker'),
           packImage
         );
         if (!image) return;

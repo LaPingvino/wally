@@ -12,8 +12,11 @@ export type TUploadMetadata = {
 };
 
 export type TUploadItem = {
-  file: TUploadContent;
-  originalFile: TUploadContent;
+  // Always Files in practice (picked/pasted/dropped, then re-wrapped by encryptFile);
+  // the message-content builders read .name/.type/.size, which Blob lacks. The raw
+  // upload-progress states in state/upload.ts keep the broader TUploadContent.
+  file: File;
+  originalFile: File;
   metadata: TUploadMetadata;
   encInfo: EncryptedAttachmentInfo | undefined;
 };

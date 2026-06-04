@@ -105,16 +105,18 @@ export const getThumbnailContent = (thumbnailInfo: {
   return content;
 };
 
-export const encryptFile = async (
-  file: File | Blob
+export const encryptFile = async <T extends File | Blob>(
+  file: T
 ): Promise<{
   encInfo: EncryptedAttachmentInfo;
   file: File;
-  originalFile: File | Blob;
+  originalFile: T;
 }> => {
   const dataBuffer = await file.arrayBuffer();
   const encryptedAttachment = await encryptAttachment(dataBuffer);
-  const encFile = new File([encryptedAttachment.data], file.name, {
+  // Message uploads pass a File (has .name); thumbnail/generated uploads pass a
+  // Blob (no .name) — fall back to a generic name there.
+  const encFile = new File([encryptedAttachment.data], file instanceof File ? file.name : 'attachment', {
     type: file.type,
   });
   return {

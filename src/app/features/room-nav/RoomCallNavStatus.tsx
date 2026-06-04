@@ -4,6 +4,7 @@ import {
   Icon,
   IconButton,
   Icons,
+  type IconSrc,
   Line,
   Spinner,
   Text,
@@ -48,9 +49,9 @@ type NavItem = {
   ariaLabel: string;
   tooltip: string;
   /** Left-side icon (the direction or the content label, depending on item). */
-  leftIcon: React.ComponentType<{ size?: string }>;
+  leftIcon: IconSrc;
   /** Right-side icon. */
-  rightIcon: React.ComponentType<{ size?: string }>;
+  rightIcon: IconSrc;
   onClick: () => void;
 };
 
