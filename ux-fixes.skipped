@@ -60,3 +60,4 @@ b6d8abb5  ux-fixes: drop client-side DM name/avatar, trust the SDK
 7b7062c1  ux-fixes: register custom state-event type + AddAccountDialog input cast
 b58493b2  ux-fixes: actually enable SDK thread support (move threadSupport to startClient)
 17398425  ux-fixes: narrow upload-item + nav-icon types (clears 24 type errors)
+d33b728a  ux-fixes: fix two test-only type errors
