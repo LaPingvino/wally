@@ -272,7 +272,7 @@ describe('Widget cleanup on hangup', () => {
   });
 
   it('cleanup handles already-null ref gracefully', () => {
-    const widgetRef = { current: null };
+    const widgetRef: { current: { stopMessaging: () => void } | null } = { current: null };
     const activeCallRoomId = null;
 
     // Should not throw

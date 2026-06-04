@@ -15,7 +15,9 @@ import { execSync } from 'child_process';
 import { describe, it, expect } from 'vitest';
 import { resolve } from 'path';
 
-const ROOT = resolve(import.meta.dirname, '../..');
+// import.meta.dirname exists at runtime (Node 20.11+/vitest) but isn't on the
+// typed ImportMeta here.
+const ROOT = resolve((import.meta as unknown as { dirname: string }).dirname, '../..');
 
 describe('TypeScript: no undefined JSX component names', () => {
   it('has no "Cannot find name" errors in any source file', { timeout: 180_000 }, () => {
