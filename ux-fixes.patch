@@ -1351,6 +1351,159 @@ index b61174da8..116bee08f 100644
          {loading && <ClientRootOptions mx={mx} />}
          {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
            <SplashScreen>
+diff --git a/src/app/pages/client/SyncStatus.tsx b/src/app/pages/client/SyncStatus.tsx
+index 9cd4b0b2d..90d05f9ae 100644
+--- a/src/app/pages/client/SyncStatus.tsx
++++ b/src/app/pages/client/SyncStatus.tsx
+@@ -1,41 +1,90 @@
+ import { MatrixClient, SyncState } from 'matrix-js-sdk';
+-import React, { useCallback, useState } from 'react';
++import React, { useCallback, useRef, useState } from 'react';
+ import { Box, config, Line, Text } from 'folds';
+ import { useSyncState } from '../../hooks/useSyncState';
+ import { ContainerColor } from '../../styles/ContainerColor.css';
+ 
+-type StateData = {
+-  current: SyncState | null;
+-  previous: SyncState | null | undefined;
+-};
++// Banner phases. Under simplified sliding sync the SDK polls every ~3s and the
++// room window GROWS over several polls, so a single "Connecting…/hidden" flip
++// hid what was still happening. Instead we track the loaded room count:
++//   connecting — first contact, nothing on screen yet
++//   loading    — connected, rooms still streaming in (window growing) — shows the count
++//   hidden      — count has settled (steady state)
++//   reconnecting / error — connection trouble
++// With the persistent cache the room list is already painted on load, so we start
++// in `loading` (calm) rather than the alarming `connecting`.
++type Phase = 'connecting' | 'loading' | 'hidden' | 'reconnecting' | 'error';
++
++// Consecutive non-growing polls before we call the initial load "settled". A small
++// buffer avoids hiding the banner during a brief gap between window-growth bursts.
++const SETTLE_POLLS = 2;
+ 
+ type SyncStatusProps = {
+   mx: MatrixClient;
+ };
+ export function SyncStatus({ mx }: SyncStatusProps) {
+-  const [stateData, setStateData] = useState<StateData>({
+-    current: null,
+-    previous: undefined,
+-  });
++  const [phase, setPhase] = useState<Phase>(() => (mx.getRooms().length > 0 ? 'loading' : 'connecting'));
++  const [roomCount, setRoomCount] = useState(() => mx.getRooms().length);
++
++  const lastCountRef = useRef(roomCount);
++  const stablePollsRef = useRef(0);
++  const settledRef = useRef(false);
+ 
+   useSyncState(
+     mx,
+-    useCallback((current, previous) => {
+-      setStateData((s) => {
+-        if (s.current === current && s.previous === previous) {
+-          return s;
++    useCallback(
++      (current) => {
++        if (current === SyncState.Error) {
++          setPhase('error');
++          return;
++        }
++        if (current === SyncState.Reconnecting) {
++          setPhase('reconnecting');
++          return;
+         }
+-        return { current, previous };
+-      });
+-    }, [])
++        if (
++          current !== SyncState.Prepared &&
++          current !== SyncState.Syncing &&
++          current !== SyncState.Catchup
++        ) {
++          return;
++        }
++
++        const count = mx.getRooms().length;
++        setRoomCount(count);
++
++        // Once the initial load has settled, stay out of the way — only a fresh
++        // reconnect/error (handled above) should bring the banner back.
++        if (settledRef.current) {
++          setPhase('hidden');
++          return;
++        }
++
++        if (count > lastCountRef.current) {
++          lastCountRef.current = count;
++          stablePollsRef.current = 0;
++          setPhase('loading');
++          return;
++        }
++        // Nothing arrived yet at all → still connecting; otherwise count the quiet
++        // polls and settle once the window has stopped growing.
++        if (count === 0) {
++          setPhase('connecting');
++          return;
++        }
++        stablePollsRef.current += 1;
++        if (stablePollsRef.current >= SETTLE_POLLS) {
++          settledRef.current = true;
++          setPhase('hidden');
++        } else {
++          setPhase('loading');
++        }
++      },
++      [mx]
++    )
+   );
+ 
+-  if (
+-    (stateData.current === SyncState.Prepared ||
+-      stateData.current === SyncState.Syncing ||
+-      stateData.current === SyncState.Catchup) &&
+-    stateData.previous !== SyncState.Syncing
+-  ) {
++  if (phase === 'connecting') {
+     return (
+       <Box direction="Column" shrink="No">
+         <Box
+@@ -51,7 +100,25 @@ export function SyncStatus({ mx }: SyncStatusProps) {
+     );
+   }
+ 
+-  if (stateData.current === SyncState.Reconnecting) {
++  if (phase === 'loading') {
++    return (
++      <Box direction="Column" shrink="No">
++        <Box
++          className={ContainerColor({ variant: 'Success' })}
++          style={{ padding: `${config.space.S100} 0` }}
++          alignItems="Center"
++          justifyContent="Center"
++        >
++          <Text size="L400">
++            {roomCount > 0 ? `Loading rooms… (${roomCount})` : 'Loading rooms…'}
++          </Text>
++        </Box>
++        <Line variant="Success" size="300" />
++      </Box>
++    );
++  }
++
++  if (phase === 'reconnecting') {
+     return (
+       <Box direction="Column" shrink="No">
+         <Box
+@@ -67,7 +134,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
+     );
+   }
+ 
+-  if (stateData.current === SyncState.Error) {
++  if (phase === 'error') {
+     return (
+       <Box direction="Column" shrink="No">
+         <Box
 diff --git a/src/app/pages/client/VersionCheck.tsx b/src/app/pages/client/VersionCheck.tsx
 new file mode 100644
 index 000000000..2d4a65bb3
