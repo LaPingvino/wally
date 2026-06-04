@@ -1,20 +1,7 @@
 import { atom } from 'jotai';
-import { CallEmbed } from '../plugins/call';
 
-const baseCallEmbedAtom = atom<CallEmbed | undefined>(undefined);
-
-export const callEmbedAtom = atom<CallEmbed | undefined, [CallEmbed | undefined], void>(
-  (get) => get(baseCallEmbedAtom),
-  (get, set, callEmbed) => {
-    const prevCallEmbed = get(baseCallEmbedAtom);
-    if (callEmbed === prevCallEmbed) return;
-
-    if (prevCallEmbed) {
-      prevCallEmbed.dispose();
-    }
-
-    set(baseCallEmbedAtom, callEmbed);
-  }
-);
-
+// Whether the in-call chat panel is open. This file previously also held the
+// Element Call embed atom (callEmbedAtom) + the CallEmbed instance; that whole
+// chain was removed when calls moved to direct LiveKit and the EC iframe was
+// retired, leaving only this live UI flag.
 export const callChatAtom = atom<boolean>(false);

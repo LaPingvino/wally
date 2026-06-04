@@ -125,7 +125,6 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@element-hq/element-call-embedded": "0.16.3",
     "@typescript/native-preview": "7.0.0-dev.20260604.1",
     "@esbuild-plugins/node-globals-polyfill": "0.2.3",
     "@rollup/plugin-inject": "5.0.3",
