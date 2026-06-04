@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { EventType } from 'matrix-js-sdk';
 import { Box, Text, IconButton, Icon, Icons, Scroll, Button } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
@@ -97,7 +98,7 @@ export function Performance({ requestClose }: PerformanceProps) {
   const joinedRooms = rooms.filter((r) => r.getMyMembership() === Membership.Join);
   const invitedRooms = rooms.filter((r) => r.getMyMembership() === Membership.Invite);
   const spaces = joinedRooms.filter((r) => r.isSpaceRoom());
-  const mDirectEvent = mx.getAccountData('m.direct');
+  const mDirectEvent = mx.getAccountData(EventType.Direct);
   const dmRoomIds = mDirectEvent ? getMDirects(mDirectEvent) : new Set<string>();
   const dmRooms = joinedRooms.filter((r) => dmRoomIds.has(r.roomId));
 
