@@ -1162,6 +1162,7 @@ function SyncTransport() {
 
 function SettingsSync() {
   const [syncEnabled, setSyncEnabled] = useSetting(settingsAtom, 'settingsSyncEnabled');
+  const [pausedLocally, setPausedLocally] = useSetting(settingsAtom, 'settingsSyncPausedLocally');
   const lastSynced = useAtomValue(settingsSyncLastSyncedAtom);
   const status = useAtomValue(settingsSyncStatusAtom);
   const settings = useAtomValue(settingsAtom);
@@ -1185,6 +1186,8 @@ function SettingsSync() {
   let statusText: string;
   if (!syncEnabled) {
     statusText = 'Disabled';
+  } else if (pausedLocally) {
+    statusText = 'Independent on this device';
   } else if (status === 'syncing') {
     statusText = 'Syncing…';
   } else if (status === 'error') {
@@ -1204,6 +1207,13 @@ function SettingsSync() {
           description={`Stores your preferences in Matrix account data (eu.kiefte.wally.settings) so they follow you to other sessions. Device-local settings (zoom, drawer state, notification permission, developer tools) stay local. ${statusText}.`}
           after={<Switch variant="Primary" value={syncEnabled} onChange={setSyncEnabled} />}
         />
+        {syncEnabled && (
+          <SettingTile
+            title="Use independent settings on this device"
+            description="Decouple THIS device from sync: it stops both sending and receiving changes, so settings you change here stay local and aren't overwritten by your other sessions. Turn off to rejoin and adopt the shared settings again. Sync stays on for the rest of your account."
+            after={<Switch variant="Primary" value={pausedLocally} onChange={setPausedLocally} />}
+          />
+        )}
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile

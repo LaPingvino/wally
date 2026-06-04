@@ -85,8 +85,16 @@ export interface Settings {
   unreadNavBar: 'always' | 'onNav' | 'never';
 
   // Cross-device settings sync via Matrix account data
-  // (`eu.kiefte.wally.settings`). Device-local: never synced itself.
+  // (`eu.kiefte.wally.settings`). The flag itself is mirrored across devices via
+  // the synced blob (so enabling once follows the account); see useSettingsSync.
   settingsSyncEnabled: boolean;
+
+  // Per-device opt-out, shown only once sync is enabled. When true, THIS device is
+  // fully decoupled from sync — neither pushing nor receiving — so changes made
+  // here stay local and aren't overwritten by other sessions. Turning it back off
+  // rejoins and adopts the shared settings. Account-wide sync stays on for other
+  // devices. Device-local: never synced.
+  settingsSyncPausedLocally: boolean;
 
   // Sync transport. true (default) = classic /sync — the battle-tested path
   // that delivers full membership, to_device and device-list updates reliably.
@@ -147,6 +155,7 @@ const defaultSettings: Settings = {
   unreadNavBar: 'onNav',
 
   settingsSyncEnabled: false,
+  settingsSyncPausedLocally: false,
   useClassicSync: true,
 };
 

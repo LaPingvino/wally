@@ -56,6 +56,13 @@ export type SyncableKey = (typeof SYNCABLE_KEYS)[number];
 export type SettingsSyncContent = {
   v: number;
   settings: Partial<Pick<Settings, SyncableKey>>;
+  // The cross-device ENABLE switch itself, persisted in account data so the
+  // choice "sync my settings" follows the account to new sessions. Unlike the
+  // whitelisted settings, a device honours this field EVEN WHILE its own local
+  // switch is off — that's what lets enabling sync on one device adopt it on a
+  // fresh login, and a blob that says `false` keeps new devices waiting (no other
+  // settings sync) until it's turned on. Absent on blobs written before this.
+  enabled?: boolean;
   // Random token written by the uploading device so its own echo back via
   // ClientEvent.AccountData can be filtered out instead of round-tripping.
   synctoken?: string;
@@ -72,7 +79,20 @@ const pickSyncable = (settings: Settings): Partial<Pick<Settings, SyncableKey>> 
 export const serializeForSync = (settings: Settings): SettingsSyncContent => ({
   v: SETTINGS_SYNC_VERSION,
   settings: pickSyncable(settings),
+  enabled: settings.settingsSyncEnabled,
 });
+
+// Read the cross-device ENABLE flag from a settings-sync account-data payload.
+// This is the one field a device honours even while its OWN sync switch is off,
+// so "turn sync on once" propagates the switch to every other session (and off
+// likewise). Returns null when absent/invalid so callers leave the local switch
+// untouched (e.g. a pre-`enabled` blob, or no blob at all).
+export const readSyncEnabled = (data: unknown): boolean | null => {
+  if (!data || typeof data !== 'object') return null;
+  const c = data as Record<string, unknown>;
+  if (c.v !== SETTINGS_SYNC_VERSION) return null;
+  return typeof c.enabled === 'boolean' ? c.enabled : null;
+};
 
 // Validate incoming account data and merge it into current settings.
 // Returns null when the data is invalid or from an incompatible schema
