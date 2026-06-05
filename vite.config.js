@@ -1,10 +1,10 @@
 import { defineConfig } from 'vite';
+import inject from '@rollup/plugin-inject';
 import react from '@vitejs/plugin-react';
 import { wasm } from '@rollup/plugin-wasm';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
-import inject from '@rollup/plugin-inject';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'fs';
@@ -125,10 +125,19 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // Modern target: the app is ES2020+ and our browsers support it natively, so
+    // don't downlevel (esbuild can't transform some destructuring to old targets,
+    // which broke the build after the vite-7 plugin bumps).
+    target: 'es2022',
     sourcemap: false,
     reportCompressedSize: false,
     copyPublicDir: false,
     rollupOptions: {
+      // @rollup/plugin-inject provides the Buffer global matrix-js-sdk / crypto rely
+      // on. Rolldown has a native inject, but rolldown-vite rejects `rollupOptions.
+      // inject` (Invalid key) and the correct exposure is unclear — keep the working
+      // rollup plugin (rolldown runs it fine; it only emits a non-fatal perf nudge)
+      // rather than risk an undefined Buffer global at runtime.
       plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],
       input: {
         main: path.resolve(__dirname, 'index.html'),
