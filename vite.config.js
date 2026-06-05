@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite';
-import inject from '@rollup/plugin-inject';
 import react from '@vitejs/plugin-react';
 import { wasm } from '@rollup/plugin-wasm';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
@@ -133,12 +132,12 @@ export default defineConfig({
     reportCompressedSize: false,
     copyPublicDir: false,
     rollupOptions: {
-      // @rollup/plugin-inject provides the Buffer global matrix-js-sdk / crypto rely
-      // on. Rolldown has a native inject, but rolldown-vite rejects `rollupOptions.
-      // inject` (Invalid key) and the correct exposure is unclear — keep the working
-      // rollup plugin (rolldown runs it fine; it only emits a non-fatal perf nudge)
-      // rather than risk an undefined Buffer global at runtime.
-      plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],
+      // Rolldown's builtin inject provides the Buffer global matrix-js-sdk / crypto
+      // rely on (replaces @rollup/plugin-inject). It lives under transform.inject —
+      // NOT rollupOptions.inject (which rolldown-vite rejects as an invalid key).
+      transform: {
+        inject: { Buffer: ['buffer', 'Buffer'] },
+      },
       input: {
         main: path.resolve(__dirname, 'index.html'),
         widget: path.resolve(__dirname, 'widget.html'),
