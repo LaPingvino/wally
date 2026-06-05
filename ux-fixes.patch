@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index b6e78b612..1fa180e4e 100644
+index b6e78b612..a87b49cb2 100644
 --- a/package.json
 +++ b/package.json
 @@ -5,7 +5,7 @@
@@ -30,15 +30,17 @@ index b6e78b612..1fa180e4e 100644
      "await-to-js": "3.0.0",
      "badwords-list": "2.0.1-4",
      "blurhash": "2.0.5",
-@@ -125,6 +126,7 @@
+@@ -125,8 +126,8 @@
    },
    "devDependencies": {
      "@element-hq/element-call-embedded": "0.16.3",
 +    "@typescript/native-preview": "7.0.0-dev.20260604.1",
      "@esbuild-plugins/node-globals-polyfill": "0.2.3",
-     "@rollup/plugin-inject": "5.0.3",
+-    "@rollup/plugin-inject": "5.0.3",
      "@rollup/plugin-wasm": "6.1.1",
-@@ -159,9 +161,9 @@
+     "@semantic-release/exec": "7.1.0",
+     "@semantic-release/git": "10.0.1",
+@@ -159,9 +160,9 @@
      "prettier": "2.8.8",
      "semantic-release": "25.0.3",
      "typescript": "5.9.3",
@@ -2667,14 +2669,10 @@ index 7608e5578..b18c937d7 100644
    "exclude": ["node_modules", "dist"],
    "include": ["src"]
 diff --git a/vite.config.js b/vite.config.js
-index 19d282c21..a6b7f6bd7 100644
+index 19d282c21..b0baf0fbf 100644
 --- a/vite.config.js
 +++ b/vite.config.js
-@@ -1,10 +1,10 @@
- import { defineConfig } from 'vite';
-+import inject from '@rollup/plugin-inject';
- import react from '@vitejs/plugin-react';
- import { wasm } from '@rollup/plugin-wasm';
+@@ -4,7 +4,6 @@ import { wasm } from '@rollup/plugin-wasm';
  import { viteStaticCopy } from 'vite-plugin-static-copy';
  import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
  import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
@@ -2682,7 +2680,7 @@ index 19d282c21..a6b7f6bd7 100644
  import topLevelAwait from 'vite-plugin-top-level-await';
  import { VitePWA } from 'vite-plugin-pwa';
  import fs from 'fs';
-@@ -129,9 +129,19 @@ export default defineConfig({
+@@ -129,10 +128,20 @@ export default defineConfig({
    },
    build: {
      outDir: 'dist',
@@ -2695,11 +2693,13 @@ index 19d282c21..a6b7f6bd7 100644
 +    reportCompressedSize: false,
      copyPublicDir: false,
      rollupOptions: {
-+      // @rollup/plugin-inject provides the Buffer global matrix-js-sdk / crypto rely
-+      // on. Rolldown has a native inject, but rolldown-vite rejects `rollupOptions.
-+      // inject` (Invalid key) and the correct exposure is unclear — keep the working
-+      // rollup plugin (rolldown runs it fine; it only emits a non-fatal perf nudge)
-+      // rather than risk an undefined Buffer global at runtime.
-       plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],
+-      plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],
++      // Rolldown's builtin inject provides the Buffer global matrix-js-sdk / crypto
++      // rely on (replaces @rollup/plugin-inject). It lives under transform.inject —
++      // NOT rollupOptions.inject (which rolldown-vite rejects as an invalid key).
++      transform: {
++        inject: { Buffer: ['buffer', 'Buffer'] },
++      },
        input: {
          main: path.resolve(__dirname, 'index.html'),
+         widget: path.resolve(__dirname, 'widget.html'),
