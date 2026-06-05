@@ -126,7 +126,6 @@
   },
   "devDependencies": {
     "@typescript/native-preview": "7.0.0-dev.20260604.1",
-    "@esbuild-plugins/node-globals-polyfill": "0.2.3",
     "@rollup/plugin-wasm": "6.1.1",
     "@semantic-release/exec": "7.1.0",
     "@semantic-release/git": "10.0.1",
@@ -143,7 +142,7 @@
     "@types/ua-parser-js": "0.7.39",
     "@typescript-eslint/eslint-plugin": "5.62.0",
     "@typescript-eslint/parser": "5.62.0",
-    "@vitejs/plugin-react": "4.7.0",
+    "@vitejs/plugin-react-oxc": "0.4.3",
     "buffer": "6.0.3",
     "cz-conventional-changelog": "3.3.0",
     "eslint": "8.57.1",

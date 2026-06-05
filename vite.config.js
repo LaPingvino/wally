@@ -1,9 +1,8 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import react from '@vitejs/plugin-react-oxc';
 import { wasm } from '@rollup/plugin-wasm';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
-import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
 import topLevelAwait from 'vite-plugin-top-level-await';
 import { VitePWA } from 'vite-plugin-pwa';
 import fs from 'fs';
@@ -109,17 +108,17 @@ export default defineConfig({
     }),
   ],
   optimizeDeps: {
-    esbuildOptions: {
-      define: {
-        global: 'globalThis',
+    // Rolldown replaced esbuild for dep pre-bundling; esbuildOptions is deprecated.
+    rolldownOptions: {
+      transform: {
+        define: {
+          global: 'globalThis',
+        },
+        // Rolldown's builtin inject provides the Buffer global matrix-js-sdk /
+        // crypto rely on, replacing the esbuild NodeGlobalsPolyfillPlugin. Same
+        // shape the production build uses (build.rollupOptions.transform.inject).
+        inject: { Buffer: ['buffer', 'Buffer'] },
       },
-      plugins: [
-        // Enable esbuild polyfill plugins
-        NodeGlobalsPolyfillPlugin({
-          process: false,
-          buffer: true,
-        }),
-      ],
     },
   },
   build: {
