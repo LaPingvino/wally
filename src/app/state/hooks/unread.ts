@@ -20,6 +20,9 @@ const getRoomsUnread = (rooms: string[], roomToUnread: RoomToUnread): Unread | u
     };
     newUnread.total += roomUnread.total;
     newUnread.highlight += roomUnread.highlight;
+    // Aggregate stays pending (a dot, not a number) while ANY contributing room is still
+    // unconfirmed — never show a precise sum that's really only partial.
+    if (roomUnread.pending) newUnread.pending = true;
     newUnread.from?.add(roomId);
     return newUnread;
   }, undefined);

@@ -29,6 +29,7 @@ import { roomToParentsAtom } from './roomToParents';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
+import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 
 export type RoomToUnreadAction =
   | {
@@ -52,6 +53,7 @@ export const unreadInfoToUnread = (unreadInfo: UnreadInfo): Unread => ({
   highlight: unreadInfo.highlight,
   total: unreadInfo.total,
   from: null,
+  pending: unreadInfo.pending,
 });
 
 const putUnreadInfo = (
@@ -71,6 +73,10 @@ const putUnreadInfo = (
       highlight: (oldParentUnread.highlight += newH),
       total: (oldParentUnread.total += newT),
       from: new Set([...(oldParentUnread.from ?? []), unreadInfo.roomId]),
+      // A space stays a dot while ANY contributing child is still unconfirmed, so it
+      // never shows a precise number that's really only a partial sum. Rebuilt fresh on
+      // each RESET, so this best-effort OR self-corrects as children become confident.
+      pending: (oldParentUnread.pending ?? false) || (unreadInfo.pending ?? false),
     });
   });
 };
@@ -98,7 +104,10 @@ const deleteUnreadInfo = (roomToUnread: RoomToUnread, allParents: Set<string>, r
 };
 
 export const unreadEqual = (u1: Unread, u2: Unread): boolean => {
-  const countEqual = u1.highlight === u2.highlight && u1.total === u2.total;
+  // Compare `pending` too: a room flipping pending→confirmed with the SAME numbers must
+  // still re-render (dot → number), so it can't be treated as "no change".
+  const countEqual =
+    u1.highlight === u2.highlight && u1.total === u2.total && !!u1.pending === !!u2.pending;
 
   if (!countEqual) return false;
 
@@ -192,11 +201,19 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   const roomsNotificationPreferences = useRoomsNotificationPreferencesContext();
   // Shared between timeline and receipt effects so receipts can cancel pending unread updates.
   const dirtyRoomsRef = useRef(new Set<string>());
+  // The currently-open room is the only one allowed to use the precise timeline walk (see
+  // getUnreadInfo). Kept in a ref so the long-lived effects/flush below always read the
+  // latest value without needing to re-subscribe when navigation changes.
+  const selectedRoom = useSelectedRoom();
+  const openRoomRef = useRef<string | undefined>(undefined);
+  openRoomRef.current = selectedRoom
+    ? mx.getRoom(selectedRoom)?.roomId ?? selectedRoom
+    : undefined;
 
   useEffect(() => {
     setUnreadAtom({
       type: 'RESET',
-      unreadInfos: getUnreadInfos(mx),
+      unreadInfos: getUnreadInfos(mx, openRoomRef.current),
     });
   }, [mx, setUnreadAtom]);
 
@@ -210,7 +227,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         ) {
           setUnreadAtom({
             type: 'RESET',
-            unreadInfos: getUnreadInfos(mx),
+            unreadInfos: getUnreadInfos(mx, openRoomRef.current),
           });
         }
       },
@@ -231,7 +248,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       const infos: UnreadInfo[] = [];
       dirtyRooms.forEach((roomId) => {
         const room = mx.getRoom(roomId);
-        if (room) infos.push(getUnreadInfo(room, mx));
+        if (room) infos.push(getUnreadInfo(room, mx, openRoomRef.current));
       });
       dirtyRooms.clear();
       if (infos.length > 0) {
@@ -266,9 +283,36 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         flushTimer = setTimeout(flush, 2000);
       }
     };
+    // Upgrade a "pending" (dot) room to a real number once it goes live-synced. A live
+    // sliding-sync response sets the room's notification count (processRoomData →
+    // setUnreadNotificationCount, which emits unconditionally), so this fires as the window
+    // sweeps each room into live state — at which point getUnreadInfo sees isRoomLiveSynced
+    // === true and returns a confident count. Reuses the same throttled flush.
+    const handleUnreadNotifications = (...args: unknown[]) => {
+      // Re-emitted from the Room via the client's ReEmitter, which appends the source room
+      // as the LAST argument (the event has several emit arities, so the room's position
+      // varies — read it from the end).
+      const room = args[args.length - 1];
+      if (!(room instanceof Room) || room.isSpaceRoom() || room.getMyMembership() !== 'join') return;
+      if (getNotificationType(mx, room.roomId) === NotificationType.Mute) return;
+      dirtyRooms.add(room.roomId);
+      if (!flushTimer) {
+        flushTimer = setTimeout(flush, 2000);
+      }
+    };
+
     mx.on(RoomEvent.Timeline, handleTimelineEvent);
+    // The client re-emits this once the SDK is rebuilt+repinned; cast so this file
+    // typechecks against either SDK version in node_modules (runtime is gated on the
+    // deployed SDK actually re-emitting it — see the reEmit lists in the SDK fork).
+    const mxEmitter = mx as unknown as {
+      on: (event: RoomEvent, cb: (...args: unknown[]) => void) => void;
+      removeListener: (event: RoomEvent, cb: (...args: unknown[]) => void) => void;
+    };
+    mxEmitter.on(RoomEvent.UnreadNotifications, handleUnreadNotifications);
     return () => {
       mx.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+      mxEmitter.removeListener(RoomEvent.UnreadNotifications, handleUnreadNotifications);
       if (flushTimer) clearTimeout(flushTimer);
       // Flush remaining dirty rooms on cleanup
       if (dirtyRooms.size > 0) flush();
@@ -303,7 +347,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   useEffect(() => {
     setUnreadAtom({
       type: 'RESET',
-      unreadInfos: getUnreadInfos(mx),
+      unreadInfos: getUnreadInfos(mx, openRoomRef.current),
     });
   }, [mx, setUnreadAtom, roomsNotificationPreferences]);
 
@@ -329,7 +373,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         if (mEvent.getType() === StateEvent.SpaceChild) {
           setUnreadAtom({
             type: 'RESET',
-            unreadInfos: getUnreadInfos(mx),
+            unreadInfos: getUnreadInfos(mx, openRoomRef.current),
           });
         }
       },

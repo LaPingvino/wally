@@ -366,7 +366,7 @@ export function RoomNavItem({
         : room.getJoinRule() === JoinRule.Public
           ? 'Public Room'
           : 'Group Room',
-    unread?.total && `${unread.total} Messages`,
+    unread?.total && (unread.pending ? 'Unread messages' : `${unread.total} Messages`),
   ]
     .flat()
     .filter(Boolean)
@@ -485,7 +485,12 @@ export function RoomNavItem({
               )}
               {!optionsVisible && unread && (
                 <UnreadBadgeCenter>
-                  <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
+                  {/* pending = count not yet trustworthy under sliding sync → show a dot
+                      (count 0 renders an empty badge), not a possibly-wrong number. */}
+                  <UnreadBadge
+                    highlight={unread.highlight > 0}
+                    count={unread.pending ? 0 : unread.total}
+                  />
                 </UnreadBadgeCenter>
               )}
               {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (

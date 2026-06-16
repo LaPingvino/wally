@@ -275,29 +275,55 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
  * The server's getUnreadNotificationCount is bypassed because it includes
  * member events that bump the count without being real conversation.
  */
-export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
+/**
+ * Compute a room's unread, with explicit CONFIDENCE — the fix for unread flicker on
+ * sliding sync, which loads rooms partially and incrementally.
+ *
+ * Three cases (see {@link MatrixClient.isRoomLiveSynced}):
+ *  1. Room NOT live-synced this session → its data is only a (possibly stale) boot-cache
+ *     paint. We surface unread-or-not from the cached server count but mark it `pending`,
+ *     so the UI shows a DOT, never a (possibly-wrong) number. Out-of-window rooms that never
+ *     live-sync this session stay a dot until opened (opening subscribes → a live response).
+ *  2. Live-synced but NOT the open room → trust the server's notification count (computed
+ *     over full history; the only count that's stable for list rooms under sliding sync,
+ *     whose loaded timeline is tiny). No walk.
+ *  3. The currently OPEN room → walk the (subscribed, full) timeline for a precise count that
+ *     ignores member/notice/state noise. The walk is restricted to the open room because a
+ *     rehydrated room can carry a fat cached timeline that live syncs never trim, so "marker
+ *     reachable" (canWalk) is NOT a safe license to walk for anything but the open room.
+ */
+export const getUnreadInfo = (room: Room, mx: MatrixClient, openRoomId?: string): UnreadInfo => {
   const userId = mx.getUserId();
   if (!userId) return { roomId: room.roomId, total: 0, highlight: 0 };
 
-  const readUpToId = room.getEventReadUpTo(userId);
-  const events = room.getLiveTimeline().getEvents();
+  const serverTotal = Math.max(0, room.getUnreadNotificationCount(NotificationCountType.Total) ?? 0);
+  const serverHighlight = Math.max(
+    0,
+    room.getUnreadNotificationCount(NotificationCountType.Highlight) ?? 0
+  );
 
-  // The client-side walk below counts unread by scanning the loaded timeline back
-  // to the read marker — accurate ONLY when the loaded timeline actually reaches
-  // that marker. Under sliding sync (timeline_limit 1) the loaded timeline is
-  // tiny, so it can't see the unread events and would report 0 — which makes ALL
-  // unreads vanish after a sync RESET (useSyncState recomputes every room). When
-  // we can't walk to the marker, fall back to the server's notification counts:
-  // they're computed over full history and already exclude member/state events
-  // that don't notify (see getUnreadNotificationCount). Full sync still uses the
-  // walk, preserving the activity-patch behaviour (ignore notice/state/member).
-  const canWalk = !!readUpToId && events.some((e) => e.getId() === readUpToId);
-  if (!canWalk) {
+  // Case 1: provisional — we don't trust the number yet.
+  const liveSynced =
+    (mx as unknown as { isRoomLiveSynced?: (roomId: string) => boolean }).isRoomLiveSynced?.(
+      room.roomId
+    ) ?? true;
+  if (!liveSynced) {
     return {
       roomId: room.roomId,
-      total: Math.max(0, room.getUnreadNotificationCount(NotificationCountType.Total) ?? 0),
-      highlight: Math.max(0, room.getUnreadNotificationCount(NotificationCountType.Highlight) ?? 0),
+      total: serverTotal,
+      highlight: serverHighlight,
+      pending: serverTotal > 0 || serverHighlight > 0,
     };
+  }
+
+  // Case 3: the open room walks its full timeline; everyone else (case 2) uses the
+  // server count. canWalk only gates whether the walk can physically run.
+  const isOpen = !!openRoomId && room.roomId === openRoomId;
+  const readUpToId = room.getEventReadUpTo(userId);
+  const events = room.getLiveTimeline().getEvents();
+  const canWalk = isOpen && !!readUpToId && events.some((e) => e.getId() === readUpToId);
+  if (!canWalk) {
+    return { roomId: room.roomId, total: serverTotal, highlight: serverHighlight };
   }
 
   let total = 0;
@@ -315,13 +341,13 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
   return { roomId: room.roomId, total, highlight };
 };
 
-export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
+export const getUnreadInfos = (mx: MatrixClient, openRoomId?: string): UnreadInfo[] => {
   const unreadInfos = mx.getRooms().reduce<UnreadInfo[]>((unread, room) => {
     if (room.isSpaceRoom()) return unread;
     if (room.getMyMembership() !== 'join') return unread;
     if (getNotificationType(mx, room.roomId) === NotificationType.Mute) return unread;
 
-    const info = getUnreadInfo(room, mx);
+    const info = getUnreadInfo(room, mx, openRoomId);
     if (info.total > 0 || info.highlight > 0) {
       unread.push(info);
     }

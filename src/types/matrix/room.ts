@@ -90,12 +90,17 @@ export type Unread = {
   total: number;
   highlight: number;
   from: Set<string> | null;
+  // `true` when this room is unread but its count is NOT yet trustworthy-current:
+  // under sliding sync the room hasn't received a live response this session, so we
+  // only know "unread or not", not how many. The UI shows a dot instead of a number.
+  pending?: boolean;
 };
 export type RoomToUnread = Map<string, Unread>;
 export type UnreadInfo = {
   roomId: string;
   total: number;
   highlight: number;
+  pending?: boolean;
 };
 
 export type MuteChanges = {
