@@ -340,8 +340,12 @@ export const MessagePinItem = as<
     if (!isPinned && eventId) {
       pinContent.pinned.push(eventId);
     }
-    mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, pinContent);
+    // Close the menu immediately (optimistic); surface a write failure instead of
+    // letting the rejection vanish — on failure the pin state reverts on next sync.
     onClose?.();
+    mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, pinContent).catch((err) =>
+      console.error('message: failed to update pinned events', err)
+    );
   };
 
   return (

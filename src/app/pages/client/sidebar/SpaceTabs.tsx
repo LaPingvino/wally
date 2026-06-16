@@ -746,7 +746,9 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
 
         const newSpacesContent = makeCinnySpacesContent(mx, newItems);
         localEchoSidebarItem(parseSidebar(mx, orphanSpaces, newSpacesContent));
-        mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent);
+        mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent).catch((err) =>
+          console.error('sidebar: failed to persist space reorder', err)
+        );
       },
       [mx, sidebarItems, setOpenedFolder, localEchoSidebarItem, orphanSpaces]
     )
@@ -792,7 +794,9 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
 
       const newSpacesContent = makeCinnySpacesContent(mx, newItems);
       localEchoSidebarItem(parseSidebar(mx, orphanSpaces, newSpacesContent));
-      mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent);
+      mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent).catch((err) =>
+        console.error('sidebar: failed to persist unpin', err)
+      );
     },
     [mx, sidebarItems, orphanSpaces, localEchoSidebarItem]
   );

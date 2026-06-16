@@ -298,7 +298,7 @@ export function Lobby() {
 
         // remove from current space
         if (item.parentId !== containerParentId) {
-          mx.sendStateEvent(item.parentId, StateEvent.SpaceChild as any, {}, item.roomId);
+          await mx.sendStateEvent(item.parentId, StateEvent.SpaceChild as any, {}, item.roomId);
         }
 
         if (
@@ -318,7 +318,7 @@ export function Lobby() {
               joinRuleContent.allow?.filter((allowRule) => allowRule.room_id !== item.parentId) ??
               [];
             allow.push({ type: RestrictedAllowType.RoomMembership, room_id: containerParentId });
-            mx.sendStateEvent(itemRoom.roomId, StateEvent.RoomJoinRules as any, {
+            await mx.sendStateEvent(itemRoom.roomId, StateEvent.RoomJoinRules as any, {
               ...joinRuleContent,
               allow,
             });
@@ -422,7 +422,9 @@ export function Lobby() {
         newItems.push(rId);
       }
       const newSpacesContent = makeCinnySpacesContent(mx, newItems);
-      mx.setAccountData(AccountDataEvent.CinnySpaces as any, newSpacesContent as any);
+      mx.setAccountData(AccountDataEvent.CinnySpaces as any, newSpacesContent as any).catch((err) =>
+        console.error('lobby: failed to update sidebar spaces (pin toggle)', err)
+      );
     },
     [mx, sidebarItems, sidebarSpaces]
   );

@@ -44,5 +44,5 @@ export function addRecentEmoji(mx: MatrixClient, unicode: string) {
   recentEmoji.unshift(entry);
   mx.setAccountData(AccountDataEvent.ElementRecentEmoji, {
     recent_emoji: recentEmoji.slice(0, 100),
-  });
+  }).catch((err) => console.error('recent-emoji: failed to persist recent emoji', err));
 }
