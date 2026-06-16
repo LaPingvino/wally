@@ -47,7 +47,6 @@ import {
 } from 'folds';
 import { isKeyHotkey } from 'is-hotkey';
 import { Opts as LinkifyOpts } from 'linkifyjs';
-import { useTranslation } from 'react-i18next';
 import { eventWithShortcode, factoryEventSentBy, getMxIdLocalPart } from '../../utils/matrix';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useVirtualPaginator, ItemRange } from '../../hooks/useVirtualPaginator';
@@ -1244,7 +1243,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
     },
     [editor]
   );
-  const { t } = useTranslation();
 
   const renderMatrixEvent = useMatrixEventRenderer<
     [string, MatrixEvent, number, EventTimelineSet, boolean]
@@ -1610,7 +1608,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 <Box grow="Yes" direction="Column">
                   <Text size="T300" priority="300">
                     <b>{senderName}</b>
-                    {t('Organisms.RoomCommon.changed_room_name')}
+                    {' changed the room name'}
                   </Text>
                 </Box>
               }
