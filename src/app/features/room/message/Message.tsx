@@ -32,6 +32,7 @@ import { MatrixEvent, Room } from 'matrix-js-sdk';
 import { Relations } from 'matrix-js-sdk/lib/models/relations';
 import classNames from 'classnames';
 import { RoomPinnedEventsEventContent } from 'matrix-js-sdk/lib/types';
+import { useAtom } from 'jotai';
 import {
   AvatarBase,
   BubbleLayout,
@@ -65,7 +66,6 @@ import { ReactionViewer } from '../reaction-viewer';
 import { MessageEditor } from './MessageEditor';
 import { MessageForwardItem } from './ForwardDialog';
 import { forwardSelectionAtom } from '../../../state/forwardSelection';
-import { useAtom } from 'jotai';
 import { UserAvatar } from '../../../components/user-avatar';
 import { NativeDialog } from '../../../components/NativeDialog';
 import * as dialogCss from '../../../components/NativeDialog.css';
