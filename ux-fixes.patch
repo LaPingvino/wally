@@ -1,5 +1,5 @@
 diff --git a/package.json b/package.json
-index b6e78b612..f1df913d7 100644
+index 54eaf6656..fcfaaaa0a 100644
 --- a/package.json
 +++ b/package.json
 @@ -5,7 +5,7 @@
@@ -1080,10 +1080,18 @@ index 4da9a96f7..4376cc90c 100644
            onKeyUp={handleKeyUp}
            onPaste={handlePaste}
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 65fd0e2dc..5950e3fa1 100644
+index 65fd0e2dc..f72822781 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
-@@ -909,6 +909,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -47,7 +47,6 @@ import {
+ } from 'folds';
+ import { isKeyHotkey } from 'is-hotkey';
+ import { Opts as LinkifyOpts } from 'linkifyjs';
+-import { useTranslation } from 'react-i18next';
+ import { eventWithShortcode, factoryEventSentBy, getMxIdLocalPart } from '../../utils/matrix';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+ import { useVirtualPaginator, ItemRange } from '../../hooks/useVirtualPaginator';
+@@ -909,6 +908,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
      useCallback(() => roomInputRef.current, [roomInputRef])
    );
  
@@ -1106,6 +1114,23 @@ index 65fd0e2dc..5950e3fa1 100644
    const tryAutoMarkAsRead = useCallback(() => {
      const readUptoEventId = readUptoEventIdRef.current;
      if (!readUptoEventId) {
+@@ -1218,7 +1233,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+     },
+     [editor]
+   );
+-  const { t } = useTranslation();
+ 
+   const renderMatrixEvent = useMatrixEventRenderer<
+     [string, MatrixEvent, number, EventTimelineSet, boolean]
+@@ -1578,7 +1592,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+                 <Box grow="Yes" direction="Column">
+                   <Text size="T300" priority="300">
+                     <b>{senderName}</b>
+-                    {t('Organisms.RoomCommon.changed_room_name')}
++                    {' changed the room name'}
+                   </Text>
+                 </Box>
+               }
 diff --git a/src/app/features/room/RoomViewHeader.tsx b/src/app/features/room/RoomViewHeader.tsx
 index a19058d26..4aab60158 100644
 --- a/src/app/features/room/RoomViewHeader.tsx
