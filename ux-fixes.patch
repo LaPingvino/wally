@@ -928,6 +928,39 @@ index 402c1d095..21ff11110 100644
                  style={{ paddingBottom: config.space.S100, borderBottom: isRoot ? '1px solid ' + color.Surface.ContainerLine : undefined }}>
                  <Box gap="100" alignItems="Center">
                    <Text size="T200" style={{ fontWeight: 600 }}>{displayName(sender)}</Text>
+diff --git a/src/app/features/lobby/Lobby.tsx b/src/app/features/lobby/Lobby.tsx
+index d1c871285..32442c7b4 100644
+--- a/src/app/features/lobby/Lobby.tsx
++++ b/src/app/features/lobby/Lobby.tsx
+@@ -298,7 +298,7 @@ export function Lobby() {
+ 
+         // remove from current space
+         if (item.parentId !== containerParentId) {
+-          mx.sendStateEvent(item.parentId, StateEvent.SpaceChild as any, {}, item.roomId);
++          await mx.sendStateEvent(item.parentId, StateEvent.SpaceChild as any, {}, item.roomId);
+         }
+ 
+         if (
+@@ -318,7 +318,7 @@ export function Lobby() {
+               joinRuleContent.allow?.filter((allowRule) => allowRule.room_id !== item.parentId) ??
+               [];
+             allow.push({ type: RestrictedAllowType.RoomMembership, room_id: containerParentId });
+-            mx.sendStateEvent(itemRoom.roomId, StateEvent.RoomJoinRules as any, {
++            await mx.sendStateEvent(itemRoom.roomId, StateEvent.RoomJoinRules as any, {
+               ...joinRuleContent,
+               allow,
+             });
+@@ -422,7 +422,9 @@ export function Lobby() {
+         newItems.push(rId);
+       }
+       const newSpacesContent = makeCinnySpacesContent(mx, newItems);
+-      mx.setAccountData(AccountDataEvent.CinnySpaces as any, newSpacesContent as any);
++      mx.setAccountData(AccountDataEvent.CinnySpaces as any, newSpacesContent as any).catch((err) =>
++        console.error('lobby: failed to update sidebar spaces (pin toggle)', err)
++      );
+     },
+     [mx, sidebarItems, sidebarSpaces]
+   );
 diff --git a/src/app/features/lobby/SpaceHierarchy.tsx b/src/app/features/lobby/SpaceHierarchy.tsx
 index 280b8a5a2..cc01c13ea 100644
 --- a/src/app/features/lobby/SpaceHierarchy.tsx
@@ -1153,10 +1186,24 @@ index a19058d26..4aab60158 100644
        return;
      }
 diff --git a/src/app/features/room/message/Message.tsx b/src/app/features/room/message/Message.tsx
-index 9c5b2ec77..c11bdb94e 100644
+index 9c5b2ec77..5a17e584b 100644
 --- a/src/app/features/room/message/Message.tsx
 +++ b/src/app/features/room/message/Message.tsx
-@@ -736,11 +736,11 @@ export const Message = as<'div', MessageProps>(
+@@ -383,8 +383,12 @@ export const MessagePinItem = as<
+     if (!isPinned && eventId) {
+       pinContent.pinned.push(eventId);
+     }
+-    mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, pinContent);
++    // Close the menu immediately (optimistic); surface a write failure instead of
++    // letting the rejection vanish — on failure the pin state reverts on next sync.
+     onClose?.();
++    mx.sendStateEvent(room.roomId, StateEvent.RoomPinnedEvents as any, pinContent).catch((err) =>
++      console.error('message: failed to update pinned events', err)
++    );
+   };
+ 
+   return (
+@@ -736,11 +740,11 @@ export const Message = as<'div', MessageProps>(
      const useAuthentication = useMediaAuthentication();
      const senderId = mEvent.getSender() ?? '';
  
@@ -1171,7 +1218,7 @@ index 9c5b2ec77..c11bdb94e 100644
  
      const senderDisplayName =
        getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
-@@ -783,15 +783,15 @@ export const Message = as<'div', MessageProps>(
+@@ -783,15 +787,15 @@ export const Message = as<'div', MessageProps>(
            {tagIconSrc && <PowerIcon size="100" iconSrc={tagIconSrc} />}
          </Box>
          <Box shrink="No" gap="100">
@@ -1191,7 +1238,7 @@ index 9c5b2ec77..c11bdb94e 100644
            )}
            <Time
              ts={mEvent.getTs()}
-@@ -902,12 +902,10 @@ export const Message = as<'div', MessageProps>(
+@@ -902,12 +906,10 @@ export const Message = as<'div', MessageProps>(
          highlight={highlight}
          selected={!!menuAnchor || !!emojiBoardAnchor}
          {...props}
@@ -1826,6 +1873,43 @@ index 04edf1090..0888d2184 100644
 +      {guessOpen && <GuessDMDialog mx={mx} onClose={() => setGuessOpen(false)} />}
      </>
    );
+ }
+diff --git a/src/app/pages/client/sidebar/SpaceTabs.tsx b/src/app/pages/client/sidebar/SpaceTabs.tsx
+index 750f4ad14..a54ef909f 100644
+--- a/src/app/pages/client/sidebar/SpaceTabs.tsx
++++ b/src/app/pages/client/sidebar/SpaceTabs.tsx
+@@ -746,7 +746,9 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
+ 
+         const newSpacesContent = makeCinnySpacesContent(mx, newItems);
+         localEchoSidebarItem(parseSidebar(mx, orphanSpaces, newSpacesContent));
+-        mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent);
++        mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent).catch((err) =>
++          console.error('sidebar: failed to persist space reorder', err)
++        );
+       },
+       [mx, sidebarItems, setOpenedFolder, localEchoSidebarItem, orphanSpaces]
+     )
+@@ -792,7 +794,9 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
+ 
+       const newSpacesContent = makeCinnySpacesContent(mx, newItems);
+       localEchoSidebarItem(parseSidebar(mx, orphanSpaces, newSpacesContent));
+-      mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent);
++      mx.setAccountData(AccountDataEvent.CinnySpaces, newSpacesContent).catch((err) =>
++        console.error('sidebar: failed to persist unpin', err)
++      );
+     },
+     [mx, sidebarItems, orphanSpaces, localEchoSidebarItem]
+   );
+diff --git a/src/app/plugins/recent-emoji.ts b/src/app/plugins/recent-emoji.ts
+index 811ed9d5a..dde25edff 100644
+--- a/src/app/plugins/recent-emoji.ts
++++ b/src/app/plugins/recent-emoji.ts
+@@ -44,5 +44,5 @@ export function addRecentEmoji(mx: MatrixClient, unicode: string) {
+   recentEmoji.unshift(entry);
+   mx.setAccountData(AccountDataEvent.ElementRecentEmoji, {
+     recent_emoji: recentEmoji.slice(0, 100),
+-  });
++  }).catch((err) => console.error('recent-emoji: failed to persist recent emoji', err));
  }
 diff --git a/src/app/state/room/roomToUnread.ts b/src/app/state/room/roomToUnread.ts
 index f7ef1b797..2320c1b19 100644
