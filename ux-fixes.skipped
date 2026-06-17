@@ -64,3 +64,4 @@ d33b728a  ux-fixes: fix two test-only type errors
 cf684dad  ux-fixes: TS7-clean — EventEmitter named import + node types for tests
 327f74ac  ux-fixes: confidence-gate unread badges so they stop flickering on boot
 75aeae26  ux-fixes: uncertain unread shows NOTHING (not a dot); don't regress classic sync
+9321f917  ux-fixes: count unread fully client-side (drop the server notification count)
