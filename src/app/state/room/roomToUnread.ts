@@ -232,14 +232,24 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
 
     const flush = () => {
       flushTimer = null;
-      const infos: UnreadInfo[] = [];
+      const puts: UnreadInfo[] = [];
       dirtyRooms.forEach((roomId) => {
         const room = mx.getRoom(roomId);
-        if (room) infos.push(getUnreadInfo(room, mx));
+        if (!room) return;
+        const info = getUnreadInfo(room, mx);
+        if (info.total > 0 || info.highlight > 0) {
+          puts.push(info);
+        } else {
+          // Computed to read / activity-only / not-yet-countable → REMOVE any existing badge.
+          // Storing a total-0 entry here is what produced "dots that never go away": the badge
+          // renders an empty (count-0) dot, and every later notification-count change re-marked
+          // the room dirty and re-stored the zero. DELETE is a no-op if it isn't currently shown.
+          setUnreadAtom({ type: 'DELETE', roomId });
+        }
       });
       dirtyRooms.clear();
-      if (infos.length > 0) {
-        setUnreadAtom({ type: 'PUT_BATCH', unreadInfos: infos });
+      if (puts.length > 0) {
+        setUnreadAtom({ type: 'PUT_BATCH', unreadInfos: puts });
       }
     };
 
