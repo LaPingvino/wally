@@ -40,13 +40,11 @@ export const useRoomsUnread = (
   );
   const unread = useAtomValue(selectAtom(roomToUnreadAtm, selector, compareUnreadEqual));
   // Aggregates are untrustworthy until the room load settles: mid-load we don't yet know about
-  // every unread child, so a precise sum would be premature and flip back to a dot when a late
-  // unread room appears. Force `pending` (a dot) until settled, then reveal the real total — one
-  // clean dot→number transition instead of dot↔number churn.
+  // every unread child, so any sum is premature. Show NOTHING until settled (and nothing while
+  // any contributing child is still uncertain), then the real total — never a wrong intermediate.
   const loaded = useAtomValue(roomsLoadedAtom);
-  if (!unread) return undefined;
-  if (loaded || unread.pending) return unread;
-  return { ...unread, pending: true };
+  if (!unread || !loaded || unread.pending) return undefined;
+  return unread;
 };
 
 export const useRoomUnread = (
@@ -54,5 +52,9 @@ export const useRoomUnread = (
   roomToUnreadAtm: typeof roomToUnreadAtom
 ): Unread | undefined => {
   const selector = useCallback((roomToUnread: RoomToUnread) => roomToUnread.get(roomId), [roomId]);
-  return useAtomValue(selectAtom(roomToUnreadAtm, selector, compareUnreadEqual));
+  const unread = useAtomValue(selectAtom(roomToUnreadAtm, selector, compareUnreadEqual));
+  // Uncertain (sliding-sync room not loaded this session) → show NOTHING, not a number or a dot.
+  // Resolves to a real value once the room goes live. (Dots remain for the genuine count===0 case.)
+  if (unread?.pending) return undefined;
+  return unread;
 };

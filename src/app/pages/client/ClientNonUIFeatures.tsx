@@ -269,6 +269,9 @@ function FaviconUpdater() {
     let notification = false;
     let highlight = false;
     roomToUnread.forEach((unread) => {
+      // Skip uncertain rooms (sliding-sync, not yet loaded) — don't flash a false "unread"
+      // favicon on boot for rooms whose count we can't trust yet.
+      if (unread.pending) return;
       if (unread.total > 0) {
         notification = true;
       }

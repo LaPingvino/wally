@@ -276,21 +276,20 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
  * member events that bump the count without being real conversation.
  */
 /**
- * Compute a room's unread, with explicit CONFIDENCE — the fix for unread flicker on
- * sliding sync, which loads rooms partially and incrementally.
+ * Compute a room's unread count.
  *
- * Three cases (see {@link MatrixClient.isRoomLiveSynced}):
- *  1. Room NOT live-synced this session → its data is only a (possibly stale) boot-cache
- *     paint. We surface unread-or-not from the cached server count but mark it `pending`,
- *     so the UI shows a DOT, never a (possibly-wrong) number. Out-of-window rooms that never
- *     live-sync this session stay a dot until opened (opening subscribes → a live response).
- *  2. Live-synced but NOT the open room → trust the server's notification count (computed
- *     over full history; the only count that's stable for list rooms under sliding sync,
- *     whose loaded timeline is tiny). No walk.
- *  3. The currently OPEN room → walk the (subscribed, full) timeline for a precise count that
- *     ignores member/notice/state noise. The walk is restricted to the open room because a
- *     rehydrated room can carry a fat cached timeline that live syncs never trim, so "marker
- *     reachable" (canWalk) is NOT a safe license to walk for anything but the open room.
+ * Classic /sync (the common case): unchanged from the original behaviour — walk the loaded
+ * timeline back to the read marker (ignoring member/notice/state noise) when the marker is
+ * loaded, else fall back to the server's notification count. Every room is trustworthy.
+ *
+ * Sliding sync (loads rooms partially/incrementally):
+ *  - A room NOT yet live-synced this session is UNCERTAIN: we don't know its real count, so we
+ *    flag it `pending` and the display hooks render NOTHING for it (never a guessed number, and
+ *    never a dot — dots are reserved for the genuine "unread but no counted message" case). It
+ *    resolves to a number once the room goes live (e.g. when opened).
+ *  - A live-synced room that is NOT the open room uses the server count (its loaded timeline is
+ *    tiny). Only the OPEN room walks — a rehydrated room can carry a fat cached timeline that
+ *    live syncs never trim, so "marker reachable" alone can't license the walk there.
  */
 export const getUnreadInfo = (room: Room, mx: MatrixClient, openRoomId?: string): UnreadInfo => {
   const userId = mx.getUserId();
@@ -302,26 +301,30 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient, openRoomId?: string)
     room.getUnreadNotificationCount(NotificationCountType.Highlight) ?? 0
   );
 
-  // Case 1: provisional — we don't trust the number yet.
-  const liveSynced =
-    (mx as unknown as { isRoomLiveSynced?: (roomId: string) => boolean }).isRoomLiveSynced?.(
-      room.roomId
-    ) ?? true;
-  if (!liveSynced) {
-    return {
-      roomId: room.roomId,
-      total: serverTotal,
-      highlight: serverHighlight,
-      pending: serverTotal > 0 || serverHighlight > 0,
-    };
+  const slidingSync = !!(
+    mx as unknown as { getSlidingSync?: () => unknown }
+  ).getSlidingSync?.();
+
+  if (slidingSync) {
+    // Uncertain under sliding sync (room not loaded this session) → render NOTHING, not a
+    // guessed number and not a dot.
+    const liveSynced =
+      (mx as unknown as { isRoomLiveSynced?: (roomId: string) => boolean }).isRoomLiveSynced?.(
+        room.roomId
+      ) ?? true;
+    if (!liveSynced) {
+      return { roomId: room.roomId, total: serverTotal, highlight: serverHighlight, pending: true };
+    }
   }
 
-  // Case 3: the open room walks its full timeline; everyone else (case 2) uses the
-  // server count. canWalk only gates whether the walk can physically run.
+  // Walk when the marker is in the loaded timeline AND the timeline is trustworthy: under classic
+  // sync that's ANY room (full timelines — original behaviour); under sliding sync ONLY the open
+  // room. Otherwise use the server's count.
   const isOpen = !!openRoomId && room.roomId === openRoomId;
   const readUpToId = room.getEventReadUpTo(userId);
   const events = room.getLiveTimeline().getEvents();
-  const canWalk = isOpen && !!readUpToId && events.some((e) => e.getId() === readUpToId);
+  const markerLoaded = !!readUpToId && events.some((e) => e.getId() === readUpToId);
+  const canWalk = markerLoaded && (!slidingSync || isOpen);
   if (!canWalk) {
     return { roomId: room.roomId, total: serverTotal, highlight: serverHighlight };
   }

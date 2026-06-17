@@ -73,10 +73,6 @@ const putUnreadInfo = (
       highlight: (oldParentUnread.highlight += newH),
       total: (oldParentUnread.total += newT),
       from: new Set([...(oldParentUnread.from ?? []), unreadInfo.roomId]),
-      // A space stays a dot while ANY contributing child is still unconfirmed, so it
-      // never shows a precise number that's really only a partial sum. Rebuilt fresh on
-      // each RESET, so this best-effort OR self-corrects as children become confident.
-      pending: (oldParentUnread.pending ?? false) || (unreadInfo.pending ?? false),
     });
   });
 };

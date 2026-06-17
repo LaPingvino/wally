@@ -35,7 +35,15 @@ export const useBindRoomsLoadedAtom = (mx: MatrixClient, loadedAtom: typeof room
 
   // Reset on client change (account switch / re-login): the new session starts un-settled, so a
   // stale `true` doesn't reveal premature aggregate totals before the new account has loaded.
+  // Classic /sync has no incremental room discovery — every room arrives at once — so its
+  // aggregates are trustworthy immediately; only sliding sync needs the settle gate.
   useEffect(() => {
+    const slidingSync = !!(mx as unknown as { getSlidingSync?: () => unknown }).getSlidingSync?.();
+    if (!slidingSync) {
+      settledRef.current = true;
+      setLoaded(true);
+      return;
+    }
     settledRef.current = false;
     stablePollsRef.current = 0;
     lastCountRef.current = mx.getRooms().length;
