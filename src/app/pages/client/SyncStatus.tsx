@@ -25,6 +25,10 @@ type SyncStatusProps = {
 export function SyncStatus({ mx }: SyncStatusProps) {
   const [phase, setPhase] = useState<Phase>(() => (mx.getRooms().length > 0 ? 'loading' : 'connecting'));
   const [roomCount, setRoomCount] = useState(() => mx.getRooms().length);
+  // Total joined rooms the server reports for the main sliding-sync list, so the banner can show
+  // "checked x/y" progress (how many rooms we've loaded — and therefore counted unread for — out
+  // of the total). Undefined under classic /sync, where the count isn't meaningful.
+  const [totalRooms, setTotalRooms] = useState<number | undefined>(undefined);
 
   const lastCountRef = useRef(roomCount);
   const stablePollsRef = useRef(0);
@@ -52,6 +56,13 @@ export function SyncStatus({ mx }: SyncStatusProps) {
 
         const count = mx.getRooms().length;
         setRoomCount(count);
+        const ss = (
+          mx as unknown as {
+            getSlidingSync?: () => { getListData?: (k: string) => { joinedCount?: number } | null } | undefined;
+          }
+        ).getSlidingSync?.();
+        const jc = ss?.getListData?.('all')?.joinedCount;
+        if (typeof jc === 'number' && jc > 0) setTotalRooms(jc);
 
         // Once the initial load has settled, stay out of the way — only a fresh
         // reconnect/error (handled above) should bring the banner back.
@@ -110,7 +121,11 @@ export function SyncStatus({ mx }: SyncStatusProps) {
           justifyContent="Center"
         >
           <Text size="L400">
-            {roomCount > 0 ? `Loading rooms… (${roomCount})` : 'Loading rooms…'}
+            {roomCount > 0
+              ? `Loading rooms… (${
+                  totalRooms && totalRooms >= roomCount ? `${roomCount}/${totalRooms}` : roomCount
+                })`
+              : 'Loading rooms…'}
           </Text>
         </Box>
         <Line variant="Success" size="300" />
