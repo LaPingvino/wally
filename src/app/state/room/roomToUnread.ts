@@ -29,7 +29,6 @@ import { roomToParentsAtom } from './roomToParents';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
 import { useSyncState } from '../../hooks/useSyncState';
 import { useRoomsNotificationPreferencesContext } from '../../hooks/useRoomsNotificationPreferences';
-import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 
 export type RoomToUnreadAction =
   | {
@@ -197,19 +196,11 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   const roomsNotificationPreferences = useRoomsNotificationPreferencesContext();
   // Shared between timeline and receipt effects so receipts can cancel pending unread updates.
   const dirtyRoomsRef = useRef(new Set<string>());
-  // The currently-open room is the only one allowed to use the precise timeline walk (see
-  // getUnreadInfo). Kept in a ref so the long-lived effects/flush below always read the
-  // latest value without needing to re-subscribe when navigation changes.
-  const selectedRoom = useSelectedRoom();
-  const openRoomRef = useRef<string | undefined>(undefined);
-  openRoomRef.current = selectedRoom
-    ? mx.getRoom(selectedRoom)?.roomId ?? selectedRoom
-    : undefined;
 
   useEffect(() => {
     setUnreadAtom({
       type: 'RESET',
-      unreadInfos: getUnreadInfos(mx, openRoomRef.current),
+      unreadInfos: getUnreadInfos(mx),
     });
   }, [mx, setUnreadAtom]);
 
@@ -223,7 +214,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         ) {
           setUnreadAtom({
             type: 'RESET',
-            unreadInfos: getUnreadInfos(mx, openRoomRef.current),
+            unreadInfos: getUnreadInfos(mx),
           });
         }
       },
@@ -244,7 +235,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
       const infos: UnreadInfo[] = [];
       dirtyRooms.forEach((roomId) => {
         const room = mx.getRoom(roomId);
-        if (room) infos.push(getUnreadInfo(room, mx, openRoomRef.current));
+        if (room) infos.push(getUnreadInfo(room, mx));
       });
       dirtyRooms.clear();
       if (infos.length > 0) {
@@ -343,7 +334,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   useEffect(() => {
     setUnreadAtom({
       type: 'RESET',
-      unreadInfos: getUnreadInfos(mx, openRoomRef.current),
+      unreadInfos: getUnreadInfos(mx),
     });
   }, [mx, setUnreadAtom, roomsNotificationPreferences]);
 
@@ -369,7 +360,7 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         if (mEvent.getType() === StateEvent.SpaceChild) {
           setUnreadAtom({
             type: 'RESET',
-            unreadInfos: getUnreadInfos(mx, openRoomRef.current),
+            unreadInfos: getUnreadInfos(mx),
           });
         }
       },

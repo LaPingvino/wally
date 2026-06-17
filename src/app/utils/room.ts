@@ -276,59 +276,48 @@ export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
  * member events that bump the count without being real conversation.
  */
 /**
- * Compute a room's unread count.
+ * Compute a room's unread count — FULLY client-side.
  *
- * Classic /sync (the common case): unchanged from the original behaviour — walk the loaded
- * timeline back to the read marker (ignoring member/notice/state noise) when the marker is
- * loaded, else fall back to the server's notification count. Every room is trustworthy.
+ * We never use the server's `getUnreadNotificationCount`: it's blind to encrypted content,
+ * counts member/state noise, and is expensive — the homeserver can't count accurately, only the
+ * client can. So we walk the loaded timeline back to the read marker, counting real notifying
+ * messages (ignoring member/notice/state events — those go to the Activities inbox).
  *
- * Sliding sync (loads rooms partially/incrementally):
- *  - A room NOT yet live-synced this session is UNCERTAIN: we don't know its real count, so we
- *    flag it `pending` and the display hooks render NOTHING for it (never a guessed number, and
- *    never a dot — dots are reserved for the genuine "unread but no counted message" case). It
- *    resolves to a number once the room goes live (e.g. when opened).
- *  - A live-synced room that is NOT the open room uses the server count (its loaded timeline is
- *    tiny). Only the OPEN room walks — a rehydrated room can carry a fat cached timeline that
- *    live syncs never trim, so "marker reachable" alone can't license the walk there.
+ * The walk is cheap for the common case (a read room: the marker is the latest event, so the loop
+ * stops at 0 — works even at timeline_limit 1) and lazy for the rest: if the marker is below the
+ * loaded window we return the count we CAN see as a lower bound, which grows as more timeline
+ * loads in. Under sliding sync we additionally wait until a room is live-synced this session
+ * before counting (its cached marker/timeline may be stale and would briefly over-count). The
+ * timeline comes from live sync, the persistent cache (~100 events/room), or an opened-room
+ * subscription (50). Classic /sync always has full timelines, so it always counts exactly.
  */
-export const getUnreadInfo = (room: Room, mx: MatrixClient, openRoomId?: string): UnreadInfo => {
+export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
   const userId = mx.getUserId();
   if (!userId) return { roomId: room.roomId, total: 0, highlight: 0 };
 
-  const serverTotal = Math.max(0, room.getUnreadNotificationCount(NotificationCountType.Total) ?? 0);
-  const serverHighlight = Math.max(
-    0,
-    room.getUnreadNotificationCount(NotificationCountType.Highlight) ?? 0
-  );
-
-  const slidingSync = !!(
-    mx as unknown as { getSlidingSync?: () => unknown }
-  ).getSlidingSync?.();
-
+  // Under sliding sync only trust a room once it's live-synced this session — until then its read
+  // marker / timeline may be a stale cache paint, which would show a count that then corrects.
+  const slidingSync = !!(mx as unknown as { getSlidingSync?: () => unknown }).getSlidingSync?.();
   if (slidingSync) {
-    // Uncertain under sliding sync (room not loaded this session) → render NOTHING, not a
-    // guessed number and not a dot.
     const liveSynced =
       (mx as unknown as { isRoomLiveSynced?: (roomId: string) => boolean }).isRoomLiveSynced?.(
         room.roomId
       ) ?? true;
     if (!liveSynced) {
-      return { roomId: room.roomId, total: serverTotal, highlight: serverHighlight, pending: true };
+      return { roomId: room.roomId, total: 0, highlight: 0, pending: true };
     }
   }
 
-  // Walk when the marker is in the loaded timeline AND the timeline is trustworthy: under classic
-  // sync that's ANY room (full timelines — original behaviour); under sliding sync ONLY the open
-  // room. Otherwise use the server's count.
-  const isOpen = !!openRoomId && room.roomId === openRoomId;
   const readUpToId = room.getEventReadUpTo(userId);
   const events = room.getLiveTimeline().getEvents();
-  const markerLoaded = !!readUpToId && events.some((e) => e.getId() === readUpToId);
-  const canWalk = markerLoaded && (!slidingSync || isOpen);
-  if (!canWalk) {
-    return { roomId: room.roomId, total: serverTotal, highlight: serverHighlight };
-  }
 
+  // Walk newest → read marker, counting real notifying messages (member/notice/state events are
+  // skipped — those belong to the Activities inbox). Three outcomes fall out of one loop:
+  //  - marker IS the latest event (or our own message is) → loop breaks immediately → 0 = read.
+  //  - marker is reached within the loaded timeline → exact count.
+  //  - marker is below the loaded window → we count every loaded message and never break → the
+  //    result is a LOWER BOUND that grows as more timeline loads in (lazy, per Sliding Sync;
+  //    the room is genuinely unread, we just can't see how deep yet).
   let total = 0;
   let highlight = 0;
   for (let i = events.length - 1; i >= 0; i -= 1) {
@@ -344,13 +333,13 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient, openRoomId?: string)
   return { roomId: room.roomId, total, highlight };
 };
 
-export const getUnreadInfos = (mx: MatrixClient, openRoomId?: string): UnreadInfo[] => {
+export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
   const unreadInfos = mx.getRooms().reduce<UnreadInfo[]>((unread, room) => {
     if (room.isSpaceRoom()) return unread;
     if (room.getMyMembership() !== 'join') return unread;
     if (getNotificationType(mx, room.roomId) === NotificationType.Mute) return unread;
 
-    const info = getUnreadInfo(room, mx, openRoomId);
+    const info = getUnreadInfo(room, mx);
     if (info.total > 0 || info.highlight > 0) {
       unread.push(info);
     }
