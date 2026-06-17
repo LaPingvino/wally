@@ -63,3 +63,4 @@ b58493b2  ux-fixes: actually enable SDK thread support (move threadSupport to st
 d33b728a  ux-fixes: fix two test-only type errors
 cf684dad  ux-fixes: TS7-clean — EventEmitter named import + node types for tests
 327f74ac  ux-fixes: confidence-gate unread badges so they stop flickering on boot
+75aeae26  ux-fixes: uncertain unread shows NOTHING (not a dot); don't regress classic sync
