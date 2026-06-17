@@ -3,9 +3,11 @@ import { MatrixClient, ReceiptType } from 'matrix-js-sdk';
 export async function markAsRead(mx: MatrixClient, roomId: string, privateReceipt: boolean) {
   const room = mx.getRoom(roomId);
   if (!room) return;
+  const userId = mx.getUserId();
+  if (!userId) return;
 
   const timeline = room.getLiveTimeline().getEvents();
-  const readEventId = room.getEventReadUpTo(mx.getUserId()!);
+  const readEventId = room.getEventReadUpTo(userId);
 
   const getLatestValidEvent = () => {
     for (let i = timeline.length - 1; i >= 0; i -= 1) {

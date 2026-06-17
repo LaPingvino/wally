@@ -165,13 +165,13 @@ export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefin
         baseRoomToUnread,
         produce(get(baseRoomToUnread), (draftRoomToUnread) => {
           const roomToParents = get(roomToParentsAtom);
-          for (const unreadInfo of action.unreadInfos) {
+          action.unreadInfos.forEach((unreadInfo) => {
             const currentUnread = draftRoomToUnread.get(unreadInfo.roomId);
             if (currentUnread && unreadEqual(currentUnread, unreadInfoToUnread(unreadInfo))) {
-              continue;
+              return;
             }
             putUnreadInfo(draftRoomToUnread, getAllParents(roomToParents, unreadInfo.roomId), unreadInfo);
-          }
+          });
         })
       );
       return;

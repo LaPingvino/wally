@@ -43,6 +43,7 @@ import {
   getSpacePath,
   getSpaceRoomPath,
 } from '../../pathUtils';
+
 const getUnreadMessages = (room: Room, userId: string, limit = 10): MatrixEvent[] => {
   const readUpToId = room.getEventReadUpTo(userId);
   const events = room.getLiveTimeline().getEvents();

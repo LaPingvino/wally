@@ -1,6 +1,7 @@
 import { IconName, IconSrc } from 'folds';
 
 import {
+  AccountDataEvents,
   EventTimeline,
   EventTimelineSet,
   EventType,
@@ -45,7 +46,7 @@ export const getStateEvents = (room: Room, eventType: StateEvent): MatrixEvent[]
 export const getAccountData = (
   mx: MatrixClient,
   eventType: AccountDataEvent
-): MatrixEvent | undefined => mx.getAccountData(eventType as any);
+): MatrixEvent | undefined => mx.getAccountData(eventType as keyof AccountDataEvents);
 
 export const getMDirects = (mDirectEvent: MatrixEvent): Set<string> => {
   const roomIds = new Set<string>();
@@ -311,11 +312,13 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const e = events[i];
     if (e.getId() === readUpToId) break;
-    if (!isNotificationEvent(e)) continue;
-    if (e.getSender() === userId) continue;
-    total += 1;
-    const actions = mx.getPushActionsForEvent(e);
-    if (actions?.tweaks?.highlight === true) highlight += 1;
+    // Count only real notifying messages from others; member/notice/state noise and our own
+    // messages are not unread (those state changes belong to the Activities inbox).
+    if (isNotificationEvent(e) && e.getSender() !== userId) {
+      total += 1;
+      const actions = mx.getPushActionsForEvent(e);
+      if (actions?.tweaks?.highlight === true) highlight += 1;
+    }
   }
 
   return { roomId: room.roomId, total, highlight };
