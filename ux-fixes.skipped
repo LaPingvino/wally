@@ -66,3 +66,4 @@ cf684dad  ux-fixes: TS7-clean — EventEmitter named import + node types for tes
 75aeae26  ux-fixes: uncertain unread shows NOTHING (not a dot); don't regress classic sync
 9321f917  ux-fixes: count unread fully client-side (drop the server notification count)
 61bb3034  ux-fixes: flush must DELETE read rooms, not store a phantom count-0 dot
+8b8c9705  ux-fixes: only count unread when the read marker is loaded (no fake unreads)
