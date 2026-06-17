@@ -1,5 +1,4 @@
 import React, { MouseEventHandler, forwardRef, useState, MouseEvent } from 'react';
-import { useAtom } from 'jotai';
 import { EventType, JoinRule, Room } from 'matrix-js-sdk';
 import {
   Avatar,
@@ -26,12 +25,12 @@ import { useNavigate } from 'react-router-dom';
 import { NavButton, NavItem, NavItemContent, NavItemOptions } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
-import { getDirectRoomAvatarUrl, getRoomAvatarUrl, getStateEvent } from '../../utils/room';
+import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { nameInitials } from '../../utils/common';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
-import { getPowersLevelFromMatrixEvent, usePowerLevels } from '../../hooks/usePowerLevels';
+import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
 import { markAsRead } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
@@ -48,7 +47,6 @@ import { settingsAtom } from '../../state/settings';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { useCallState } from '../../pages/client/call/CallProvider';
-import { callChatAtom } from '../../state/callEmbed';
 import { useCallMembers } from '../../hooks/useCallMemberships';
 import { useRoomName } from '../../hooks/useRoomMeta';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
@@ -64,10 +62,23 @@ import {
   useSetRoomNoticeOverride,
 } from '../../state/room/noticeMode';
 import { RoomNoticeModeSwitcher } from '../../components/RoomNoticeModeSwitcher';
-import { getRoomCreatorsForRoomId, useRoomCreators } from '../../hooks/useRoomCreators';
-import { getRoomPermissionsAPI, useRoomPermissions } from '../../hooks/useRoomPermissions';
+import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
-import { StateEvent } from '../../../types/matrix/room';
+
+const noticeOverrideTitle = (
+  noticeOverride: boolean | undefined,
+  effectiveNoticeInboxOnly: boolean
+): string => {
+  if (noticeOverride === undefined) {
+    return `Notices: follow global default (currently ${
+      effectiveNoticeInboxOnly ? 'inbox only' : 'inline'
+    })`;
+  }
+  return noticeOverride
+    ? 'Notices: always inbox-only for this room'
+    : 'Notices: always inline for this room';
+};
 
 type RoomNavItemMenuProps = {
   room: Room;
@@ -98,7 +109,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const effectiveNoticeInboxOnly = useEffectiveNoticeInboxOnly(room);
     const setNoticeOverride = useSetRoomNoticeOverride(mx, room.roomId);
     const handleSetNoticeOverride = (override: boolean | undefined) => {
-      void setNoticeOverride(override);
+      setNoticeOverride(override).catch(() => undefined);
     };
 
     const handleInvite = () => {
@@ -181,15 +192,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
                 radii="300"
                 aria-pressed={opened}
                 onClick={handleOpen}
-                title={
-                  noticeOverride === undefined
-                    ? `Notices: follow global default (currently ${
-                        effectiveNoticeInboxOnly ? 'inbox only' : 'inline'
-                      })`
-                    : noticeOverride
-                    ? 'Notices: always inbox-only for this room'
-                    : 'Notices: always inline for this room'
-                }
+                title={noticeOverrideTitle(noticeOverride, effectiveNoticeInboxOnly)}
               >
                 <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
                   Notices
@@ -280,24 +283,6 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
 );
 RoomNavItemMenu.displayName = 'RoomNavItemMenu';
 
-function CallChatToggle() {
-  const [chat, setChat] = useAtom(callChatAtom);
-
-  return (
-    <IconButton
-      onClick={() => setChat(!chat)}
-      aria-pressed={chat}
-      aria-label="Toggle Chat"
-      variant="Background"
-      fill="None"
-      size="300"
-      radii="300"
-    >
-      <Icon size="50" src={Icons.Message} filled={chat} />
-    </IconButton>
-  );
-}
-
 type RoomNavItemProps = {
   room: Room;
   selected: boolean;
@@ -316,7 +301,6 @@ export function RoomNavItem({
   direct,
   notificationMode,
   linkPath,
-  focused,
   optionId,
   tabIndex,
 }: RoomNavItemProps) {
@@ -353,21 +337,21 @@ export function RoomNavItem({
 
   const { navigateRoom } = useRoomNavigate();
   const navigate = useNavigate();
-  const ariaLabel = [
-    roomName,
-    room.isCallRoom()
-      ? [
-          'Call Room',
-          isActiveCall && 'Currently in Call',
-          callMemberships.length && `${callMemberships.length} in Call`,
-        ]
-      : direct
-        ? 'Direct Message'
-        : room.getJoinRule() === JoinRule.Public
-          ? 'Public Room'
-          : 'Group Room',
-    unread?.total && `${unread.total} Messages`,
-  ]
+  let roomKind: string | (string | number | boolean)[];
+  if (room.isCallRoom()) {
+    roomKind = [
+      'Call Room',
+      isActiveCall && 'Currently in Call',
+      callMemberships.length && `${callMemberships.length} in Call`,
+    ];
+  } else if (direct) {
+    roomKind = 'Direct Message';
+  } else if (room.getJoinRule() === JoinRule.Public) {
+    roomKind = 'Public Room';
+  } else {
+    roomKind = 'Group Room';
+  }
+  const ariaLabel = [roomName, roomKind, unread?.total && `${unread.total} Messages`]
     .flat()
     .filter(Boolean)
     .join(', ');
