@@ -1911,6 +1911,55 @@ index 811ed9d5a..dde25edff 100644
 -  });
 +  }).catch((err) => console.error('recent-emoji: failed to persist recent emoji', err));
  }
+diff --git a/src/app/state/hooks/unread.ts b/src/app/state/hooks/unread.ts
+index 62386d02f..38ec1f4cb 100644
+--- a/src/app/state/hooks/unread.ts
++++ b/src/app/state/hooks/unread.ts
+@@ -3,6 +3,7 @@ import { useAtomValue } from 'jotai';
+ import { selectAtom } from 'jotai/utils';
+ import { RoomToUnread, Unread } from '../../../types/matrix/room';
+ import { roomToUnreadAtom, unreadEqual } from '../room/roomToUnread';
++import { roomsLoadedAtom } from '../roomsLoaded';
+ 
+ const compareUnreadEqual = (u1?: Unread, u2?: Unread): boolean => {
+   if (!u1 || !u2) return false;
+@@ -34,7 +35,15 @@ export const useRoomsUnread = (
+     (roomToUnread: RoomToUnread) => getRoomsUnread(rooms, roomToUnread),
+     [rooms]
+   );
+-  return useAtomValue(selectAtom(roomToUnreadAtm, selector, compareUnreadEqual));
++  const unread = useAtomValue(selectAtom(roomToUnreadAtm, selector, compareUnreadEqual));
++  // Aggregates are untrustworthy until the room load settles: mid-load we don't yet know about
++  // every unread child, so a precise sum would be premature and flip back to a dot when a late
++  // unread room appears. Force `pending` (a dot) until settled, then reveal the real total — one
++  // clean dot→number transition instead of dot↔number churn.
++  const loaded = useAtomValue(roomsLoadedAtom);
++  if (!unread) return undefined;
++  if (loaded || unread.pending) return unread;
++  return { ...unread, pending: true };
+ };
+ 
+ export const useRoomUnread = (
+diff --git a/src/app/state/hooks/useBindAtoms.ts b/src/app/state/hooks/useBindAtoms.ts
+index d4572ff4c..4a6d78558 100644
+--- a/src/app/state/hooks/useBindAtoms.ts
++++ b/src/app/state/hooks/useBindAtoms.ts
+@@ -5,6 +5,7 @@ import { mDirectAtom, useBindMDirectAtom } from '../mDirectList';
+ import { roomToUnreadAtom, useBindRoomToUnreadAtom } from '../room/roomToUnread';
+ import { roomToParentsAtom, useBindRoomToParentsAtom } from '../room/roomToParents';
+ import { roomIdToTypingMembersAtom, useBindRoomIdToTypingMembersAtom } from '../typingMembers';
++import { roomsLoadedAtom, useBindRoomsLoadedAtom } from '../roomsLoaded';
+ 
+ export const useBindAtoms = (mx: MatrixClient) => {
+   useBindMDirectAtom(mx, mDirectAtom);
+@@ -12,6 +13,7 @@ export const useBindAtoms = (mx: MatrixClient) => {
+   useBindAllRoomsAtom(mx, allRoomsAtom);
+   useBindRoomToParentsAtom(mx, roomToParentsAtom);
+   useBindRoomToUnreadAtom(mx, roomToUnreadAtom);
++  useBindRoomsLoadedAtom(mx, roomsLoadedAtom);
+ 
+   useBindRoomIdToTypingMembersAtom(mx, roomIdToTypingMembersAtom);
+ };
 diff --git a/src/app/state/room/roomToUnread.ts b/src/app/state/room/roomToUnread.ts
 index f7ef1b797..2320c1b19 100644
 --- a/src/app/state/room/roomToUnread.ts
@@ -2031,6 +2080,86 @@ index f7ef1b797..2320c1b19 100644
          setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
        }
      };
+diff --git a/src/app/state/roomsLoaded.ts b/src/app/state/roomsLoaded.ts
+new file mode 100644
+index 000000000..6ac0a57df
+--- /dev/null
++++ b/src/app/state/roomsLoaded.ts
+@@ -0,0 +1,74 @@
++import { atom, useSetAtom } from 'jotai';
++import { MatrixClient, SyncState } from 'matrix-js-sdk';
++import { useCallback, useEffect, useRef } from 'react';
++import { useSyncState } from '../hooks/useSyncState';
++
++/**
++ * Has the initial sliding-sync room load SETTLED this session?
++ *
++ * Sliding sync discovers rooms incrementally (the window grows over several polls), so for a
++ * while we don't yet know about every room — including unread ones. Aggregate badges (space /
++ * folder totals) can't be trusted during that phase: they'd show a premature partial sum, then
++ * flip back to a dot when a late-loading unread room appears. So aggregates render a DOT until
++ * this flips true, then the real total. (Per-room badges don't need this — each resolves on its
++ * own as it goes live.)
++ *
++ * `false` until the loaded room count stops growing for {@link SETTLE_POLLS} consecutive syncs,
++ * then `true` for the rest of the session. Mirrors the heuristic the SyncStatus banner uses.
++ */
++const baseRoomsLoadedAtom = atom(false);
++export const roomsLoadedAtom = atom<boolean, [boolean], undefined>(
++  (get) => get(baseRoomsLoadedAtom),
++  (get, set, value) => {
++    set(baseRoomsLoadedAtom, value);
++  }
++);
++
++/** Consecutive non-growing polls before the initial load is called "settled". */
++const SETTLE_POLLS = 2;
++
++export const useBindRoomsLoadedAtom = (mx: MatrixClient, loadedAtom: typeof roomsLoadedAtom) => {
++  const setLoaded = useSetAtom(loadedAtom);
++  const lastCountRef = useRef(mx.getRooms().length);
++  const stablePollsRef = useRef(0);
++  const settledRef = useRef(false);
++
++  // Reset on client change (account switch / re-login): the new session starts un-settled, so a
++  // stale `true` doesn't reveal premature aggregate totals before the new account has loaded.
++  useEffect(() => {
++    settledRef.current = false;
++    stablePollsRef.current = 0;
++    lastCountRef.current = mx.getRooms().length;
++    setLoaded(false);
++  }, [mx, setLoaded]);
++
++  useSyncState(
++    mx,
++    useCallback(
++      (current) => {
++        if (settledRef.current) return;
++        if (
++          current !== SyncState.Prepared &&
++          current !== SyncState.Syncing &&
++          current !== SyncState.Catchup
++        ) {
++          return;
++        }
++        const count = mx.getRooms().length;
++        if (count > lastCountRef.current) {
++          // Window still growing — reset the quiet-poll counter.
++          lastCountRef.current = count;
++          stablePollsRef.current = 0;
++          return;
++        }
++        if (count === 0) return; // nothing yet — still connecting
++        stablePollsRef.current += 1;
++        if (stablePollsRef.current >= SETTLE_POLLS) {
++          settledRef.current = true;
++          setLoaded(true);
++        }
++      },
++      [mx, setLoaded]
++    )
++  );
++};
 diff --git a/src/app/state/typingMembers.ts b/src/app/state/typingMembers.ts
 index e94ba9726..3c08e5954 100644
 --- a/src/app/state/typingMembers.ts
