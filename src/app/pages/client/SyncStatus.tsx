@@ -4,20 +4,15 @@ import { Box, config, Line, Text } from 'folds';
 import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 
-// Banner phases. Under simplified sliding sync the SDK polls every ~3s and the
-// room window GROWS over several polls, so a single "Connecting…/hidden" flip
-// hid what was still happening. Instead we track the loaded room count:
-//   connecting — first contact, nothing on screen yet
-//   loading    — connected, rooms still streaming in (window growing) — shows the count
-//   hidden      — count has settled (steady state)
+// Banner phases:
+//   connecting — first contact, no rooms on screen yet
+//   loading    — momentary, while the baseline (cache paint / first sliding-sync window) lands;
+//                shows "(x/y)" progress if the total is known
+//   hidden      — baseline is in; the rest of the rooms stream in lazily in the background
 //   reconnecting / error — connection trouble
-// With the persistent cache the room list is already painted on load, so we start
-// in `loading` (calm) rather than the alarming `connecting`.
+// We deliberately do NOT hold the banner through the full window growth — sliding sync loads the
+// long tail lazily, so once the baseline is usable we settle and get out of the way.
 type Phase = 'connecting' | 'loading' | 'hidden' | 'reconnecting' | 'error';
-
-// Consecutive non-growing polls before we call the initial load "settled". A small
-// buffer avoids hiding the banner during a brief gap between window-growth bursts.
-const SETTLE_POLLS = 2;
 
 type SyncStatusProps = {
   mx: MatrixClient;
@@ -30,8 +25,6 @@ export function SyncStatus({ mx }: SyncStatusProps) {
   // of the total). Undefined under classic /sync, where the count isn't meaningful.
   const [totalRooms, setTotalRooms] = useState<number | undefined>(undefined);
 
-  const lastCountRef = useRef(roomCount);
-  const stablePollsRef = useRef(0);
   const settledRef = useRef(false);
 
   useSyncState(
@@ -64,32 +57,24 @@ export function SyncStatus({ mx }: SyncStatusProps) {
         const jc = ss?.getListData?.('all')?.joinedCount;
         if (typeof jc === 'number' && jc > 0) setTotalRooms(jc);
 
-        // Once the initial load has settled, stay out of the way — only a fresh
-        // reconnect/error (handled above) should bring the banner back.
+        // Stay out of the way once settled — only a fresh reconnect/error (handled above)
+        // brings the banner back.
         if (settledRef.current) {
           setPhase('hidden');
           return;
         }
-
-        if (count > lastCountRef.current) {
-          lastCountRef.current = count;
-          stablePollsRef.current = 0;
-          setPhase('loading');
-          return;
-        }
-        // Nothing arrived yet at all → still connecting; otherwise count the quiet
-        // polls and settle once the window has stopped growing.
+        // Nothing at all yet → still connecting.
         if (count === 0) {
           setPhase('connecting');
           return;
         }
-        stablePollsRef.current += 1;
-        if (stablePollsRef.current >= SETTLE_POLLS) {
-          settledRef.current = true;
-          setPhase('hidden');
-        } else {
-          setPhase('loading');
-        }
+        // We have a baseline set of rooms (the cache paint and/or the first sliding-sync window)
+        // — enough to use the app. Settle NOW and let the rest of the window stream in lazily in
+        // the background, rather than holding the banner through the full room-count growth (which
+        // kept "Loading rooms… (597)" up for a long time on large accounts). Sliding sync is built
+        // to load the tail lazily; the banner shouldn't wait for it.
+        settledRef.current = true;
+        setPhase('hidden');
       },
       [mx]
     )
