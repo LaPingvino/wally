@@ -46,11 +46,13 @@ import {
 const getUnreadMessages = (room: Room, userId: string, limit = 10): MatrixEvent[] => {
   const readUpToId = room.getEventReadUpTo(userId);
   const events = room.getLiveTimeline().getEvents();
-  let startIdx = 0;
-  if (readUpToId) {
-    const idx = events.findIndex((e) => e.getId() === readUpToId);
-    startIdx = idx >= 0 ? idx + 1 : 0;
-  }
+  // Only show a preview when the read marker is in the loaded timeline. If it isn't, we don't know
+  // which loaded events are actually unread — same "uncertain → nothing" rule getUnreadInfo uses,
+  // rather than guessing the whole window is unread. (In practice this list is fed by the
+  // pending-filtered unread atom, so the marker is loaded here; this just keeps the rule consistent.)
+  const idx = readUpToId ? events.findIndex((e) => e.getId() === readUpToId) : -1;
+  if (idx < 0) return [];
+  const startIdx = idx + 1;
   return events
     .slice(startIdx)
     .filter(

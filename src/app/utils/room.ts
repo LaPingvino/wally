@@ -247,25 +247,6 @@ export const roomHaveNotification = (room: Room): boolean => {
   return total > 0 || highlight > 0;
 };
 
-export const roomHaveUnread = (mx: MatrixClient, room: Room) => {
-  const userId = mx.getUserId();
-  if (!userId) return false;
-  const readUpToId = room.getEventReadUpTo(userId);
-  const liveEvents = room.getLiveTimeline().getEvents();
-
-  if (liveEvents[liveEvents.length - 1]?.getSender() === userId) {
-    return false;
-  }
-
-  for (let i = liveEvents.length - 1; i >= 0; i -= 1) {
-    const event = liveEvents[i];
-    if (!event) return false;
-    if (event.getId() === readUpToId) return false;
-    if (isNotificationEvent(event)) return true;
-  }
-  return true;
-};
-
 /**
  * Count unread events in a room from the user's read marker, ignoring
  * membership and other state events so profile-picture / display-name /
