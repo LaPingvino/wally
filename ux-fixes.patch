@@ -1527,10 +1527,10 @@ index b61174da8..116bee08f 100644
          {(loadState.status === AsyncStatus.Error || startState.status === AsyncStatus.Error) && (
            <SplashScreen>
 diff --git a/src/app/pages/client/SyncStatus.tsx b/src/app/pages/client/SyncStatus.tsx
-index 9cd4b0b2d..90d05f9ae 100644
+index 9cd4b0b2d..7b6b65e05 100644
 --- a/src/app/pages/client/SyncStatus.tsx
 +++ b/src/app/pages/client/SyncStatus.tsx
-@@ -1,41 +1,90 @@
+@@ -1,41 +1,101 @@
  import { MatrixClient, SyncState } from 'matrix-js-sdk';
 -import React, { useCallback, useState } from 'react';
 +import React, { useCallback, useRef, useState } from 'react';
@@ -1567,6 +1567,10 @@ index 9cd4b0b2d..90d05f9ae 100644
 -  });
 +  const [phase, setPhase] = useState<Phase>(() => (mx.getRooms().length > 0 ? 'loading' : 'connecting'));
 +  const [roomCount, setRoomCount] = useState(() => mx.getRooms().length);
++  // Total joined rooms the server reports for the main sliding-sync list, so the banner can show
++  // "checked x/y" progress (how many rooms we've loaded — and therefore counted unread for — out
++  // of the total). Undefined under classic /sync, where the count isn't meaningful.
++  const [totalRooms, setTotalRooms] = useState<number | undefined>(undefined);
 +
 +  const lastCountRef = useRef(roomCount);
 +  const stablePollsRef = useRef(0);
@@ -1601,6 +1605,13 @@ index 9cd4b0b2d..90d05f9ae 100644
 +
 +        const count = mx.getRooms().length;
 +        setRoomCount(count);
++        const ss = (
++          mx as unknown as {
++            getSlidingSync?: () => { getListData?: (k: string) => { joinedCount?: number } | null } | undefined;
++          }
++        ).getSlidingSync?.();
++        const jc = ss?.getListData?.('all')?.joinedCount;
++        if (typeof jc === 'number' && jc > 0) setTotalRooms(jc);
 +
 +        // Once the initial load has settled, stay out of the way — only a fresh
 +        // reconnect/error (handled above) should bring the banner back.
@@ -1643,7 +1654,7 @@ index 9cd4b0b2d..90d05f9ae 100644
      return (
        <Box direction="Column" shrink="No">
          <Box
-@@ -51,7 +100,25 @@ export function SyncStatus({ mx }: SyncStatusProps) {
+@@ -51,7 +111,29 @@ export function SyncStatus({ mx }: SyncStatusProps) {
      );
    }
  
@@ -1658,7 +1669,11 @@ index 9cd4b0b2d..90d05f9ae 100644
 +          justifyContent="Center"
 +        >
 +          <Text size="L400">
-+            {roomCount > 0 ? `Loading rooms… (${roomCount})` : 'Loading rooms…'}
++            {roomCount > 0
++              ? `Loading rooms… (${
++                  totalRooms && totalRooms >= roomCount ? `${roomCount}/${totalRooms}` : roomCount
++                })`
++              : 'Loading rooms…'}
 +          </Text>
 +        </Box>
 +        <Line variant="Success" size="300" />
@@ -1670,7 +1685,7 @@ index 9cd4b0b2d..90d05f9ae 100644
      return (
        <Box direction="Column" shrink="No">
          <Box
-@@ -67,7 +134,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
+@@ -67,7 +149,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
      );
    }
  
