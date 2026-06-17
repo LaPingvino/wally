@@ -65,3 +65,4 @@ cf684dad  ux-fixes: TS7-clean — EventEmitter named import + node types for tes
 327f74ac  ux-fixes: confidence-gate unread badges so they stop flickering on boot
 75aeae26  ux-fixes: uncertain unread shows NOTHING (not a dot); don't regress classic sync
 9321f917  ux-fixes: count unread fully client-side (drop the server notification count)
+61bb3034  ux-fixes: flush must DELETE read rooms, not store a phantom count-0 dot
