@@ -329,10 +329,23 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
         )
       );
       if (isMyReceipt) {
-        // Clear from pending throttled updates so the flush doesn't re-add
-        // the unread badge after the receipt already cleared it.
+        // Clear from pending throttled updates so a stale flush doesn't fight this.
         dirtyRoomsRef.current.delete(room.roomId);
-        setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+        // A receipt is NOT necessarily "fully read" — it can be a partial read with newer messages
+        // still unread. So recompute rather than blindly clearing: a partial read keeps the
+        // remaining count, a full read clears. This also lets a deeply-unread room self-correct the
+        // instant its marker syncs (getUnreadInfo now counts by the raw receipt, not the loaded
+        // marker). Muted rooms never carry a badge.
+        if (getNotificationType(mx, room.roomId) === NotificationType.Mute) {
+          setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+          return;
+        }
+        const info = getUnreadInfo(room, mx);
+        if (info.total > 0 || info.highlight > 0) {
+          setUnreadAtom({ type: 'PUT', unreadInfo: info });
+        } else {
+          setUnreadAtom({ type: 'DELETE', roomId: room.roomId });
+        }
       }
     };
     mx.on(RoomEvent.Receipt, handleReceipt);

@@ -14,6 +14,7 @@ import {
   MatrixEvent,
   MsgType,
   NotificationCountType,
+  ReceiptType,
   RelationType,
   Room,
   RoomMember,
@@ -249,30 +250,51 @@ export const roomHaveNotification = (room: Room): boolean => {
 };
 
 /**
- * Count unread events in a room from the user's read marker, ignoring
- * membership and other state events so profile-picture / display-name /
- * room-metadata changes don't mark the room dirty.
+ * The user's latest read marker for a room as `{ eventId, ts }`, across public AND private (and
+ * synthetic) receipts — crucially WITHOUT requiring the marker event to be loaded.
  *
- * Walks the live timeline backwards from newest until the read marker.
- * The server's getUnreadNotificationCount is bypassed because it includes
- * member events that bump the count without being real conversation.
+ * We deliberately do NOT use `room.getEventReadUpTo`: it returns null when the marker event isn't
+ * in the loaded timeline (see read-receipt.ts), and a deeply-unread room's marker is, by
+ * definition, an old event below the window. Relying on it hid exactly the rooms with the MOST
+ * unread (marker null → "uncertain" → no badge). The raw receipt carries the marker id + timestamp
+ * regardless of loading, so we can count by timestamp when the marker event itself isn't loaded.
  */
+const getLatestReadReceipt = (
+  room: Room,
+  userId: string
+): { eventId: string; ts: number } | null =>
+  [ReceiptType.Read, ReceiptType.ReadPrivate]
+    .map((type) => room.getReadReceiptForUserId(userId, false, type))
+    .reduce<{ eventId: string; ts: number } | null>((best, receipt) => {
+      if (!receipt) return best;
+      const ts = receipt.data?.ts ?? 0;
+      return !best || ts > best.ts ? { eventId: receipt.eventId, ts } : best;
+    }, null);
+
 /**
  * Compute a room's unread count — FULLY client-side.
  *
- * We never use the server's `getUnreadNotificationCount`: it's blind to encrypted content,
- * counts member/state noise, and is expensive — the homeserver can't count accurately, only the
- * client can. So we walk the loaded timeline back to the read marker, counting real notifying
- * messages (ignoring member/notice/state events — those go to the Activities inbox).
+ * We never use the server's `getUnreadNotificationCount`: it's blind to encrypted content, counts
+ * member/state noise, and is expensive — the homeserver can't count accurately, only the client
+ * can. So we walk the loaded timeline back to the read marker, counting real notifying messages
+ * from others (member/notice/state noise and our own messages are skipped — those belong to the
+ * Activities inbox).
  *
- * The walk is cheap for the common case (a read room: the marker is the latest event, so the loop
- * stops at 0 — works even at timeline_limit 1). We count ONLY when the read marker is in the
- * loaded timeline; if it isn't (an old room whose marker is below the window — `getEventReadUpTo`
- * returns null) we show NOTHING rather than risk counting a read room's history as unread. Under
- * sliding sync we also wait until a room is live-synced this session (its cached marker may be
- * stale). Vanishing is fine by design: a room with TRUE recent unread bumps into the window and
- * loads its marker; opening a room loads it too. The timeline comes from live sync, the persistent
- * cache (~100 events/room), or an opened-room subscription (50). Classic /sync has full timelines.
+ * The walk stops at the read marker by EVENT ID when the marker is loaded (exact count), or by
+ * TIMESTAMP when it isn't (the marker is an old event below the loaded window — every loaded event
+ * is newer than it, so we count what's loaded as a LOWER BOUND that grows as more timeline streams
+ * in). The timestamp cutoff is sound because both sync paths give us head-anchored timelines (the
+ * loaded events ARE the newest). This is what SURFACES deeply-unread rooms instead of hiding them:
+ * previously, the deeper a room's marker, the more likely it was unloaded → shown as nothing, so
+ * the most-unread rooms vanished. A read room's newest event is at/under the marker ts ⇒ the loop
+ * stops immediately at 0 (cheap, works even at timeline_limit 1).
+ *
+ * Two "uncertain → show nothing (pending)" guards remain, both narrow and self-correcting:
+ *  - Under sliding sync, until a room is live-synced this session (a rehydrated cache marker /
+ *    timeline may be stale).
+ *  - No receipt at all (rare — the SDK keeps a synthetic receipt for events you've seen): counting
+ *    the whole loaded history as unread would resurrect the "fake unreads on old rooms" bug for a
+ *    read room whose receipt hasn't synced. Resolves when a receipt arrives (RoomEvent.Receipt).
  */
 export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
   const userId = mx.getUserId();
@@ -291,29 +313,18 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
     }
   }
 
-  const readUpToId = room.getEventReadUpTo(userId);
-  const events = room.getLiveTimeline().getEvents();
-
-  // We can only count if the read marker is in the LOADED timeline. `getEventReadUpTo` returns
-  // null when the marker's event isn't loaded (an old room whose marker is below the window) — and
-  // if we walked anyway with a null marker we'd never find it and count EVERY loaded event as
-  // unread, marking a read room as unread (the "fake unreads on old rooms" bug). So: no loaded
-  // marker → uncertain → show nothing. Fine by design (vanishing is OK; true recent unreads bump
-  // into the window and load their marker; opening a room loads it too).
-  const markerLoaded = !!readUpToId && events.some((e) => e.getId() === readUpToId);
-  if (!markerLoaded) {
+  const receipt = getLatestReadReceipt(room, userId);
+  if (!receipt) {
     return { roomId: room.roomId, total: 0, highlight: 0, pending: true };
   }
 
-  // Walk newest → marker, counting real notifying messages (member/notice/state are skipped —
-  // those belong to the Activities inbox). Marker is the latest event ⇒ stops at 0 = read.
+  const events = room.getLiveTimeline().getEvents();
   let total = 0;
   let highlight = 0;
   for (let i = events.length - 1; i >= 0; i -= 1) {
     const e = events[i];
-    if (e.getId() === readUpToId) break;
-    // Count only real notifying messages from others; member/notice/state noise and our own
-    // messages are not unread (those state changes belong to the Activities inbox).
+    if (e.getId() === receipt.eventId) break; // marker loaded → exact stop
+    if (e.getTs() <= receipt.ts) break; // marker not loaded → stop by time (everything below is read)
     if (isNotificationEvent(e) && e.getSender() !== userId) {
       total += 1;
       const actions = mx.getPushActionsForEvent(e);

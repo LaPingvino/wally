@@ -3,7 +3,6 @@ import { useAtomValue } from 'jotai';
 import { selectAtom } from 'jotai/utils';
 import { RoomToUnread, Unread } from '../../../types/matrix/room';
 import { roomToUnreadAtom, unreadEqual } from '../room/roomToUnread';
-import { roomsLoadedAtom } from '../roomsLoaded';
 
 const compareUnreadEqual = (u1?: Unread, u2?: Unread): boolean => {
   if (!u1 || !u2) return false;
@@ -39,11 +38,12 @@ export const useRoomsUnread = (
     [rooms]
   );
   const unread = useAtomValue(selectAtom(roomToUnreadAtm, selector, compareUnreadEqual));
-  // Aggregates are untrustworthy until the room load settles: mid-load we don't yet know about
-  // every unread child, so any sum is premature. Show NOTHING until settled (and nothing while
-  // any contributing child is still uncertain), then the real total — never a wrong intermediate.
-  const loaded = useAtomValue(roomsLoadedAtom);
-  if (!unread || !loaded || unread.pending) return undefined;
+  // Sum of the KNOWN per-room unreads. Each per-room count is itself a lower bound that only grows
+  // as the room's timeline streams in (no overcount that corrects downward), so the aggregate is a
+  // monotonically-growing lower bound too. We therefore show it as soon as any unread child is
+  // known, rather than waiting for the whole room list to finish loading — that wait fully hid
+  // space / folder / Home / Direct badges for a long time on large accounts (the over-hiding bug).
+  if (!unread || unread.pending) return undefined;
   return unread;
 };
 
