@@ -59,7 +59,6 @@ import {
   MessageBase,
   MessageUnsupportedContent,
   Time,
-  MessageNotDecryptedContent,
   RedactedContent,
   MSticker,
   ImageContent,
@@ -87,7 +86,7 @@ import { useSetting } from '../../state/hooks/settings';
 import { MessageLayout, settingsAtom } from '../../state/settings';
 import { getPerMsgProfile } from '../../state/personas';
 import { useMatrixEventRenderer } from '../../hooks/useMatrixEventRenderer';
-import { Reactions, Message, Event, EncryptedContent } from './message';
+import { Reactions, Message, Event, EncryptedContent, RetryDecryptContent } from './message';
 import { useMemberEventParser } from '../../hooks/useMemberEventParser';
 import * as customHtmlCss from '../../styles/CustomHtml.css';
 import { RoomIntro } from '../../components/room-intro';
@@ -1451,7 +1450,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
                 if (mEvent.getType() === MessageEvent.RoomMessageEncrypted)
                   return (
                     <Text>
-                      <MessageNotDecryptedContent />
+                      <RetryDecryptContent mx={mx} mEvent={mEvent} />
                     </Text>
                   );
                 return (
