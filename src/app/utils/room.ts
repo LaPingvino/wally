@@ -250,21 +250,20 @@ export const roomHaveNotification = (room: Room): boolean => {
 };
 
 /**
- * The user's latest read marker for a room as `{ eventId, ts }`, across public AND private (and
- * synthetic) receipts — crucially WITHOUT requiring the marker event to be loaded.
+ * The user's latest SERVER-CONFIRMED read marker for a room as `{ eventId, ts }`, across public and
+ * private receipts — WITHOUT requiring the marker event to be loaded.
  *
- * We deliberately do NOT use `room.getEventReadUpTo`: it returns null when the marker event isn't
- * in the loaded timeline (see read-receipt.ts), and a deeply-unread room's marker is, by
- * definition, an old event below the window. Relying on it hid exactly the rooms with the MOST
- * unread (marker null → "uncertain" → no badge). The raw receipt carries the marker id + timestamp
- * regardless of loading, so we can count by timestamp when the marker event itself isn't loaded.
+ * `ignoreSynthesized` is true on purpose: `getReadReceiptForUserId(..., false, ...)` returns the
+ * synthetic receipt IN PREFERENCE to the real one, and synthetic receipts can be stale (e.g. an old
+ * own-message), which would place the marker too far back and over-count. We only use this for the
+ * deep-room timestamp MARGIN below, where a server-confirmed real receipt is exactly what we want.
  */
-const getLatestReadReceipt = (
+const getLatestRealReadReceipt = (
   room: Room,
   userId: string
 ): { eventId: string; ts: number } | null =>
   [ReceiptType.Read, ReceiptType.ReadPrivate]
-    .map((type) => room.getReadReceiptForUserId(userId, false, type))
+    .map((type) => room.getReadReceiptForUserId(userId, true, type))
     .reduce<{ eventId: string; ts: number } | null>((best, receipt) => {
       if (!receipt) return best;
       const ts = receipt.data?.ts ?? 0;
@@ -280,21 +279,22 @@ const getLatestReadReceipt = (
  * from others (member/notice/state noise and our own messages are skipped — those belong to the
  * Activities inbox).
  *
- * The walk stops at the read marker by EVENT ID when the marker is loaded (exact count), or by
- * TIMESTAMP when it isn't (the marker is an old event below the loaded window — every loaded event
- * is newer than it, so we count what's loaded as a LOWER BOUND that grows as more timeline streams
- * in). The timestamp cutoff is sound because both sync paths give us head-anchored timelines (the
- * loaded events ARE the newest). This is what SURFACES deeply-unread rooms instead of hiding them:
- * previously, the deeper a room's marker, the more likely it was unloaded → shown as nothing, so
- * the most-unread rooms vanished. A read room's newest event is at/under the marker ts ⇒ the loop
- * stops immediately at 0 (cheap, works even at timeline_limit 1).
+ * Placement of the marker is by EVENT-ID POSITION, never by timestamp — timestamps are unreliable
+ * across federated servers, and a ts heuristic produced STUCK phantom unreads (read events that
+ * looked "newer than the marker" by clock skew got counted, and no future receipt would clear them).
  *
- * Two "uncertain → show nothing (pending)" guards remain, both narrow and self-correcting:
- *  - Under sliding sync, until a room is live-synced this session (a rehydrated cache marker /
- *    timeline may be stale).
- *  - No receipt at all (rare — the SDK keeps a synthetic receipt for events you've seen): counting
- *    the whole loaded history as unread would resurrect the "fake unreads on old rooms" bug for a
- *    read room whose receipt hasn't synced. Resolves when a receipt arrives (RoomEvent.Receipt).
+ *  - Marker event is in the loaded timeline → count notifying events after its position. EXACT.
+ *  - Marker not loaded, but its (server-confirmed) receipt timestamp is older than EVEN THE OLDEST
+ *    loaded event → the marker is clearly below the whole window, so every loaded event is genuinely
+ *    newer = unread → count them as a LOWER BOUND that grows as more timeline streams in. This is
+ *    what SURFACES deeply-unread rooms instead of hiding them.
+ *  - Otherwise (no receipt; or the marker's ts falls inside the loaded window yet we can't find its
+ *    event — a gap / clock skew / a non-head-anchored timeline) → uncertain → show NOTHING. We will
+ *    NOT guess a count we can't place, because a wrong count here is a stuck phantom unread. It
+ *    resolves the moment the marker loads (scroll/open) or a fresh receipt arrives.
+ *
+ * Plus one more "uncertain → nothing" guard: under sliding sync, until a room is live-synced this
+ * session (a rehydrated cache marker / timeline may be stale).
  */
 export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
   const userId = mx.getUserId();
@@ -313,26 +313,42 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
     }
   }
 
-  const receipt = getLatestReadReceipt(room, userId);
-  if (!receipt) {
+  const events = room.getLiveTimeline().getEvents();
+  if (events.length === 0) {
     return { roomId: room.roomId, total: 0, highlight: 0, pending: true };
   }
 
-  const events = room.getLiveTimeline().getEvents();
-  let total = 0;
-  let highlight = 0;
-  for (let i = events.length - 1; i >= 0; i -= 1) {
-    const e = events[i];
-    if (e.getId() === receipt.eventId) break; // marker loaded → exact stop
-    if (e.getTs() <= receipt.ts) break; // marker not loaded → stop by time (everything below is read)
-    if (isNotificationEvent(e) && e.getSender() !== userId) {
-      total += 1;
-      const actions = mx.getPushActionsForEvent(e);
-      if (actions?.tweaks?.highlight === true) highlight += 1;
+  const countAfter = (startExclusive: number): UnreadInfo => {
+    let total = 0;
+    let highlight = 0;
+    for (let i = events.length - 1; i > startExclusive; i -= 1) {
+      const e = events[i];
+      if (isNotificationEvent(e) && e.getSender() !== userId) {
+        total += 1;
+        const actions = mx.getPushActionsForEvent(e);
+        if (actions?.tweaks?.highlight === true) highlight += 1;
+      }
     }
+    return { roomId: room.roomId, total, highlight };
+  };
+
+  // Reliable path: the SDK resolves the latest receipt across public/private/synthetic AND only
+  // returns it if the event is loaded (null otherwise). When we have it, count exactly by position.
+  const loadedMarkerId = room.getEventReadUpTo(userId, false);
+  if (loadedMarkerId) {
+    const idx = events.findIndex((e) => e.getId() === loadedMarkerId);
+    if (idx >= 0) return countAfter(idx);
   }
 
-  return { roomId: room.roomId, total, highlight };
+  // Marker not in the loaded timeline. Only surface a lower-bound count when the marker is CLEARLY
+  // older than the entire loaded window (its receipt predates even the oldest loaded event). If the
+  // marker's ts falls within the window but we couldn't find its event, we can't place it reliably
+  // → uncertain → nothing (avoids stuck phantom unreads).
+  const receipt = getLatestRealReadReceipt(room, userId);
+  if (receipt && receipt.ts > 0 && receipt.ts < events[0].getTs()) {
+    return countAfter(-1);
+  }
+  return { roomId: room.roomId, total: 0, highlight: 0, pending: true };
 };
 
 export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
