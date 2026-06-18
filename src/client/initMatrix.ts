@@ -3,6 +3,7 @@ import { createClient, MatrixClient, IndexedDBStore, IndexedDBCryptoStore } from
 import { cryptoCallbacks } from './secretStorageKeys';
 import { seedAccountData } from './seedAccountData';
 import { installVerificationTracer } from './verifyTrace';
+import { startSyncWake } from './syncWakeHeartbeat';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import { pushSessionToSW } from '../sw-session';
 import { removeSecondarySession } from '../app/state/sessions';
@@ -161,6 +162,12 @@ export const startClient = async (mx: MatrixClient) => {
   // seed the types cinny reads (secret-storage/cross-signing → encryption +
   // verification, space order, settings, emoji) straight from the server.
   if (willSlide) seedAccountData(mx);
+
+  // Sliding-sync wake heartbeat: some servers (Continuwuity's v5) hold the sliding-sync long-poll
+  // open instead of returning new data promptly, so incoming messages can lag ~the poll interval.
+  // This probes for that and, only when present, drives instant latency with an unconsumed classic
+  // `/sync` heartbeat (which wakes correctly everywhere). No-op under classic sync / healthy servers.
+  if (willSlide) startSyncWake(mx);
 
   // Live SAS-verification tracer + window.wallyClient handle (see verifyTrace).
   // Cheap, logging-only; invaluable for the "emoji never show" stall.
