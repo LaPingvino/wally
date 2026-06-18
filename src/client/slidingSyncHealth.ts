@@ -39,6 +39,9 @@ const PROBE_TIMEOUT_MS = 2500;
 const REPROBE_MIN_INTERVAL_MS = 60_000;
 const HEARTBEAT_TIMEOUT_MS = 30000;
 const POKE_DEBOUNCE_MS = 150;
+// Let the first sync's boot storm (rehydrate, initial window, OlmMachine init, to-device backlog)
+// drain before probing, so we measure steady-state long-poll latency, not reload latency.
+const SETTLE_DELAY_MS = 6000;
 
 const BOOTSTRAP_FILTER = JSON.stringify({
   presence: { types: [] },
@@ -100,6 +103,7 @@ const probeIsDegraded = async (mx: MatrixClient): Promise<boolean> => {
     }
   };
   mx.on(ClientEvent.ToDeviceEvent, onToDevice);
+  const t0 = Date.now();
   try {
     const contentMap = new Map([[userId, new Map([[deviceId, { nonce }]])]]);
     await mx.sendToDevice(PROBE_EVENT_TYPE, contentMap);
@@ -109,6 +113,13 @@ const probeIsDegraded = async (mx: MatrixClient): Promise<boolean> => {
         setTimeout(() => resolve(false), PROBE_TIMEOUT_MS);
       }),
     ]);
+    const ms = Date.now() - t0;
+    // eslint-disable-next-line no-console
+    console.info(
+      `[wally] sliding-sync probe: ${
+        delivered ? `delivered in ${ms}ms` : `no delivery within ${PROBE_TIMEOUT_MS}ms`
+      }`
+    );
     return !delivered; // not delivered in time ⇒ degraded
   } catch {
     return false; // probe failed → be conservative: assume healthy
@@ -239,12 +250,23 @@ export const startSlidingSyncHealth = (mx: MatrixClient): (() => void) => {
     }
   };
 
-  probe().catch(() => undefined);
+  let initialProbeDone = false;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Re-probe when the connection is re-established (server may have been fixed/upgraded, or newly
-  // degraded), throttled so routine sync churn doesn't probe constantly.
+  // Probe in STEADY STATE, not during the reload storm. The first sync cycle kicks off cache
+  // rehydrate, the initial window, OlmMachine init and a to-device backlog drain — all of which make
+  // a to-device round-trip slow for reasons unrelated to the long-poll wake we want to measure.
+  // Probing then would false-positive "degraded". So wait for the first sync, let it settle, then
+  // probe the long-poll behaviour cleanly.
   const onSync = (state: SyncState, prev: SyncState | null): void => {
-    if (state !== SyncState.Syncing) return;
+    if (state !== SyncState.Syncing && state !== SyncState.Prepared) return;
+    if (!initialProbeDone) {
+      initialProbeDone = true;
+      settleTimer = setTimeout(() => probe().catch(() => undefined), SETTLE_DELAY_MS);
+      return;
+    }
+    // Reconnect re-probe (server may have been fixed/upgraded, or newly degraded), throttled so
+    // routine sync churn doesn't probe constantly.
     if (prev === SyncState.Syncing || prev === null) return;
     if (Date.now() - lastProbeAt < REPROBE_MIN_INTERVAL_MS) return;
     probe().catch(() => undefined);
@@ -254,6 +276,7 @@ export const startSlidingSyncHealth = (mx: MatrixClient): (() => void) => {
   return () => {
     stopped = true;
     mx.removeListener(ClientEvent.Sync, onSync);
+    if (settleTimer) clearTimeout(settleTimer);
     heartbeat?.stop();
   };
 };
