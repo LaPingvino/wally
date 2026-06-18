@@ -34,6 +34,9 @@ const PROBE_EVENT_TYPE = 'eu.kiefte.wally.sync_wake_probe';
 // Healthy delivery is well under a second; a slow/holding server only surfaces the probe at ~the
 // poll interval. 2.5s separates them without false-positiving on a slow network.
 const PROBE_TIMEOUT_MS = 2500;
+// How long to keep watching for the probe's eventual round-trip (diagnostic only — distinguishes
+// "slow but works" from "never echoes"); does not affect the mode verdict.
+const PROBE_DIAGNOSTIC_MS = 15000;
 // Re-probe at most this often (on reconnects) — server health is per-session-stable, so we don't
 // poll continuously; we just re-check when the connection is re-established.
 const REPROBE_MIN_INTERVAL_MS = 60_000;
@@ -90,42 +93,53 @@ const probeIsDegraded = async (mx: MatrixClient): Promise<boolean> => {
   if (!userId || !deviceId) return false; // can't probe → assume healthy
 
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  let resolveReceived: (delivered: boolean) => void = () => undefined;
-  const received = new Promise<boolean>((resolve) => {
-    resolveReceived = resolve;
+  const t0 = Date.now();
+  let onArrive: (ms: number | null) => void = () => undefined;
+  const arrival = new Promise<number | null>((resolve) => {
+    onArrive = resolve;
   });
   const onToDevice = (event: MatrixEvent): void => {
     if (
       event.getType() === PROBE_EVENT_TYPE &&
       (event.getContent() as { nonce?: string }).nonce === nonce
     ) {
-      resolveReceived(true);
+      onArrive(Date.now() - t0);
     }
   };
   mx.on(ClientEvent.ToDeviceEvent, onToDevice);
-  const t0 = Date.now();
+  const giveUp = setTimeout(() => onArrive(null), PROBE_DIAGNOSTIC_MS);
+
+  // Diagnostic (fire-and-forget): report the EVENTUAL round-trip time — or that it never came back —
+  // so we can tell "slow but works" (real server latency ⇒ fallback justified) from "self to-device
+  // never echoes" (the probe itself is invalid, NOT a latency signal). The mode verdict below still
+  // uses the faster PROBE_TIMEOUT_MS budget.
+  arrival
+    .then((ms) => {
+      clearTimeout(giveUp);
+      mx.removeListener(ClientEvent.ToDeviceEvent, onToDevice);
+      // eslint-disable-next-line no-console
+      console.info(
+        ms === null
+          ? `[wally] sliding-sync probe: NO round-trip within ${PROBE_DIAGNOSTIC_MS}ms — self to-device may not echo (probe invalid, not a server-latency signal)`
+          : `[wally] sliding-sync probe: round-tripped in ${ms}ms`
+      );
+    })
+    .catch(() => undefined);
+
   try {
     const contentMap = new Map([[userId, new Map([[deviceId, { nonce }]])]]);
     await mx.sendToDevice(PROBE_EVENT_TYPE, contentMap);
-    const delivered = await Promise.race([
-      received,
-      new Promise<boolean>((resolve) => {
-        setTimeout(() => resolve(false), PROBE_TIMEOUT_MS);
-      }),
-    ]);
-    const ms = Date.now() - t0;
-    // eslint-disable-next-line no-console
-    console.info(
-      `[wally] sliding-sync probe: ${
-        delivered ? `delivered in ${ms}ms` : `no delivery within ${PROBE_TIMEOUT_MS}ms`
-      }`
-    );
-    return !delivered; // not delivered in time ⇒ degraded
   } catch {
-    return false; // probe failed → be conservative: assume healthy
-  } finally {
-    mx.removeListener(ClientEvent.ToDeviceEvent, onToDevice);
+    onArrive(null);
+    return false; // couldn't even send → don't penalise the server
   }
+
+  return Promise.race([
+    arrival.then((ms) => ms === null || ms > PROBE_TIMEOUT_MS),
+    new Promise<boolean>((resolve) => {
+      setTimeout(() => resolve(true), PROBE_TIMEOUT_MS);
+    }),
+  ]);
 };
 
 class SyncWakeHeartbeat {
