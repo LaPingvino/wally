@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { ReceiptType } from 'matrix-js-sdk';
 import type { MatrixClient, MatrixEvent, Room } from 'matrix-js-sdk';
 import { getUnreadInfo } from '../room';
 
@@ -35,7 +36,7 @@ const ev = ({ id, sender, type = 'm.room.message' }: EvOpts): MatrixEvent =>
 type RoomOpts = {
   events: MatrixEvent[];
   readUpTo?: string | null; // getEventReadUpTo result (null = marker not loaded)
-  hasReadHead?: boolean; // hasUserReadEvent(head)
+  readReceiptId?: string; // raw real read-receipt event-id (available even when the event isn't loaded)
 };
 
 // getUnreadNotificationCount is wired to a poison value; the assertion that matters is that the
@@ -46,7 +47,9 @@ const makeRoom = (opts: RoomOpts) => {
     roomId: '!r:server',
     getLiveTimeline: () => ({ getEvents: () => opts.events }),
     getEventReadUpTo: () => opts.readUpTo ?? null,
-    hasUserReadEvent: () => opts.hasReadHead ?? false,
+    // raw receipt lookup — returns the event-id directly, no loading required (only Read here)
+    getReadReceiptForUserId: (_u: string, _ignoreSynthetic: boolean, receiptType: ReceiptType) =>
+      receiptType === ReceiptType.Read && opts.readReceiptId ? { eventId: opts.readReceiptId } : null,
     getUnreadNotificationCount: serverCountSpy,
   } as unknown as Room;
   return { room, serverCountSpy };
@@ -82,24 +85,26 @@ describe('getUnreadInfo', () => {
     expect(serverCountSpy).not.toHaveBeenCalled();
   });
 
-  it('marker NOT loaded but head is read → 0 (and ignores a poisoned server count)', () => {
-    // This is the exact regression: previously this returned the server count (9999).
+  it('marker NOT loaded but our receipt is at the head → 0 (by raw id; ignores a poisoned server count)', () => {
+    // The "unread counters revert" regression: the marker event scrolled out so getEventReadUpTo is
+    // null, but our raw read receipt still points at the head — must read as 0, not re-show unread.
     const events = [ev({ id: 'e9', sender: OTHER })];
-    const { room, serverCountSpy } = makeRoom({ events, readUpTo: null, hasReadHead: true });
+    const { room, serverCountSpy } = makeRoom({ events, readUpTo: null, readReceiptId: 'e9' });
     const info = getUnreadInfo(room, makeMx());
     expect(info.total).toBe(0);
     expect(info.highlight).toBe(0);
     expect(serverCountSpy).not.toHaveBeenCalled();
   });
 
-  it('marker NOT loaded and head unread → noise-filtered lower bound, NOT the server count', () => {
+  it('marker NOT loaded and receipt not at head → noise-filtered lower bound, NOT the server count', () => {
     const events = [
       ev({ id: 'e0', sender: OTHER }),
       ev({ id: 'e1', sender: ME }), // own → skipped
       ev({ id: 'e2', sender: OTHER }),
       ev({ id: 'm0', sender: OTHER, type: 'm.room.member' }), // member noise → skipped
     ];
-    const { room, serverCountSpy } = makeRoom({ events, readUpTo: null, hasReadHead: false });
+    // receipt points at an old, scrolled-out event (not the head 'm0') → genuinely unread
+    const { room, serverCountSpy } = makeRoom({ events, readUpTo: null, readReceiptId: 'old' });
     const info = getUnreadInfo(room, makeMx());
     expect(info.total).toBe(2); // e0 + e2; never 9999
     expect(serverCountSpy).not.toHaveBeenCalled();

@@ -14,6 +14,7 @@ import {
   MatrixEvent,
   MsgType,
   NotificationCountType,
+  ReceiptType,
   RelationType,
   Room,
   RoomMember,
@@ -315,15 +316,20 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
     if (idx >= 0) return countAfter(idx);
   }
 
-  // Marker not in the loaded timeline → place read state by RECEIPT POSITION, not a timestamp (skew
-  // resurrected read rooms) and not the server's notification count (counts member/state/bridge noise
-  // the walk skips and doesn't clear reliably under sliding sync → it inflated aggregates with phantom
-  // unreads that crept up over time). Ask the SDK whether we've read the room's HEAD event:
-  //   read → 0 (reliable; receipt is at-or-after the head);
-  //   not read → the head (and maybe more) are unread → count the loaded window's real notifications as
-  //   a noise-filtered lower bound, exact once the marker/timeline loads.
+  // Marker not in the loaded timeline. Decide read-state by comparing our REAL read-receipt event-id
+  // to the head event-id DIRECTLY — never a timestamp (skew resurrected read rooms), never the server
+  // count (noise), and NOT hasUserReadEvent/position lookup: once a room is read its receipt event
+  // usually scrolls out of the lean window, so the position lookup can't resolve it and would wrongly
+  // report the room unread again on the next recompute (the "unread counters revert" bug). The raw
+  // receipt always carries its event-id, so an id match is reliable regardless of what's loaded.
+  //   receipt at head → read (0);
+  //   else → the head (and maybe more) are unread → count the loaded window's real notifications as a
+  //   noise-filtered lower bound (head-anchored window ⇒ everything loaded is after the marker).
   const headId = events[events.length - 1].getId();
-  if (headId && room.hasUserReadEvent(userId, headId)) {
+  const readAtHead =
+    room.getReadReceiptForUserId(userId, true, ReceiptType.Read)?.eventId === headId ||
+    room.getReadReceiptForUserId(userId, true, ReceiptType.ReadPrivate)?.eventId === headId;
+  if (readAtHead) {
     return { roomId: room.roomId, total: 0, highlight: 0 };
   }
   return countAfter(-1);
