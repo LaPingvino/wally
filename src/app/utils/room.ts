@@ -13,7 +13,6 @@ import {
   MatrixClient,
   MatrixEvent,
   MsgType,
-  NotificationCountType,
   ReceiptType,
   RelationType,
   Room,
@@ -240,13 +239,6 @@ export const getLastMeaningfulTimestamp = (room: Room): number => {
     if (isNotificationEvent(events[i])) return events[i].getTs();
   }
   return room.getLastActiveTimestamp();
-};
-
-export const roomHaveNotification = (room: Room): boolean => {
-  const total = room.getUnreadNotificationCount(NotificationCountType.Total);
-  const highlight = room.getUnreadNotificationCount(NotificationCountType.Highlight);
-
-  return total > 0 || highlight > 0;
 };
 
 /**
