@@ -253,21 +253,20 @@ export const roomHaveNotification = (room: Room): boolean => {
  *
  * We compute it client-side by walking the loaded timeline back to the read marker, counting real
  * notifying messages from others (member/notice/state noise and our own messages are skipped — those
- * belong to the Activities inbox). The server's `getUnreadNotificationCount` is blind to encrypted
- * content and counts state noise, so it is NOT the displayed number for a room we can walk — it is
- * used below only as a coarse has-anything SIGNAL when the marker isn't loaded.
+ * belong to the Activities inbox). We NEVER use the server's `getUnreadNotificationCount`: it counts
+ * member/state/bridge noise the walk skips and doesn't clear reliably under sliding sync, so feeding it
+ * into the count inflated the space/folder aggregates with phantom unreads that crept up over time.
  *
- * Placement of the marker is by EVENT-ID POSITION, never by timestamp — timestamps are unreliable
- * across federated servers, and a ts heuristic produced STUCK phantom unreads (read events that
- * looked "newer than the marker" by clock skew got counted, and no future receipt would clear them —
- * the "old unreads coming back" bug).
+ * Read state is placed by RECEIPT POSITION, never by timestamp — timestamps are unreliable across
+ * federated servers, and a ts heuristic produced STUCK phantom unreads (read events that looked "newer
+ * than the marker" by clock skew got counted, and no future receipt would clear them — "old unreads
+ * coming back").
  *
  *  - Marker event is in the loaded timeline → count notifying events after its position. EXACT.
- *  - Marker not loaded → we CANNOT place it, so we never guess from a timestamp (that is exactly what
- *    resurrected read rooms). We defer to the server's notification count purely as a has-anything
- *    signal: 0 → trust it and show nothing (a read room can never resurrect); >0 → surface a soft
- *    PENDING count (a dot) so a deeply-unread out-of-window room isn't hidden either. Either way it
- *    snaps to the exact walked number the moment the room is opened.
+ *  - Marker not loaded → ask the SDK by POSITION whether we've read the room's HEAD event
+ *    (hasUserReadEvent). Read → 0 (reliable: receipt-at-or-after head, no ts, no server count).
+ *    Not read → the head (and maybe more) are unread → count the loaded window's real notifications as
+ *    a noise-filtered LOWER BOUND that resolves to the exact number once the marker/timeline loads.
  *
  * Plus one more "uncertain → pending" guard: under sliding sync, until a room is live-synced this
  * session (a rehydrated cache marker / timeline may be stale).
@@ -316,18 +315,18 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
     if (idx >= 0) return countAfter(idx);
   }
 
-  // Marker not in the loaded timeline → we can't place it. Do NOT guess from a timestamp comparison:
-  // cross-server clock skew made read rooms look unread, and they could not self-clear while the
-  // marker stayed unloaded ("old unreads coming back"). Defer to the server's notification count as a
-  // coarse has-anything signal instead: if it says nothing is unread, trust it (a read room never
-  // resurrects); if it says there is, surface a soft pending count (a dot) so a deeply-unread
-  // out-of-window room isn't hidden. It snaps to the exact walked number the instant the room opens.
-  const serverTotal = room.getUnreadNotificationCount(NotificationCountType.Total) ?? 0;
-  const serverHighlight = room.getUnreadNotificationCount(NotificationCountType.Highlight) ?? 0;
-  if (serverTotal > 0 || serverHighlight > 0) {
-    return { roomId: room.roomId, total: serverTotal, highlight: serverHighlight, pending: true };
+  // Marker not in the loaded timeline → place read state by RECEIPT POSITION, not a timestamp (skew
+  // resurrected read rooms) and not the server's notification count (counts member/state/bridge noise
+  // the walk skips and doesn't clear reliably under sliding sync → it inflated aggregates with phantom
+  // unreads that crept up over time). Ask the SDK whether we've read the room's HEAD event:
+  //   read → 0 (reliable; receipt is at-or-after the head);
+  //   not read → the head (and maybe more) are unread → count the loaded window's real notifications as
+  //   a noise-filtered lower bound, exact once the marker/timeline loads.
+  const headId = events[events.length - 1].getId();
+  if (headId && room.hasUserReadEvent(userId, headId)) {
+    return { roomId: room.roomId, total: 0, highlight: 0 };
   }
-  return { roomId: room.roomId, total: 0, highlight: 0 };
+  return countAfter(-1);
 };
 
 export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
