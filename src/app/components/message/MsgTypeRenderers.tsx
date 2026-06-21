@@ -403,9 +403,18 @@ export function MLocation({ content }: MLocationProps) {
   const location = parseGeoUri(geoUri);
   if (!location) return <BrokenContent body={geoUri} />;
 
+  // Show a human label, not the raw "geo:52.52,13.40;u=35" URI — that's junk to a
+  // user. Bridges (mautrix-whatsapp) put a name or a bracketed placeholder in body;
+  // use it when it's meaningful, else a generic label. (Ported from WukkieMail,
+  // which fixed the same "renders as junk text" problem.)
+  const label =
+    typeof content.body === 'string' && content.body && !content.body.startsWith('[')
+      ? content.body
+      : 'Shared location';
+
   return (
     <Box direction="Column" alignItems="Start" gap="100">
-      <Text size="T400">{geoUri}</Text>
+      <Text size="T400">{label}</Text>
       <Chip
         as="a"
         size="400"
