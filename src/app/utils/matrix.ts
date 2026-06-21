@@ -6,6 +6,7 @@ import {
 import {
   ClientEvent,
   EventTimeline,
+  EventType,
   MatrixClient,
   MatrixError,
   MatrixEvent,
@@ -183,6 +184,19 @@ export const eventWithShortcode = (ev: MatrixEvent) =>
   typeof ev.getContent().shortcode === 'string';
 
 export const getDMRoomFor = (mx: MatrixClient, userId: string): Room | undefined => {
+  // Authoritative first: m.direct tags the DM regardless of which members are currently loaded. Under
+  // sliding sync the live roster is $LAZY-only, so a partner who hasn't spoken recently is missing from
+  // getMembers() and the heuristic below fails to match → a duplicate DM gets created. m.direct doesn't
+  // depend on the loaded roster.
+  const direct = mx.getAccountData(EventType.Direct)?.getContent() as
+    | Record<string, string[]>
+    | undefined;
+  const directRoom = (direct?.[userId] ?? [])
+    .map((roomId) => mx.getRoom(roomId))
+    .find((room) => room && room.getMyMembership() === Membership.Join);
+  if (directRoom) return directRoom;
+
+  // Fallback: the original roster heuristic (unchanged) for DMs not (yet) recorded in m.direct.
   const dmLikeRooms = mx
     .getRooms()
     .filter(
