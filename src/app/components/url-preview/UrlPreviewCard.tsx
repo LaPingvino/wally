@@ -18,20 +18,98 @@ import { onEnterOrSpace } from '../../utils/keyboard';
 
 const linkStyles = { color: color.Success.Main };
 
+// URL previews are strictly background work. Without throttling, a room full of links fires 100+
+// getUrlPreview calls on mount, saturating the browser's ~6-connection-per-host pool and delaying the
+// sliding-sync long-poll and outgoing sends queued behind them. Two guards keep the live message path
+// snappy: scheduleIdle() defers each fetch to spare time so room-open paints first, and a small
+// concurrency cap shapes the initial burst. (The SDK already caches results per url+ts.)
+const MAX_CONCURRENT_PREVIEWS = 3;
+let activePreviews = 0;
+const previewWaiters: Array<() => void> = [];
+const acquirePreviewSlot = (): Promise<void> =>
+  new Promise((resolve) => {
+    if (activePreviews < MAX_CONCURRENT_PREVIEWS) {
+      activePreviews += 1;
+      resolve();
+    } else {
+      previewWaiters.push(resolve);
+    }
+  });
+const releasePreviewSlot = (): void => {
+  const next = previewWaiters.shift();
+  if (next) next(); // hand the slot straight to the next waiter (in-flight count unchanged)
+  else activePreviews -= 1;
+};
+const scheduleIdle = (): Promise<void> =>
+  new Promise((resolve) => {
+    const ric = (
+      window as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void;
+      }
+    ).requestIdleCallback;
+    if (ric) ric(() => resolve(), { timeout: 2000 });
+    else setTimeout(resolve, 0);
+  });
+
 export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
   ({ url, ts, ...props }, ref) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const [viewer, setViewer] = useState(false);
     const [previewStatus, loadPreview] = useAsyncCallback(
-      useCallback(() => mx.getUrlPreview(url, ts), [url, ts, mx])
+      // Background priority: yield to idle time, then take a concurrency slot, so previews never block
+      // the live message path (sync long-poll, sends, scrolling).
+      useCallback(async () => {
+        await scheduleIdle();
+        await acquirePreviewSlot();
+        try {
+          return await mx.getUrlPreview(url, ts);
+        } finally {
+          releasePreviewSlot();
+        }
+      }, [url, ts, mx])
+    );
+
+    // Only fetch once the card is on (or near) screen — off-screen previews must not compete for the
+    // connection pool. The 300px rootMargin starts the fetch just before it scrolls into view.
+    const cardElRef = useRef<HTMLDivElement | null>(null);
+    const [onScreen, setOnScreen] = useState(false);
+    const intersectionObserver = useIntersectionObserver(
+      useCallback((entries) => {
+        const el = cardElRef.current;
+        const entry = el && getIntersectionObserverEntry(el, entries);
+        if (entry?.isIntersecting) setOnScreen(true);
+      }, []),
+      useCallback(() => ({ rootMargin: '300px' }), [])
+    );
+    useEffect(() => {
+      const el = cardElRef.current;
+      if (el) intersectionObserver?.observe(el);
+      return () => {
+        if (el) intersectionObserver?.unobserve(el);
+      };
+    }, [intersectionObserver]);
+
+    // The forwarded ref points at the card root; we also need it for the visibility observer.
+    const setRefs = useCallback(
+      (node: HTMLDivElement | null) => {
+        cardElRef.current = node;
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref) {
+          // eslint-disable-next-line no-param-reassign
+          (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }
+      },
+      [ref]
     );
 
     useEffect(() => {
-      // useAsync re-throws after updating state; suppress unhandled-rejection
-      // warnings since the error is already handled by the AsyncStatus.Error branch.
+      if (!onScreen) return;
+      // useAsync re-throws after updating state; suppress unhandled-rejection warnings since the
+      // error is already handled by the AsyncStatus.Error branch.
       loadPreview().catch(() => undefined);
-    }, [loadPreview]);
+    }, [onScreen, loadPreview]);
 
     if (previewStatus.status === AsyncStatus.Error) return null;
 
@@ -97,7 +175,7 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
     };
 
     return (
-      <UrlPreview {...props} ref={ref}>
+      <UrlPreview {...props} ref={setRefs}>
         {previewStatus.status === AsyncStatus.Success ? (
           renderContent(previewStatus.data)
         ) : (
