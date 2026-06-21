@@ -205,17 +205,29 @@ export function CallProvider({ children }: CallProviderProps) {
     if (room && MatrixRTCSession.callMembershipsForRoom(room).filter(
       (m) => m.sender !== mx.getUserId()
     ).length === 0) {
-      const isDm = room.currentState.getJoinedMemberCount() <= 2;
-      const otherMembers = room.getJoinedMembers()
-        .map((m) => m.userId)
-        .filter((id) => id !== mx.getUserId());
-      callDebug('notify', 'Sending m.call.notify', { roomId: currentRoomId, isDm });
-      mx.sendEvent(currentRoomId, 'm.call.notify' as any, {
-        call_id: '',
-        application: 'm.call',
-        'm.mentions': isDm ? { room: false, user_ids: otherMembers } : { room: true },
-        notify_type: 'ring',
-      }).catch(() => undefined);
+      // Priority-load the full roster before deciding who to ring. Under sliding sync the live roster
+      // is $LAZY-only, so getJoinedMembers() can omit a DM partner (→ ring nobody) or under-count a
+      // group (→ misclassify as a DM and ring only the loaded few). Starting a call is a one-shot
+      // user action, exactly where an on-demand member fetch belongs.
+      (async () => {
+        const forceable = room as unknown as { forceLoadMembers?: () => Promise<unknown> };
+        try {
+          await forceable.forceLoadMembers?.();
+        } catch {
+          /* fall back to whatever roster we have */
+        }
+        const isDm = room.currentState.getJoinedMemberCount() <= 2;
+        const otherMembers = room.getJoinedMembers()
+          .map((m) => m.userId)
+          .filter((id) => id !== mx.getUserId());
+        callDebug('notify', 'Sending m.call.notify', { roomId: currentRoomId, isDm });
+        mx.sendEvent(currentRoomId, 'm.call.notify' as any, {
+          call_id: '',
+          application: 'm.call',
+          'm.mentions': isDm ? { room: false, user_ids: otherMembers } : { room: true },
+          notify_type: 'ring',
+        }).catch(() => undefined);
+      })();
     }
   }, [lkConnected, mx]);
 
