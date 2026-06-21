@@ -21,12 +21,12 @@ import { getUnreadInfo } from '../room';
 const ME = '@me:server';
 const OTHER = '@other:server';
 
-type EvOpts = { id: string; sender: string; type?: string };
-const ev = ({ id, sender, type = 'm.room.message' }: EvOpts): MatrixEvent =>
+type EvOpts = { id: string; sender: string; type?: string; ts?: number };
+const ev = ({ id, sender, type = 'm.room.message', ts = 0 }: EvOpts): MatrixEvent =>
   ({
     getId: () => id,
     getSender: () => sender,
-    getTs: () => 0,
+    getTs: () => ts,
     getType: () => type,
     isRedacted: () => false,
     getRelation: () => undefined,
@@ -37,6 +37,7 @@ type RoomOpts = {
   events: MatrixEvent[];
   readUpTo?: string | null; // getEventReadUpTo result (null = marker not loaded)
   readReceiptId?: string; // raw real read-receipt event-id (available even when the event isn't loaded)
+  readReceiptTs?: number; // raw real read-receipt timestamp (bounds the count when marker not loaded)
 };
 
 // getUnreadNotificationCount is wired to a poison value; the assertion that matters is that the
@@ -47,9 +48,11 @@ const makeRoom = (opts: RoomOpts) => {
     roomId: '!r:server',
     getLiveTimeline: () => ({ getEvents: () => opts.events }),
     getEventReadUpTo: () => opts.readUpTo ?? null,
-    // raw receipt lookup — returns the event-id directly, no loading required (only Read here)
+    // raw receipt lookup — returns the event-id (+ ts) directly, no loading required (only Read here)
     getReadReceiptForUserId: (_u: string, _ignoreSynthetic: boolean, receiptType: ReceiptType) =>
-      receiptType === ReceiptType.Read && opts.readReceiptId ? { eventId: opts.readReceiptId } : null,
+      receiptType === ReceiptType.Read && opts.readReceiptId
+        ? { eventId: opts.readReceiptId, data: { ts: opts.readReceiptTs ?? 0 } }
+        : null,
     getUnreadNotificationCount: serverCountSpy,
   } as unknown as Room;
   return { room, serverCountSpy };
@@ -108,6 +111,47 @@ describe('getUnreadInfo', () => {
     const info = getUnreadInfo(room, makeMx());
     expect(info.total).toBe(2); // e0 + e2; never 9999
     expect(serverCountSpy).not.toHaveBeenCalled();
+  });
+
+  it('marker not loaded, receipt ts bounds the count → already-read posts are NOT recounted', () => {
+    // Broadcast channel (mautrix newsletter / WhatsApp channel) regression: the channel's posts
+    // ARE notifying events. The user read up to ts=200 (that marker scrolled out of the window),
+    // so post_a (ts=150) is already read. An unbounded count would recount it and inflate the
+    // room-list + space/folder aggregates ("counts merged/wrong"). The ts bound counts only
+    // post_b/post_c (newer than the receipt).
+    const events = [
+      ev({ id: 'post_a', sender: OTHER, ts: 150 }), // already read (older than receipt)
+      ev({ id: 'post_b', sender: OTHER, ts: 250 }),
+      ev({ id: 'post_c', sender: OTHER, ts: 350 }),
+    ];
+    const { room, serverCountSpy } = makeRoom({
+      events,
+      readUpTo: null, // marker event scrolled out
+      readReceiptId: 'scrolled_out', // not at head → genuinely some unread
+      readReceiptTs: 200,
+    });
+    const info = getUnreadInfo(room, makeMx());
+    expect(info.total).toBe(2); // post_b + post_c only; NOT 3
+    expect(serverCountSpy).not.toHaveBeenCalled();
+  });
+
+  it('marker not loaded, only trailing metadata newer than the receipt → 0 (no false unread)', () => {
+    // Fully-read channel, then a bridge pushes a profile/avatar churn event at the head. The metadata
+    // event is newer than the receipt but is NOT a notifying event (goes to the Activity inbox), so
+    // the room must stay read — not flip to unread just because its head moved.
+    const events = [
+      ev({ id: 'post1', sender: OTHER, ts: 100 }), // read
+      ev({ id: 'avatar', sender: OTHER, ts: 200, type: 'm.room.member' }), // metadata, newer
+    ];
+    const { room } = makeRoom({
+      events,
+      readUpTo: null,
+      readReceiptId: 'post1', // receipt on the last real message, but it's not the head event
+      readReceiptTs: 100,
+    });
+    const info = getUnreadInfo(room, makeMx());
+    expect(info.total).toBe(0);
+    expect(info.highlight).toBe(0);
   });
 
   it('counts highlights via push actions', () => {

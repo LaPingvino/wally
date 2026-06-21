@@ -300,6 +300,30 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
     return { roomId: room.roomId, total, highlight };
   };
 
+  // Count notifying events strictly NEWER than the read-receipt timestamp. Used only when the
+  // marker event itself isn't loaded so we can't count by position. Unlike countAfter(-1) it
+  // does NOT assume the loaded window is entirely after the marker — that assumption is false
+  // for broadcast channels (mautrix newsletters / WhatsApp channels, whose posts ARE notifying
+  // events) and for the fat non-head-anchored timeline a cache rehydrate paints: in both, posts
+  // you already READ stay loaded, and an unbounded count recounts them → inflated room-list and
+  // space/folder aggregates (the "counts merged/wrong" regression). Bounding by ts skips the
+  // already-read tail. This is a count bound ONLY — the read/unread DECISION above stays id-based
+  // (head match → 0), so a fully-read room is never resurrected by clock skew.
+  const countAfterTs = (afterTs: number): UnreadInfo => {
+    let total = 0;
+    let highlight = 0;
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const e = events[i];
+      if (e.getTs() <= afterTs) continue; // at/older than the marker → already read
+      if (isNotificationEvent(e) && e.getSender() !== userId) {
+        total += 1;
+        const actions = mx.getPushActionsForEvent(e);
+        if (actions?.tweaks?.highlight === true) highlight += 1;
+      }
+    }
+    return { roomId: room.roomId, total, highlight };
+  };
+
   // Reliable path: the SDK resolves the latest receipt across public/private/synthetic AND only
   // returns it if the event is loaded (null otherwise). When we have it, count exactly by position.
   const loadedMarkerId = room.getEventReadUpTo(userId, false);
@@ -315,16 +339,19 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
   // report the room unread again on the next recompute (the "unread counters revert" bug). The raw
   // receipt always carries its event-id, so an id match is reliable regardless of what's loaded.
   //   receipt at head → read (0);
-  //   else → the head (and maybe more) are unread → count the loaded window's real notifications as a
-  //   noise-filtered lower bound (head-anchored window ⇒ everything loaded is after the marker).
+  //   else → the head (and maybe more) are unread → count notifications NEWER than the receipt ts
+  //   (a noise-filtered lower bound). We do NOT assume "everything loaded is after the marker": that
+  //   over-counts read posts in broadcast channels and rehydrated timelines (see countAfterTs).
+  const readReceiptRead = room.getReadReceiptForUserId(userId, true, ReceiptType.Read);
+  const readReceiptPriv = room.getReadReceiptForUserId(userId, true, ReceiptType.ReadPrivate);
   const headId = events[events.length - 1].getId();
-  const readAtHead =
-    room.getReadReceiptForUserId(userId, true, ReceiptType.Read)?.eventId === headId ||
-    room.getReadReceiptForUserId(userId, true, ReceiptType.ReadPrivate)?.eventId === headId;
-  if (readAtHead) {
+  if (readReceiptRead?.eventId === headId || readReceiptPriv?.eventId === headId) {
     return { roomId: room.roomId, total: 0, highlight: 0 };
   }
-  return countAfter(-1);
+  // Bound the count by the receipt timestamp when we have one; without a ts (e.g. no receipt at
+  // all) fall back to counting the whole loaded window as the lower bound.
+  const receiptTs = Math.max(readReceiptRead?.data?.ts ?? 0, readReceiptPriv?.data?.ts ?? 0);
+  return receiptTs > 0 ? countAfterTs(receiptTs) : countAfter(-1);
 };
 
 export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
