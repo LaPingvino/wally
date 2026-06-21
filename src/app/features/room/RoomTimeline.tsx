@@ -19,6 +19,7 @@ import {
   IContent,
   MatrixClient,
   MatrixEvent,
+  MatrixEventEvent,
   Room,
   RoomEvent,
   RoomEventHandlerMap,
@@ -834,6 +835,34 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
     threadId
   );
 
+  // Reactions / edits in ENCRYPTED rooms (e.g. mautrix-whatsapp bridge rooms)
+  // aggregate into the relations container only AFTER they decrypt: the SDK's
+  // aggregateChildEvent defers an undecrypted relation and re-aggregates on its
+  // `Decrypted` event — but that async decryption does NOT re-emit RoomEvent.Timeline,
+  // so onArrive (and therefore the re-render) never fires for it. The render loop
+  // reads reactions fresh every render (getEventReactions), so a re-render is all
+  // that's needed — but for an EARLIER message nothing else triggers one (the latest
+  // message only updated incidentally, via the at-bottom range bump on later events).
+  // Result: a friend's reaction to an older message — common with WhatsApp sticker /
+  // emoji reactions — silently never appeared. Force a re-render when a relation
+  // decrypts so the now-aggregated reaction is picked up. (WukkieMail avoids this by
+  // re-snapping the whole timeline on every sync.)
+  useEffect(() => {
+    const handleRelationDecrypted = (mEvent: MatrixEvent) => {
+      if (mEvent.getRoomId() !== room.roomId) return;
+      if (!reactionOrEditEvent(mEvent)) return;
+      if (threadId) {
+        setTimeline(getInitialTimeline(room, threadId));
+      } else {
+        setTimeline((ct) => ({ ...ct }));
+      }
+    };
+    mx.on(MatrixEventEvent.Decrypted, handleRelationDecrypted);
+    return () => {
+      mx.removeListener(MatrixEventEvent.Decrypted, handleRelationDecrypted);
+    };
+  }, [mx, room, threadId]);
+
   const handleOpenEvent = useCallback(
     async (
       evtId: string,
@@ -1468,6 +1497,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
         const reactions = reactionRelations && reactionRelations.getSortedAnnotationsByKey();
         const hasReactions = reactions && reactions.length > 0;
         const highlighted = focusItem?.index === item && focusItem.highlight;
+        // Stickers can be replies too — WhatsApp's "reply to a message with a
+        // sticker" (mautrix-whatsapp) arrives as an m.sticker carrying m.in_reply_to.
+        // The RoomMessage renderer shows the quoted message; the sticker renderer
+        // dropped it, so a sticker reply looked like a standalone sticker (you
+        // couldn't tell it was a reply to YOUR message). Mirror the reply here.
+        const { replyEventId, threadRootId } = mEvent;
 
         return (
           <Message
@@ -1489,6 +1524,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
             onUsernameClick={handleUsernameClick}
             onReplyClick={handleReplyClick}
             onReactionToggle={handleReactionToggle}
+            reply={
+              replyEventId && (
+                <Reply
+                  room={room}
+                  timelineSet={timelineSet}
+                  replyEventId={replyEventId}
+                  threadRootId={threadRootId}
+                  onClick={handleOpenReply}
+                  getMemberPowerTag={getMemberPowerTag}
+                  accessibleTagColors={accessiblePowerTagColors}
+                  legacyUsernameColor={legacyUsernameColor || direct}
+                />
+              )
+            }
             reactions={
               reactionRelations && (
                 <Reactions
