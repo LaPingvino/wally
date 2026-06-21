@@ -70,3 +70,4 @@ cf684dad  ux-fixes: TS7-clean — EventEmitter named import + node types for tes
 a51b0bc3  ux-fixes: collapse the 3-way read-marker divergence (dead code + consistency)
 f6feefc8  ux-fixes: clear lint in the unread cluster (stability hardening)
 54ceda45  ux-fixes: clear lint in RoomNavItem + SpaceTabs
+d78b2dca  ux-fixes: optimistically show composer + call button while power_levels is unsynced
