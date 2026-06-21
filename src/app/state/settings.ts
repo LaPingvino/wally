@@ -156,7 +156,11 @@ const defaultSettings: Settings = {
 
   settingsSyncEnabled: false,
   settingsSyncPausedLocally: false,
-  useClassicSync: true,
+  // Sliding sync is the preferred path (the SDK fork auto-falls-back to classic
+  // /sync on servers that don't advertise MSC4186). `useClassicSync` is now a
+  // FORCE-classic override for troubleshooting, default off — see the SyncTransport
+  // setting copy in General.tsx.
+  useClassicSync: false,
 };
 
 export const getSettings = () => {

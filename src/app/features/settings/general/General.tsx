@@ -1151,8 +1151,8 @@ function SyncTransport() {
       <Text size="L400">Sync</Text>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Use classic sync (recommended)"
-          description="Classic /sync delivers full room membership, encryption keys and device updates reliably. Turn this off to try sliding sync (MSC4186) for a faster initial load on very large accounts — but its support is still maturing and can cause rooms flickering in and out, unread glitches, or messages that fail to decrypt. Changing this reloads the app."
+          title="Force classic sync (fallback)"
+          description="Wally defaults to sliding sync (MSC4186) — it loads only what you need, when you need it, for a fast start and low memory on large accounts. On servers that don't support it, Wally automatically falls back to classic /sync; you don't have to choose. Both paths live in Wally's own SDK fork and are kept at parity — turning this ON forces classic /sync everywhere, which is only useful for troubleshooting. This is NOT a switch back to upstream Matrix behaviour; it just prefers the older code path within Wally. Changing this reloads the app."
           after={<Switch variant="Primary" value={useClassicSync} onChange={handleChange} />}
         />
       </SequenceCard>
