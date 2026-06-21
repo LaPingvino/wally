@@ -196,6 +196,8 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
   const roomsNotificationPreferences = useRoomsNotificationPreferencesContext();
   // Shared between timeline and receipt effects so receipts can cancel pending unread updates.
   const dirtyRoomsRef = useRef(new Set<string>());
+  // Coalesces the full-recompute triggered by m.space.child changes (see below).
+  const spaceChildResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setUnreadAtom({
@@ -376,16 +378,34 @@ export const useBindRoomToUnreadAtom = (mx: MatrixClient, unreadAtom: typeof roo
     };
   }, [mx, setUnreadAtom]);
 
+  useEffect(
+    () => () => {
+      if (spaceChildResetTimerRef.current) clearTimeout(spaceChildResetTimerRef.current);
+    },
+    []
+  );
+
   useStateEventCallback(
     mx,
     useCallback(
       (mEvent) => {
-        if (mEvent.getType() === StateEvent.SpaceChild) {
+        if (mEvent.getType() !== StateEvent.SpaceChild) return;
+        // A space-child change only shifts PARENT aggregation; no single room's own
+        // unread changes. But rebuilding the parent rollups needs a full
+        // getUnreadInfos(mx) over every room. On boot the rehydrate replays a BURST
+        // of m.space.child state events — running an all-rooms recompute per event is
+        // quadratic and a real first-paint cost. Coalesce into ONE trailing RESET: a
+        // single timer (no overlapping promises, Go-style), fired once when the burst
+        // settles. RESET is authoritative, so the final recompute supersedes anything
+        // that interleaved. A ~half-second lag on a space badge is imperceptible.
+        if (spaceChildResetTimerRef.current) return;
+        spaceChildResetTimerRef.current = setTimeout(() => {
+          spaceChildResetTimerRef.current = null;
           setUnreadAtom({
             type: 'RESET',
             unreadInfos: getUnreadInfos(mx),
           });
-        }
+        }, 500);
       },
       [mx, setUnreadAtom]
     )
