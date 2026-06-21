@@ -14,7 +14,6 @@ import {
   MatrixEvent,
   MsgType,
   NotificationCountType,
-  ReceiptType,
   RelationType,
   Room,
   RoomMember,
@@ -250,50 +249,27 @@ export const roomHaveNotification = (room: Room): boolean => {
 };
 
 /**
- * The user's latest SERVER-CONFIRMED read marker for a room as `{ eventId, ts }`, across public and
- * private receipts — WITHOUT requiring the marker event to be loaded.
- *
- * `ignoreSynthesized` is true on purpose: `getReadReceiptForUserId(..., false, ...)` returns the
- * synthetic receipt IN PREFERENCE to the real one, and synthetic receipts can be stale (e.g. an old
- * own-message), which would place the marker too far back and over-count. We only use this for the
- * deep-room timestamp MARGIN below, where a server-confirmed real receipt is exactly what we want.
- */
-const getLatestRealReadReceipt = (
-  room: Room,
-  userId: string
-): { eventId: string; ts: number } | null =>
-  [ReceiptType.Read, ReceiptType.ReadPrivate]
-    .map((type) => room.getReadReceiptForUserId(userId, true, type))
-    .reduce<{ eventId: string; ts: number } | null>((best, receipt) => {
-      if (!receipt) return best;
-      const ts = receipt.data?.ts ?? 0;
-      return !best || ts > best.ts ? { eventId: receipt.eventId, ts } : best;
-    }, null);
-
-/**
  * Compute a room's unread count — FULLY client-side.
  *
- * We never use the server's `getUnreadNotificationCount`: it's blind to encrypted content, counts
- * member/state noise, and is expensive — the homeserver can't count accurately, only the client
- * can. So we walk the loaded timeline back to the read marker, counting real notifying messages
- * from others (member/notice/state noise and our own messages are skipped — those belong to the
- * Activities inbox).
+ * We compute it client-side by walking the loaded timeline back to the read marker, counting real
+ * notifying messages from others (member/notice/state noise and our own messages are skipped — those
+ * belong to the Activities inbox). The server's `getUnreadNotificationCount` is blind to encrypted
+ * content and counts state noise, so it is NOT the displayed number for a room we can walk — it is
+ * used below only as a coarse has-anything SIGNAL when the marker isn't loaded.
  *
  * Placement of the marker is by EVENT-ID POSITION, never by timestamp — timestamps are unreliable
  * across federated servers, and a ts heuristic produced STUCK phantom unreads (read events that
- * looked "newer than the marker" by clock skew got counted, and no future receipt would clear them).
+ * looked "newer than the marker" by clock skew got counted, and no future receipt would clear them —
+ * the "old unreads coming back" bug).
  *
  *  - Marker event is in the loaded timeline → count notifying events after its position. EXACT.
- *  - Marker not loaded, but its (server-confirmed) receipt timestamp is older than EVEN THE OLDEST
- *    loaded event → the marker is clearly below the whole window, so every loaded event is genuinely
- *    newer = unread → count them as a LOWER BOUND that grows as more timeline streams in. This is
- *    what SURFACES deeply-unread rooms instead of hiding them.
- *  - Otherwise (no receipt; or the marker's ts falls inside the loaded window yet we can't find its
- *    event — a gap / clock skew / a non-head-anchored timeline) → uncertain → show NOTHING. We will
- *    NOT guess a count we can't place, because a wrong count here is a stuck phantom unread. It
- *    resolves the moment the marker loads (scroll/open) or a fresh receipt arrives.
+ *  - Marker not loaded → we CANNOT place it, so we never guess from a timestamp (that is exactly what
+ *    resurrected read rooms). We defer to the server's notification count purely as a has-anything
+ *    signal: 0 → trust it and show nothing (a read room can never resurrect); >0 → surface a soft
+ *    PENDING count (a dot) so a deeply-unread out-of-window room isn't hidden either. Either way it
+ *    snaps to the exact walked number the moment the room is opened.
  *
- * Plus one more "uncertain → nothing" guard: under sliding sync, until a room is live-synced this
+ * Plus one more "uncertain → pending" guard: under sliding sync, until a room is live-synced this
  * session (a rehydrated cache marker / timeline may be stale).
  */
 export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
@@ -340,15 +316,18 @@ export const getUnreadInfo = (room: Room, mx: MatrixClient): UnreadInfo => {
     if (idx >= 0) return countAfter(idx);
   }
 
-  // Marker not in the loaded timeline. Only surface a lower-bound count when the marker is CLEARLY
-  // older than the entire loaded window (its receipt predates even the oldest loaded event). If the
-  // marker's ts falls within the window but we couldn't find its event, we can't place it reliably
-  // → uncertain → nothing (avoids stuck phantom unreads).
-  const receipt = getLatestRealReadReceipt(room, userId);
-  if (receipt && receipt.ts > 0 && receipt.ts < events[0].getTs()) {
-    return countAfter(-1);
+  // Marker not in the loaded timeline → we can't place it. Do NOT guess from a timestamp comparison:
+  // cross-server clock skew made read rooms look unread, and they could not self-clear while the
+  // marker stayed unloaded ("old unreads coming back"). Defer to the server's notification count as a
+  // coarse has-anything signal instead: if it says nothing is unread, trust it (a read room never
+  // resurrects); if it says there is, surface a soft pending count (a dot) so a deeply-unread
+  // out-of-window room isn't hidden. It snaps to the exact walked number the instant the room opens.
+  const serverTotal = room.getUnreadNotificationCount(NotificationCountType.Total) ?? 0;
+  const serverHighlight = room.getUnreadNotificationCount(NotificationCountType.Highlight) ?? 0;
+  if (serverTotal > 0 || serverHighlight > 0) {
+    return { roomId: room.roomId, total: serverTotal, highlight: serverHighlight, pending: true };
   }
-  return { roomId: room.roomId, total: 0, highlight: 0, pending: true };
+  return { roomId: room.roomId, total: 0, highlight: 0 };
 };
 
 export const getUnreadInfos = (mx: MatrixClient): UnreadInfo[] => {
