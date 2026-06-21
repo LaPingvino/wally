@@ -75,6 +75,19 @@ export function usePowerLevels(room: Room): IPowerLevels {
   return powerLevels;
 }
 
+/**
+ * Whether the room's `m.room.power_levels` state event is actually loaded.
+ *
+ * usePowerLevels falls back to DEFAULT_POWER_LEVELS (state_default 50, users_default 0) when the event
+ * is absent — indistinguishable from a real defaults-only room. Under sliding sync power_levels arrives
+ * late, so a permission check on the defaults wrongly denies admins/creators and hides affordances
+ * until the next poll. Callers can use this to OPTIMISTICALLY allow non-destructive affordances while
+ * power_levels is unconfirmed (the server remains the real gate), instead of flickering them off.
+ */
+export function useRoomPowerLevelsLoaded(room: Room): boolean {
+  return useStateEvent(room, StateEvent.RoomPowerLevels) !== undefined;
+}
+
 export const PowerLevelsContext = createContext<IPowerLevels | null>(null);
 
 export const PowerLevelsContextProvider = PowerLevelsContext.Provider;

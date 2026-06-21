@@ -7,7 +7,7 @@ import { ReactEditor } from 'slate-react';
 import { isKeyHotkey } from 'is-hotkey';
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { StateEvent } from '../../../types/matrix/room';
-import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
+import { usePowerLevelsContext, useRoomPowerLevelsLoaded } from '../../hooks/usePowerLevels';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useEditor } from '../../components/editor';
 import { RoomInputPlaceholder } from './RoomInputPlaceholder';
@@ -143,7 +143,13 @@ export function RoomView({ eventId }: { eventId?: string }) {
   }, [roomId]);
 
   const permissions = useRoomPermissions(creators, powerLevels);
-  const canMessage = permissions.event(EventType.RoomMessage, mx.getSafeUserId());
+  // Optimistically show the composer while power_levels hasn't synced (sliding sync delivers it late);
+  // otherwise a permission check on DEFAULT_POWER_LEVELS would hide the input until the next poll. The
+  // server is the real gate, so a wrong-optimistic input just fails the send rather than silently
+  // hiding the composer for everyone.
+  const powerLevelsLoaded = useRoomPowerLevelsLoaded(room);
+  const canMessage =
+    !powerLevelsLoaded || permissions.event(EventType.RoomMessage, mx.getSafeUserId());
 
   const setSearchModal = useSetAtom(searchModalAtom);
 

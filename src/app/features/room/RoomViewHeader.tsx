@@ -42,7 +42,7 @@ import { getCanonicalAliasOrRoomId, isRoomAlias, mxcUrlToHttp } from '../../util
 import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
 import { useRoomUnread } from '../../state/hooks/unread';
-import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
+import { usePowerLevelsContext, useRoomPowerLevelsLoaded } from '../../hooks/usePowerLevels';
 import { markAsRead } from '../../utils/notifications';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
@@ -561,7 +561,12 @@ export function RoomViewHeader({ isIssueBoard, onToggleIssueBoard, isThreadsDraw
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
   const permissions = useRoomPermissions(creators, powerLevels);
-  const canCall = permissions.stateEvent('org.matrix.msc3401.call.member', mx.getSafeUserId());
+  // Optimistically show the call button while power_levels is still syncing (sliding sync delivers it
+  // late) — otherwise a check on DEFAULT_POWER_LEVELS hides it until the next poll. Joining is the real
+  // gate. Mirrors the canStartCall pattern in WukkieMail.
+  const powerLevelsLoaded = useRoomPowerLevelsLoaded(room);
+  const canCall =
+    !powerLevelsLoaded || permissions.stateEvent('org.matrix.msc3401.call.member', mx.getSafeUserId());
   const roomWidgets = useRoomWidgets(room);
   const canWriteIssues = permissions.stateEvent('eu.kiefte.issue' as any, mx.getSafeUserId());
   // Check room creator directly (creatorsSupported returns false for versions 1–11).
