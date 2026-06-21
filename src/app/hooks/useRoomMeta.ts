@@ -13,12 +13,16 @@ import { useStateEvent } from './useStateEvent';
 // so the avatar resolves from the same source with no manual member load.
 export const useRoomAvatar = (room: Room, dm?: boolean): string | undefined => {
   const avatarEvent = useStateEvent(room, StateEvent.RoomAvatar);
-
-  if (dm) {
-    return room.getAvatarFallbackMember()?.getMxcAvatarUrl();
-  }
   const content = avatarEvent?.getContent();
   const avatarMxc = content && typeof content.url === 'string' ? content.url : undefined;
+
+  if (dm) {
+    // An explicit room avatar (e.g. a bridge-set channel photo) wins over the
+    // DM-partner fallback. Without this, a WhatsApp broadcast channel — which the
+    // bridge maps into m.direct but whose only other "member" is your own ghost —
+    // resolves to YOUR face instead of the channel photo. See getDirectRoomAvatarUrl.
+    return avatarMxc ?? room.getAvatarFallbackMember()?.getMxcAvatarUrl();
+  }
 
   return avatarMxc;
 };

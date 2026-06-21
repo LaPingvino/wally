@@ -444,15 +444,28 @@ export const getDirectRoomAvatarUrl = (
   size: 32 | 96 = 32,
   useAuthentication = false
 ): string | undefined => {
-  const mxcUrl = room.getAvatarFallbackMember()?.getMxcAvatarUrl();
-
-  if (!mxcUrl) {
-    return getRoomAvatarUrl(mx, room, size, useAuthentication);
+  // The room's OWN avatar (m.room.avatar) is an explicit choice and wins. Bridges
+  // (mautrix-whatsapp) set it to the channel/contact photo AND map the room into
+  // m.direct — so a WhatsApp broadcast channel is "direct" but has only you + your
+  // own ghost as members. The per-member DM fallback then picks the "other member"
+  // (your ghost, carrying your face) and overrides the bridge's correct setup. So
+  // prefer the explicit room avatar; only DERIVE from the DM partner when there is
+  // none (native Matrix DMs, which don't set m.room.avatar).
+  const roomMxc = room.getMxcAvatarUrl();
+  if (roomMxc) {
+    return (
+      mx.mxcUrlToHttp(roomMxc, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
+    );
   }
 
-  return (
-    mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
-  );
+  const memberMxc = room.getAvatarFallbackMember()?.getMxcAvatarUrl();
+  if (memberMxc) {
+    return (
+      mx.mxcUrlToHttp(memberMxc, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
+    );
+  }
+
+  return undefined;
 };
 
 export const trimReplyFromBody = (body: string): string => {
