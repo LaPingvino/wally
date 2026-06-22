@@ -7,32 +7,40 @@ const HYDRATION_TIMEOUT_MS = 12000;
 export type RoomHydration = 'live' | 'loading' | 'unknown';
 
 /**
- * Whether a room's data has live-synced this session.
+ * Whether a room actually has content to show.
  *
- * Under sliding sync a room that's out of the window hasn't been hydrated yet — its
- * name/avatar/unread may be a stale cache paint or absent. `isRoomLiveSynced` (SDK
- * fork) reports when it has. Returns 'loading' until then, 'live' once it syncs, and
- * 'unknown' if it STILL hasn't after HYDRATION_TIMEOUT_MS — at which point the UI
- * settles a "?" instead of pulsing forever. Self-heals: if an 'unknown' room later
- * syncs, it flips back to 'live'. Classic /sync (no isRoomLiveSynced) ⇒ always 'live'.
+ * A room is "loaded" if EITHER it has live-synced this session (isRoomLiveSynced,
+ * SDK fork) OR it already has real timeline content. The OR matters: a room
+ * rehydrated from the persistent cache has a full timeline but was NOT live-synced
+ * this session, so keying purely off isRoomLiveSynced wrongly decays a fully-loaded
+ * (from cache) room to "?". We only want the indicator for rooms with genuinely no
+ * content yet.
+ *
+ * Returns 'loading' while there's no content (and not yet live), 'live' once content
+ * is present or it syncs, and 'unknown' if STILL nothing after HYDRATION_TIMEOUT_MS
+ * — at which point the UI settles a "?" instead of pulsing forever. Self-heals: if an
+ * 'unknown' room later gets content, it flips back to 'live'. Classic /sync ⇒ 'live'.
  */
 export const useRoomHydration = (roomId: string): RoomHydration => {
   const mx = useMatrixClient();
   const isLive = (): boolean =>
     (mx as unknown as { isRoomLiveSynced?: (id: string) => boolean }).isRoomLiveSynced?.(roomId) ?? true;
+  const hasContent = (): boolean => {
+    const room = mx.getRoom(roomId);
+    return !!room && room.getLiveTimeline().getEvents().length > 0;
+  };
 
-  const live = isLive();
+  const loaded = isLive() || hasContent();
   const [, force] = useState(0);
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     setTimedOut(false);
-    if (live) return undefined;
+    if (loaded) return undefined;
     const room = mx.getRoom(roomId);
-    // Re-render the instant this room gets data (so it can flip to 'live'); the room
-    // emits Timeline / membership events as it hydrates.
+    // Re-render the instant this room gets content / live-syncs.
     const recheck = (): void => {
-      if (isLive()) force((n) => n + 1);
+      if (isLive() || hasContent()) force((n) => n + 1);
     };
     room?.on(RoomEvent.Timeline, recheck);
     room?.on(RoomEvent.MyMembership, recheck);
@@ -42,10 +50,10 @@ export const useRoomHydration = (roomId: string): RoomHydration => {
       room?.removeListener(RoomEvent.MyMembership, recheck);
       window.clearTimeout(timer);
     };
-    // isLive() reads live SDK state; `live` (its snapshot) drives re-subscription.
+    // isLive()/hasContent() read live SDK state; `loaded` (their snapshot) drives this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, mx, live]);
+  }, [roomId, mx, loaded]);
 
-  if (live) return 'live';
+  if (loaded) return 'live';
   return timedOut ? 'unknown' : 'loading';
 };

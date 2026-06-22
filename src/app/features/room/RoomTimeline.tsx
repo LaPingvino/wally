@@ -987,6 +987,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
     const latestTimeline = evtTimeline && getFirstLinkedTimeline(evtTimeline, Direction.Forward);
     if (latestTimeline === room.getLiveTimeline()) {
       requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity));
+      return;
+    }
+    // The marker points outside the live chain — its event isn't reachable (a
+    // detached/limited-reset segment, or a redacted/gapped marker). Without this the
+    // room stays WEDGED: it never gets a fresh receipt, so it lingers "unresolved"
+    // until something else jolts it much later. We're at the bottom viewing the
+    // latest, so SALVAGE the marker by reading the latest — but ONLY when the receipt
+    // is behind the latest loaded event (a genuinely-stuck marker). If it's at/ahead
+    // (read on another device past our window) we leave it, since marking-latest would
+    // regress the marker and resurrect phantom unreads.
+    const userId = mx.getUserId();
+    const events = room.getLiveTimeline().getEvents();
+    const latestTs = events.length > 0 ? events[events.length - 1].getTs() : 0;
+    const receiptTs = userId ? room.getReadReceiptForUserId(userId)?.data?.ts ?? 0 : 0;
+    if (latestTs > 0 && receiptTs > 0 && receiptTs < latestTs) {
+      requestAnimationFrame(() => markAsRead(mx, room.roomId, hideActivity));
     }
   }, [mx, room, hideActivity]);
 
