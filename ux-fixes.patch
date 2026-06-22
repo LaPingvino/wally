@@ -1127,7 +1127,7 @@ index 4da9a96f7..4376cc90c 100644
            onKeyUp={handleKeyUp}
            onPaste={handlePaste}
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 65fd0e2dc..3f532fed1 100644
+index 65fd0e2dc..23c7eac02 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -19,6 +19,7 @@ import {
@@ -1163,7 +1163,138 @@ index 65fd0e2dc..3f532fed1 100644
  import { useMemberEventParser } from '../../hooks/useMemberEventParser';
  import * as customHtmlCss from '../../styles/CustomHtml.css';
  import { RoomIntro } from '../../components/room-intro';
-@@ -826,6 +825,34 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -305,17 +304,17 @@ const useTimelinePagination = (
+       setTimeline((currentTimeline) => {
+         const newStart = currentTimeline.range.start + offsetRange;
+         const newEnd = currentTimeline.range.end + offsetRange;
+-        const newRange =
+-          offsetRange > 0
+-            ? newStart === newEnd
+-              ? (() => {
+-                  // Zero-width range (happens on initial empty thread timeline):
+-                  // show the most recent events instead of preserving an empty window.
+-                  const total = getTimelinesEventsCount(newLTimelines);
+-                  return { start: Math.max(total - limit, 0), end: total };
+-                })()
+-              : { start: newStart, end: newEnd }
+-            : { ...currentTimeline.range };
++        let newRange: { start: number; end: number };
++        if (offsetRange <= 0) {
++          newRange = { ...currentTimeline.range };
++        } else if (newStart === newEnd) {
++          // Zero-width range (happens on initial empty thread timeline): show the
++          // most recent events instead of preserving an empty window.
++          const total = getTimelinesEventsCount(newLTimelines);
++          newRange = { start: Math.max(total - limit, 0), end: total };
++        } else {
++          newRange = { start: newStart, end: newEnd };
++        }
+         return { linkedTimelines: newLTimelines, range: newRange };
+       });
+     };
+@@ -443,13 +442,31 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+   }, [room, onRefresh]);
+ };
+ 
++const getEmptyTimeline = () => ({
++  range: { start: 0, end: 0 },
++  linkedTimelines: [],
++});
++
++// Walk backward from liveTimeline staying within the same EventTimelineSet (thread-safe).
++// Prevents getLinkedTimelines() from crossing into the room's main timeline chain.
++const getThreadTimelines = (liveTimeline: EventTimeline): EventTimeline[] => {
++  const threadSet = liveTimeline.getTimelineSet();
++  const timelines: EventTimeline[] = [liveTimeline];
++  let cur = liveTimeline.getNeighbouringTimeline(Direction.Backward);
++  while (cur && cur.getTimelineSet() === threadSet) {
++    timelines.unshift(cur);
++    cur = cur.getNeighbouringTimeline(Direction.Backward);
++  }
++  return timelines;
++};
++
+ const getInitialTimeline = (room: Room, threadId?: string) => {
+   if (threadId) {
+     // Prefer SDK Thread — it tracks server-fetched history (via
+     // createThreadsTimelineSets / fetchRoomThreads) and ongoing replies.
+     const sdkThread = room.getThread(threadId);
+     if (sdkThread) {
+-      const liveTimeline = sdkThread.liveTimeline;
++      const { liveTimeline } = sdkThread;
+       const events = liveTimeline.getEvents();
+       if (events.length > 0) {
+         return {
+@@ -483,13 +500,13 @@ const getInitialTimeline = (room: Room, threadId?: string) => {
+ 
+     const syntheticSet = new EventTimelineSet(room, {});
+     const syntheticTimeline = syntheticSet.getLiveTimeline();
+-    for (const e of threadEvents) {
++    threadEvents.forEach((e) => {
+       try {
+         syntheticSet.addEventToTimeline(e, syntheticTimeline, { toStartOfTimeline: false, addToState: false });
+-      } catch (_) {
++      } catch {
+         /* skip */
+       }
+-    }
++    });
+     const evLen = syntheticTimeline.getEvents().length;
+     return {
+       linkedTimelines: [syntheticTimeline],
+@@ -507,24 +524,6 @@ const getInitialTimeline = (room: Room, threadId?: string) => {
+   };
+ };
+ 
+-const getEmptyTimeline = () => ({
+-  range: { start: 0, end: 0 },
+-  linkedTimelines: [],
+-});
+-
+-// Walk backward from liveTimeline staying within the same EventTimelineSet (thread-safe).
+-// Prevents getLinkedTimelines() from crossing into the room's main timeline chain.
+-const getThreadTimelines = (liveTimeline: EventTimeline): EventTimeline[] => {
+-  const threadSet = liveTimeline.getTimelineSet();
+-  const timelines: EventTimeline[] = [liveTimeline];
+-  let cur = liveTimeline.getNeighbouringTimeline(Direction.Backward);
+-  while (cur && cur.getTimelineSet() === threadSet) {
+-    timelines.unshift(cur);
+-    cur = cur.getNeighbouringTimeline(Direction.Backward);
+-  }
+-  return timelines;
+-};
+-
+ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+   const readUptoEventId = room.getEventReadUpTo(room.client.getUserId() ?? '');
+   if (!readUptoEventId) return undefined;
+@@ -661,15 +660,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+   // return its absolute index, or undefined if it's no longer there. Cheap
+   // linear scan: linkedTimelines is small (≤ a handful) and each timeline
+   // typically holds a few hundred events.
+-  const findAbsIndex = (eventId: string): number | undefined => {
++  const findAbsIndex = (targetEventId: string): number | undefined => {
+     let base = 0;
+-    for (const tm of timeline.linkedTimelines) {
++    let absIndex: number | undefined;
++    timeline.linkedTimelines.some((tm) => {
+       const evts = tm.getEvents();
+-      const idx = evts.findIndex((e) => e.getId() === eventId);
+-      if (idx !== -1) return base + idx;
++      const idx = evts.findIndex((e) => e.getId() === targetEventId);
++      if (idx !== -1) {
++        absIndex = base + idx;
++        return true;
++      }
+       base += evts.length;
+-    }
+-    return undefined;
++      return false;
++    });
++    return absIndex;
+   };
+   if (anchorRef.current) {
+     const currentIdx = findAbsIndex(anchorRef.current.eventId);
+@@ -826,6 +830,34 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
      threadId
    );
  
@@ -1198,14 +1329,14 @@ index 65fd0e2dc..3f532fed1 100644
    const handleOpenEvent = useCallback(
      async (
        evtId: string,
-@@ -909,6 +936,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -909,6 +941,22 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
      useCallback(() => roomInputRef.current, [roomInputRef])
    );
  
 +  // Stay at bottom when virtual keyboard opens/closes (mobile)
 +  useEffect(() => {
 +    const vv = window.visualViewport;
-+    if (!vv) return;
++    if (!vv) return undefined;
 +    const handler = () => {
 +      requestAnimationFrame(() => {
 +        const scrollElement = getScrollElement();
@@ -1221,7 +1352,7 @@ index 65fd0e2dc..3f532fed1 100644
    const tryAutoMarkAsRead = useCallback(() => {
      const readUptoEventId = readUptoEventIdRef.current;
      if (!readUptoEventId) {
-@@ -1218,7 +1261,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1218,7 +1266,6 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
      },
      [editor]
    );
@@ -1229,7 +1360,7 @@ index 65fd0e2dc..3f532fed1 100644
  
    const renderMatrixEvent = useMatrixEventRenderer<
      [string, MatrixEvent, number, EventTimelineSet, boolean]
-@@ -1421,7 +1463,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1421,7 +1468,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
                  if (mEvent.getType() === MessageEvent.RoomMessageEncrypted)
                    return (
                      <Text>
@@ -1238,7 +1369,7 @@ index 65fd0e2dc..3f532fed1 100644
                      </Text>
                    );
                  return (
-@@ -1439,6 +1481,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1439,6 +1486,12 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
          const reactions = reactionRelations && reactionRelations.getSortedAnnotationsByKey();
          const hasReactions = reactions && reactions.length > 0;
          const highlighted = focusItem?.index === item && focusItem.highlight;
@@ -1251,7 +1382,7 @@ index 65fd0e2dc..3f532fed1 100644
  
          return (
            <Message
-@@ -1460,6 +1508,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1460,6 +1513,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
              onUsernameClick={handleUsernameClick}
              onReplyClick={handleReplyClick}
              onReactionToggle={handleReactionToggle}
@@ -1272,7 +1403,7 @@ index 65fd0e2dc..3f532fed1 100644
              reactions={
                reactionRelations && (
                  <Reactions
-@@ -1578,7 +1640,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
+@@ -1578,7 +1645,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
                  <Box grow="Yes" direction="Column">
                    <Text size="T300" priority="300">
                      <b>{senderName}</b>
