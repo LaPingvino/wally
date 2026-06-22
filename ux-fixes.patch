@@ -905,6 +905,52 @@ index 9edb96784..b6da4f932 100644
  
  export const MessageEmptyContent = as<'div', { children?: never }>(({ ...props }, ref) => (
    <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
+index 85969b563..cf607f414 100644
+--- a/src/app/components/room-avatar/RoomAvatar.tsx
++++ b/src/app/components/room-avatar/RoomAvatar.tsx
+@@ -1,9 +1,10 @@
+ import { JoinRule } from 'matrix-js-sdk';
+ import { AvatarFallback, AvatarImage, Icon, Icons, color } from 'folds';
+-import React, { ComponentProps, ReactEventHandler, ReactNode, forwardRef, useState } from 'react';
++import React, { ComponentProps, ReactEventHandler, ReactNode, forwardRef } from 'react';
+ import * as css from './RoomAvatar.css';
+ import { getRoomIconSrc } from '../../utils/room';
+ import colorMXID from '../../../util/colorMXID';
++import { useImageRetry } from '../../hooks/useImageRetry';
+ 
+ type RoomAvatarProps = {
+   roomId: string;
+@@ -12,13 +13,14 @@ type RoomAvatarProps = {
+   renderFallback: () => ReactNode;
+ };
+ export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps) {
+-  const [error, setError] = useState(false);
++  // Retry the load (SW/token may not be ready yet on a refresh) before falling back.
++  const { retryKey, failed, onError } = useImageRetry(src);
+ 
+   const handleLoad: ReactEventHandler<HTMLImageElement> = (evt) => {
+     evt.currentTarget.setAttribute('data-image-loaded', 'true');
+   };
+ 
+-  if (!src || error) {
++  if (!src || failed) {
+     return (
+       <AvatarFallback
+         style={{ backgroundColor: colorMXID(roomId ?? ''), color: color.Surface.Container }}
+@@ -33,10 +35,11 @@ export function RoomAvatar({ roomId, src, alt, renderFallback }: RoomAvatarProps
+ 
+   return (
+     <AvatarImage
++      key={retryKey}
+       className={css.RoomAvatar}
+       src={src}
+       alt={alt}
+-      onError={() => setError(true)}
++      onError={onError}
+       onLoad={handleLoad}
+       draggable={false}
+     />
 diff --git a/src/app/components/url-preview/UrlPreviewCard.tsx b/src/app/components/url-preview/UrlPreviewCard.tsx
 index ee8967af7..658bdcfa7 100644
 --- a/src/app/components/url-preview/UrlPreviewCard.tsx
@@ -920,6 +966,51 @@ index ee8967af7..658bdcfa7 100644
      }, [loadPreview]);
  
      if (previewStatus.status === AsyncStatus.Error) return null;
+diff --git a/src/app/components/user-avatar/UserAvatar.tsx b/src/app/components/user-avatar/UserAvatar.tsx
+index 5afee73a8..7de9394e7 100644
+--- a/src/app/components/user-avatar/UserAvatar.tsx
++++ b/src/app/components/user-avatar/UserAvatar.tsx
+@@ -1,8 +1,9 @@
+ import { AvatarFallback, AvatarImage, color } from 'folds';
+-import React, { ReactEventHandler, ReactNode, useState } from 'react';
++import React, { ReactEventHandler, ReactNode } from 'react';
+ import classNames from 'classnames';
+ import * as css from './UserAvatar.css';
+ import colorMXID from '../../../util/colorMXID';
++import { useImageRetry } from '../../hooks/useImageRetry';
+ 
+ type UserAvatarProps = {
+   className?: string;
+@@ -12,13 +13,14 @@ type UserAvatarProps = {
+   renderFallback: () => ReactNode;
+ };
+ export function UserAvatar({ className, userId, src, alt, renderFallback }: UserAvatarProps) {
+-  const [error, setError] = useState(false);
++  // Retry the load (SW/token may not be ready yet on a refresh) before falling back.
++  const { retryKey, failed, onError } = useImageRetry(src);
+ 
+   const handleLoad: ReactEventHandler<HTMLImageElement> = (evt) => {
+     evt.currentTarget.setAttribute('data-image-loaded', 'true');
+   };
+ 
+-  if (!src || error) {
++  if (!src || failed) {
+     return (
+       <AvatarFallback
+         style={{ backgroundColor: colorMXID(userId), color: color.Surface.Container }}
+@@ -33,10 +35,11 @@ export function UserAvatar({ className, userId, src, alt, renderFallback }: User
+ 
+   return (
+     <AvatarImage
++      key={retryKey}
+       className={classNames(css.UserAvatar, className)}
+       src={src}
+       alt={alt}
+-      onError={() => setError(true)}
++      onError={onError}
+       onLoad={handleLoad}
+       draggable={false}
+     />
 diff --git a/src/app/features/issues/IssueBoard.tsx b/src/app/features/issues/IssueBoard.tsx
 index 402c1d095..21ff11110 100644
 --- a/src/app/features/issues/IssueBoard.tsx
@@ -1775,6 +1866,62 @@ index c02b0e94e..6541a9c36 100644
        [Command.ConvertToDm]: {
          name: Command.ConvertToDm,
          description: 'Convert room to direct message',
+diff --git a/src/app/hooks/useImageRetry.ts b/src/app/hooks/useImageRetry.ts
+new file mode 100644
+index 000000000..099a331b9
+--- /dev/null
++++ b/src/app/hooks/useImageRetry.ts
+@@ -0,0 +1,50 @@
++import { ReactEventHandler, useCallback, useEffect, useRef, useState } from 'react';
++
++const MAX_RETRIES = 4;
++
++/**
++ * Retry an avatar/image load a few times before giving up to the fallback.
++ *
++ * Authenticated media (MSC3916) is served from /_matrix/client/v1/media/..., which a
++ * plain <img> can only load once the service worker is active to attach the auth
++ * header. The SW registers on `load` (after first paint), so on a REFRESH an avatar
++ * can fire before the SW controls the page → 401 → onError. Cinny's avatars then set a
++ * permanent fallback, so the picture stays missing until the next reload — the
++ * long-standing "pictures randomly don't load on refresh" bug.
++ *
++ * Here we instead retry with backoff (0.5s, 1s, 2s, 4s); by then the SW / access token
++ * is virtually always ready, and remounting the <img> (via the returned `retryKey`)
++ * re-fetches the same URL so the SW can auth it. Only after MAX_RETRIES do we fall back.
++ * Resets when `src` changes.
++ */
++export const useImageRetry = (
++  src?: string
++): { retryKey: number; failed: boolean; onError: ReactEventHandler<HTMLImageElement> } => {
++  const attemptRef = useRef(0);
++  const timerRef = useRef<number | undefined>(undefined);
++  const [, force] = useState(0);
++  const [failed, setFailed] = useState(false);
++
++  useEffect(() => {
++    attemptRef.current = 0;
++    setFailed(false);
++    force((n) => n + 1);
++    return () => {
++      if (timerRef.current) window.clearTimeout(timerRef.current);
++    };
++  }, [src]);
++
++  const onError = useCallback<ReactEventHandler<HTMLImageElement>>(() => {
++    if (attemptRef.current >= MAX_RETRIES) {
++      setFailed(true);
++      return;
++    }
++    const delay = 500 * 2 ** attemptRef.current;
++    attemptRef.current += 1;
++    if (timerRef.current) window.clearTimeout(timerRef.current);
++    // Re-render after the backoff so the <img> remounts (new retryKey) and re-fetches.
++    timerRef.current = window.setTimeout(() => force((n) => n + 1), delay);
++  }, []);
++
++  return { retryKey: attemptRef.current, failed, onError };
++};
 diff --git a/src/app/hooks/useRoomMembers.ts b/src/app/hooks/useRoomMembers.ts
 index df369011b..14fd8d44f 100644
 --- a/src/app/hooks/useRoomMembers.ts
