@@ -28,7 +28,9 @@ import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { nameInitials } from '../../utils/common';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { useRoomHydration } from '../../hooks/useRoomHydration';
 import { useRoomUnread } from '../../state/hooks/unread';
+import * as navStyles from './styles.css';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
@@ -311,6 +313,7 @@ export function RoomNavItem({
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+  const hydration = useRoomHydration(room.roomId);
   const typingMember = useRoomTypingMember(room.roomId).filter(
     (receipt) => receipt.userId !== mx.getUserId()
   );
@@ -454,6 +457,7 @@ export function RoomNavItem({
               </Avatar>
               <Box as="span" grow="Yes">
                 <Text
+                  className={hydration === 'loading' ? navStyles.RoomLoadingName : undefined}
                   priority={unread || isActiveCall ? '500' : '300'}
                   as="span"
                   size="Inherit"
@@ -470,6 +474,15 @@ export function RoomNavItem({
               {!optionsVisible && unread && (
                 <UnreadBadgeCenter>
                   <UnreadBadge highlight={unread.highlight > 0} count={unread.total} />
+                </UnreadBadgeCenter>
+              )}
+              {!optionsVisible && !unread && hydration === 'unknown' && (
+                // Room never live-synced this session — we don't know its real state.
+                // Settle a "?" where the count would be instead of pulsing forever.
+                <UnreadBadgeCenter>
+                  <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined aria-label="State unknown — not loaded">
+                    <Text as="span" size="L400">?</Text>
+                  </Badge>
                 </UnreadBadgeCenter>
               )}
               {!optionsVisible && notificationMode !== RoomNotificationMode.Unset && (
