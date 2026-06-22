@@ -41,7 +41,9 @@ const PROBE_DIAGNOSTIC_MS = 15000;
 // poll continuously; we just re-check when the connection is re-established.
 const REPROBE_MIN_INTERVAL_MS = 60_000;
 const HEARTBEAT_TIMEOUT_MS = 30000;
-const POKE_DEBOUNCE_MS = 150;
+// Leading-edge: the first poke after idle fires IMMEDIATELY (no added latency).
+// Further activity within the cooldown coalesces into a single trailing poke.
+const POKE_COOLDOWN_MS = 150;
 // Let the first sync's boot storm (rehydrate, initial window, OlmMachine init, to-device backlog)
 // drain before probing, so we measure steady-state long-poll latency, not reload latency.
 const SETTLE_DELAY_MS = 6000;
@@ -81,6 +83,28 @@ export const subscribeSyncMode = (cb: () => void): (() => void) => {
 type SlidingSyncLike = { poke?: () => void };
 const getSlidingSync = (mx: MatrixClient): SlidingSyncLike | undefined =>
   (mx as unknown as { getSlidingSync?: () => SlidingSyncLike | undefined }).getSlidingSync?.();
+
+interface SyncWakeResponse {
+  next_batch: string;
+  rooms?: {
+    join?: Record<string, { timeline?: { events?: unknown[] } }>;
+    invite?: Record<string, unknown>;
+    leave?: Record<string, unknown>;
+  };
+}
+
+// Did this /sync return carry a ROOM change worth re-polling the sliding connection
+// for — a new timeline event in a joined room, or any invite/leave? A to-device-only
+// wake (key shares during a crypto handshake) doesn't need the room connection
+// re-polled (the dedicated encryption sync owns to-device), so skip those.
+const hasRoomChange = (resp: SyncWakeResponse): boolean => {
+  const r = resp.rooms;
+  if (!r) return false;
+  if (r.invite && Object.keys(r.invite).length > 0) return true;
+  if (r.leave && Object.keys(r.leave).length > 0) return true;
+  if (r.join && Object.values(r.join).some((j) => (j.timeline?.events?.length ?? 0) > 0)) return true;
+  return false;
+};
 
 /**
  * Probe the sliding-sync path: send a no-op to-device to our own device and time how long sliding
@@ -147,7 +171,9 @@ class SyncWakeHeartbeat {
 
   private abort?: AbortController;
 
-  private pokeTimer?: ReturnType<typeof setTimeout>;
+  private pokeCooldown?: ReturnType<typeof setTimeout>;
+
+  private pokeQueued = false;
 
   private readonly mx: MatrixClient;
 
@@ -162,15 +188,22 @@ class SyncWakeHeartbeat {
   public stop(): void {
     this.stopped = true;
     this.abort?.abort();
-    if (this.pokeTimer) clearTimeout(this.pokeTimer);
+    if (this.pokeCooldown) clearTimeout(this.pokeCooldown);
   }
 
   private pokeSliding(): void {
-    if (this.pokeTimer) return; // debounce a burst of activity into one poke
-    this.pokeTimer = setTimeout(() => {
-      this.pokeTimer = undefined;
-      getSlidingSync(this.mx)?.poke?.();
-    }, POKE_DEBOUNCE_MS);
+    if (this.pokeCooldown) {
+      this.pokeQueued = true; // activity during cooldown → one trailing poke when it ends
+      return;
+    }
+    getSlidingSync(this.mx)?.poke?.(); // leading edge: poke NOW, no added latency
+    this.pokeCooldown = setTimeout(() => {
+      this.pokeCooldown = undefined;
+      if (this.pokeQueued) {
+        this.pokeQueued = false;
+        this.pokeSliding();
+      }
+    }, POKE_COOLDOWN_MS);
   }
 
   private async loop(): Promise<void> {
@@ -185,7 +218,7 @@ class SyncWakeHeartbeat {
       if (since) query.since = since;
       try {
         // eslint-disable-next-line no-await-in-loop
-        const resp = await this.mx.http.authedRequest<{ next_batch: string }>(
+        const resp = await this.mx.http.authedRequest<SyncWakeResponse>(
           Method.Get,
           '/sync',
           query,
@@ -197,7 +230,9 @@ class SyncWakeHeartbeat {
           }
         );
         since = resp.next_batch;
-        if (!bootstrap && !this.stopped) this.pokeSliding();
+        // Only poke when the wake actually carries a room change — skip to-device-
+        // only wakes (key shares) that don't need the room connection re-polled.
+        if (!bootstrap && !this.stopped && hasRoomChange(resp)) this.pokeSliding();
       } catch {
         if (this.stopped) break;
         // eslint-disable-next-line no-await-in-loop
