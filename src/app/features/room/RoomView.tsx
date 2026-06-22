@@ -29,7 +29,6 @@ import { useSetting } from '../../state/hooks/settings';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
-import { useOpenChatCatchup } from '../../hooks/useOpenChatCatchup';
 import { useRoomUnread } from '../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { announce } from '../../utils/announce';
@@ -85,9 +84,6 @@ export function RoomView({ eventId }: { eventId?: string }) {
 
   const room = useRoom();
   const { roomId } = room;
-  // Keep the open chat converged while we're viewing it (catches straggler/bridged
-  // messages that Continuwuity delivers a poll late). See useOpenChatCatchup.
-  useOpenChatCatchup(roomId);
   const editor = useEditor();
 
   const mx = useMatrixClient();
