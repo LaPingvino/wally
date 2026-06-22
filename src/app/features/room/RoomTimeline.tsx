@@ -919,14 +919,24 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
     }
   }, [liveTimelineLinked, rangeAtEnd, atBottom, room, threadId]);
 
-  // Thread mode: if liveTimelineLinked becomes false (synthetic timeline ref went stale),
-  // re-scan main room timeline to rebuild. No dependency on SDK Thread objects.
+  // Self-heal a detached live timeline. The SDK replaces the live timeline via
+  // room.resetLiveTimeline() on a `limited` sliding response — a real gap, e.g. a
+  // WhatsApp-bridge burst that overflows the timeline window — which fires
+  // RoomEvent.TimelineReset. We only listen for TimelineRefresh (a different event),
+  // so without this the rendered `linkedTimelines` stay pinned to the now-dead chain:
+  // new messages land on the fresh live timeline that isn't linked, so they never
+  // appear until a full PAGE reload rebuilds from getLiveTimeline(). Rebuild here
+  // instead. Applies to BOTH thread mode (synthetic ref went stale) and room mode —
+  // it was previously thread-only, which is exactly why room chats silently dropped
+  // messages until reload. Skip a room-mode permalink view (eventId): rebuilding to
+  // live would yank away from the event the user jumped to.
   useEffect(() => {
-    if (!threadId || liveTimelineLinked) return;
+    if (liveTimelineLinked) return;
+    if (!threadId && eventId) return;
     const newTimeline = getInitialTimeline(room, threadId);
     if (newTimeline.linkedTimelines.length === 0) return;
     setTimeline(newTimeline);
-  }, [room, threadId, liveTimelineLinked]);
+  }, [room, threadId, eventId, liveTimelineLinked]);
 
   // Stay at bottom when room editor resize
   useResizeObserver(
