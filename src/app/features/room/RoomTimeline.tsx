@@ -308,17 +308,17 @@ const useTimelinePagination = (
       setTimeline((currentTimeline) => {
         const newStart = currentTimeline.range.start + offsetRange;
         const newEnd = currentTimeline.range.end + offsetRange;
-        const newRange =
-          offsetRange > 0
-            ? newStart === newEnd
-              ? (() => {
-                  // Zero-width range (happens on initial empty thread timeline):
-                  // show the most recent events instead of preserving an empty window.
-                  const total = getTimelinesEventsCount(newLTimelines);
-                  return { start: Math.max(total - limit, 0), end: total };
-                })()
-              : { start: newStart, end: newEnd }
-            : { ...currentTimeline.range };
+        let newRange: { start: number; end: number };
+        if (offsetRange <= 0) {
+          newRange = { ...currentTimeline.range };
+        } else if (newStart === newEnd) {
+          // Zero-width range (happens on initial empty thread timeline): show the
+          // most recent events instead of preserving an empty window.
+          const total = getTimelinesEventsCount(newLTimelines);
+          newRange = { start: Math.max(total - limit, 0), end: total };
+        } else {
+          newRange = { start: newStart, end: newEnd };
+        }
         return { linkedTimelines: newLTimelines, range: newRange };
       });
     };
@@ -446,13 +446,31 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
   }, [room, onRefresh]);
 };
 
+const getEmptyTimeline = () => ({
+  range: { start: 0, end: 0 },
+  linkedTimelines: [],
+});
+
+// Walk backward from liveTimeline staying within the same EventTimelineSet (thread-safe).
+// Prevents getLinkedTimelines() from crossing into the room's main timeline chain.
+const getThreadTimelines = (liveTimeline: EventTimeline): EventTimeline[] => {
+  const threadSet = liveTimeline.getTimelineSet();
+  const timelines: EventTimeline[] = [liveTimeline];
+  let cur = liveTimeline.getNeighbouringTimeline(Direction.Backward);
+  while (cur && cur.getTimelineSet() === threadSet) {
+    timelines.unshift(cur);
+    cur = cur.getNeighbouringTimeline(Direction.Backward);
+  }
+  return timelines;
+};
+
 const getInitialTimeline = (room: Room, threadId?: string) => {
   if (threadId) {
     // Prefer SDK Thread — it tracks server-fetched history (via
     // createThreadsTimelineSets / fetchRoomThreads) and ongoing replies.
     const sdkThread = room.getThread(threadId);
     if (sdkThread) {
-      const liveTimeline = sdkThread.liveTimeline;
+      const { liveTimeline } = sdkThread;
       const events = liveTimeline.getEvents();
       if (events.length > 0) {
         return {
@@ -486,13 +504,13 @@ const getInitialTimeline = (room: Room, threadId?: string) => {
 
     const syntheticSet = new EventTimelineSet(room, {});
     const syntheticTimeline = syntheticSet.getLiveTimeline();
-    for (const e of threadEvents) {
+    threadEvents.forEach((e) => {
       try {
         syntheticSet.addEventToTimeline(e, syntheticTimeline, { toStartOfTimeline: false, addToState: false });
-      } catch (_) {
+      } catch {
         /* skip */
       }
-    }
+    });
     const evLen = syntheticTimeline.getEvents().length;
     return {
       linkedTimelines: [syntheticTimeline],
@@ -508,24 +526,6 @@ const getInitialTimeline = (room: Room, threadId?: string) => {
       end: evLength,
     },
   };
-};
-
-const getEmptyTimeline = () => ({
-  range: { start: 0, end: 0 },
-  linkedTimelines: [],
-});
-
-// Walk backward from liveTimeline staying within the same EventTimelineSet (thread-safe).
-// Prevents getLinkedTimelines() from crossing into the room's main timeline chain.
-const getThreadTimelines = (liveTimeline: EventTimeline): EventTimeline[] => {
-  const threadSet = liveTimeline.getTimelineSet();
-  const timelines: EventTimeline[] = [liveTimeline];
-  let cur = liveTimeline.getNeighbouringTimeline(Direction.Backward);
-  while (cur && cur.getTimelineSet() === threadSet) {
-    timelines.unshift(cur);
-    cur = cur.getNeighbouringTimeline(Direction.Backward);
-  }
-  return timelines;
 };
 
 const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
@@ -670,15 +670,20 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   // return its absolute index, or undefined if it's no longer there. Cheap
   // linear scan: linkedTimelines is small (≤ a handful) and each timeline
   // typically holds a few hundred events.
-  const findAbsIndex = (eventId: string): number | undefined => {
+  const findAbsIndex = (targetEventId: string): number | undefined => {
     let base = 0;
-    for (const tm of timeline.linkedTimelines) {
+    let absIndex: number | undefined;
+    timeline.linkedTimelines.some((tm) => {
       const evts = tm.getEvents();
-      const idx = evts.findIndex((e) => e.getId() === eventId);
-      if (idx !== -1) return base + idx;
+      const idx = evts.findIndex((e) => e.getId() === targetEventId);
+      if (idx !== -1) {
+        absIndex = base + idx;
+        return true;
+      }
       base += evts.length;
-    }
-    return undefined;
+      return false;
+    });
+    return absIndex;
   };
   if (anchorRef.current) {
     const currentIdx = findAbsIndex(anchorRef.current.eventId);
@@ -949,7 +954,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   // Stay at bottom when virtual keyboard opens/closes (mobile)
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!vv) return;
+    if (!vv) return undefined;
     const handler = () => {
       requestAnimationFrame(() => {
         const scrollElement = getScrollElement();
