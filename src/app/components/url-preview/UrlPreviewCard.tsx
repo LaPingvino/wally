@@ -51,8 +51,8 @@ const scheduleIdle = (): Promise<void> =>
     else setTimeout(resolve, 0);
   });
 
-export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
-  ({ url, ts, ...props }, ref) => {
+export const UrlPreviewCard = as<'div', { url: string; ts: number; preview?: IPreviewUrlResponse }>(
+  ({ url, ts, preview, ...props }, ref) => {
     const mx = useMatrixClient();
     const useAuthentication = useMediaAuthentication();
     const [viewer, setViewer] = useState(false);
@@ -105,13 +105,15 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
     );
 
     useEffect(() => {
-      if (!onScreen) return;
+      // A bundled preview (from the event content) needs no fetch — skip it entirely.
+      if (preview || !onScreen) return;
       // useAsync re-throws after updating state; suppress unhandled-rejection warnings since the
       // error is already handled by the AsyncStatus.Error branch.
       loadPreview().catch(() => undefined);
-    }, [onScreen, loadPreview]);
+    }, [preview, onScreen, loadPreview]);
 
-    if (previewStatus.status === AsyncStatus.Error) return null;
+    // Only the FETCH path hides itself on error. A bundled preview always renders.
+    if (!preview && previewStatus.status === AsyncStatus.Error) return null;
 
     const renderContent = (prev: IPreviewUrlResponse) => {
       const thumbUrl = mxcUrlToHttp(
@@ -176,7 +178,9 @@ export const UrlPreviewCard = as<'div', { url: string; ts: number }>(
 
     return (
       <UrlPreview {...props} ref={setRefs}>
-        {previewStatus.status === AsyncStatus.Success ? (
+        {preview ? (
+          renderContent(preview)
+        ) : previewStatus.status === AsyncStatus.Success ? (
           renderContent(previewStatus.data)
         ) : (
           <Box grow="Yes" alignItems="Center" justifyContent="Center">

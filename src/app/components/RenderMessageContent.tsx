@@ -1,5 +1,5 @@
 import React from 'react';
-import { MsgType } from 'matrix-js-sdk';
+import { MsgType, IPreviewUrlResponse } from 'matrix-js-sdk';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Opts } from 'linkifyjs';
 import { config } from 'folds';
@@ -59,6 +59,29 @@ export function RenderMessageContent({
   outlineAttachment,
 }: RenderMessageContentProps) {
   const renderUrlsPreview = (urls: string[]) => {
+    // Prefer previews the event already carries (MSC4095 `m.url_previews` /
+    // unstable `com.beeper.linkpreviews` — e.g. mautrix WhatsApp Channel posts).
+    // Rendering those directly skips the per-link getUrlPreview fetch, which both
+    // avoids the connection-pool storm AND fixes the "spinner → fetch errors →
+    // card vanishes" flicker on links the shim can't resolve (e.g. shortlinks).
+    // Same keys as MatrixEvent.getUrlPreviews(); read from content as we hold getContent here.
+    const content = getContent<Record<string, unknown>>();
+    const bundled = (content['m.url_previews'] ?? content['com.beeper.linkpreviews']) as
+      | IPreviewUrlResponse[]
+      | undefined;
+    if (Array.isArray(bundled)) {
+      const cards = bundled.filter((p) => p && (p['og:image'] || p['og:title']));
+      if (cards.length > 0) {
+        return (
+          <UrlPreviewHolder>
+            {cards.map((p, i) => {
+              const matched = typeof p['matched_url'] === 'string' ? p['matched_url'] : '';
+              return <UrlPreviewCard key={matched || i} url={matched} ts={ts} preview={p} />;
+            })}
+          </UrlPreviewHolder>
+        );
+      }
+    }
     const filteredUrls = urls.filter((url) => !testMatrixTo(url));
     if (filteredUrls.length === 0) return undefined;
     return (
