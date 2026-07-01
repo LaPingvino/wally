@@ -12,7 +12,7 @@ type ModeStyle = {
 
 const MODE_STYLE: Record<SyncMode, ModeStyle> = {
   sliding_healthy: { label: 'Full sliding sync', variant: 'Success' },
-  sliding_degraded: { label: 'Sliding sync · poll fallback (server bug?)', variant: 'Warning' },
+  sliding_degraded: { label: 'Sliding sync · slow wake measured (diagnostic)', variant: 'Warning' },
   no_sliding: { label: 'Classic sync', variant: 'SurfaceVariant' },
 };
 

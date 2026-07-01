@@ -351,7 +351,9 @@ const useTimelinePagination = (
         })
       );
       if (err) {
-        // TODO: handle pagination error.
+        // Unlatch so the next scroll retries — leaving `fetching` true here wedged
+        // pagination for the rest of the room visit after one network blip.
+        fetching = false;
         return;
       }
       const fetchedTimeline =
