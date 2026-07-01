@@ -6,6 +6,17 @@ export async function markAsRead(mx: MatrixClient, roomId: string, privateReceip
   const userId = mx.getUserId();
   if (!userId) return;
 
+  // Never receipt off a stale paint. Under sliding sync a cache-rehydrated room's
+  // timeline is last session's snapshot until its first live response; receipting
+  // its "newest" event can move the marker BACKWARDS past what another device
+  // already read — the classic "read messages come back as unread", for every
+  // device. Display already gates on liveness (getUnreadInfo); the SEND side must
+  // too. The SDK's monotonic-receipt guard backstops this, but don't even try.
+  const liveSynced = (
+    mx as unknown as { isRoomLiveSynced?: (id: string) => boolean }
+  ).isRoomLiveSynced?.(roomId);
+  if (liveSynced === false) return;
+
   const timeline = room.getLiveTimeline().getEvents();
   const readEventId = room.getEventReadUpTo(userId);
 
