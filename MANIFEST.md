@@ -7,13 +7,6 @@ stack at `codeberg.org/lapingvino/wally` (branch `main`).
 
 ## Full patches (every commit in the family applied cleanly)
 
-- `emoji-font.patch` — independent (applies to vanilla cinny)
-- `pronouns.patch` — independent (applies to vanilla cinny)
-- `threads.patch` — independent (applies to vanilla cinny)
-- `issue-widget.patch` — independent (applies to vanilla cinny)
-- `themes.patch` — independent (applies to vanilla cinny)
-- `markdown-parser.patch` — independent (applies to vanilla cinny)
-- `invite-resilience.patch` — independent (applies to vanilla cinny)
 - `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience
 - `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, invite-resilience, issue-tracker
 
@@ -41,4 +34,4 @@ set; fetch the per-family branch on Codeberg:
 - `per-msg-profiles` — `git fetch codeberg per-msg-profiles`
 - `settings-sync` — `git fetch codeberg settings-sync`
 
-_Generated 2026-07-01T22:44:41Z_
+_Generated 2026-07-02T16:37:58Z_
