@@ -1904,6 +1904,14 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
   let isPrevRendered = false;
   let newDivider = false;
   let dayDivider = false;
+  // We flatten `linkedTimelines` by absolute index with no cross-segment dedup — the SDK owns
+  // uniqueness. But a `limited` sliding response calls resetLiveTimeline(), which can leave the
+  // same event in two neighbouring EventTimeline segments; the flatten then emits it twice, and
+  // since every row keys on `key={mEvent.getId()}` that's a duplicate React key → thrashing
+  // reconciliation (duplicated rows, remounting URL-preview cards stuck on their spinner, and a
+  // scroll anchor that can't settle). Collapse it at the single point where all overlap cases
+  // meet: keep the first occurrence of each id per render, skip the rest.
+  const renderedEventIds = new Set<string>();
   const eventRenderer = (item: number) => {
     const [eventTimeline, baseIndex] = getTimelineAndBaseIndex(timeline.linkedTimelines, item);
     if (!eventTimeline) return null;
@@ -1912,6 +1920,11 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
     const mEventId = mEvent?.getId();
 
     if (!mEvent || !mEventId) return null;
+
+    // Duplicate across overlapping segments — already rendered above; skip without disturbing
+    // grouping/divider state (prevEvent is left untouched, exactly as for any other skipped index).
+    if (renderedEventIds.has(mEventId)) return null;
+    renderedEventIds.add(mEventId);
 
     const eventSender = mEvent.getSender();
     if (eventSender && ignoredUsersSet.has(eventSender)) {
@@ -2085,31 +2098,31 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
             (messageLayout === MessageLayout.Compact ? (
               <>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase ref={observeBackAnchor}>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
               </>
             ) : (
               <>
                 <MessageBase>
-                  <DefaultPlaceholder key={getItems().length} />
+                  <DefaultPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <DefaultPlaceholder key={getItems().length} />
+                  <DefaultPlaceholder />
                 </MessageBase>
                 <MessageBase ref={observeBackAnchor}>
-                  <DefaultPlaceholder key={getItems().length} />
+                  <DefaultPlaceholder />
                 </MessageBase>
               </>
             ))}
@@ -2120,31 +2133,31 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: 
             (messageLayout === MessageLayout.Compact ? (
               <>
                 <MessageBase ref={observeFrontAnchor}>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <CompactPlaceholder key={getItems().length} />
+                  <CompactPlaceholder />
                 </MessageBase>
               </>
             ) : (
               <>
                 <MessageBase ref={observeFrontAnchor}>
-                  <DefaultPlaceholder key={getItems().length} />
+                  <DefaultPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <DefaultPlaceholder key={getItems().length} />
+                  <DefaultPlaceholder />
                 </MessageBase>
                 <MessageBase>
-                  <DefaultPlaceholder key={getItems().length} />
+                  <DefaultPlaceholder />
                 </MessageBase>
               </>
             ))}
