@@ -40,6 +40,7 @@ import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-sc
 import { combine } from '@atlaskit/pragmatic-drag-and-drop/combine';
 import FocusTrap from 'focus-trap-react';
 import {
+  useChildSpaceScopeFactory,
   useOrphanSpaces,
   useRecursiveChildScopeFactory,
   useSpaceChildren,
@@ -69,9 +70,11 @@ import {
   SidebarItems,
   TSidebarItem,
   makeCinnySpacesContent,
+  makeSubspaceFoldersContent,
   parseSidebar,
   sidebarItemWithout,
   useSidebarItems,
+  useSubspaceFolders,
 } from '../../../hooks/useSidebarItems';
 import { AccountDataEvent } from '../../../../types/matrix/accountData';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
@@ -85,7 +88,7 @@ import { copyToClipboard } from '../../../utils/dom';
 import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoom } from '../../../plugins/matrix-to';
 import { getViaServers } from '../../../plugins/via-servers';
-import { getRoomAvatarUrl } from '../../../utils/room';
+import { getRoomAvatarUrl, isSpace } from '../../../utils/room';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -119,6 +122,23 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
       useRecursiveChildScopeFactory(mx, roomToParents)
     );
     const unread = useRoomsUnread(allChild, roomToUnreadAtom);
+
+    const childSpaces = useSpaceChildren(
+      allRoomsAtom,
+      room.roomId,
+      useChildSpaceScopeFactory(mx, roomToParents)
+    );
+    const subspaceFolders = useSubspaceFolders();
+    const asSubspaceFolder = subspaceFolders.includes(room.roomId);
+
+    const handleToggleSubspaceFolder = () => {
+      const content = makeSubspaceFoldersContent(mx, room.roomId, !asSubspaceFolder);
+      mx.setAccountData(AccountDataEvent.CinnySpaces, content).catch((err) =>
+        // eslint-disable-next-line no-console
+        console.error('sidebar: failed to persist subspace-folder toggle', err)
+      );
+      requestClose();
+    };
 
     const handleMarkAsRead = () => {
       allChild.forEach((childRoomId) => markAsRead(mx, childRoomId, hideActivity));
@@ -169,6 +189,19 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(
               Mark as Read
             </Text>
           </MenuItem>
+          {childSpaces.length > 0 && (
+            <MenuItem
+              size="300"
+              radii="300"
+              onClick={handleToggleSubspaceFolder}
+              after={<Icon size="100" src={Icons.Category} filled={asSubspaceFolder} />}
+              aria-pressed={asSubspaceFolder}
+            >
+              <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+                {asSubspaceFolder ? 'Subspaces as Headers' : 'Subspaces in Sidebar'}
+              </Text>
+            </MenuItem>
+          )}
           {onUnpin && (
             <MenuItem
               size="300"
@@ -522,7 +555,13 @@ function OpenedSpaceFolder({ folder, onClose, children }: OpenedSpaceFolderProps
     >
       <SidebarFolderDropTarget ref={aboveTargetRef} position="Top" />
       <SidebarAvatar size="300">
-        <IconButton data-id={folder.id} size="300" variant="Background" onClick={onClose} aria-label="Collapse folder">
+        <IconButton
+          data-id={folder.id}
+          size="300"
+          variant="Background"
+          onClick={onClose}
+          aria-label="Collapse folder"
+        >
           <Icon size="400" src={Icons.ChevronTop} filled />
         </IconButton>
       </SidebarAvatar>
@@ -571,7 +610,13 @@ function ClosedSpaceFolder({
         >
           <SidebarItemTooltip tooltip={disabled ? undefined : tooltipName}>
             {(tooltipRef) => (
-              <SidebarFolder data-id={folder.id} as="button" ref={tooltipRef} aria-label={`${tooltipName} folder, collapsed`} onClick={onOpen}>
+              <SidebarFolder
+                data-id={folder.id}
+                as="button"
+                ref={tooltipRef}
+                aria-label={`${tooltipName} folder, collapsed`}
+                onClick={onOpen}
+              >
                 {folder.content.map((sId) => {
                   const space = mx.getRoom(sId);
                   if (!space) return null;
@@ -615,7 +660,39 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
   const roomToParents = useAtomValue(roomToParentsAtom);
   const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
   const [sidebarItems, localEchoSidebarItem] = useSidebarItems(orphanSpaces);
+  const allRooms = useAtomValue(allRoomsAtom);
+  const subspaceFolders = useSubspaceFolders();
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
+
+  // Direct, joined child spaces of `parentId`, sorted A–Z for a stable order.
+  const childSpacesOf = useCallback(
+    (parentId: string): string[] =>
+      allRooms
+        .filter((rId) => isSpace(mx.getRoom(rId)) && !!roomToParents.get(rId)?.has(parentId))
+        .sort((a, b) => (mx.getRoom(a)?.name ?? '').localeCompare(mx.getRoom(b)?.name ?? '')),
+    [allRooms, mx, roomToParents]
+  );
+
+  // Display list: any TOP-LEVEL space entry that the user put in "subspace folder" mode
+  // is replaced by a derived (display-only) folder of the parent + its direct subspaces.
+  // Spaces already inside a manual folder are left untouched (only string entries are
+  // transformed), and a space with no subspaces stays a normal icon.
+  const displayItems = useMemo<SidebarItems>(() => {
+    if (subspaceFolders.length === 0) return sidebarItems;
+    const folderSet = new Set(subspaceFolders);
+    return sidebarItems.map((item) => {
+      if (typeof item !== 'string' || !folderSet.has(item)) return item;
+      const children = childSpacesOf(item);
+      if (children.length === 0) return item;
+      const derived: ISidebarFolder = {
+        id: item,
+        name: mx.getRoom(item)?.name,
+        content: [item, ...children],
+        derivedFromSpace: item,
+      };
+      return derived;
+    });
+  }, [sidebarItems, subspaceFolders, childSpacesOf, mx]);
   const [openedFolder, setOpenedFolder] = useAtom(useOpenedSidebarFolderAtom());
   const [draggingItem, setDraggingItem] = useState<SidebarDraggable>();
 
@@ -624,6 +701,16 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
     setDraggingItem,
     useCallback(
       (item, containerItem, instructionType) => {
+        // Derived subspace folders are display-only and rebuilt from the space hierarchy;
+        // ignore any drag that would try to reorder them or move spaces into/out of them,
+        // so we never persist their synthetic content into `in.cinny.spaces`.
+        if (
+          (typeof item === 'object' && item.folder.derivedFromSpace) ||
+          (typeof containerItem === 'object' && containerItem.folder.derivedFromSpace)
+        ) {
+          return;
+        }
+
         const newItems: SidebarItems = [];
 
         const matchDest = (sI: TSidebarItem, dI: SidebarDraggable): boolean => {
@@ -803,12 +890,12 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
     [mx, sidebarItems, orphanSpaces, localEchoSidebarItem]
   );
 
-  if (sidebarItems.length === 0) return null;
+  if (displayItems.length === 0) return null;
   return (
     <>
       <SidebarStackSeparator />
       <SidebarStack>
-        {sidebarItems.map((item) => {
+        {displayItems.map((item) => {
           if (typeof item === 'object') {
             if (openedFolder.has(item.id)) {
               return (
@@ -829,7 +916,11 @@ export function SpaceTabs({ scrollRef }: SpaceTabsProps) {
                             ? draggingItem.spaceId === space.roomId
                             : false
                         }
-                        onUnpin={orphanSpaces.includes(space.roomId) ? undefined : handleUnpin}
+                        onUnpin={
+                          item.derivedFromSpace || orphanSpaces.includes(space.roomId)
+                            ? undefined
+                            : handleUnpin
+                        }
                       />
                     );
                   })}
