@@ -66,10 +66,14 @@ import {
 } from '../../../utils/sort';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
-import { useSubspaceFolders } from '../../../hooks/useSidebarItems';
+import { makeSubspaceFoldersContent, useSubspaceFolders } from '../../../hooks/useSidebarItems';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
-import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
+import {
+  useChildSpaceScopeFactory,
+  useRecursiveChildScopeFactory,
+  useSpaceChildren,
+} from '../../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
 import { markAsRead } from '../../../utils/notifications';
 import { useRoomsUnread } from '../../../state/hooks/unread';
@@ -79,6 +83,7 @@ import { copyToClipboard } from '../../../utils/dom';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { useStateEvent } from '../../../hooks/useStateEvent';
 import { Membership, StateEvent } from '../../../../types/matrix/room';
+import { AccountDataEvent } from '../../../../types/matrix/accountData';
 import { stopPropagation } from '../../../utils/keyboard';
 import { getMatrixToRoom } from '../../../plugins/matrix-to';
 import { getViaServers } from '../../../plugins/via-servers';
@@ -128,6 +133,23 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
     useRecursiveChildScopeFactory(mx, roomToParents)
   );
   const unread = useRoomsUnread(allChild, roomToUnreadAtom);
+
+  const childSpaces = useSpaceChildren(
+    allRoomsAtom,
+    room.roomId,
+    useChildSpaceScopeFactory(mx, roomToParents)
+  );
+  const subspaceFolders = useSubspaceFolders();
+  const asSubspaceFolder = subspaceFolders.includes(room.roomId);
+
+  const handleToggleSubspaceFolder = () => {
+    const content = makeSubspaceFoldersContent(mx, room.roomId, !asSubspaceFolder);
+    mx.setAccountData(AccountDataEvent.CinnySpaces, content).catch((err) =>
+      // eslint-disable-next-line no-console
+      console.error('sidebar: failed to persist subspace-folder toggle', err)
+    );
+    requestClose();
+  };
 
   const handleMarkAsRead = () => {
     allChild.forEach((childRoomId) => markAsRead(mx, childRoomId, hideActivity));
@@ -256,6 +278,19 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
             Space Settings
           </Text>
         </MenuItem>
+        {childSpaces.length > 0 && (
+          <MenuItem
+            onClick={handleToggleSubspaceFolder}
+            size="300"
+            after={<Icon size="100" src={Icons.Category} filled={asSubspaceFolder} />}
+            radii="300"
+            aria-pressed={asSubspaceFolder}
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              {asSubspaceFolder ? 'Subspaces as Headers' : 'Subspaces in Sidebar'}
+            </Text>
+          </MenuItem>
+        )}
         {developerTools && (
           <MenuItem
             onClick={handleOpenTimeline}
