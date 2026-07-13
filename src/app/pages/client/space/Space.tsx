@@ -57,9 +57,16 @@ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { useRoomName } from '../../../hooks/useRoomMeta';
 import { HierarchyItem, useSpaceJoinedHierarchy } from '../../../hooks/useSpaceHierarchy';
-import { factoryRoomIdByActivity, factoryRoomIdByAtoZ, factoryRoomIdByUnreadFirst, byOrderKey, byTsOldToNew } from '../../../utils/sort';
+import {
+  factoryRoomIdByActivity,
+  factoryRoomIdByAtoZ,
+  factoryRoomIdByUnreadFirst,
+  byOrderKey,
+  byTsOldToNew,
+} from '../../../utils/sort';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useFavoriteRooms } from '../../../hooks/useFavoriteRooms';
+import { useSubspaceFolders } from '../../../hooks/useSidebarItems';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
@@ -483,7 +490,7 @@ export function Space() {
     [mx, roomSortOrder, roomToUnread]
   );
 
-  const hierarchy = useSpaceJoinedHierarchy(
+  const rawHierarchy = useSpaceJoinedHierarchy(
     space.roomId,
     getRoom,
     useCallback(
@@ -499,6 +506,21 @@ export function Space() {
     ),
     sortSpaceRoomItems
   );
+
+  // When this space is shown as a subspace-folder in the sidebar, its direct subspaces are
+  // split out into their own sidebar entries. Filter them (and their nested rooms) out of the
+  // space's own room list so we only show the top-level space's own rooms — no redundant
+  // nested headers duplicating what's now in the sidebar.
+  const subspaceFolders = useSubspaceFolders();
+  const asSubspaceFolder = subspaceFolders.includes(space.roomId);
+  const hierarchy = useMemo((): HierarchyItem[] => {
+    if (!asSubspaceFolder) return rawHierarchy;
+    return rawHierarchy.filter((item) => {
+      if (item.roomId === space.roomId) return true; // keep the root "Rooms" header
+      if ('space' in item) return false; // drop split-out subspace headers
+      return item.parentId === space.roomId; // keep only rooms directly under this space
+    });
+  }, [rawHierarchy, asSubspaceFolder, space.roomId]);
 
   // Virtual "Unread" group: when roomSortOrder==='unread' and the space has sub-spaces,
   // hoist all unread rooms from every sub-space into a single group at the top.
@@ -543,15 +565,11 @@ export function Space() {
     // Remaining hierarchy: keep all space headers + read rooms.
     // Sub-space headers whose rooms are all in the virtual group still appear —
     // rooms will bounce back to them once read.
-    const remaining = hierarchy.filter(
-      (item) => 'space' in item && item.space ? true : !unreadSet.has(item.roomId)
+    const remaining = hierarchy.filter((item) =>
+      'space' in item && item.space ? true : !unreadSet.has(item.roomId)
     );
 
-    return [
-      virtualHeader,
-      ...(virtualGroupClosed ? [] : sortedUnread),
-      ...remaining,
-    ];
+    return [virtualHeader, ...(virtualGroupClosed ? [] : sortedUnread), ...remaining];
   }, [hierarchy, roomSortOrder, roomToUnread, mx, space.roomId, closedCategories]);
 
   const virtualizer = useVirtualizer({
@@ -586,9 +604,7 @@ export function Space() {
   const allSpaceFavoriteRoomIds = useFavoriteRooms(allSpaceRoomIds);
   const spaceFavoriteRoomIds = useMemo(() => {
     if (!hideReadRooms) return allSpaceFavoriteRoomIds;
-    return allSpaceFavoriteRoomIds.filter(
-      (rId) => roomToUnread.has(rId) || rId === selectedRoomId
-    );
+    return allSpaceFavoriteRoomIds.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
   }, [hideReadRooms, allSpaceFavoriteRoomIds, roomToUnread, selectedRoomId]);
   const SPACE_FAVORITES_CATEGORY_ID = makeNavCategoryId(space.roomId, '__favorites__');
 
@@ -598,7 +614,8 @@ export function Space() {
   // in this space's URL, not whatever orphan parent navigateRoom would
   // pick (which can route to a different sidebar bucket entirely).
   const navigateInBucket = useCallback(
-    (roomId: string) => navigate(getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId))),
+    (roomId: string) =>
+      navigate(getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId))),
     [navigate, mx, spaceIdOrAlias]
   );
   // Publish the displayed list to useNavigateUnread + drain any
@@ -614,7 +631,10 @@ export function Space() {
     selectedRoomId,
     virtualizer,
     onNavigate: (roomId) => navigateRoom(roomId),
-    onTypeChar: (key) => { setSearchInitialChar(key); setSearchModal(true); },
+    onTypeChar: (key) => {
+      setSearchInitialChar(key);
+      setSearchModal(true);
+    },
   });
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
@@ -698,7 +718,10 @@ export function Space() {
                       selected={selectedRoomId === roomId}
                       focused={false}
                       optionId={`room-option-fav-${roomId}`}
-                      linkPath={getSpaceRoomPath(spaceIdOrAlias, getCanonicalAliasOrRoomId(mx, roomId))}
+                      linkPath={getSpaceRoomPath(
+                        spaceIdOrAlias,
+                        getCanonicalAliasOrRoomId(mx, roomId)
+                      )}
                       notificationMode={getRoomNotificationMode(notificationPreferences, roomId)}
                     />
                   );
@@ -717,7 +740,7 @@ export function Space() {
               }}
             >
               {virtualizer.getVirtualItems().map((vItem) => {
-                const { roomId } = hierarchy[vItem.index] ?? {};
+                const { roomId } = displayHierarchy[vItem.index] ?? {};
                 const room = mx.getRoom(roomId);
                 if (!room) return null;
 
@@ -730,7 +753,9 @@ export function Space() {
                       key={vItem.key}
                       ref={virtualizer.measureElement}
                     >
-                      <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
+                      <div
+                        style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}
+                      >
                         <NavCategoryHeader>
                           <RoomNavCategoryButton
                             data-category-id={categoryId}
@@ -756,7 +781,10 @@ export function Space() {
                       showAvatar={mDirects.has(roomId)}
                       direct={mDirects.has(roomId)}
                       linkPath={getToLink(roomId)}
-                      notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
+                      notificationMode={getRoomNotificationMode(
+                        notificationPreferences,
+                        room.roomId
+                      )}
                     />
                   </VirtualTile>
                 );
