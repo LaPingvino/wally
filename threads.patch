@@ -1,0 +1,930 @@
+diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
+index f88ccf938..94eee2a8f 100644
+--- a/src/app/features/room/RoomInput.tsx
++++ b/src/app/features/room/RoomInput.tsx
+@@ -123,9 +123,10 @@ interface RoomInputProps {
+   fileDropContainerRef: RefObject<HTMLElement>;
+   roomId: string;
+   room: Room;
++  threadId?: string;
+ }
+ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+-  ({ editor, fileDropContainerRef, roomId, room }, ref) => {
++  ({ editor, fileDropContainerRef, roomId, room, threadId }, ref) => {
+     const mx = useMatrixClient();
+     const useAuthentication = useMediaAuthentication();
+     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
+@@ -139,8 +140,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+     const powerLevels = usePowerLevelsContext();
+     const creators = useRoomCreators(room);
+ 
+-    const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
+-    const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(roomId));
++    const draftKey = threadId ? `${roomId}_thread_${threadId}` : roomId;
++    const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(draftKey));
++    const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(draftKey));
+     const replyUserID = replyDraft?.userId;
+ 
+     const powerLevelTags = usePowerLevelTags(room, powerLevels);
+@@ -360,7 +362,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+         content.format = 'org.matrix.custom.html';
+         content.formatted_body = formattedBody;
+       }
+-      if (replyDraft) {
++      if (threadId) {
++        // Sending a thread reply (thread-native, no fallback to main timeline)
++        content['m.relates_to'] = {
++          rel_type: RelationType.Thread,
++          event_id: threadId,
++          ...(replyDraft
++            ? {
++                'm.in_reply_to': { event_id: replyDraft.eventId },
++                is_falling_back: false,
++              }
++            : {}),
++        };
++      } else if (replyDraft) {
+         content['m.relates_to'] = {
+           'm.in_reply_to': {
+             event_id: replyDraft.eventId,
+@@ -377,7 +391,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
+       resetEditorHistory(editor);
+       setReplyDraft(undefined);
+       sendTypingStatus(false);
+-    }, [mx, roomId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
++    }, [mx, roomId, threadId, editor, replyDraft, sendTypingStatus, setReplyDraft, isMarkdown, commands]);
+ 
+     const handleKeyDown: KeyboardEventHandler = useCallback(
+       (evt) => {
+diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
+index 39d7e50a6..ec1fb60b1 100644
+--- a/src/app/features/room/RoomTimeline.tsx
++++ b/src/app/features/room/RoomTimeline.tsx
+@@ -229,6 +229,7 @@ type RoomTimelineProps = {
+   eventId?: string;
+   roomInputRef: RefObject<HTMLElement>;
+   editor: Editor;
++  threadId?: string;
+ };
+ 
+ const PAGINATION_LIMIT = 80;
+@@ -273,7 +274,8 @@ const useTimelinePagination = (
+   mx: MatrixClient,
+   timeline: Timeline,
+   setTimeline: Dispatch<SetStateAction<Timeline>>,
+-  limit: number
++  limit: number,
++  getTimelinesForTop?: (top: EventTimeline) => EventTimeline[]
+ ) => {
+   const timelineRef = useRef(timeline);
+   timelineRef.current = timeline;
+@@ -290,7 +292,9 @@ const useTimelinePagination = (
+       const topTimeline = linkedTimelines[0];
+       const timelineMatch = (mt: EventTimeline) => (t: EventTimeline) => t === mt;
+ 
+-      const newLTimelines = getLinkedTimelines(topTimeline);
++      const newLTimelines = getTimelinesForTop
++        ? getTimelinesForTop(topTimeline)
++        : getLinkedTimelines(topTimeline);
+       const topTmIndex = newLTimelines.findIndex(timelineMatch(topTimeline));
+       const topAddedTm = topTmIndex === -1 ? [] : newLTimelines.slice(0, topTmIndex);
+ 
+@@ -298,16 +302,22 @@ const useTimelinePagination = (
+         timelineToEventsCount(newLTimelines[topTmIndex]) - timelinesEventsCount[0];
+       const offsetRange = getTimelinesEventsCount(topAddedTm) + (backwards ? topTmAddedEvt : 0);
+ 
+-      setTimeline((currentTimeline) => ({
+-        linkedTimelines: newLTimelines,
+-        range:
++      setTimeline((currentTimeline) => {
++        const newStart = currentTimeline.range.start + offsetRange;
++        const newEnd = currentTimeline.range.end + offsetRange;
++        const newRange =
+           offsetRange > 0
+-            ? {
+-                start: currentTimeline.range.start + offsetRange,
+-                end: currentTimeline.range.end + offsetRange,
+-              }
+-            : { ...currentTimeline.range },
+-      }));
++            ? newStart === newEnd
++              ? (() => {
++                  // Zero-width range (happens on initial empty thread timeline):
++                  // show the most recent events instead of preserving an empty window.
++                  const total = getTimelinesEventsCount(newLTimelines);
++                  return { start: Math.max(total - limit, 0), end: total };
++                })()
++              : { start: newStart, end: newEnd }
++            : { ...currentTimeline.range };
++        return { linkedTimelines: newLTimelines, range: newRange };
++      });
+     };
+ 
+     return async (backwards: boolean) => {
+@@ -358,12 +368,43 @@ const useTimelinePagination = (
+         recalibratePagination(lTimelines, timelinesEventsCount, backwards);
+       }
+     };
+-  }, [mx, alive, setTimeline, limit]);
++  }, [mx, alive, setTimeline, limit, getTimelinesForTop]);
+   return handleTimelinePagination;
+ };
+ 
+-const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void) => {
++const useLiveEventArrive = (
++  room: Room,
++  onArrive: (mEvent: MatrixEvent) => void,
++  threadId?: string
++) => {
+   useEffect(() => {
++    if (threadId) {
++      // Thread mode: listen on the room's live timeline and filter for this thread.
++      // We rely entirely on the main room timeline — no SDK Thread objects needed.
++      // Both stable ('m.thread') and unstable ('io.element.thread') rel_types are handled.
++      const handleRoomTimeline: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
++        mEvent,
++        _eventRoom,
++        _toStartOfTimeline,
++        _removed,
++        data
++      ) => {
++        if (!data.liveEvent) return;
++        const rel = mEvent.getContent()?.['m.relates_to'];
++        if (
++          rel?.rel_type !== 'm.thread' &&
++          rel?.rel_type !== 'io.element.thread'
++        ) return;
++        if (rel?.event_id !== threadId) return;
++        if (mEvent.isRedacted()) return;
++        onArrive(mEvent);
++      };
++      room.on(RoomEvent.Timeline, handleRoomTimeline);
++      return () => {
++        room.off(RoomEvent.Timeline, handleRoomTimeline);
++      };
++    }
++    // Room mode: listen for live timeline events
+     const handleTimelineEvent: EventTimelineSetHandlerMap[RoomEvent.Timeline] = (
+       mEvent,
+       eventRoom,
+@@ -385,7 +426,7 @@ const useLiveEventArrive = (room: Room, onArrive: (mEvent: MatrixEvent) => void)
+       room.removeListener(RoomEvent.Timeline, handleTimelineEvent);
+       room.removeListener(RoomEvent.Redaction, handleRedaction);
+     };
+-  }, [room, onArrive]);
++  }, [room, threadId, onArrive]);
+ };
+ 
+ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+@@ -402,7 +443,59 @@ const useLiveTimelineRefresh = (room: Room, onRefresh: () => void) => {
+   }, [room, onRefresh]);
+ };
+ 
+-const getInitialTimeline = (room: Room) => {
++const getInitialTimeline = (room: Room, threadId?: string) => {
++  if (threadId) {
++    // Prefer SDK Thread — it tracks server-fetched history (via
++    // createThreadsTimelineSets / fetchRoomThreads) and ongoing replies.
++    const sdkThread = room.getThread(threadId);
++    if (sdkThread) {
++      const liveTimeline = sdkThread.liveTimeline;
++      const events = liveTimeline.getEvents();
++      if (events.length > 0) {
++        return {
++          linkedTimelines: getThreadTimelines(liveTimeline),
++          range: { start: 0, end: events.length },
++        };
++      }
++    }
++
++    // Fallback: synthesize from a main-timeline scan. Kept while we work
++    // upstream SDK fixes that make the SDK path reliable for every case:
++    //   - Thread.canContain rejects stable 'm.thread' rel_type when the
++    //     server lacks MSC3856 (fix lives in our matrix-js-sdk fork).
++    //   - resetLiveTimeline can wipe SDK Thread state.
++    // When this branch stops triggering in production we can delete it.
++    const mainTimeline = room.getUnfilteredTimelineSet().getLiveTimeline();
++    const threadEvents = mainTimeline.getEvents().filter((e) => {
++      if (e.isRedacted()) return false;
++      const rel = e.getContent()?.['m.relates_to'];
++      return (
++        (rel?.rel_type === 'm.thread' || rel?.rel_type === 'io.element.thread') &&
++        rel?.event_id === threadId
++      );
++    });
++    if (threadEvents.length === 0) return getEmptyTimeline();
++
++    console.warn(
++      `[threads] Falling back to synthetic timeline for ${threadId} ` +
++        `(SDK Thread missing or empty; ${threadEvents.length} event(s) recovered from main timeline)`
++    );
++
++    const syntheticSet = new EventTimelineSet(room, {});
++    const syntheticTimeline = syntheticSet.getLiveTimeline();
++    for (const e of threadEvents) {
++      try {
++        syntheticSet.addEventToTimeline(e, syntheticTimeline, { toStartOfTimeline: false, addToState: false });
++      } catch (_) {
++        /* skip */
++      }
++    }
++    const evLen = syntheticTimeline.getEvents().length;
++    return {
++      linkedTimelines: [syntheticTimeline],
++      range: { start: 0, end: evLen },
++    };
++  }
+   const linkedTimelines = getLinkedTimelines(getLiveTimeline(room));
+   const evLength = getTimelinesEventsCount(linkedTimelines);
+   return {
+@@ -419,6 +512,19 @@ const getEmptyTimeline = () => ({
+   linkedTimelines: [],
+ });
+ 
++// Walk backward from liveTimeline staying within the same EventTimelineSet (thread-safe).
++// Prevents getLinkedTimelines() from crossing into the room's main timeline chain.
++const getThreadTimelines = (liveTimeline: EventTimeline): EventTimeline[] => {
++  const threadSet = liveTimeline.getTimelineSet();
++  const timelines: EventTimeline[] = [liveTimeline];
++  let cur = liveTimeline.getNeighbouringTimeline(Direction.Backward);
++  while (cur && cur.getTimelineSet() === threadSet) {
++    timelines.unshift(cur);
++    cur = cur.getNeighbouringTimeline(Direction.Backward);
++  }
++  return timelines;
++};
++
+ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+   const readUptoEventId = room.getEventReadUpTo(room.client.getUserId() ?? '');
+   if (!readUptoEventId) return undefined;
+@@ -431,7 +537,7 @@ const getRoomUnreadInfo = (room: Room, scrollTo = false) => {
+   };
+ };
+ 
+-export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimelineProps) {
++export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }: RoomTimelineProps) {
+   const mx = useMatrixClient();
+   const useAuthentication = useMediaAuthentication();
+   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+@@ -454,7 +560,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+   const ignoredUsersList = useIgnoredUsers();
+   const ignoredUsersSet = useMemo(() => new Set(ignoredUsersList), [ignoredUsersList]);
+ 
+-  const setReplyDraft = useSetAtom(roomIdToReplyDraftAtomFamily(room.roomId));
++  const replyDraftKey = threadId ? `${room.roomId}_thread_${threadId}` : room.roomId;
++  const setReplyDraft = useSetAtom(roomIdToReplyDraftAtomFamily(replyDraftKey));
+   const powerLevels = usePowerLevelsContext();
+   const creators = useRoomCreators(room);
+ 
+@@ -487,7 +594,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+ 
+   const imagePackRooms: Room[] = useImagePackRooms(room.roomId, roomToParents);
+ 
+-  const [unreadInfo, setUnreadInfo] = useState(() => getRoomUnreadInfo(room, true));
++  const [unreadInfo, setUnreadInfo] = useState(() => threadId ? undefined : getRoomUnreadInfo(room, true));
+   const readUptoEventIdRef = useRef<string>();
+   if (unreadInfo) {
+     readUptoEventIdRef.current = unreadInfo.readUptoEventId;
+@@ -536,11 +643,17 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+   const parseMemberEvent = useMemberEventParser();
+ 
+   const [timeline, setTimeline] = useState<Timeline>(() =>
+-    eventId ? getEmptyTimeline() : getInitialTimeline(room)
++    eventId ? getEmptyTimeline() : getInitialTimeline(room, threadId)
+   );
+   const eventsLength = getTimelinesEventsCount(timeline.linkedTimelines);
++  // Thread mode: the "live" end is always the last timeline in our synthetic linked list.
++  // This keeps liveTimelineLinked=true without depending on SDK Thread objects.
++  const currentLiveTimeline = threadId
++    ? timeline.linkedTimelines[timeline.linkedTimelines.length - 1]
++    : getLiveTimeline(room);
+   const liveTimelineLinked =
+-    timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === getLiveTimeline(room);
++    !!currentLiveTimeline &&
++    timeline.linkedTimelines[timeline.linkedTimelines.length - 1] === currentLiveTimeline;
+   const canPaginateBack =
+     typeof timeline.linkedTimelines[0]?.getPaginationToken(Direction.Backward) === 'string';
+   const rangeAtStart = timeline.range.start === 0;
+@@ -552,7 +665,8 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+     mx,
+     timeline,
+     setTimeline,
+-    PAGINATION_LIMIT
++    PAGINATION_LIMIT,
++    threadId ? getThreadTimelines : undefined
+   );
+ 
+   const getScrollElement = useCallback(() => scrollRef.current, []);
+@@ -598,10 +712,10 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+     ),
+     useCallback(() => {
+       if (!alive()) return;
+-      setTimeline(getInitialTimeline(room));
++      setTimeline(getInitialTimeline(room, threadId));
+       scrollToBottomRef.current.count += 1;
+       scrollToBottomRef.current.smooth = false;
+-    }, [alive, room])
++    }, [alive, room, threadId])
+   );
+ 
+   useLiveEventArrive(
+@@ -612,11 +726,18 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+         // keep paginating timeline and conditionally mark as read
+         // otherwise we update timeline without paginating
+         // so timeline can be updated with evt like: edits, reactions etc
++        if (threadId) {
++          // Thread mode: rebuild synthetic timeline from main room timeline
++          // (the new event is now in the main timeline, so getInitialTimeline picks it up).
++          setTimeline(getInitialTimeline(room, threadId));
++          if (atBottomRef.current) {
++            scrollToBottomRef.current.count += 1;
++            scrollToBottomRef.current.smooth = true;
++          }
++          return;
++        }
+         if (atBottomRef.current) {
+           if (document.hasFocus() && (!unreadInfo || mEvt.getSender() === mx.getUserId())) {
+-            // Check if the document is in focus (user is actively viewing the app),
+-            // and either there are no unread messages or the latest message is from the current user.
+-            // If either condition is met, trigger the markAsRead function to send a read receipt.
+             requestAnimationFrame(() => markAsRead(mx, mEvt.getRoomId()!, hideActivity));
+           }
+ 
+@@ -641,8 +762,9 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+           setUnreadInfo(getRoomUnreadInfo(room));
+         }
+       },
+-      [mx, room, unreadInfo, hideActivity]
+-    )
++      [mx, room, threadId, unreadInfo, hideActivity]
++    ),
++    threadId
+   );
+ 
+   const handleOpenEvent = useCallback(
+@@ -678,12 +800,33 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+   useLiveTimelineRefresh(
+     room,
+     useCallback(() => {
+-      if (liveTimelineLinked) {
+-        setTimeline(getInitialTimeline(room));
+-      }
+-    }, [room, liveTimelineLinked])
++      // Always reinitialize: TimelineRefresh signals the SDK replaced the live
++      // timeline chain, so any stored range/indices against the old chain are
++      // invalid regardless of liveTimelineLinked state.
++      setTimeline(getInitialTimeline(room, threadId));
++      setAtBottom(true);
++      scrollToBottomRef.current.count += 1;
++      scrollToBottomRef.current.smooth = false;
++    }, [room, threadId])
+   );
+ 
++  // Self-heal: if the range fell behind the live end while at the bottom
++  // (e.g. events arrived between a TimelineRefresh and re-render), snap back.
++  useEffect(() => {
++    if (liveTimelineLinked && !rangeAtEnd && atBottom) {
++      setTimeline(getInitialTimeline(room, threadId));
++    }
++  }, [liveTimelineLinked, rangeAtEnd, atBottom, room, threadId]);
++
++  // Thread mode: if liveTimelineLinked becomes false (synthetic timeline ref went stale),
++  // re-scan main room timeline to rebuild. No dependency on SDK Thread objects.
++  useEffect(() => {
++    if (!threadId || liveTimelineLinked) return;
++    const newTimeline = getInitialTimeline(room, threadId);
++    if (newTimeline.linkedTimelines.length === 0) return;
++    setTimeline(newTimeline);
++  }, [room, threadId, liveTimelineLinked]);
++
+   // Stay at bottom when room editor resize
+   useResizeObserver(
+     useMemo(() => {
+@@ -887,7 +1030,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor }: RoomTimeli
+     if (eventId) {
+       navigateRoom(room.roomId, undefined, { replace: true });
+     }
+-    setTimeline(getInitialTimeline(room));
++    setTimeline(getInitialTimeline(room, threadId));
+     scrollToBottomRef.current.count += 1;
+     scrollToBottomRef.current.smooth = false;
+   };
+diff --git a/src/app/features/room/ThreadView.tsx b/src/app/features/room/ThreadView.tsx
+new file mode 100644
+index 000000000..9a6463842
+--- /dev/null
++++ b/src/app/features/room/ThreadView.tsx
+@@ -0,0 +1,170 @@
++/**
++ * ThreadView — renders a single Matrix thread using the same RoomTimeline + RoomInput
++ * infrastructure as the main room view.
++ *
++ * Thread events come from the SDK Thread when one exists for this thread root.
++ * RoomTimeline falls back to a main-timeline scan when the SDK Thread is
++ * missing or empty; that fallback is kept while we work upstream SDK fixes.
++ *
++ * Layout:
++ *   ┌─ root event header ─────────────────────────────┐
++ *   │  <sender>: <message preview>                     │
++ *   └──────────────────────────────────────────────────┘
++ *   ┌─ RoomTimeline (thread replies) ─────────────────┐
++ *   │  (full message rendering, pagination, etc.)      │
++ *   └──────────────────────────────────────────────────┘
++ *   ┌─ RoomInput (sends thread replies) ──────────────┐
++ *   └──────────────────────────────────────────────────┘
++ */
++import React, { useRef } from 'react';
++import { Box, Text, config, toRem } from 'folds';
++import { Room, MatrixEvent } from 'matrix-js-sdk';
++import { useEditor } from '../../components/editor';
++import { RoomTimeline } from './RoomTimeline';
++import { RoomInput } from './RoomInput';
++import { Page } from '../../components/page';
++import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
++import { getMemberDisplayName } from '../../utils/room';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { useSetting } from '../../state/hooks/settings';
++import { settingsAtom } from '../../state/settings';
++
++// ── Root event header ──────────────────────────────────────────────────────────
++
++function getEventBodyPreview(event: MatrixEvent): string {
++  const content = event.getContent();
++  const body: string = content.body ?? content.formatted_body ?? '';
++  // Strip reply-to block ("> <@user:server> message\n\n")
++  const stripped = body.replace(/^> .*\n+/gm, '').trim();
++  return stripped.length > 200 ? `${stripped.slice(0, 200)}…` : stripped;
++}
++
++type RootEventHeaderProps = {
++  room: Room;
++  rootEvent: MatrixEvent;
++};
++function RootEventHeader({ room, rootEvent }: RootEventHeaderProps) {
++  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
++
++  const senderId = rootEvent.getSender() ?? '';
++  const displayName =
++    getMemberDisplayName(room, senderId) ?? getMxIdLocalPart(senderId) ?? senderId;
++
++  const member = room.getMember(senderId);
++  const avatarMxc = member?.getMxcAvatarUrl();
++  const avatarUrl = avatarMxc
++    ? mxcUrlToHttp(mx, avatarMxc, useAuthentication, 28, 28, 'crop') ?? undefined
++    : undefined;
++
++  const preview = getEventBodyPreview(rootEvent);
++  const ts = rootEvent.getDate();
++  const timeStr = ts
++    ? ts.toLocaleTimeString([], {
++        hour: '2-digit',
++        minute: '2-digit',
++        hour12: !hour24Clock,
++      })
++    : '';
++
++  return (
++    <Box
++      direction="Row"
++      gap="200"
++      style={{
++        padding: `${config.space.S200} ${config.space.S300}`,
++        borderBottom: `1px solid var(--bg-surface-border)`,
++        flexShrink: 0,
++        background: 'var(--bg-surface-low)',
++      }}
++    >
++      {/* Avatar */}
++      <div
++        style={{
++          width: toRem(28),
++          height: toRem(28),
++          borderRadius: '50%',
++          background: 'var(--bg-secondary)',
++          flexShrink: 0,
++          overflow: 'hidden',
++          display: 'flex',
++          alignItems: 'center',
++          justifyContent: 'center',
++          marginTop: toRem(2),
++        }}
++      >
++        {avatarUrl ? (
++          <img
++            src={avatarUrl}
++            alt={displayName}
++            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
++          />
++        ) : (
++          <Text size="T200">{displayName[0]?.toUpperCase() ?? '?'}</Text>
++        )}
++      </div>
++
++      {/* Content */}
++      <Box direction="Column" grow="Yes" style={{ minWidth: 0 }}>
++        <Box gap="200" alignItems="Baseline">
++          <Text size="T300" style={{ fontWeight: 600 }} truncate>
++            {displayName}
++          </Text>
++          {timeStr && (
++            <Text size="T200" priority="300">
++              {timeStr}
++            </Text>
++          )}
++        </Box>
++        <Text size="T300" priority="300" style={{ opacity: 0.8, wordBreak: 'break-word' }}>
++          {preview || <em>Message</em>}
++        </Text>
++      </Box>
++    </Box>
++  );
++}
++
++// ── ThreadView ─────────────────────────────────────────────────────────────────
++
++type ThreadViewProps = {
++  room: Room;
++  threadRootId: string;
++};
++
++export function ThreadView({ room, threadRootId }: ThreadViewProps) {
++  const inputRef = useRef<HTMLDivElement>(null);
++  const viewRef = useRef<HTMLDivElement>(null);
++  const editor = useEditor();
++
++  // RoomTimeline pulls events from the SDK Thread when present, with a
++  // main-timeline-scan fallback for the cases the SDK still mishandles.
++  const rootEvent = room.findEventById(threadRootId) ?? null;
++
++  return (
++    <Page ref={viewRef}>
++      {rootEvent && <RootEventHeader room={room} rootEvent={rootEvent} />}
++      <Box grow="Yes" direction="Column">
++        <RoomTimeline
++          room={room}
++          roomInputRef={inputRef}
++          editor={editor}
++          threadId={threadRootId}
++        />
++      </Box>
++      <Box shrink="No" direction="Column">
++        <div style={{ padding: `0 ${config.space.S400}` }}>
++          <RoomInput
++            room={room}
++            roomId={room.roomId}
++            threadId={threadRootId}
++            editor={editor}
++            fileDropContainerRef={viewRef}
++            ref={inputRef}
++          />
++        </div>
++      </Box>
++    </Page>
++  );
++}
+diff --git a/src/app/features/room/ThreadsDrawer.tsx b/src/app/features/room/ThreadsDrawer.tsx
+new file mode 100644
+index 000000000..d0950d495
+--- /dev/null
++++ b/src/app/features/room/ThreadsDrawer.tsx
+@@ -0,0 +1,337 @@
++import React, { KeyboardEventHandler, useCallback, useEffect, useState } from 'react';
++import { Room, MatrixEvent, RoomEvent, ThreadEvent, RelationType } from 'matrix-js-sdk';
++import {
++  Box,
++  Spinner,
++  Text,
++  Icon,
++  Icons,
++  IconButton,
++  config,
++  toRem,
++} from 'folds';
++import { isKeyHotkey } from 'is-hotkey';
++import { atom, useAtom } from 'jotai';
++import { useMatrixClient } from '../../hooks/useMatrixClient';
++import { getMxIdLocalPart, mxcUrlToHttp } from '../../utils/matrix';
++import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
++import { ThreadView } from './ThreadView';
++
++// Global atom — set this to any event ID to open that event's thread in the drawer.
++// Timeline messages, issue board, etc. can all import and set this atom.
++export const openThreadIdAtom = atom<string | null>(null);
++
++function getDisplayName(userId: string, room: Room): string {
++  const member = room.getMember(userId);
++  return member?.rawDisplayName || getMxIdLocalPart(userId) || userId;
++}
++
++type AvatarCircleProps = {
++  displayName: string;
++  avatarUrl?: string;
++};
++function AvatarCircle({ displayName, avatarUrl }: AvatarCircleProps) {
++  const letter = displayName[0]?.toUpperCase() ?? '?';
++  return (
++    <div
++      style={{
++        width: toRem(28),
++        height: toRem(28),
++        borderRadius: '50%',
++        background: 'var(--bg-secondary)',
++        flexShrink: 0,
++        overflow: 'hidden',
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'center',
++      }}
++    >
++      {avatarUrl ? (
++        <img
++          src={avatarUrl}
++          alt={displayName}
++          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
++        />
++      ) : (
++        <Text size="T200">{letter}</Text>
++      )}
++    </div>
++  );
++}
++
++// Unified thread representation — works with both SDK Thread objects and timeline fallback.
++type ThreadEntry = {
++  id: string;
++  rootEvent: MatrixEvent;
++  replyCount: number;
++};
++
++type ThreadItemProps = {
++  entry: ThreadEntry;
++  room: Room;
++  onClick: () => void;
++  tabIndex?: number;
++};
++function ThreadItem({ entry, room, onClick, tabIndex: tabIndexProp }: ThreadItemProps) {
++  const { rootEvent, replyCount } = entry;
++  const mx = useMatrixClient();
++  const useAuthentication = useMediaAuthentication();
++  const senderId = rootEvent.getSender() ?? '';
++  const displayName = getDisplayName(senderId, room);
++  const member = room.getMember(senderId);
++  const mxcUrl = member?.getMxcAvatarUrl();
++  const avatarUrl = mxcUrl
++    ? mxcUrlToHttp(mx, mxcUrl, useAuthentication, 28, 28, 'crop') ?? undefined
++    : undefined;
++  const body: string = rootEvent.getContent().body ?? '';
++  const preview = body.length > 80 ? `${body.slice(0, 80)}…` : body;
++
++  return (
++    <button
++      type="button"
++      onClick={onClick}
++      data-thread-id={entry.id}
++      tabIndex={tabIndexProp ?? 0}
++      style={{
++        display: 'flex',
++        gap: config.space.S200,
++        padding: `${config.space.S200} ${config.space.S300}`,
++        width: '100%',
++        textAlign: 'left',
++        background: 'none',
++        border: 'none',
++        cursor: 'pointer',
++        borderBottom: '1px solid var(--bg-surface-border)',
++        color: 'inherit',
++      }}
++    >
++      <AvatarCircle displayName={displayName} avatarUrl={avatarUrl} />
++      <Box direction="Column" gap="100" style={{ flex: 1, minWidth: 0 }}>
++        <Text size="T300" style={{ fontWeight: 600 }} truncate>
++          {displayName}
++        </Text>
++        <Text size="T200" priority="300" truncate>
++          {preview || '…'}
++        </Text>
++        <Text size="T200" priority="300">
++          {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
++        </Text>
++      </Box>
++    </button>
++  );
++}
++
++type ThreadsDrawerProps = {
++  room: Room;
++  onClose: () => void;
++  width?: number;
++  isFullWidth?: boolean;
++  onToggleFullWidth?: () => void;
++};
++
++export function ThreadsDrawer({ room, onClose, width = 320, isFullWidth, onToggleFullWidth }: ThreadsDrawerProps) {
++  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
++  const [openThreadId, setOpenThreadId] = useAtom(openThreadIdAtom);
++  const mx = useMatrixClient();
++
++  // SDK threads (via createThreadsTimelineSets / fetchRoomThreads) are the
++  // source of truth. The main-timeline scan exists only as a fallback for
++  // cases the SDK currently mishandles — when it stops adding entries in
++  // production we can drop it. See the warn below.
++  const getThreads = useCallback((): ThreadEntry[] => {
++    const entries = new Map<string, ThreadEntry>();
++
++    for (const t of room.getThreads()) {
++      if (!t.rootEvent) continue;
++      entries.set(t.id, { id: t.id, rootEvent: t.rootEvent, replyCount: t.length });
++    }
++
++    // Fallback: scan main timeline for m.thread relations the SDK didn't surface.
++    let fallbackAdded = 0;
++    const timeline = room.getUnfilteredTimelineSet().getLiveTimeline().getEvents();
++    const replyMap = new Map<string, number>();
++    for (const evt of timeline) {
++      if (evt.isRedacted()) continue;
++      const rel = evt.getContent()['m.relates_to'] as
++        | { rel_type?: string; event_id?: string }
++        | undefined;
++      if (rel?.rel_type === RelationType.Thread && rel.event_id) {
++        replyMap.set(rel.event_id, (replyMap.get(rel.event_id) ?? 0) + 1);
++      }
++    }
++    for (const [rootId, count] of replyMap.entries()) {
++      if (entries.has(rootId)) continue;
++      const rootEvent = room.findEventById(rootId);
++      if (!rootEvent || rootEvent.isRedacted()) continue;
++      entries.set(rootId, { id: rootId, rootEvent, replyCount: count });
++      fallbackAdded += 1;
++    }
++    if (fallbackAdded > 0) {
++      console.warn(
++        `[threads] Fallback added ${fallbackAdded} thread(s) the SDK didn't surface for ${room.roomId}`
++      );
++    }
++
++    return [...entries.values()].sort((a, b) => b.rootEvent.getTs() - a.rootEvent.getTs());
++  }, [room]);
++
++  const [threads, setThreads] = useState<ThreadEntry[]>(getThreads);
++  const [loading, setLoading] = useState(true);
++  const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
++
++  const handleThreadListKeyDown: KeyboardEventHandler<HTMLDivElement> = useCallback(
++    (evt) => {
++      const target = evt.target as HTMLElement;
++      const threadId = target.getAttribute('data-thread-id');
++      if (!threadId) return;
++      const isDown = isKeyHotkey('arrowdown', evt as unknown as KeyboardEvent);
++      const isUp = isKeyHotkey('arrowup', evt as unknown as KeyboardEvent);
++      const isHome = isKeyHotkey('home', evt as unknown as KeyboardEvent);
++      const isEnd = isKeyHotkey('end', evt as unknown as KeyboardEvent);
++      if (!isDown && !isUp && !isHome && !isEnd) return;
++      evt.preventDefault();
++      const buttons = Array.from(
++        (evt.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-thread-id]')
++      );
++      const currentIdx = buttons.findIndex((b) => b.getAttribute('data-thread-id') === threadId);
++      let nextIdx: number;
++      if (isHome) nextIdx = 0;
++      else if (isEnd) nextIdx = buttons.length - 1;
++      else if (isDown) nextIdx = Math.min(currentIdx + 1, buttons.length - 1);
++      else nextIdx = Math.max(currentIdx - 1, 0);
++      const next = buttons[nextIdx];
++      if (next) {
++        setFocusedThreadId(next.getAttribute('data-thread-id'));
++        next.focus();
++      }
++    },
++    []
++  );
++
++  // Fetch all historical threads on mount via SDK (works when server supports MSC3856).
++  // Falls back to showing whatever the timeline scan or local sync state has.
++  useEffect(() => {
++    setLoading(true);
++    room.createThreadsTimelineSets()
++      .then(() => room.fetchRoomThreads())
++      .then(() => {
++        setThreads(getThreads());
++        setLoading(false);
++      })
++      .catch((err) => {
++        console.warn('ThreadsDrawer: failed to fetch threads', err);
++        setThreads(getThreads());
++        setLoading(false);
++      });
++  }, [room, getThreads]);
++
++  // Keep list updated as new threads arrive or get replies
++  useEffect(() => {
++    const update = () => setThreads(getThreads());
++    room.on(ThreadEvent.New as any, update);
++    room.on(ThreadEvent.NewReply as any, update);
++    room.on(RoomEvent.Timeline as any, update);
++    return () => {
++      room.off(ThreadEvent.New as any, update);
++      room.off(ThreadEvent.NewReply as any, update);
++      room.off(RoomEvent.Timeline as any, update);
++    };
++  }, [room, getThreads]);
++
++  // Open a specific thread when requested via atom (from timeline, issue board, etc.)
++  useEffect(() => {
++    if (openThreadId) {
++      setSelectedThreadId(openThreadId);
++      setOpenThreadId(null);
++    }
++  }, [openThreadId, setOpenThreadId]);
++
++  return (
++    <Box
++      id="cinny-threads-panel"
++      role="region"
++      aria-label="Threads panel"
++      tabIndex={-1}
++      direction="Column"
++      style={
++        isFullWidth
++          ? { flex: 1, minWidth: 0, overflow: 'hidden' }
++          : { width: `${width}px`, flexShrink: 0, overflow: 'hidden' }
++      }
++    >
++      <Box
++        alignItems="Center"
++        justifyContent="SpaceBetween"
++        style={{
++          padding: `${config.space.S200} ${config.space.S300}`,
++          borderBottom: '1px solid var(--bg-surface-border)',
++          flexShrink: 0,
++        }}
++      >
++        <Box alignItems="Center" gap="200">
++          {selectedThreadId && (
++            <IconButton fill="None" size="300" onClick={() => setSelectedThreadId(null)} aria-label="Back to thread list">
++              <Icon size="200" src={Icons.ArrowLeft} />
++            </IconButton>
++          )}
++          <Text size="H5" as="h2">{selectedThreadId ? 'Thread' : 'Threads'}</Text>
++        </Box>
++        {onToggleFullWidth && (
++          <IconButton
++            fill="None"
++            size="300"
++            onClick={onToggleFullWidth}
++            aria-label={isFullWidth ? 'Side by side' : 'Full width'}
++          >
++            <Icon size="200" src={isFullWidth ? Icons.ArrowGoRight : Icons.ArrowGoLeft} />
++          </IconButton>
++        )}
++        <IconButton fill="None" size="300" onClick={onClose} aria-label="Close threads panel">
++          <Icon size="200" src={Icons.Cross} />
++        </IconButton>
++      </Box>
++
++      {selectedThreadId ? (
++        <Box grow="Yes" direction="Column" style={{ overflow: 'hidden' }}>
++          <ThreadView room={room} threadRootId={selectedThreadId} />
++        </Box>
++      ) : (
++        <div
++          style={{ flex: 1, overflowY: 'auto' }}
++          onKeyDown={handleThreadListKeyDown}
++          onFocus={(evt) => {
++            const threadId = (evt.target as HTMLElement).getAttribute('data-thread-id');
++            if (threadId) setFocusedThreadId(threadId);
++          }}
++        >
++          {loading ? (
++            <Box style={{ padding: config.space.S400 }} justifyContent="Center" alignItems="Center" gap="300">
++              <Spinner size="300" variant="Secondary" />
++              <Text size="T300" priority="300">Loading threads…</Text>
++            </Box>
++          ) : threads.length === 0 ? (
++            <Box style={{ padding: config.space.S400 }} justifyContent="Center">
++              <Text size="T300" priority="300">
++                No threads in this room yet
++              </Text>
++            </Box>
++          ) : (
++            threads.map((entry, idx) => (
++              <ThreadItem
++                key={entry.id}
++                entry={entry}
++                room={room}
++                onClick={() => setSelectedThreadId(entry.id)}
++                tabIndex={
++                  focusedThreadId
++                    ? entry.id === focusedThreadId ? 0 : -1
++                    : idx === 0 ? 0 : -1
++                }
++              />
++            ))
++          )}
++        </div>
++      )}
++    </Box>
++  );
++}
