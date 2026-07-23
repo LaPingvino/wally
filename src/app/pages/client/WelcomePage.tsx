@@ -49,7 +49,7 @@ export function WelcomePage() {
               <span>
                 A stubborn Matrix client.{' '}
                 <a
-                  href="https://codeberg.org/lapingvino/cinny/releases"
+                  href="https://github.com/LaPingvino/wally/releases"
                   target="_blank"
                   rel="noreferrer noopener"
                 >
@@ -63,7 +63,7 @@ export function WelcomePage() {
                 <Box grow="Yes" style={{ maxWidth: toRem(300) }} direction="Column" gap="300">
                   <Button
                     as="a"
-                    href="https://codeberg.org/lapingvino/cinny"
+                    href="https://github.com/LaPingvino/wally"
                     target="_blank"
                     rel="noreferrer noopener"
                     before={<Icon size="200" src={Icons.Code} />}
@@ -98,7 +98,7 @@ export function WelcomePage() {
                     <li key={name}>
                       <Text size="T300">
                         <a
-                          href={`https://codeberg.org/lapingvino/cinny/src/branch/${name}`}
+                          href={`https://github.com/LaPingvino/wally/tree/${name}`}
                           target="_blank"
                           rel="noreferrer noopener"
                         >

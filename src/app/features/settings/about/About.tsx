@@ -54,7 +54,7 @@ export function About({ requestClose }: AboutProps) {
                   <Box gap="200" wrap="Wrap">
                     <Button
                       as="a"
-                      href="https://codeberg.org/lapingvino/cinny"
+                      href="https://github.com/LaPingvino/wally"
                       rel="noreferrer noopener"
                       target="_blank"
                       variant="Secondary"

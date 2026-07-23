@@ -87,7 +87,7 @@ Content:
         }</pre>
         <p style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
           Or use the{' '}
-          <a href="https://codeberg.org/lapingvino/cinny" style={{ color: '#1976d2' }}>Wally</a>'s
+          <a href="https://github.com/LaPingvino/wally" style={{ color: '#1976d2' }}>Wally</a>'s
           built-in "Enable widget" button in the issue board toolbar.
           Also see{' '}
           <a href="https://github.com/lapingvino/matrix-issue-widget" style={{ color: '#1976d2' }}>matrix-issue-widget on GitHub</a>.
