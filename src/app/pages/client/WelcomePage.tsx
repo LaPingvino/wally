@@ -4,7 +4,7 @@ import { Page, PageHero, PageHeroSection } from '../../components/page';
 import WallySVG from '../../../../public/res/svg/wally.svg';
 import { APP_VERSION } from '../../version';
 
-// Sync the entries here with PATCH_DEFS in cinny-web-git/push-to-github.sh.
+// Sync the entries here with PATCH_DEFS in wally-web-git/push-to-github.sh.
 // Status reflects the latest audit: "full" applies cleanly to vanilla cinny
 // (or to the listed dep chain), "partial" ships the cleanly-applicable subset
 // of a coupled family, "branch" means no isolated patch is producible \u2014 fetch
