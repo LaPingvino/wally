@@ -232,7 +232,7 @@ export const clearLoginData = async () => {
 // If the OS discards the tab and wipes localStorage (Chromebooks), we can
 // restore credentials from this backup without requiring a re-login.
 // ---------------------------------------------------------------------------
-const SESSION_BACKUP_CACHE = 'cinny-session-backup';
+const SESSION_BACKUP_CACHE = 'wally-session-backup';
 const SESSION_BACKUP_KEY = '/_session';
 
 const SESSION_LS_KEYS = [
@@ -375,7 +375,7 @@ export const repairIDBAndReload = async () => {
 // serialise/deserialise primitives moved.
 // ---------------------------------------------------------------------------
 
-const CHECKPOINT_CACHE = 'cinny-crypto-checkpoint';
+const CHECKPOINT_CACHE = 'wally-crypto-checkpoint';
 const CHECKPOINT_TS_KEY = 'wally_checkpoint_ts';
 
 // matches RUST_SDK_STORE_PREFIX in matrix-js-sdk/lib/rust-crypto/constants.js
@@ -404,7 +404,7 @@ async function getCryptoDbNames(): Promise<string[]> {
       // matrix-js-sdk's own healthcheck DBs — transient, never useful.
       if (n.startsWith('checkIndexedDBSupport-')) continue;
       // Our own probe DBs.
-      if (n.startsWith('cinny-startup-probe-')) continue;
+      if (n.startsWith('wally-startup-probe-')) continue;
       if (n.startsWith('idb-health-')) continue;
       if (
         n.includes('matrix-sdk-crypto') ||

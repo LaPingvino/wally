@@ -11,10 +11,6 @@ enableMapSet();
 import './index.css';
 
 import { trimTrailingSlash } from './app/utils/common';
-import { runStorageMigration } from './app/migrateStorage';
-
-// Migrate cinny_*/cinny-* storage keys before anything reads them.
-runStorageMigration();
 
 import App from './app/pages/App';
 

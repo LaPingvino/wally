@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import classNames from 'classnames';
 import * as css from './auth/styles.css';
 import * as PatternsCss from '../styles/Patterns.css';
-import CinnySVG from '../../../public/res/svg/cinny.svg';
+import WallySVG from '../../../public/res/svg/wally.svg';
 import { AuthFooter } from './auth/AuthFooter';
 import { GuestCallView } from '../features/call/GuestCallView';
 
@@ -122,7 +122,7 @@ export function GuestJoin() {
         <Box direction="Column" className={css.AuthCard}>
           <Header className={css.AuthHeader} size="600" variant="Surface">
             <Box grow="Yes" direction="Row" gap="300" alignItems="Center">
-              <img className={css.AuthLogo} src={CinnySVG} alt="Wally Logo" />
+              <img className={css.AuthLogo} src={WallySVG} alt="Wally Logo" />
               <Text size="H3" as="h1">
                 Wally
               </Text>

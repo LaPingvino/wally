@@ -29,7 +29,6 @@ export interface Settings {
   isMarkdown: boolean;
   editorToolbar: boolean;
   emojiFont: EmojiFont;
-  twitterEmoji?: boolean; // deprecated, kept for migration
   pageZoom: number;
   hideActivity: boolean;
   // Global default for m.notice routing. Per-room override in room
@@ -167,12 +166,6 @@ export const getSettings = () => {
   const settings = localStorage.getItem(STORAGE_KEY);
   if (settings === null) return defaultSettings;
   const parsed = JSON.parse(settings) as Settings;
-
-  // Migrate old twitterEmoji boolean to new emojiFont enum
-  if (parsed.twitterEmoji !== undefined && parsed.emojiFont === undefined) {
-    parsed.emojiFont = parsed.twitterEmoji ? EmojiFont.Twemoji : EmojiFont.System;
-    delete parsed.twitterEmoji;
-  }
 
   return {
     ...defaultSettings,

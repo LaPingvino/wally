@@ -14,7 +14,7 @@
 //
 // Cap at MAX_EVENTS so the buffer can't grow unbounded.
 
-const DIAG_CACHE = 'cinny-diagnostics';
+const DIAG_CACHE = 'wally-diagnostics';
 const DIAG_KEY = '/events';
 const MAX_EVENTS = 200;
 
@@ -341,7 +341,7 @@ async function probeCryptoIdbs(): Promise<{ db: string; reason: string } | null>
     //   - matrix-js-sdk's healthcheck DBs (created+deleted in a tight
     //     loop during init; opening one as it's being deleted times out
     //     and triggers a false-positive auto-repair).
-    if (info.name.startsWith('cinny-startup-probe-')) continue;
+    if (info.name.startsWith('wally-startup-probe-')) continue;
     if (info.name.startsWith('idb-health-')) continue;
     if (info.name.startsWith('checkIndexedDBSupport-')) continue;
     // eslint-disable-next-line no-await-in-loop
@@ -356,7 +356,7 @@ async function probeCryptoIdbs(): Promise<{ db: string; reason: string } | null>
  * Catches the case where IDB itself is completely wedged (rare).
  */
 async function probeFreshIdb(): Promise<boolean> {
-  const dbName = `cinny-startup-probe-${Date.now()}`;
+  const dbName = `wally-startup-probe-${Date.now()}`;
   return new Promise<boolean>((resolve) => {
     let settled = false;
     const settle = (ok: boolean) => {
@@ -441,7 +441,7 @@ export function exposeDiagnosticsOnWindow(): void {
   fn.state = async () => {
     let checkpointBlobs: string[] = [];
     try {
-      const cache = await caches.open('cinny-crypto-checkpoint');
+      const cache = await caches.open('wally-crypto-checkpoint');
       const keys = await cache.keys();
       checkpointBlobs = keys.map((r) => r.url);
     } catch (e) {

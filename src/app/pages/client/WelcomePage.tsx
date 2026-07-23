@@ -1,10 +1,10 @@
 import React from 'react';
 import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
 import { Page, PageHero, PageHeroSection } from '../../components/page';
-import CinnySVG from '../../../../public/res/svg/cinny.svg';
+import WallySVG from '../../../../public/res/svg/wally.svg';
 import { APP_VERSION } from '../../version';
 
-// Sync the entries here with PATCH_DEFS in cinny-web-git/push-to-codeberg.sh.
+// Sync the entries here with PATCH_DEFS in cinny-web-git/push-to-github.sh.
 // Status reflects the latest audit: "full" applies cleanly to vanilla cinny
 // (or to the listed dep chain), "partial" ships the cleanly-applicable subset
 // of a coupled family, "branch" means no isolated patch is producible \u2014 fetch
@@ -43,7 +43,7 @@ export function WelcomePage() {
       >
         <PageHeroSection>
           <PageHero
-            icon={<img width="70" height="70" src={CinnySVG} alt="Wally Logo" />}
+            icon={<img width="70" height="70" src={WallySVG} alt="Wally Logo" />}
             title="Welcome to Wally"
             subTitle={
               <span>
