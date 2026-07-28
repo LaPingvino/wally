@@ -60,6 +60,7 @@ import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { StateEvent } from '../../../../types/matrix/room';
 import { testBadWords } from '../../../plugins/bad-words';
+import { getViaServers } from '../../../plugins/via-servers';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useIgnoredUsers } from '../../../hooks/useIgnoredUsers';
 import { useReportRoomSupported } from '../../../hooks/useReportRoomSupported';
@@ -67,6 +68,34 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 
 const COMPACT_CARD_WIDTH = 548;
+
+/**
+ * Accept an invite.
+ *
+ * Two things a bare `mx.joinRoom(roomId)` gets wrong, both of which show up as
+ * "accepting invites works against one server but not another":
+ *
+ * 1. Joining by ROOM ID is not self-describing — the server must be told where the
+ *    room lives. Some servers resolve it from the invite they already hold, others
+ *    return M_NOT_FOUND. So always send via servers (getViaServers now always
+ *    yields at least the room's origin server).
+ * 2. A join issued the instant the invite lands can beat the inviting server's own
+ *    membership settling, which comes back as "not invited". One retry after a beat
+ *    turns that race into a join; a second failure is real and propagates.
+ */
+const joinInvite = async (mx: MatrixClient, room: Room, roomId: string): Promise<void> => {
+  const viaServers = getViaServers(room);
+  const attempt = (): Promise<unknown> =>
+    mx.joinRoom(roomId, viaServers.length > 0 ? { viaServers } : undefined);
+  try {
+    await attempt();
+  } catch {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1500);
+    });
+    await attempt();
+  }
+};
 
 type InviteData = {
   room: Room;
@@ -170,7 +199,7 @@ function InviteCard({
         ? guessDmRoomUserId(invite.room, userId)
         : undefined;
 
-      await mx.joinRoom(invite.roomId);
+      await joinInvite(mx, invite.room, invite.roomId);
       if (dmUserId) {
         await addRoomIdToMDirect(mx, invite.roomId, dmUserId);
       }
@@ -420,7 +449,7 @@ function KnownInvites({
   const [acceptAllStatus, acceptAll] = useAsyncCallback(
     useCallback(async () => {
       await rateLimitedActions(invites, async (invite) => {
-        await mx.joinRoom(invite.roomId);
+        await joinInvite(mx, invite.room, invite.roomId);
         if (invite.isDirect) {
           const dmUserId = guessDmRoomUserId(invite.room, userId);
           if (dmUserId) await addRoomIdToMDirect(mx, invite.roomId, dmUserId);

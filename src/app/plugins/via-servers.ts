@@ -54,6 +54,14 @@ export const getViaServers = (room: Room): string[] => {
     return serverToPop;
   };
 
+  // The room id's own domain: the room's origin server. Every other signal here
+  // comes from room STATE, so on a room we barely know — an invite whose stripped
+  // state carries no power_levels, no create event and almost no members — they
+  // all come back empty and we'd return NO via at all. Joining a room by id with
+  // no via is a coin flip: the server has to already know where the room lives.
+  // This is the one via we can always derive, so it's the floor.
+  const originServer = room.roomId.includes(':') ? room.roomId.split(':').slice(1).join(':') : undefined;
+
   const via: string[] = [];
   const userId = getHighestPowerUserId();
   if (userId) {
@@ -65,9 +73,12 @@ export const getViaServers = (room: Room): string[] => {
     (svrA, svrB) => serverToPop[svrB] - serverToPop[svrA]
   );
   const mostPop3 = sortedServers.slice(0, 3);
-  if (via.length === 0) return mostPop3;
+  const withOrigin = (servers: string[]): string[] =>
+    originServer && !servers.includes(originServer) ? servers.concat(originServer) : servers;
+
+  if (via.length === 0) return withOrigin(mostPop3);
   if (mostPop3.includes(via[0])) {
     mostPop3.splice(mostPop3.indexOf(via[0]), 1);
   }
-  return via.concat(mostPop3.slice(0, 2));
+  return withOrigin(via.concat(mostPop3.slice(0, 2)));
 };
