@@ -28,6 +28,7 @@ import {
 } from '../../../components/page';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useJoinRoom } from '../../../hooks/useJoinRoom';
+import { useLeaveRoom } from '../../../hooks/useLeaveRoom';
 import { allInvitesAtom } from '../../../state/room-list/inviteList';
 import { SequenceCard } from '../../../components/sequence-card';
 import {
@@ -184,8 +185,9 @@ function InviteCard({
       onNavigate(invite.roomId, invite.isSpace);
     }, [mx, joinRoom, invite, userId, onNavigate])
   );
-  const [leaveState, leave] = useAsyncCallback<Record<string, never>, MatrixError, []>(
-    useCallback(() => mx.leave(invite.roomId), [mx, invite])
+  const leaveRoom = useLeaveRoom();
+  const [leaveState, leave] = useAsyncCallback<void, MatrixError, []>(
+    useCallback(() => leaveRoom(invite.roomId), [leaveRoom, invite])
   );
 
   const joining =
@@ -500,14 +502,13 @@ function UnknownInvites({
   hour24Clock,
   dateFormatString,
 }: UnknownInvitesProps) {
-  const mx = useMatrixClient();
-
+  const leaveRoom = useLeaveRoom();
   const [declineAllStatus, declineAll] = useAsyncCallback(
     useCallback(async () => {
       const roomIds = invites.map((invite) => invite.roomId);
 
-      await rateLimitedActions(roomIds, (roomId) => mx.leave(roomId));
-    }, [mx, invites])
+      await rateLimitedActions(roomIds, (roomId) => leaveRoom(roomId));
+    }, [leaveRoom, invites])
   );
 
   const declining = declineAllStatus.status === AsyncStatus.Loading;
@@ -578,12 +579,13 @@ function SpamInvites({
 
   const reportRoomSupported = useReportRoomSupported();
 
+  const leaveRoom = useLeaveRoom();
   const [declineAllStatus, declineAll] = useAsyncCallback(
     useCallback(async () => {
       const roomIds = invites.map((invite) => invite.roomId);
 
-      await rateLimitedActions(roomIds, (roomId) => mx.leave(roomId));
-    }, [mx, invites])
+      await rateLimitedActions(roomIds, (roomId) => leaveRoom(roomId));
+    }, [leaveRoom, invites])
   );
 
   const [reportAllStatus, reportAll] = useAsyncCallback(
