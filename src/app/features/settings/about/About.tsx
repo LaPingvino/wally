@@ -8,6 +8,7 @@ import WallySVG from '../../../../../public/res/svg/wally.svg';
 import { APP_VERSION } from '../../../version';
 import { clearCacheAndReload } from '../../../../client/initMatrix';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { SupportSection } from '../../../components/support';
 
 type AboutProps = {
   requestClose: () => void;
@@ -92,6 +93,17 @@ export function About({ requestClose }: AboutProps) {
                       </Button>
                     }
                   />
+                </SequenceCard>
+              </Box>
+              <Box direction="Column" gap="100">
+                <Text size="L400">Support</Text>
+                <SequenceCard
+                  className={SequenceCardStyle}
+                  variant="SurfaceVariant"
+                  direction="Column"
+                  gap="400"
+                >
+                  <SupportSection />
                 </SequenceCard>
               </Box>
               <Box direction="Column" gap="100">
