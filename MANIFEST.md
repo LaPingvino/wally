@@ -7,14 +7,6 @@ stack at `github.com/LaPingvino/wally` (branch `main`).
 
 ## Full patches (every commit in the family applied cleanly)
 
-- `emoji-font.patch` — independent (applies to vanilla cinny)
-- `pronouns.patch` — independent (applies to vanilla cinny)
-- `threads.patch` — independent (applies to vanilla cinny)
-- `issue-widget.patch` — independent (applies to vanilla cinny)
-- `themes.patch` — independent (applies to vanilla cinny)
-- `markdown-parser.patch` — independent (applies to vanilla cinny)
-- `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser
-- `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker
 
 ## Partial patches
 
@@ -41,4 +33,4 @@ set; fetch the per-family branch on GitHub:
 - `per-msg-profiles` — `git fetch github per-msg-profiles`
 - `settings-sync` — `git fetch github settings-sync`
 
-_Generated 2026-07-29T15:19:24Z_
+_Generated 2026-07-29T15:19:54Z_
