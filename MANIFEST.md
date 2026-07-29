@@ -29,7 +29,7 @@ you can apply those manually from the per-family branch.
 - `ux-fixes.patch` — partial (57/132 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `bridged-chat.patch` — partial (3/4 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `bridged-chat.skipped`
-- `invite-resilience.patch` — partial (1/2 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat; see `invite-resilience.skipped`
+- `invite-resilience.patch` — partial (1/3 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat; see `invite-resilience.skipped`
 - `branding.patch` — partial (10/14 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat, invite-resilience; see `branding.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
@@ -41,4 +41,4 @@ set; fetch the per-family branch on GitHub:
 - `per-msg-profiles` — `git fetch github per-msg-profiles`
 - `settings-sync` — `git fetch github settings-sync`
 
-_Generated 2026-07-28T12:45:08Z_
+_Generated 2026-07-29T12:37:44Z_
