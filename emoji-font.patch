@@ -1,0 +1,239 @@
+diff --git a/src/app/features/settings/general/General.tsx b/src/app/features/settings/general/General.tsx
+index b861a060b..6ec13f679 100644
+--- a/src/app/features/settings/general/General.tsx
++++ b/src/app/features/settings/general/General.tsx
+@@ -32,7 +32,7 @@ import FocusTrap from 'focus-trap-react';
+ import { Page, PageContent, PageHeader } from '../../../components/page';
+ import { SequenceCard } from '../../../components/sequence-card';
+ import { useSetting } from '../../../state/hooks/settings';
+-import { DateFormat, MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
++import { DateFormat, EmojiFont, MessageLayout, MessageSpacing, settingsAtom } from '../../../state/settings';
+ import { SettingTile } from '../../../components/setting-tile';
+ import { KeySymbol } from '../../../utils/key-symbol';
+ import { isMacOS } from '../../../utils/user-agent';
+@@ -259,6 +259,95 @@ function SystemThemePreferences() {
+   );
+ }
+ 
++type EmojiFontSelectorProps = {
++  emojiFonts: { id: EmojiFont; name: string }[];
++  selected: EmojiFont;
++  onSelect: (font: EmojiFont) => void;
++};
++const EmojiFontSelector = as<'div', EmojiFontSelectorProps>(
++  ({ emojiFonts, selected, onSelect, ...props }, ref) => (
++    <Menu role="menu" {...props} ref={ref}>
++      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
++        {emojiFonts.map((font) => (
++          <MenuItem
++            key={font.id}
++            size="300"
++            variant={font.id === selected ? 'Primary' : 'Surface'}
++            radii="300"
++            onClick={() => onSelect(font.id)}
++          >
++            <Text size="T300">{font.name}</Text>
++          </MenuItem>
++        ))}
++      </Box>
++    </Menu>
++  )
++);
++
++function SelectEmojiFont() {
++  const [emojiFont, setEmojiFont] = useSetting(settingsAtom, 'emojiFont');
++  const [menuCords, setMenuCords] = useState<RectCords>();
++
++  const emojiFonts = [
++    { id: EmojiFont.System, name: 'System Default' },
++    { id: EmojiFont.Twemoji, name: 'Twitter Emoji' },
++    { id: EmojiFont.NotoColorEmojiBahai, name: 'Noto Emoji Bahá\'í' },
++  ];
++
++  const selectedFont = emojiFonts.find((font) => font.id === emojiFont) ?? emojiFonts[0];
++
++  const handleMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
++    setMenuCords(evt.currentTarget.getBoundingClientRect());
++  };
++
++  const handleSelect = (font: EmojiFont) => {
++    setEmojiFont(font);
++    setMenuCords(undefined);
++  };
++
++  return (
++    <>
++      <Button
++        size="300"
++        variant="Primary"
++        outlined
++        fill="Soft"
++        radii="300"
++        after={<Icon size="300" src={Icons.ChevronBottom} />}
++        onClick={handleMenu}
++      >
++        <Text size="T300">{selectedFont.name}</Text>
++      </Button>
++      <PopOut
++        anchor={menuCords}
++        offset={5}
++        position="Bottom"
++        align="End"
++        content={
++          <FocusTrap
++            focusTrapOptions={{
++              initialFocus: false,
++              onDeactivate: () => setMenuCords(undefined),
++              clickOutsideDeactivates: true,
++              isKeyForward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowDown' || evt.key === 'ArrowRight',
++              isKeyBackward: (evt: KeyboardEvent) =>
++                evt.key === 'ArrowUp' || evt.key === 'ArrowLeft',
++              escapeDeactivates: stopPropagation,
++            }}
++          >
++            <EmojiFontSelector
++              emojiFonts={emojiFonts}
++              selected={emojiFont}
++              onSelect={handleSelect}
++            />
++          </FocusTrap>
++        }
++      />
++    </>
++  );
++}
++
+ function PageZoomInput() {
+   const [pageZoom, setPageZoom] = useSetting(settingsAtom, 'pageZoom');
+   const [currentZoom, setCurrentZoom] = useState(`${pageZoom}`);
+@@ -306,7 +395,6 @@ function PageZoomInput() {
+ function Appearance() {
+   const [systemTheme, setSystemTheme] = useSetting(settingsAtom, 'useSystemTheme');
+   const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
+-  const [twitterEmoji, setTwitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
+ 
+   return (
+     <Box direction="Column" gap="100">
+@@ -342,8 +430,9 @@ function Appearance() {
+ 
+       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+         <SettingTile
+-          title="Twitter Emoji"
+-          after={<Switch variant="Primary" value={twitterEmoji} onChange={setTwitterEmoji} />}
++          title="Emoji Font"
++          description="Select which emoji font to use across the application."
++          after={<SelectEmojiFont />}
+         />
+       </SequenceCard>
+ 
+diff --git a/src/app/pages/client/ClientNonUIFeatures.tsx b/src/app/pages/client/ClientNonUIFeatures.tsx
+index ce952bfc6..23bd48e64 100644
+--- a/src/app/pages/client/ClientNonUIFeatures.tsx
++++ b/src/app/pages/client/ClientNonUIFeatures.tsx
+@@ -10,7 +10,7 @@ import NotificationSound from '../../../../public/sound/notification.ogg';
+ import InviteSound from '../../../../public/sound/invite.ogg';
+ import { notificationPermission, setFavicon } from '../../utils/dom';
+ import { useSetting } from '../../state/hooks/settings';
+-import { settingsAtom } from '../../state/settings';
++import { EmojiFont, getSettings, settingsAtom } from '../../state/settings';
+ import { allInvitesAtom } from '../../state/room-list/inviteList';
+ import { usePreviousValue } from '../../hooks/usePreviousValue';
+ import { useMatrixClient } from '../../hooks/useMatrixClient';
+@@ -28,12 +28,19 @@ import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
+ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
+ 
+ function SystemEmojiFeature() {
+-  const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
+-
+-  if (twitterEmoji) {
+-    document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
+-  } else {
+-    document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
++  const [emojiFont] = useSetting(settingsAtom, 'emojiFont');
++
++  switch (emojiFont) {
++    case EmojiFont.Twemoji:
++      document.documentElement.style.setProperty('--font-emoji', 'Twemoji');
++      break;
++    case EmojiFont.NotoColorEmojiBahai:
++      document.documentElement.style.setProperty('--font-emoji', 'NotoColorEmojiBahai');
++      break;
++    case EmojiFont.System:
++    default:
++      document.documentElement.style.setProperty('--font-emoji', 'Twemoji_DISABLED');
++      break;
+   }
+ 
+   return null;
+diff --git a/src/app/state/settings.ts b/src/app/state/settings.ts
+index 9fbad4ff0..dccb6ed8b 100644
+--- a/src/app/state/settings.ts
++++ b/src/app/state/settings.ts
+@@ -14,6 +14,11 @@ export enum MessageLayout {
+   Compact = 1,
+   Bubble = 2,
+ }
++export enum EmojiFont {
++  System = 'system',
++  Twemoji = 'twemoji',
++  NotoColorEmojiBahai = 'noto-bahai',
++}
+ 
+ export interface Settings {
+   themeId?: string;
+@@ -23,7 +28,8 @@ export interface Settings {
+   monochromeMode?: boolean;
+   isMarkdown: boolean;
+   editorToolbar: boolean;
+-  twitterEmoji: boolean;
++  emojiFont: EmojiFont;
++  twitterEmoji?: boolean; // deprecated, kept for migration
+   pageZoom: number;
+   hideActivity: boolean;
+ 
+@@ -57,7 +63,7 @@ const defaultSettings: Settings = {
+   monochromeMode: false,
+   isMarkdown: true,
+   editorToolbar: false,
+-  twitterEmoji: false,
++  emojiFont: EmojiFont.System,
+   pageZoom: 100,
+   hideActivity: false,
+ 
+@@ -86,9 +92,17 @@ const defaultSettings: Settings = {
+ export const getSettings = () => {
+   const settings = localStorage.getItem(STORAGE_KEY);
+   if (settings === null) return defaultSettings;
++  const parsed = JSON.parse(settings) as Settings;
++
++  // Migrate old twitterEmoji boolean to new emojiFont enum
++  if (parsed.twitterEmoji !== undefined && parsed.emojiFont === undefined) {
++    parsed.emojiFont = parsed.twitterEmoji ? EmojiFont.Twemoji : EmojiFont.System;
++    delete parsed.twitterEmoji;
++  }
++
+   return {
+     ...defaultSettings,
+-    ...(JSON.parse(settings) as Settings),
++    ...parsed,
+   };
+ };
+ 
+diff --git a/src/index.css b/src/index.css
+index d46963677..4a0c45f08 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -5,6 +5,12 @@
+   font-display: swap;
+ }
+ 
++@font-face {
++  font-family: NotoColorEmojiBahai;
++  src: url('../public/font/NotoColorEmoji.Bahai.v0.0.1.ttf');
++  font-display: swap;
++}
++
+ :root {
+   --tc-link: hsl(213deg 100% 45%);
+ 

@@ -1,0 +1,324 @@
+diff --git a/public/res/svg/cinny-highlight.svg b/public/res/svg/cinny-highlight.svg
+index d59b42a17..e0109c20b 100644
+--- a/public/res/svg/cinny-highlight.svg
++++ b/public/res/svg/cinny-highlight.svg
+@@ -1,13 +1,25 @@
+ <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<g clip-path="url(#clip0_2707_1961)">
+-<path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="white"/>
+-<path d="M10 6.39999C10 6.67614 9.77614 6.89999 9.5 6.89999C9.22386 6.89999 9 6.67614 9 6.39999C9 6.12385 9.22386 5.89999 9.5 5.89999C9.77614 5.89999 10 6.12385 10 6.39999Z" fill="black"/>
+-<path fill-rule="evenodd" clip-rule="evenodd" d="M9 0C4 0 0 4 0 9C0 14 4 18 9 18C9.63967 18 10.263 17.9345 10.8636 17.8099C10.3186 17.0091 10 16.0417 10 15C10 12.2386 12.2386 10 15 10C16.0417 10 17.0091 10.3186 17.8099 10.8636C17.9345 10.263 18 9.63967 18 9C18 4 14 0 9 0ZM1.2 10.8L4.7 8.5V8.2C4.7 6.4 6 5 7.8 4.8H8.2C9.4 4.8 10.5 5.4 11.1 6.4C11.4 6.3 11.7 6.3 12 6.3C12.4 6.3 12.8 6.3 13.2 6.4C13.9 6.6 14.6 6.9 15.2 7.3C14.6 7.1 14 7 13.3 7C12.1 7 11.1 7.4 10.4 8.4C9.7 9.3 9.3 10.4 9.3 11.6C9.3 13.1 8.9 14.5 8 15.8C7.93744 15.8834 7.87923 15.9625 7.82356 16.0381C7.6123 16.325 7.43739 16.5626 7.2 16.8C4.2 16.1 1.9 13.8 1.2 10.8Z" fill="black"/>
+-<path d="M18 15C18 16.6569 16.6569 18 15 18C13.3431 18 12 16.6569 12 15C12 13.3431 13.3431 12 15 12C16.6569 12 18 13.3431 18 15Z" fill="#45B83B"/>
+-</g>
+-<defs>
+-<clipPath id="clip0_2707_1961">
+-<rect width="18" height="18" fill="white"/>
+-</clipPath>
+-</defs>
++  <defs>
++    <mask id="wally-cube-cut-h" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
++      <rect x="0" y="0" width="18" height="18" fill="black"/>
++      <polygon points="4.2,5.2 13.0,5.2 14.0,4.2 5.2,4.2" fill="white"/>
++      <rect x="4.2" y="5.2" width="8.8" height="8.8" fill="white"/>
++      <line x1="3.9" y1="7.5" x2="13.3" y2="7.7" stroke="black" stroke-width="0.35"/>
++      <line x1="3.9" y1="9.9" x2="13.3" y2="9.7" stroke="black" stroke-width="0.35"/>
++      <line x1="3.9" y1="12.0" x2="13.3" y2="12.1" stroke="black" stroke-width="0.35"/>
++      <line x1="6.6" y1="5.2" x2="6.8" y2="7.5" stroke="black" stroke-width="0.3"/>
++      <line x1="9.4" y1="7.7" x2="9.2" y2="9.9" stroke="black" stroke-width="0.3"/>
++      <line x1="11.0" y1="9.8" x2="11.2" y2="12.0" stroke="black" stroke-width="0.3"/>
++      <line x1="7.8" y1="12.1" x2="7.6" y2="14.3" stroke="black" stroke-width="0.3"/>
++      <line x1="4.0" y1="5.2" x2="13.3" y2="5.2" stroke="black" stroke-width="0.3"/>
++    </mask>
++  </defs>
++  <!-- Notched circle body (corner cut out for badge), from original -->
++  <path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="#FFFFFF" stroke="#000000" stroke-width="0.6"/>
++  <!-- Compacted trash cube -->
++  <rect x="0" y="0" width="18" height="18" fill="#000000" mask="url(#wally-cube-cut-h)"/>
++  <!-- Eye dot -->
++  <circle cx="10.5" cy="3.3" r="0.5" fill="#000000"/>
++  <!-- Highlight badge (green) -->
++  <circle cx="15" cy="15" r="3" fill="#45B83B"/>
+ </svg>
+diff --git a/public/res/svg/cinny-unread.svg b/public/res/svg/cinny-unread.svg
+index be3013751..8a40d4d7c 100644
+--- a/public/res/svg/cinny-unread.svg
++++ b/public/res/svg/cinny-unread.svg
+@@ -1,13 +1,21 @@
+ <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<g clip-path="url(#clip0_2707_2015)">
+-<path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="white"/>
+-<path d="M10 6.39999C10 6.67614 9.77614 6.89999 9.5 6.89999C9.22386 6.89999 9 6.67614 9 6.39999C9 6.12385 9.22386 5.89999 9.5 5.89999C9.77614 5.89999 10 6.12385 10 6.39999Z" fill="black"/>
+-<path fill-rule="evenodd" clip-rule="evenodd" d="M9 0C4 0 0 4 0 9C0 14 4 18 9 18C9.63967 18 10.263 17.9345 10.8636 17.8099C10.3186 17.0091 10 16.0417 10 15C10 12.2386 12.2386 10 15 10C16.0417 10 17.0091 10.3186 17.8099 10.8636C17.9345 10.263 18 9.63967 18 9C18 4 14 0 9 0ZM1.2 10.8L4.7 8.5V8.2C4.7 6.4 6 5 7.8 4.8H8.2C9.4 4.8 10.5 5.4 11.1 6.4C11.4 6.3 11.7 6.3 12 6.3C12.4 6.3 12.8 6.3 13.2 6.4C13.9 6.6 14.6 6.9 15.2 7.3C14.6 7.1 14 7 13.3 7C12.1 7 11.1 7.4 10.4 8.4C9.7 9.3 9.3 10.4 9.3 11.6C9.3 13.1 8.9 14.5 8 15.8C7.93744 15.8834 7.87923 15.9625 7.82356 16.0381C7.6123 16.325 7.43739 16.5626 7.2 16.8C4.2 16.1 1.9 13.8 1.2 10.8Z" fill="black"/>
+-<path d="M18 15C18 16.6569 16.6569 18 15 18C13.3431 18 12 16.6569 12 15C12 13.3431 13.3431 12 15 12C16.6569 12 18 13.3431 18 15Z" fill="#989898"/>
+-</g>
+-<defs>
+-<clipPath id="clip0_2707_2015">
+-<rect width="18" height="18" fill="white"/>
+-</clipPath>
+-</defs>
++  <defs>
++    <mask id="wally-cube-cut-u" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
++      <rect x="0" y="0" width="18" height="18" fill="black"/>
++      <polygon points="4.2,5.2 13.0,5.2 14.0,4.2 5.2,4.2" fill="white"/>
++      <rect x="4.2" y="5.2" width="8.8" height="8.8" fill="white"/>
++      <line x1="3.9" y1="7.5" x2="13.3" y2="7.7" stroke="black" stroke-width="0.35"/>
++      <line x1="3.9" y1="9.9" x2="13.3" y2="9.7" stroke="black" stroke-width="0.35"/>
++      <line x1="3.9" y1="12.0" x2="13.3" y2="12.1" stroke="black" stroke-width="0.35"/>
++      <line x1="6.6" y1="5.2" x2="6.8" y2="7.5" stroke="black" stroke-width="0.3"/>
++      <line x1="9.4" y1="7.7" x2="9.2" y2="9.9" stroke="black" stroke-width="0.3"/>
++      <line x1="11.0" y1="9.8" x2="11.2" y2="12.0" stroke="black" stroke-width="0.3"/>
++      <line x1="7.8" y1="12.1" x2="7.6" y2="14.3" stroke="black" stroke-width="0.3"/>
++      <line x1="4.0" y1="5.2" x2="13.3" y2="5.2" stroke="black" stroke-width="0.3"/>
++    </mask>
++  </defs>
++  <path d="M10.5867 17.3522C10.0727 17.4492 9.54226 17.5 9 17.5C4.30558 17.5 0.5 13.6944 0.5 9C0.5 4.30558 4.30558 0.5 9 0.5C13.6944 0.5 17.5 4.30558 17.5 9C17.5 9.54226 17.4492 10.0727 17.3522 10.5867C16.6511 10.2123 15.8503 10 15 10C12.2386 10 10 12.2386 10 15C10 15.8503 10.2123 16.6511 10.5867 17.3522Z" fill="#FFFFFF" stroke="#000000" stroke-width="0.6"/>
++  <rect x="0" y="0" width="18" height="18" fill="#000000" mask="url(#wally-cube-cut-u)"/>
++  <circle cx="10.5" cy="3.3" r="0.5" fill="#000000"/>
++  <circle cx="15" cy="15" r="3" fill="#989898"/>
+ </svg>
+diff --git a/public/res/svg/cinny.svg b/public/res/svg/cinny.svg
+index 8701d67b7..b8a32ffd0 100644
+--- a/public/res/svg/cinny.svg
++++ b/public/res/svg/cinny.svg
+@@ -1,19 +1,20 @@
+-<!-- Generator: Adobe Illustrator 18.0.0, SVG Export Plug-In  -->
+-<svg version="1.1"
+-	 xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:a="http://ns.adobe.com/AdobeSVGViewerExtensions/3.0/"
+-	 x="0px" y="0px" width="18px" height="18px" viewBox="0 0 18 18" enable-background="new 0 0 18 18" xml:space="preserve">
+-<defs>
+-</defs>
+-<g>
+-	<g>
+-		<circle fill="#FFFFFF" cx="9" cy="9" r="8.5"/>
+-	</g>
+-	<g>
+-		<path d="M9,0C4,0,0,4,0,9c0,5,4,9,9,9c5,0,9-4,9-9C18,4,14,0,9,0z M1.2,10.8l3.5-2.3c0-0.1,0-0.2,0-0.3c0-1.8,1.3-3.2,3.1-3.4
+-			c0.1,0,0.2,0,0.4,0c1.2,0,2.3,0.6,2.9,1.6c0.3-0.1,0.6-0.1,0.9-0.1c0.4,0,0.8,0,1.2,0.1c0.7,0.2,1.4,0.5,2,0.9
+-			C14.6,7.1,14,7,13.3,7c-1.2,0-2.2,0.4-2.9,1.4c-0.7,0.9-1.1,2-1.1,3.2c0,1.5-0.4,2.9-1.3,4.2c-0.3,0.4-0.5,0.7-0.8,1
+-			C4.2,16.1,1.9,13.8,1.2,10.8z"/>
+-		<circle cx="9.5" cy="6.4" r="0.5"/>
+-	</g>
+-</g>
+-</svg>
+\ No newline at end of file
++<svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
++  <defs>
++    <mask id="wally-cube-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
++      <rect x="0" y="0" width="18" height="18" fill="black"/>
++      <polygon points="4.2,5.2 13.0,5.2 14.0,4.2 5.2,4.2" fill="white"/>
++      <rect x="4.2" y="5.2" width="8.8" height="8.8" fill="white"/>
++      <line x1="3.9" y1="7.5" x2="13.3" y2="7.7" stroke="black" stroke-width="0.35"/>
++      <line x1="3.9" y1="9.9" x2="13.3" y2="9.7" stroke="black" stroke-width="0.35"/>
++      <line x1="3.9" y1="12.0" x2="13.3" y2="12.1" stroke="black" stroke-width="0.35"/>
++      <line x1="6.6" y1="5.2" x2="6.8" y2="7.5" stroke="black" stroke-width="0.3"/>
++      <line x1="9.4" y1="7.7" x2="9.2" y2="9.9" stroke="black" stroke-width="0.3"/>
++      <line x1="11.0" y1="9.8" x2="11.2" y2="12.0" stroke="black" stroke-width="0.3"/>
++      <line x1="7.8" y1="12.1" x2="7.6" y2="14.3" stroke="black" stroke-width="0.3"/>
++      <line x1="4.0" y1="5.2" x2="13.3" y2="5.2" stroke="black" stroke-width="0.3"/>
++    </mask>
++  </defs>
++  <circle cx="9" cy="9" r="8.5" fill="#FFFFFF" stroke="#000000" stroke-width="1"/>
++  <rect x="0" y="0" width="18" height="18" fill="#000000" mask="url(#wally-cube-cut)"/>
++  <circle cx="10.5" cy="3.3" r="0.5" fill="#000000"/>
++</svg>
+diff --git a/src/app/hooks/useTheme.ts b/src/app/hooks/useTheme.ts
+index cdbb9dba3..d8a3f2f5a 100644
+--- a/src/app/hooks/useTheme.ts
++++ b/src/app/hooks/useTheme.ts
+@@ -1,7 +1,7 @@
+ import { lightTheme } from 'folds';
+ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+ import { onDarkFontWeight, onLightFontWeight } from '../../config.css';
+-import { butterTheme, darkTheme, silverTheme } from '../../colors.css';
++import { ashTheme, butterTheme, darkTheme, sepiaTheme, silverTheme } from '../../colors.css';
+ import { settingsAtom } from '../state/settings';
+ import { useSetting } from '../state/hooks/settings';
+ 
+@@ -37,9 +37,22 @@ export const ButterTheme: Theme = {
+   kind: ThemeKind.Dark,
+   classNames: ['butter-theme', butterTheme, onDarkFontWeight, 'prism-dark'],
+ };
++export const AshTheme: Theme = {
++  id: 'ash-theme',
++  kind: ThemeKind.Dark,
++  classNames: ['ash-theme', ashTheme, onDarkFontWeight, 'prism-dark'],
++};
++export const SepiaTheme: Theme = {
++  id: 'sepia-theme',
++  kind: ThemeKind.Light,
++  classNames: ['sepia-theme', sepiaTheme, onLightFontWeight, 'prism-light'],
++};
+ 
+ export const useThemes = (): Theme[] => {
+-  const themes: Theme[] = useMemo(() => [LightTheme, SilverTheme, DarkTheme, ButterTheme], []);
++  const themes: Theme[] = useMemo(
++    () => [LightTheme, SilverTheme, SepiaTheme, DarkTheme, ButterTheme, AshTheme],
++    []
++  );
+ 
+   return themes;
+ };
+@@ -49,8 +62,10 @@ export const useThemeNames = (): Record<string, string> =>
+     () => ({
+       [LightTheme.id]: 'Light',
+       [SilverTheme.id]: 'Silver',
++      [SepiaTheme.id]: 'Sepia',
+       [DarkTheme.id]: 'Dark',
+       [ButterTheme.id]: 'Butter',
++      [AshTheme.id]: 'Ash',
+     }),
+     []
+   );
+diff --git a/src/colors.css.ts b/src/colors.css.ts
+index 268cbf788..ab0f39f90 100644
+--- a/src/colors.css.ts
++++ b/src/colors.css.ts
+@@ -197,6 +197,148 @@ const darkThemeData = {
+ 
+ export const darkTheme = createTheme(color, darkThemeData);
+ 
++export const ashTheme = createTheme(color, {
++  ...darkThemeData,
++  // Neutral grey palette inspired by Discord's Ash theme (#2E2E34 brand ref,
++  // #DADDDA text). Pattern: R≈G, B slightly higher (≈+6), steps of ~10.
++  Background: {
++    Container: '#1E1E24',
++    ContainerHover: '#28282E',
++    ContainerActive: '#323238',
++    ContainerLine: '#3C3C43',
++    OnContainer: '#DADDDA',
++  },
++
++  Surface: {
++    Container: '#28282E',
++    ContainerHover: '#323238',
++    ContainerActive: '#3C3C43',
++    ContainerLine: '#46464E',
++    OnContainer: '#DADDDA',
++  },
++
++  SurfaceVariant: {
++    Container: '#323238',
++    ContainerHover: '#3C3C43',
++    ContainerActive: '#46464E',
++    ContainerLine: '#505059',
++    OnContainer: '#DADDDA',
++  },
++
++  Secondary: {
++    Main: '#DADDDA',
++    MainHover: '#C3C6C3',
++    MainActive: '#B7BAB7',
++    MainLine: '#ABAEAB',
++    OnMain: '#1E1E24',
++    Container: '#3C3C43',
++    ContainerHover: '#46464E',
++    ContainerActive: '#505059',
++    ContainerLine: '#5A5A63',
++    OnContainer: '#DADDDA',
++  },
++});
++
++export const sepiaTheme = createTheme(color, {
++  // Background is the sidebar/outer layer — noticeably darker than Surface
++  // so the two-tone layout reads clearly.
++  Background: {
++    Container: '#E0CFA8',
++    ContainerHover: '#D7C69C',
++    ContainerActive: '#CEBD90',
++    ContainerLine: '#C0AE80',
++    OnContainer: '#1E1509',
++  },
++
++  // Surface is the main chat/content area — light parchment.
++  Surface: {
++    Container: '#F5EDD8',
++    ContainerHover: '#EDE4CC',
++    ContainerActive: '#E5DBBF',
++    ContainerLine: '#D6CAB0',
++    OnContainer: '#1E1509',
++  },
++
++  SurfaceVariant: {
++    Container: '#EDE4CC',
++    ContainerHover: '#E5DBBF',
++    ContainerActive: '#DCCEAC',
++    ContainerLine: '#CCBF98',
++    OnContainer: '#1E1509',
++  },
++
++  Primary: {
++    Main: '#7A4E1A',
++    MainHover: '#6D4516',
++    MainActive: '#663F13',
++    MainLine: '#5E3910',
++    OnMain: '#FFFFFF',
++    Container: '#E5D0B0',
++    ContainerHover: '#DEC7A2',
++    ContainerActive: '#D7BE94',
++    ContainerLine: '#CEB585',
++    OnContainer: '#5E3F1A',
++  },
++
++  Secondary: {
++    Main: '#1E1509',
++    MainHover: '#2C1F0C',
++    MainActive: '#3A2B14',
++    MainLine: '#44331A',
++    OnMain: '#F5EDD8',
++    Container: '#D0C4A0',
++    ContainerHover: '#C6B890',
++    ContainerActive: '#BCAD81',
++    ContainerLine: '#AFA170',
++    OnContainer: '#1E1509',
++  },
++
++  Success: {
++    Main: '#2D7A4F',
++    MainHover: '#296E47',
++    MainActive: '#276843',
++    MainLine: '#24623F',
++    OnMain: '#FFFFFF',
++    Container: '#C5DFD0',
++    ContainerHover: '#B8D7C6',
++    ContainerActive: '#ABCEBB',
++    ContainerLine: '#9EC6B1',
++    OnContainer: '#1F5536',
++  },
++
++  Warning: {
++    Main: '#9A5200',
++    MainHover: '#8B4A00',
++    MainActive: '#824500',
++    MainLine: '#7A4000',
++    OnMain: '#FFFFFF',
++    Container: '#E8D4B8',
++    ContainerHover: '#E0C9A6',
++    ContainerActive: '#D9BE94',
++    ContainerLine: '#D1B382',
++    OnContainer: '#6B3900',
++  },
++
++  Critical: {
++    Main: '#B52B2B',
++    MainHover: '#A32727',
++    MainActive: '#9A2525',
++    MainLine: '#912222',
++    OnMain: '#FFFFFF',
++    Container: '#EDD0C8',
++    ContainerHover: '#E7C3BA',
++    ContainerActive: '#E1B6AC',
++    ContainerLine: '#DAA89E',
++    OnContainer: '#7E1E1E',
++  },
++
++  Other: {
++    FocusRing: 'rgba(44, 31, 12, 0.5)',
++    Shadow: 'rgba(44, 31, 12, 0.2)',
++    Overlay: 'rgba(44, 31, 12, 0.5)',
++  },
++});
++
+ export const butterTheme = createTheme(color, {
+   ...darkThemeData,
+   Background: {

@@ -73,3 +73,5 @@ f6feefc8  ux-fixes: clear lint in the unread cluster (stability hardening)
 d78b2dca  ux-fixes: optimistically show composer + call button while power_levels is unsynced
 5fd14dd8  ux-fixes: unify message-type renderers into one shared <Message> frame
 d1fc6167  ux-fixes: render bundled URL previews instead of refetching (no load-then-hide)
+07eb06dd  ux-fixes: notifications survive Android, ogg audio plays, account actions match MSC4191
+385a2f15  ux-fixes: cut the README claims that don't survive checking

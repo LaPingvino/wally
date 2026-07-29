@@ -7,6 +7,14 @@ stack at `github.com/LaPingvino/wally` (branch `main`).
 
 ## Full patches (every commit in the family applied cleanly)
 
+- `emoji-font.patch` — independent (applies to vanilla cinny)
+- `pronouns.patch` — independent (applies to vanilla cinny)
+- `threads.patch` — independent (applies to vanilla cinny)
+- `issue-widget.patch` — independent (applies to vanilla cinny)
+- `themes.patch` — independent (applies to vanilla cinny)
+- `markdown-parser.patch` — independent (applies to vanilla cinny)
+- `issue-tracker.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser
+- `multi-account.patch` — requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker
 
 ## Partial patches
 
@@ -18,11 +26,11 @@ you can apply those manually from the per-family branch.
 
 - `accessibility.patch` — partial (32/60 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account; see `accessibility.skipped`
 - `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (57/132 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
+- `ux-fixes.patch` — partial (57/134 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `bridged-chat.patch` — partial (3/4 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `bridged-chat.skipped`
 - `invite-resilience.patch` — partial (1/5 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat; see `invite-resilience.skipped`
-- `branding.patch` — partial (10/14 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat, invite-resilience; see `branding.skipped`
+- `branding.patch` — partial (11/17 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat, invite-resilience; see `branding.skipped`
 
 ## Entirely coupled (no patch — fetch the branch instead)
 
@@ -33,4 +41,4 @@ set; fetch the per-family branch on GitHub:
 - `per-msg-profiles` — `git fetch github per-msg-profiles`
 - `settings-sync` — `git fetch github settings-sync`
 
-_Generated 2026-07-29T15:19:54Z_
+_Generated 2026-07-29T16:26:07Z_
