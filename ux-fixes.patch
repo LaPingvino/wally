@@ -62,6 +62,246 @@ index 396808df3..291d71d53 100644
      "vite-plugin-top-level-await": "1.6.0",
      "vitest": "4.0.18"
    }
+diff --git a/src/__tests__/concurrency-audit.test.ts b/src/__tests__/concurrency-audit.test.ts
+new file mode 100644
+index 000000000..52aa35e43
+--- /dev/null
++++ b/src/__tests__/concurrency-audit.test.ts
+@@ -0,0 +1,234 @@
++/**
++ * Structural concurrency audit — the static half of our race tooling.
++ *
++ * `go test -race` has no direct equivalent here: JS is single-threaded, so there
++ * are no data races to detect. Our races are of two other kinds, and they need
++ * two different instruments:
++ *
++ *  - ASYNC INTERLEAVING (read-modify-write across an await, stale response
++ *    overwriting a newer one). Dynamic, and testable by enumerating orderings —
++ *    see src/test/interleave.ts and mDirectConcurrency.test.ts.
++ *
++ *  - STALE DERIVATION, which has no await at all. A memo or selector computes
++ *    from LIVE mutable SDK state while its dependencies only track something
++ *    else, so when the underlying state changes nothing recomputes. This is what
++ *    hid a whole space from the sidebar: useOrphanSpaces called
++ *    `isSpace(mx.getRoom(id))` — a live read — but only re-ran when the room
++ *    LIST changed, so a room whose m.room.create arrived later stayed filtered
++ *    out until some unrelated event happened to disturb the list.
++ *
++ * This file is a TRIPWIRE, not a prover. It cannot tell a correctly-subscribed
++ * live read from a dangerous one; it counts the hazard sites and fails when the
++ * count grows, which forces the question to be asked at review time. Lowering a
++ * baseline is always welcome. Raising one should come with a reason.
++ */
++/// <reference types="node" />
++import { describe, expect, it } from 'vitest';
++import { readFileSync, readdirSync, statSync } from 'fs';
++import { join } from 'path';
++
++const APP_DIR = join(__dirname, '..', 'app');
++
++const sourceFiles = (dir: string): string[] =>
++  readdirSync(dir)
++    .filter((entry) => entry !== 'node_modules' && entry !== '__tests__')
++    .flatMap((entry) => {
++      const full = join(dir, entry);
++      if (statSync(full).isDirectory()) return sourceFiles(full);
++      return full.endsWith('.ts') || full.endsWith('.tsx') ? [full] : [];
++    });
++
++/** Body text of each call to `fn(`, matched by parentheses so concise arrows count too. */
++const callTexts = (src: string, fn: string): string[] => {
++  const out: string[] = [];
++  const re = new RegExp(`\\b${fn}\\(`, 'g');
++  let m = re.exec(src);
++  while (m !== null) {
++    const start = m.index + m[0].length - 1;
++    let depth = 0;
++    for (let j = start; j < src.length; j += 1) {
++      if (src[j] === '(') depth += 1;
++      else if (src[j] === ')') {
++        depth -= 1;
++        if (depth === 0) {
++          out.push(src.slice(start, j + 1));
++          break;
++        }
++      }
++    }
++    m = re.exec(src);
++  }
++  return out;
++};
++
++/** Brace-matched bodies of each useEffect callback. */
++const effectBodies = (src: string): string[] => {
++  const out: string[] = [];
++  const re = /useEffect\(/g;
++  let m = re.exec(src);
++  while (m !== null) {
++    const open = src.indexOf('{', m.index + m[0].length);
++    if (open >= 0) {
++      let depth = 0;
++      for (let j = open; j < src.length; j += 1) {
++        if (src[j] === '{') depth += 1;
++        else if (src[j] === '}') {
++          depth -= 1;
++          if (depth === 0) {
++            out.push(src.slice(open, j + 1));
++            break;
++          }
++        }
++      }
++    }
++    m = re.exec(src);
++  }
++  return out;
++};
++
++/** Reads that go straight to live, mutable SDK state rather than to a snapshot. */
++const LIVE_READ =
++  /mx\.getRoom\(|\.getMyMembership\(|\.currentState|\.isSpaceRoom\(|getStateEvent\(|\.getMembers\(/;
++
++/** Effects that start async work and cannot cancel it. Pure, so it can be self-tested. */
++const unguardedAsyncEffects = (src: string): number =>
++  effectBodies(src).filter((body) => {
++    const isAsync = body.includes('await ') || body.includes('.then(');
++    const guarded = body.includes('return () =>') || body.includes('return cleanup');
++    return isAsync && !guarded;
++  }).length;
++
++/** Memo/selector bodies that read live SDK state. Pure, so it can be self-tested. */
++const liveStateDerivations = (src: string): number =>
++  ['useMemo', 'useCallback']
++    .flatMap((fn) => callTexts(src, fn))
++    .filter((text) => LIVE_READ.test(text)).length;
++
++const files = sourceFiles(APP_DIR).map((path) => ({ path, src: readFileSync(path, 'utf-8') }));
++
++/**
++ * NEGATIVE CONTROLS.
++ *
++ * Every check below is a ratchet of the form "no more than N", which a detector
++ * that silently stopped matching would pass with flying colours — zero is always
++ * ≤ N. So each detector is first pointed at source it MUST flag, and the counts
++ * over the real tree are floored as well as capped. Without this the suite would
++ * go green precisely when it stopped working.
++ */
++describe('the detectors themselves', () => {
++  it('flags an async effect with no cleanup', () => {
++    expect(
++      unguardedAsyncEffects(`
++        useEffect(() => {
++          fetchThing().then(setThing);
++        }, [id]);
++      `)
++    ).toBe(1);
++  });
++
++  it('does not flag an async effect that cleans up', () => {
++    expect(
++      unguardedAsyncEffects(`
++        useEffect(() => {
++          let alive = true;
++          fetchThing().then((t) => { if (alive) setThing(t); });
++          return () => { alive = false; };
++        }, [id]);
++      `)
++    ).toBe(0);
++  });
++
++  it('flags a live read inside a CONCISE arrow body', () => {
++    // The shape that matters: useOrphanSpaces is written exactly like this, and
++    // the first version of this scan matched only braced bodies and missed it.
++    expect(
++      liveStateDerivations(`
++        const selector = useCallback((roomId) => isSpace(mx.getRoom(roomId)), [mx, roomToParents]);
++      `)
++    ).toBe(1);
++  });
++
++  it('flags a live read inside a braced body, and ignores a snapshot read', () => {
++    expect(
++      liveStateDerivations(`
++        const a = useMemo(() => {
++          return rooms.filter((r) => r.getMyMembership() === 'join');
++        }, [rooms]);
++      `)
++    ).toBe(1);
++    expect(
++      liveStateDerivations(`
++        const b = useMemo(() => snapshot.rooms.filter((r) => r.joined), [snapshot]);
++      `)
++    ).toBe(0);
++  });
++});
++
++describe('async effects', () => {
++  // An async effect with no cleanup cannot cancel itself, so a response that
++  // arrives after the inputs changed still lands — the stale-response race.
++  const BASELINE = 7;
++
++  it(`has no more than ${BASELINE} effects that start async work without a cleanup`, () => {
++    const offenders: string[] = [];
++    files.forEach(({ path, src }) => {
++      const n = unguardedAsyncEffects(src);
++      for (let i = 0; i < n; i += 1) offenders.push(path.replace(APP_DIR, 'app'));
++    });
++    expect(
++      offenders.length,
++      `Unguarded async effects:\n  ${offenders.join('\n  ')}\n\n` +
++        'Give the effect a cleanup that cancels or ignores its result, or lower the baseline.'
++    ).toBeLessThanOrEqual(BASELINE);
++    // Floor: if this ever reads 0 the scan has broken, not the codebase improved.
++    // Drop the floor deliberately when the last one is genuinely fixed.
++    expect(offenders.length, 'scan appears broken — it matched nothing').toBeGreaterThan(0);
++  });
++});
++
++describe('derivations over live state', () => {
++  // Not all of these are bugs — many are event-driven and correctly subscribed.
++  // The count is a ratchet so a NEW one has to be justified.
++  const BASELINE = 55;
++
++  it(`has no more than ${BASELINE} memo/selector bodies reading live SDK state`, () => {
++    let count = 0;
++    const where: string[] = [];
++    files.forEach(({ path, src }) => {
++      const n = liveStateDerivations(src);
++      count += n;
++      if (n > 0) where.push(path.replace(APP_DIR, 'app'));
++    });
++
++    // ANCHOR: roomList.ts holds the selectors behind the "space missing from the
++    // sidebar" bug — the canonical instance of this hazard. If the scan stops
++    // seeing it, the scan is broken, whatever the total says.
++    expect(where.join('\n'), 'anchor site no longer detected — scan is broken').toContain(
++      'state/hooks/roomList.ts'
++    );
++    expect(
++      count,
++      'A memo/selector reading live SDK state only recomputes when its deps change, ' +
++        'so state that changes underneath it is invisible until something else moves. ' +
++        'Either derive from a subscribed snapshot, or subscribe to the event that ' +
++        `changes it.\nSites:\n  ${[...new Set(where)].join('\n  ')}`
++    ).toBeLessThanOrEqual(BASELINE);
++  });
++});
++
++describe('event listeners', () => {
++  it('removes every listener it adds, per file', () => {
++    const ADD = /addEventListener\(|\.on\(/g;
++    const REM = /removeEventListener\(|\.off\(|\.removeListener\(/g;
++    // A file that subscribes far more than it unsubscribes is where leaks live.
++    // Equality is too strict (conditional subscriptions are normal), so this
++    // only catches a gross imbalance.
++    const bad: string[] = [];
++    files.forEach(({ path, src }) => {
++      const adds = (src.match(ADD) ?? []).length;
++      const rems = (src.match(REM) ?? []).length;
++      if (adds >= 4 && rems === 0) bad.push(`${path.replace(APP_DIR, 'app')} (+${adds}/-0)`);
++    });
++    expect(bad, `Files that subscribe but never unsubscribe:\n  ${bad.join('\n  ')}`).toEqual([]);
++  });
++});
 diff --git a/src/app/components/DeviceVerification.tsx b/src/app/components/DeviceVerification.tsx
 index d2502ccf7..f3e6d269f 100644
 --- a/src/app/components/DeviceVerification.tsx
@@ -1793,6 +2033,59 @@ index 6c7eab17b..6097eddf0 100644
      setRequestState
    );
  
+diff --git a/src/app/hooks/__tests__/imageRetry.test.ts b/src/app/hooks/__tests__/imageRetry.test.ts
+new file mode 100644
+index 000000000..436c6746d
+--- /dev/null
++++ b/src/app/hooks/__tests__/imageRetry.test.ts
+@@ -0,0 +1,47 @@
++import { describe, expect, it } from 'vitest';
++import { decideImageRetry } from '../useImageRetry';
++
++const MAX_RETRIES = 4;
++
++describe('decideImageRetry', () => {
++  it('waits for the service worker instead of spending an attempt', () => {
++    // The invariant that matters: while the page is uncontrolled, authenticated
++    // media CANNOT load, so those failures say nothing about the image. Counting
++    // them is how an icon ends up permanently letter-only on a slow start.
++    expect(decideImageRetry(false, 0)).toEqual({ type: 'wait-for-sw' });
++    expect(decideImageRetry(false, MAX_RETRIES)).toEqual({ type: 'wait-for-sw' });
++    expect(decideImageRetry(false, 99)).toEqual({ type: 'wait-for-sw' });
++  });
++
++  it('retries while attempts remain, and fails only after the last one', () => {
++    for (let i = 0; i < MAX_RETRIES; i += 1) {
++      expect(decideImageRetry(true, i).type).toBe('retry');
++    }
++    expect(decideImageRetry(true, MAX_RETRIES)).toEqual({ type: 'fail' });
++    expect(decideImageRetry(true, MAX_RETRIES + 1)).toEqual({ type: 'fail' });
++  });
++
++  it('backs off exponentially', () => {
++    // rand = 0.5 → no jitter, so the bare ladder shows through.
++    const delays = [0, 1, 2, 3].map((n) => {
++      const d = decideImageRetry(true, n, 0.5);
++      return d.type === 'retry' ? d.delayMs : -1;
++    });
++    expect(delays).toEqual([500, 1000, 2000, 4000]);
++  });
++
++  it('jitters within ±25% so hundreds of avatars do not retry in lockstep', () => {
++    const at = (rand: number) => {
++      const d = decideImageRetry(true, 0, rand);
++      return d.type === 'retry' ? d.delayMs : -1;
++    };
++    expect(at(0)).toBe(375); // 500 * 0.75
++    expect(at(1)).toBe(625); // 500 * 1.25
++    // Distinct random values must give distinct delays — that spread IS the fix.
++    expect(at(0)).not.toBe(at(1));
++    [0, 0.25, 0.5, 0.75, 1].forEach((r) => {
++      expect(at(r)).toBeGreaterThanOrEqual(375);
++      expect(at(r)).toBeLessThanOrEqual(625);
++    });
++  });
++});
 diff --git a/src/app/hooks/useCommands.ts b/src/app/hooks/useCommands.ts
 index c02b0e94e..6541a9c36 100644
 --- a/src/app/hooks/useCommands.ts
@@ -1868,59 +2161,140 @@ index c02b0e94e..6541a9c36 100644
          description: 'Convert room to direct message',
 diff --git a/src/app/hooks/useImageRetry.ts b/src/app/hooks/useImageRetry.ts
 new file mode 100644
-index 000000000..099a331b9
+index 000000000..bfa8c2af6
 --- /dev/null
 +++ b/src/app/hooks/useImageRetry.ts
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,131 @@
 +import { ReactEventHandler, useCallback, useEffect, useRef, useState } from 'react';
 +
 +const MAX_RETRIES = 4;
++/** Never wait on the worker forever — fall back to the blind ladder after this. */
++const SW_CONTROL_TIMEOUT = 15000;
++
++const swSupported = (): boolean => 'serviceWorker' in navigator;
++const swControlling = (): boolean => !swSupported() || !!navigator.serviceWorker.controller;
++
++/**
++ * Run `cb` once the service worker controls this page — immediately if it already
++ * does, or if there is no worker to wait for. Returns a cleanup function.
++ */
++const whenSwControls = (cb: () => void): (() => void) => {
++  if (swControlling()) {
++    cb();
++    return () => undefined;
++  }
++  let done = false;
++  let timer: number | undefined;
++  const fire = () => {
++    if (done) return;
++    done = true;
++    if (timer) window.clearTimeout(timer);
++    navigator.serviceWorker.removeEventListener('controllerchange', fire);
++    cb();
++  };
++  timer = window.setTimeout(fire, SW_CONTROL_TIMEOUT);
++  navigator.serviceWorker.addEventListener('controllerchange', fire);
++  return () => {
++    done = true;
++    if (timer) window.clearTimeout(timer);
++    navigator.serviceWorker.removeEventListener('controllerchange', fire);
++  };
++};
++
++export type RetryDecision =
++  /** Not our image's fault yet — wait for the worker instead of spending an attempt. */
++  { type: 'wait-for-sw' } | { type: 'retry'; delayMs: number } | { type: 'fail' };
++
++/**
++ * What to do about a failed image load. Pure; exported for tests.
++ *
++ * `rand` is injected so the jitter is testable — see the hook's docs below for why
++ * each branch is the way it is.
++ */
++export const decideImageRetry = (
++  swControls: boolean,
++  attempts: number,
++  rand: number = Math.random()
++): RetryDecision => {
++  if (!swControls) return { type: 'wait-for-sw' };
++  if (attempts >= MAX_RETRIES) return { type: 'fail' };
++  const base = 500 * 2 ** attempts;
++  return { type: 'retry', delayMs: base * (0.75 + rand * 0.5) };
++};
 +
 +/**
 + * Retry an avatar/image load a few times before giving up to the fallback.
 + *
 + * Authenticated media (MSC3916) is served from /_matrix/client/v1/media/..., which a
 + * plain <img> can only load once the service worker is active to attach the auth
-+ * header. The SW registers on `load` (after first paint), so on a REFRESH an avatar
-+ * can fire before the SW controls the page → 401 → onError. Cinny's avatars then set a
-+ * permanent fallback, so the picture stays missing until the next reload — the
-+ * long-standing "pictures randomly don't load on refresh" bug.
++ * header. On a refresh an avatar can fire before the worker controls the page → 401 →
++ * onError. Upstream's avatars then set a permanent fallback, so the picture stays
++ * missing until the next reload — the long-standing "pictures randomly don't load on
++ * refresh" bug.
 + *
-+ * Here we instead retry with backoff (0.5s, 1s, 2s, 4s); by then the SW / access token
-+ * is virtually always ready, and remounting the <img> (via the returned `retryKey`)
-+ * re-fetches the same URL so the SW can auth it. Only after MAX_RETRIES do we fall back.
-+ * Resets when `src` changes.
++ * Two things matter beyond simply retrying:
++ *
++ * 1. WAIT FOR THE SIGNAL, DON'T GUESS THE DURATION. While the page is uncontrolled a
++ *    failure says nothing about the image, so it must not spend one of the four
++ *    attempts — on a slow start the ladder can burn all four before the worker is
++ *    even in charge, which is precisely how an icon ends up permanently letter-only.
++ *    `controllerchange` tells us exactly when authentication becomes possible; the
++ *    timeout keeps a page that will never be controlled from hanging on it.
++ *
++ * 2. JITTER. Every avatar on screen fails at the same instant for the same reason, so
++ *    a fixed ladder retries all of them at the same four instants. With hundreds of
++ *    rooms that is a self-inflicted thundering herd against a six-connections-per-host
++ *    limit, and the requests that lose the race burn attempts on congestion we caused.
++ *    ±25% spread breaks up the convoy.
++ *
++ * `retryKey` counts REMOUNTS, not attempts: remounting the <img> is what re-fetches,
++ * and the worker-wait path retries without spending an attempt, so tying the key to
++ * the attempt counter would leave that retry invisible to React and never re-request.
++ * Only MAX_RETRIES genuine, controlled failures fall back. Resets when `src` changes.
 + */
 +export const useImageRetry = (
 +  src?: string
 +): { retryKey: number; failed: boolean; onError: ReactEventHandler<HTMLImageElement> } => {
 +  const attemptRef = useRef(0);
 +  const timerRef = useRef<number | undefined>(undefined);
-+  const [, force] = useState(0);
++  const swWaitRef = useRef<(() => void) | undefined>(undefined);
++  const [retryKey, setRetryKey] = useState(0);
 +  const [failed, setFailed] = useState(false);
 +
 +  useEffect(() => {
 +    attemptRef.current = 0;
 +    setFailed(false);
-+    force((n) => n + 1);
++    setRetryKey((n) => n + 1);
 +    return () => {
 +      if (timerRef.current) window.clearTimeout(timerRef.current);
++      swWaitRef.current?.();
++      swWaitRef.current = undefined;
 +    };
 +  }, [src]);
 +
 +  const onError = useCallback<ReactEventHandler<HTMLImageElement>>(() => {
-+    if (attemptRef.current >= MAX_RETRIES) {
++    const decision = decideImageRetry(swControlling(), attemptRef.current);
++
++    if (decision.type === 'wait-for-sw') {
++      // The worker that attaches the auth header isn't in charge yet: this
++      // failure is about our startup, not the image. Retry when it takes over.
++      swWaitRef.current?.();
++      swWaitRef.current = whenSwControls(() => setRetryKey((n) => n + 1));
++      return;
++    }
++
++    if (decision.type === 'fail') {
 +      setFailed(true);
 +      return;
 +    }
-+    const delay = 500 * 2 ** attemptRef.current;
++
 +    attemptRef.current += 1;
 +    if (timerRef.current) window.clearTimeout(timerRef.current);
 +    // Re-render after the backoff so the <img> remounts (new retryKey) and re-fetches.
-+    timerRef.current = window.setTimeout(() => force((n) => n + 1), delay);
++    timerRef.current = window.setTimeout(() => setRetryKey((n) => n + 1), decision.delayMs);
 +  }, []);
 +
-+  return { retryKey: attemptRef.current, failed, onError };
++  return { retryKey, failed, onError };
 +};
 diff --git a/src/app/hooks/useRoomMembers.ts b/src/app/hooks/useRoomMembers.ts
 index df369011b..14fd8d44f 100644
@@ -2832,8 +3206,89 @@ index e94ba9726..3c08e5954 100644
      };
    }, [mx, setTypingMembers, hideActivity]);
  };
+diff --git a/src/app/utils/__tests__/mDirectConcurrency.test.ts b/src/app/utils/__tests__/mDirectConcurrency.test.ts
+new file mode 100644
+index 000000000..2f45d0cfa
+--- /dev/null
++++ b/src/app/utils/__tests__/mDirectConcurrency.test.ts
+@@ -0,0 +1,75 @@
++import { describe, expect, it } from 'vitest';
++import { MatrixClient } from 'matrix-js-sdk';
++import { addRoomIdToMDirect } from '../matrix';
++import { exploreInterleavings, Gate } from '../../../test/interleave';
++
++/**
++ * m.direct is a read-modify-write against the server, so two taggings that
++ * overlap both read the same base and the second write drops the first — the
++ * room silently stops being a DM.
++ *
++ * Today every caller happens to serialise (rateLimitedActions is a sequential
++ * for-loop), so this never fires in practice. That is exactly why it is worth a
++ * test: the guarantee lives in the CALLERS, and one `Promise.all` would take it
++ * away with nothing to notice. The invariant belongs to the function.
++ */
++
++type Content = Record<string, string[]>;
++
++const makeMx = (gate: Gate, read: () => Content, write: (c: Content) => void) => {
++  const emitted: unknown[] = [];
++  const mx = {
++    // Both the read and the write suspend, so the explorer can interleave them.
++    getAccountDataFromServer: async () => {
++      await gate.wait('read');
++      return structuredClone(read());
++    },
++    setAccountData: async (_type: string, content: Content) => {
++      await gate.wait('write');
++      write(structuredClone(content));
++    },
++    getAccountData: () => undefined,
++    store: { storeAccountDataEvents: () => undefined },
++    emit: (...args: unknown[]) => {
++      emitted.push(args);
++      return true;
++    },
++  };
++  return mx as unknown as MatrixClient;
++};
++
++describe('addRoomIdToMDirect under concurrency', () => {
++  it('keeps every tagged room under every interleaving', async () => {
++    let content: Content = {};
++
++    const report = await exploreInterleavings({
++      reset: () => {
++        content = {};
++      },
++      run: async (gate) => {
++        const mx = makeMx(
++          gate,
++          () => content,
++          (next) => {
++            content = next;
++          }
++        );
++        await Promise.all([
++          addRoomIdToMDirect(mx, '!room-a:server', '@alice:server'),
++          addRoomIdToMDirect(mx, '!room-b:server', '@bob:server'),
++        ]);
++      },
++      invariant: () => {
++        expect(content['@alice:server'] ?? []).toContain('!room-a:server');
++        expect(content['@bob:server'] ?? []).toContain('!room-b:server');
++      },
++    });
++
++    // With the operation serialised there IS only one possible ordering — that
++    // collapse of the interleaving space is exactly what the fix buys, so this
++    // asserts 1, not "many". The explorer's ability to find violations when they
++    // exist is proven separately, in src/test/__tests__/interleave.test.ts.
++    expect(report.explored).toBe(1);
++    expect(report.schedules[0]).toEqual(['read', 'write', 'read', 'write']);
++  });
++});
 diff --git a/src/app/utils/matrix.ts b/src/app/utils/matrix.ts
-index 4c86c4e26..cce5947ce 100644
+index 4c86c4e26..992f7ed58 100644
 --- a/src/app/utils/matrix.ts
 +++ b/src/app/utils/matrix.ts
 @@ -4,6 +4,7 @@ import {
@@ -2871,7 +3326,7 @@ index 4c86c4e26..cce5947ce 100644
    const member = getOldestMember(room.getJoinedMembers());
    if (member) return member.userId;
  
-@@ -225,16 +237,46 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
+@@ -225,55 +237,297 @@ export const guessDmRoomUserId = (room: Room, myUserId: string): string => {
    return member1?.userId ?? myUserId;
  };
  
@@ -2909,46 +3364,89 @@ index 4c86c4e26..cce5947ce 100644
 +  mx.emit(ClientEvent.AccountData, ev, prev ?? undefined);
 +};
 +
++// Serialise every m.direct read-modify-write.
++//
++// The sequence is read-from-server → merge → write-back, so two taggings that
++// OVERLAP both read the same base and the second write silently drops the first:
++// the room just stops being a DM. Callers happen to be sequential today
++// (rateLimitedActions is a for-loop), which means the guarantee currently belongs
++// to the callers — one `Promise.all` would take it away with nothing to notice.
++// A one-at-a-time queue puts the guarantee back on the operation itself. Costs an
++// await, removes a whole class; see mDirectConcurrency.test.ts.
++let mDirectQueue: Promise<unknown> = Promise.resolve();
++const withMDirectLock = <T>(task: () => Promise<T>): Promise<T> => {
++  const run = mDirectQueue.then(task, task);
++  // The chain must survive a failed task, or one rejection wedges every later write.
++  mDirectQueue = run.then(
++    () => undefined,
++    () => undefined
++  );
++  return run;
++};
++
  export const addRoomIdToMDirect = async (
    mx: MatrixClient,
    roomId: string,
    userId: string
- ): Promise<void> => {
+-): Promise<void> => {
 -  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
 -  let userIdToRoomIds: Record<string, string[]> = {};
--
++): Promise<void> =>
++  withMDirectLock(async () => {
++    const userIdToRoomIds = await readMDirect(mx);
++
++    // remove it from the lists of any others users
++    // (it can only be a DM room for one person)
++    Object.keys(userIdToRoomIds).forEach((targetUserId) => {
++      const roomIds = userIdToRoomIds[targetUserId];
++
++      if (targetUserId !== userId) {
++        const indexOfRoomId = roomIds.indexOf(roomId);
++        if (indexOfRoomId > -1) {
++          roomIds.splice(indexOfRoomId, 1);
++        }
++      }
++    });
+ 
 -  if (typeof mDirectsEvent !== 'undefined')
 -    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
-+  const userIdToRoomIds = await readMDirect(mx);
++    const roomIds = userIdToRoomIds[userId] || [];
++    if (roomIds.indexOf(roomId) === -1) {
++      roomIds.push(roomId);
++    }
++    userIdToRoomIds[userId] = roomIds;
  
-   // remove it from the lists of any others users
-   // (it can only be a DM room for one person)
-@@ -255,15 +297,11 @@ export const addRoomIdToMDirect = async (
-   }
-   userIdToRoomIds[userId] = roomIds;
+-  // remove it from the lists of any others users
+-  // (it can only be a DM room for one person)
+-  Object.keys(userIdToRoomIds).forEach((targetUserId) => {
+-    const roomIds = userIdToRoomIds[targetUserId];
++    await commitMDirect(mx, userIdToRoomIds);
++  });
  
--  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
-+  await commitMDirect(mx, userIdToRoomIds);
- };
- 
- export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> => {
--  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
--  let userIdToRoomIds: Record<string, string[]> = {};
--
--  if (typeof mDirectsEvent !== 'undefined')
--    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
-+  const userIdToRoomIds = await readMDirect(mx);
- 
-   Object.keys(userIdToRoomIds).forEach((targetUserId) => {
-     const roomIds = userIdToRoomIds[targetUserId];
-@@ -273,7 +311,199 @@ export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string):
-     }
+-    if (targetUserId !== userId) {
++export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> =>
++  // Same queue as the add: an add and a remove that overlap clobber each other
++  // exactly as two adds would.
++  withMDirectLock(async () => {
++    const userIdToRoomIds = await readMDirect(mx);
++
++    Object.keys(userIdToRoomIds).forEach((targetUserId) => {
++      const roomIds = userIdToRoomIds[targetUserId];
+       const indexOfRoomId = roomIds.indexOf(roomId);
+       if (indexOfRoomId > -1) {
+         roomIds.splice(indexOfRoomId, 1);
+       }
+-    }
++    });
++
++    await commitMDirect(mx, userIdToRoomIds);
    });
  
--  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
-+  await commitMDirect(mx, userIdToRoomIds);
-+};
-+
+-  const roomIds = userIdToRoomIds[userId] || [];
+-  if (roomIds.indexOf(roomId) === -1) {
+-    roomIds.push(roomId);
+-  }
+-  userIdToRoomIds[userId] = roomIds;
 +// Bridge-aware DM detection. Kept local rather than importing from utils/bridges
 +// because bridges.ts imports from THIS module (a cycle). Mirrors its heuristics.
 +const DM_BRIDGE_KEYWORDS = ['bridge', 'bot', 'relay'];
@@ -2973,7 +3471,8 @@ index 4c86c4e26..cce5947ce 100644
 +  const name = (member.rawDisplayName ?? member.name ?? '').toLowerCase();
 +  return name === myDisplayName.toLowerCase();
 +};
-+
+ 
+-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
 +// Another of YOUR OWN accounts (same Matrix localpart, different server) — e.g.
 +// @joop:poliglota for @joop:chat.kiefte. It isn't a conversation partner, so a
 +// room whose only other member is your alt is NOT a DM (it's why community rooms
@@ -2996,8 +3495,11 @@ index 4c86c4e26..cce5947ce 100644
 +  // is the "partner"). Mistagged current DMs get this so the dialog can suggest
 +  // removing them; candidates are only ever added when this is true.
 +  valid: boolean;
-+};
-+
+ };
+ 
+-export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> => {
+-  const mDirectsEvent = mx.getAccountData(AccountDataEvent.Direct as any);
+-  let userIdToRoomIds: Record<string, string[]> = {};
 +// Force a full member fetch for a small room so bot/puppet classification works
 +// even under the lean sliding-sync roster. No-op-safe; bounded by the caller.
 +const ensureRoster = async (room: Room): Promise<void> => {
@@ -3008,7 +3510,9 @@ index 4c86c4e26..cce5947ce 100644
 +    /* classify with whatever roster we have */
 +  }
 +};
-+
+ 
+-  if (typeof mDirectsEvent !== 'undefined')
+-    userIdToRoomIds = structuredClone(mDirectsEvent.getContent());
 +// Find the bridge bot in a room's roster (for grouping), if any.
 +const roomBridgeBot = (room: Room, self: string | null): RoomMember | undefined =>
 +  room.getJoinedMembers().find((m) => m.userId !== self && isBridgeBotMember(m));
@@ -3074,7 +3578,12 @@ index 4c86c4e26..cce5947ce 100644
 +      valid: true,
 +    });
 +  }
-+
+ 
+-  Object.keys(userIdToRoomIds).forEach((targetUserId) => {
+-    const roomIds = userIdToRoomIds[targetUserId];
+-    const indexOfRoomId = roomIds.indexOf(roomId);
+-    if (indexOfRoomId > -1) {
+-      roomIds.splice(indexOfRoomId, 1);
 +  // Current DMs: everything already in m.direct, so the user can review + untag.
 +  // Mark whether each STILL looks like a real 1:1 — mistags (a group, a bot, or a
 +  // room whose only "partner" is your own alt) come back valid:false so the dialog
@@ -3095,7 +3604,8 @@ index 4c86c4e26..cce5947ce 100644
 +        valid: false,
 +      });
 +      continue;
-+    }
+     }
+-  });
 +    const count = room.getJoinedMemberCount();
 +    // eslint-disable-next-line no-await-in-loop
 +    if (count >= 2 && count <= 8) await ensureRoster(room);
@@ -3114,7 +3624,8 @@ index 4c86c4e26..cce5947ce 100644
 +      valid,
 +    });
 +  }
-+
+ 
+-  await mx.setAccountData(AccountDataEvent.Direct as any, userIdToRoomIds as any);
 +  return rows;
 +};
 +
@@ -3360,6 +3871,397 @@ index 000000000..dfe4b5f9d
 +      console.info(`[Wally][verify] recv ${type} from ${entry.from ?? '?'} txn=${entry.txn ?? '?'}`);
 +    }
 +  });
++};
+diff --git a/src/index.tsx b/src/index.tsx
+index 6cc0ca38f..fc93a82af 100644
+--- a/src/index.tsx
++++ b/src/index.tsx
+@@ -32,8 +32,18 @@ if ('serviceWorker' in navigator) {
+     pushSessionToSW(session?.baseUrl, session?.accessToken);
+   };
+ 
++  // Send it NOW, before waiting on any promise. On a reload the page is already
++  // controlled, but the first avatar requests go out while register()/ready()
++  // are still pending — and a media request that reaches the worker before the
++  // token does gets served unauthenticated. When we are not controlled yet this
++  // call queues inside pushSessionToSW and lands on controllerchange.
++  sendSessionToSW();
++
+   navigator.serviceWorker.register(swUrl).then(sendSessionToSW);
+   navigator.serviceWorker.ready.then(sendSessionToSW);
++  // A worker update swaps the controller mid-session; the new one starts with no
++  // sessions at all, so re-send rather than wait for it to ask.
++  navigator.serviceWorker.addEventListener('controllerchange', sendSessionToSW);
+ 
+   navigator.serviceWorker.addEventListener('message', (ev) => {
+     const { type } = ev.data ?? {};
+diff --git a/src/sw-session.ts b/src/sw-session.ts
+index 4b2ec055d..aace382c3 100644
+--- a/src/sw-session.ts
++++ b/src/sw-session.ts
+@@ -1,10 +1,48 @@
++type PendingSession = { baseUrl?: string; accessToken?: string };
++
++let pending: PendingSession | undefined;
++let waitingForControl = false;
++
++/**
++ * Hand the current session to the service worker, which is the only thing that
++ * can attach the auth header to authenticated-media (MSC3916) requests.
++ *
++ * The subtlety is `navigator.serviceWorker.controller`: it is null until a
++ * worker actually controls THIS page — on a first load, and again for a while
++ * after the worker updates. Dropping the session in that window (what line 3
++ * used to do) is silent and permanent: the worker never learns the token, every
++ * avatar request 401s, and room icons render initials instead of pictures for
++ * the rest of the session. The worker does ask for a session when it sees an
++ * unauthenticated media request, but that ask times out after 3s and then
++ * serves the request WITHOUT auth — so a slow answer still costs a picture.
++ *
++ * So never drop it: with no controller yet, remember the session and send it the
++ * moment `controllerchange` says we are controlled. Latest call wins.
++ */
+ export function pushSessionToSW(baseUrl?: string, accessToken?: string) {
+   if (!('serviceWorker' in navigator)) return;
+-  if (!navigator.serviceWorker.controller) return;
+ 
+-  navigator.serviceWorker.controller.postMessage({
+-    type: 'setSession',
+-    accessToken,
+-    baseUrl,
+-  });
++  const { controller } = navigator.serviceWorker;
++  if (controller) {
++    controller.postMessage({
++      type: 'setSession',
++      accessToken,
++      baseUrl,
++    });
++    return;
++  }
++
++  pending = { baseUrl, accessToken };
++  if (waitingForControl) return;
++  waitingForControl = true;
++  navigator.serviceWorker.addEventListener(
++    'controllerchange',
++    () => {
++      waitingForControl = false;
++      const session = pending;
++      pending = undefined;
++      if (session) pushSessionToSW(session.baseUrl, session.accessToken);
++    },
++    { once: true }
++  );
+ }
+diff --git a/src/test/__tests__/interleave.test.ts b/src/test/__tests__/interleave.test.ts
+new file mode 100644
+index 000000000..cdd10d551
+--- /dev/null
++++ b/src/test/__tests__/interleave.test.ts
+@@ -0,0 +1,151 @@
++import { describe, expect, it } from 'vitest';
++import { exploreInterleavings, Gate } from '../interleave';
++
++/**
++ * Self-test for the interleaving explorer.
++ *
++ * A detector that cannot be shown to detect is worse than none: every downstream
++ * test would pass for the wrong reason. So this pins both directions — it finds
++ * the violation in a knowingly racy operation, and it does not cry wolf over a
++ * serialised one.
++ */
++
++/** Read-modify-write with no mutual exclusion — the classic lost update. */
++const makeStore = () => {
++  let value: string[] = [];
++  return {
++    get: () => value,
++    reset: () => {
++      value = [];
++    },
++    racyAppend: async (gate: Gate, item: string): Promise<void> => {
++      await gate.wait(`read:${item}`);
++      const next = [...value, item];
++      await gate.wait(`write:${item}`);
++      value = next;
++    },
++  };
++};
++
++describe('exploreInterleavings', () => {
++  it('finds the interleaving that loses an update', async () => {
++    const store = makeStore();
++
++    await expect(
++      exploreInterleavings({
++        reset: () => store.reset(),
++        run: async (gate) => {
++          await Promise.all([store.racyAppend(gate, 'a'), store.racyAppend(gate, 'b')]);
++        },
++        invariant: () => {
++          expect(store.get()).toHaveLength(2);
++        },
++      })
++    ).rejects.toThrow(/invariant violated by interleaving/);
++  });
++
++  it('names the schedule that broke it, so the failure reproduces', async () => {
++    const store = makeStore();
++    let message = '';
++    try {
++      await exploreInterleavings({
++        reset: () => store.reset(),
++        run: async (gate) => {
++          await Promise.all([store.racyAppend(gate, 'a'), store.racyAppend(gate, 'b')]);
++        },
++        invariant: () => {
++          expect(store.get()).toHaveLength(2);
++        },
++      });
++    } catch (err) {
++      message = (err as Error).message;
++    }
++    // Both reads must precede a write for an update to be lost — the report has
++    // to show that shape, not merely say "something went wrong".
++    expect(message).toMatch(/read:a.*read:b|read:b.*read:a/);
++    expect(message).toMatch(/→/);
++  });
++
++  it('passes a serialised operation, and collapses it to a single ordering', async () => {
++    const store = makeStore();
++    let chain: Promise<unknown> = Promise.resolve();
++    const serialAppend = (gate: Gate, item: string): Promise<void> => {
++      const run = chain.then(() => store.racyAppend(gate, item));
++      chain = run.then(
++        () => undefined,
++        () => undefined
++      );
++      return run;
++    };
++
++    const report = await exploreInterleavings({
++      reset: () => {
++        store.reset();
++        chain = Promise.resolve();
++      },
++      run: async (gate) => {
++        await Promise.all([serialAppend(gate, 'a'), serialAppend(gate, 'b')]);
++      },
++      invariant: () => {
++        expect(store.get()).toHaveLength(2);
++      },
++    });
++
++    expect(report.explored).toBe(1);
++    expect(report.schedules[0]).toEqual(['read:a', 'write:a', 'read:b', 'write:b']);
++  });
++
++  it('explores more than one ordering when operations genuinely overlap', async () => {
++    const seen: string[][] = [];
++    const report = await exploreInterleavings({
++      run: async (gate) => {
++        await Promise.all([gate.wait('x'), gate.wait('y')]);
++      },
++      invariant: (schedule) => {
++        seen.push(schedule);
++      },
++    });
++    expect(report.explored).toBe(2);
++    expect(seen).toContainEqual(['x', 'y']);
++    expect(seen).toContainEqual(['y', 'x']);
++  });
++
++  it('finds a violation that ONLY a non-default ordering produces', async () => {
++    // The lost-update fixture above breaks under the default schedule too, so it
++    // would still "pass" against an explorer that never explores. This one is
++    // safe in arrival order and only breaks when the alternative is taken, so it
++    // fails if forking ever stops working — which is the way this harness would
++    // realistically rot.
++    let x = 0;
++    let observed = -1;
++
++    const run = async (gate: Gate) => {
++      const a = (async () => {
++        await gate.wait('a:set');
++        x = 1;
++        await gate.wait('a:observe');
++        observed = x;
++      })();
++      const b = (async () => {
++        await gate.wait('b:overwrite');
++        x = 2;
++      })();
++      await Promise.all([a, b]);
++    };
++
++    await expect(
++      exploreInterleavings({
++        reset: () => {
++          x = 0;
++          observed = -1;
++        },
++        run,
++        // Holds in arrival order (a:set → b:overwrite → a:observe ⇒ 2).
++        // Fails when a:observe is taken before b:overwrite ⇒ 1.
++        invariant: () => {
++          expect(observed).toBe(2);
++        },
++      })
++    ).rejects.toThrow(/a:observe/);
++  });
++});
+diff --git a/src/test/interleave.ts b/src/test/interleave.ts
+new file mode 100644
+index 000000000..dc93747a1
+--- /dev/null
++++ b/src/test/interleave.ts
+@@ -0,0 +1,146 @@
++/**
++ * Deterministic interleaving explorer — the closest useful analogue to Go's race
++ * detector for this codebase.
++ *
++ * `go test -race` works by watching real memory accesses from real threads and
++ * checking happens-before. None of that exists here: one thread, no shared
++ * mutable memory between workers. What we have instead are ASYNC INTERLEAVINGS —
++ * two operations suspended at `await` points, resuming in an order the runtime
++ * picks and a test never varies. The classic shape is read-modify-write:
++ *
++ *     const state = await read();   // both operations read the SAME value
++ *     state.push(x);
++ *     await write(state);           // second write silently drops the first
++ *
++ * Running that twice in a test passes every time, because a test's fake `read`
++ * resolves in call order. The bug only appears when the two overlap.
++ *
++ * So: the code under test suspends on test doubles that call `gate.wait()`, and
++ * this explorer enumerates every order in which those suspension points can be
++ * released, re-running from a fresh state each time and checking an invariant
++ * after each complete run. A violation is reported with the exact schedule that
++ * produced it, so it reproduces.
++ *
++ * LIMITS, because a detector you trust wrongly is worse than none:
++ *  - It only sees suspension points routed through `gate.wait()`. Real timers,
++ *    real network, and un-gated promises are invisible to it.
++ *  - It explores orderings, not timings. Anything that depends on wall-clock
++ *    duration is out of scope.
++ *  - It cannot see non-async races at all — a derived value recomputed from
++ *    live mutable state has no suspension point to gate. Those need the static
++ *    audit instead (see src/__tests__/concurrency-audit.test.ts).
++ */
++
++export type Gate = {
++  /** Suspend here until the explorer releases this point. Call from test doubles. */
++  wait(label: string): Promise<void>;
++};
++
++type Waiter = { label: string; release: () => void };
++
++export type InterleavingReport = {
++  /** How many distinct interleavings were run. */
++  explored: number;
++  /** The schedules run, as the label order they released. */
++  schedules: string[][];
++};
++
++const flush = (): Promise<void> =>
++  new Promise((resolve) => {
++    setTimeout(resolve, 0);
++  });
++
++export type ExploreOptions = {
++  /** Start every concurrent operation. Must resolve when all of them are done. */
++  run: (gate: Gate) => Promise<void>;
++  /** Fresh state before each interleaving. */
++  reset?: () => void;
++  /** Throw to report a violation. Runs after each complete interleaving. */
++  invariant: (schedule: string[]) => void;
++  /** Safety cap on explored paths (combinatorial). Default 200. */
++  maxPaths?: number;
++};
++
++/**
++ * Explore every order in which the gated suspension points can resume, checking
++ * the invariant after each. Throws on the first violating schedule.
++ */
++export const exploreInterleavings = async (
++  options: ExploreOptions
++): Promise<InterleavingReport> => {
++  const { run, reset, invariant, maxPaths = 200 } = options;
++
++  // A schedule is the choice index taken at each decision point. We cannot rewind
++  // a running program, so each schedule is replayed from scratch; unexplored
++  // branches discovered during a run are queued as new schedules.
++  const queue: number[][] = [[]];
++  const schedules: string[][] = [];
++  let explored = 0;
++
++  while (queue.length > 0) {
++    if (explored >= maxPaths) break;
++    const plan = queue.shift() as number[];
++    reset?.();
++
++    const pending: Waiter[] = [];
++    const gate: Gate = {
++      wait: (label: string) =>
++        new Promise<void>((resolve) => {
++          pending.push({ label, release: resolve });
++        }),
++    };
++
++    let finished = false;
++    const done = run(gate).then(
++      () => {
++        finished = true;
++      },
++      (err) => {
++        finished = true;
++        throw err;
++      }
++    );
++
++    const taken: string[] = [];
++    const branching: number[] = [];
++    let depth = 0;
++
++    // Drive the run: at each step let everything runnable settle, then release
++    // exactly one suspension point.
++    for (;;) {
++      // eslint-disable-next-line no-await-in-loop
++      await flush();
++      if (finished || pending.length === 0) break;
++
++      const choice = depth < plan.length ? plan[depth] : 0;
++      branching[depth] = pending.length;
++      const picked = pending.splice(Math.min(choice, pending.length - 1), 1)[0];
++      taken.push(picked.label);
++      picked.release();
++      depth += 1;
++    }
++
++    // eslint-disable-next-line no-await-in-loop
++    await done;
++    explored += 1;
++    schedules.push(taken);
++
++    try {
++      invariant(taken);
++    } catch (err) {
++      const detail = taken.length > 0 ? taken.join(' → ') : '(no suspension points)';
++      throw new Error(
++        `invariant violated by interleaving: ${detail}\n${(err as Error).message ?? String(err)}`
++      );
++    }
++
++    // Fork the branches this run defaulted past.
++    for (let i = plan.length; i < branching.length; i += 1) {
++      for (let alt = 1; alt < branching[i]; alt += 1) {
++        queue.push([...plan.slice(0, i), alt]);
++      }
++    }
++  }
++
++  return { explored, schedules };
 +};
 diff --git a/src/types/matrix/accountData.ts b/src/types/matrix/accountData.ts
 index 987159964..254e44f22 100644

@@ -4,3 +4,4 @@ c312a5d6  branding: replace Cinny C-mark with compacted trash cube (Wally pun)
 8b845ace  branding: 5.0.0 clean break — drop Cinny migration shims, rename to wally
 34c1a156  branding: rewrite the README for this fork
 e827a90e  branding: add the Bitcoin Cash QR to the support corner
+dd239df2  branding: surface the support corner in settings → About
