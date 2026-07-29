@@ -109,4 +109,43 @@ describe('exploreInterleavings', () => {
     expect(seen).toContainEqual(['x', 'y']);
     expect(seen).toContainEqual(['y', 'x']);
   });
+
+  it('finds a violation that ONLY a non-default ordering produces', async () => {
+    // The lost-update fixture above breaks under the default schedule too, so it
+    // would still "pass" against an explorer that never explores. This one is
+    // safe in arrival order and only breaks when the alternative is taken, so it
+    // fails if forking ever stops working — which is the way this harness would
+    // realistically rot.
+    let x = 0;
+    let observed = -1;
+
+    const run = async (gate: Gate) => {
+      const a = (async () => {
+        await gate.wait('a:set');
+        x = 1;
+        await gate.wait('a:observe');
+        observed = x;
+      })();
+      const b = (async () => {
+        await gate.wait('b:overwrite');
+        x = 2;
+      })();
+      await Promise.all([a, b]);
+    };
+
+    await expect(
+      exploreInterleavings({
+        reset: () => {
+          x = 0;
+          observed = -1;
+        },
+        run,
+        // Holds in arrival order (a:set → b:overwrite → a:observe ⇒ 2).
+        // Fails when a:observe is taken before b:overwrite ⇒ 1.
+        invariant: () => {
+          expect(observed).toBe(2);
+        },
+      })
+    ).rejects.toThrow(/a:observe/);
+  });
 });
