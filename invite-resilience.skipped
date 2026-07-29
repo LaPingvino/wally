@@ -1,2 +1,4 @@
 440f697a  invite-resilience: always join with via servers, and retry the invite-settling race
 f22e9911  invite-resilience: make joining a chat immediate, everywhere
+63c0a685  invite-resilience: clear the accepted invite optimistically too
+24c6b060  invite-resilience: declining an invite clears it optimistically too
