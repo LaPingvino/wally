@@ -33,8 +33,18 @@ if ('serviceWorker' in navigator) {
     pushSessionToSW(session?.baseUrl, session?.accessToken);
   };
 
+  // Send it NOW, before waiting on any promise. On a reload the page is already
+  // controlled, but the first avatar requests go out while register()/ready()
+  // are still pending — and a media request that reaches the worker before the
+  // token does gets served unauthenticated. When we are not controlled yet this
+  // call queues inside pushSessionToSW and lands on controllerchange.
+  sendSessionToSW();
+
   navigator.serviceWorker.register(swUrl).then(sendSessionToSW);
   navigator.serviceWorker.ready.then(sendSessionToSW);
+  // A worker update swaps the controller mid-session; the new one starts with no
+  // sessions at all, so re-send rather than wait for it to ask.
+  navigator.serviceWorker.addEventListener('controllerchange', sendSessionToSW);
 
   navigator.serviceWorker.addEventListener('message', (ev) => {
     const { type } = ev.data ?? {};
