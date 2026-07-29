@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, Button, Icon, Icons, Text, config, toRem } from 'folds';
 import { Page, PageHero, PageHeroSection } from '../../components/page';
 import WallySVG from '../../../../public/res/svg/wally.svg';
+import BchQrPNG from '../../../../public/res/bch-qr.png';
 import { APP_VERSION } from '../../version';
 import { copyToClipboard } from '../../utils/dom';
 import { announce } from '../../utils/announce';
@@ -22,6 +23,7 @@ const SUPPORT_BCH_SHORT = 'qrrqxuwd…ju53j7glf20';
 
 function SupportSection() {
   const [open, setOpen] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -88,7 +90,33 @@ function SupportSection() {
                 {copied ? 'Copied' : 'Copy address'}
               </Text>
             </Button>
+            <Button
+              size="300"
+              variant="Secondary"
+              fill="Soft"
+              radii="300"
+              onClick={() => setShowQr(!showQr)}
+              aria-expanded={showQr}
+              aria-controls="support-bch-qr"
+            >
+              <Text as="span" size="B300">
+                QR
+              </Text>
+            </Button>
           </Box>
+          {showQr && (
+            <Box id="support-bch-qr" justifyContent="Center">
+              <a href={SUPPORT_BCH}>
+                <img
+                  src={BchQrPNG}
+                  alt={`Bitcoin Cash QR code for ${SUPPORT_BCH}`}
+                  width="185"
+                  height="185"
+                  loading="lazy"
+                />
+              </a>
+            </Box>
+          )}
         </Box>
       )}
     </Box>
