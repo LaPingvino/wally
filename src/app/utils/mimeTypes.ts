@@ -31,6 +31,11 @@ export const APPLICATION_MIME_TYPES = [
   'application/javascript',
   'application/xhtml+xml',
   'application/xml',
+  // Ogg audio is very often labelled application/ogg (that IS the registered
+  // container type). Without it here the blob is rejected as unsafe and the
+  // player never gets a source — see getBlobSafeMimeType below, which maps it
+  // back to the media type the <audio> element can actually play.
+  'application/ogg',
 ];
 
 export const TEXT_MIME_TYPE = [
@@ -114,6 +119,11 @@ export const getBlobSafeMimeType = (mimeType: string) => {
   // Required for Chromium browsers
   if (type === 'video/quicktime') {
     return 'video/mp4';
+  }
+  // application/ogg is the container type; browsers only play it from an
+  // <audio> element when it is served as audio/ogg.
+  if (type === 'application/ogg') {
+    return 'audio/ogg';
   }
   return type;
 };

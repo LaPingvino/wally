@@ -8,7 +8,7 @@ import LogoUnreadSVG from '../../../../public/res/svg/wally-unread.svg';
 import LogoHighlightSVG from '../../../../public/res/svg/wally-highlight.svg';
 import NotificationSound from '../../../../public/sound/notification.ogg';
 import InviteSound from '../../../../public/sound/invite.ogg';
-import { notificationPermission, setFavicon } from '../../utils/dom';
+import { notificationPermission, setFavicon, showNotification } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { EmojiFont, getSettings, settingsAtom } from '../../state/settings';
 import { allInvitesAtom } from '../../state/room-list/inviteList';
@@ -302,17 +302,18 @@ function InviteNotifications() {
 
   const notify = useCallback(
     (count: number) => {
-      const noti = new window.Notification('Invitation', {
-        icon: LogoSVG,
-        badge: LogoSVG,
-        body: `You have ${count} new invitation request.`,
-        silent: true,
-      });
-
-      noti.onclick = () => {
-        if (!window.closed) navigate(getInboxInvitesPath());
-        noti.close();
-      };
+      showNotification(
+        'Invitation',
+        {
+          icon: LogoSVG,
+          badge: LogoSVG,
+          body: `You have ${count} new invitation request.`,
+          silent: true,
+        },
+        () => {
+          if (!window.closed) navigate(getInboxInvitesPath());
+        }
+      );
     },
     [navigate]
   );
@@ -372,21 +373,22 @@ function MessageNotifications() {
       roomId: string;
       eventId: string;
     }) => {
-      const noti = new window.Notification(roomName, {
-        icon: roomAvatar,
-        badge: roomAvatar,
-        body: `New inbox notification from ${username}`,
-        silent: true,
-      });
-
-      noti.onclick = () => {
-        if (!window.closed) {
-          window.focus();
-          navigate(getHomeRoomPath(roomId, eventId));
+      const noti = showNotification(
+        roomName,
+        {
+          icon: roomAvatar,
+          badge: roomAvatar,
+          body: `New inbox notification from ${username}`,
+          silent: true,
+        },
+        () => {
+          if (!window.closed) {
+            window.focus();
+            navigate(getHomeRoomPath(roomId, eventId));
+          }
+          notifRef.current = undefined;
         }
-        noti.close();
-        notifRef.current = undefined;
-      };
+      );
 
       notifRef.current?.close();
       notifRef.current = noti;

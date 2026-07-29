@@ -236,6 +236,58 @@ export const notificationPermission = (permission: NotificationPermission) => {
   return false;
 };
 
+/**
+ * Raise a desktop notification, on every platform or not at all — but never by
+ * throwing.
+ *
+ * `notificationPermission('granted')` is a permission check, and permission is
+ * NOT capability. On Android Chrome the Notification API exists and reports
+ * `granted`, yet `new Notification()` throws `TypeError: Illegal constructor`:
+ * notifications there may only be raised through the service worker
+ * (https://issues.chromium.org/issues/40415865). Every caller had that
+ * constructor sitting bare inside a sync handler, so on Android the throw took
+ * out the handler that raised it — a timeline listener — rather than merely
+ * losing a notification.
+ *
+ * Probing by CONSTRUCTING a notification would be worse than the bug (the probe
+ * itself pops an empty notification), so we don't feature-detect: we try the
+ * direct path, and on failure hand off to the service worker, which is the
+ * supported route on exactly the platforms where the constructor fails. If that
+ * is unavailable too, the notification is dropped — silence is an acceptable
+ * outcome here, a crash is not.
+ *
+ * The service-worker path can't carry `onClick`: activating those notifications
+ * needs a `notificationclick` handler inside the worker. Until we add one,
+ * Android gets the notification without the click-to-navigate.
+ *
+ * Returns the Notification when the direct path worked, so a caller can close
+ * it later (replacing its own previous one); `undefined` on the fallback path,
+ * where there is no handle to hold.
+ */
+export const showNotification = (
+  title: string,
+  options: NotificationOptions,
+  onClick?: () => void
+): Notification | undefined => {
+  try {
+    const notification = new window.Notification(title, options);
+    if (onClick) {
+      notification.onclick = () => {
+        onClick();
+        notification.close();
+      };
+    }
+    return notification;
+  } catch {
+    navigator.serviceWorker?.ready
+      .then((registration) => registration.showNotification(title, options))
+      .catch(() => {
+        // no service worker, or it refused too — drop the notification
+      });
+    return undefined;
+  }
+};
+
 export const getMouseEventCords = (event: MouseEvent) => ({
   x: event.clientX,
   y: event.clientY,

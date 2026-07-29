@@ -22,6 +22,25 @@ Thank you for your understanding.
 
 <img align="center" src="https://raw.githubusercontent.com/cinnyapp/cinny-site/main/assets/preview2-light.png" height="380">
 
+## Fixes not yet upstream
+
+This fork carries bug fixes that have not landed upstream. Each was verified against the
+upstream `dev` branch on 2026-07-29 and was still unfixed there at the time of writing:
+
+* **Cross-signing account data was read under the wrong keys.** `m.cross_signing.self` and
+  `m.cross_signing.user`, where the spec says `m.cross_signing.self_signing` and
+  `m.cross_signing.user_signing` — so every lookup silently missed.
+* **Device verification could cancel itself.** `verifier.verify()` was driven from both ends,
+  including the initiating one, where only the accepting side should drive it. The symptom was
+  an emoji comparison that connected and then cancelled on its own.
+* **Bridged 1:1 chats were filed under the bridge bot.** DM identity fell back to an
+  oldest-joined-member heuristic, and on a bridged room the bot almost always joins first — so
+  the chat took the bot's name and avatar instead of the person's.
+* **Shared locations rendered as raw `geo:` URIs.** An `m.location` message displayed
+  `geo:52.52,13.40;u=35` as its text rather than a readable label.
+* **Desktop notifications ignored per-room push rules.** A muted room still raised a system
+  notification for every message; notifications are now gated on the event's push actions.
+
 ## Getting started
 The web app is available at [app.cinny.in](https://app.cinny.in/) and gets updated on each new release. The `dev` branch is continuously deployed at [dev.cinny.in](https://dev.cinny.in) but keep in mind that it could have things broken.
 
