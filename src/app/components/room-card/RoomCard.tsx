@@ -27,6 +27,7 @@ import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
 import { onEnterOrSpace } from '../../utils/keyboard';
 import { RoomType, StateEvent } from '../../../types/matrix/room';
 import { useJoinedRoomId } from '../../hooks/useJoinedRoomId';
+import { useJoinRoom } from '../../hooks/useJoinRoom';
 import { useElementSizeObserver } from '../../hooks/useElementSizeObserver';
 import { getRoomAvatarUrl, getStateEvent } from '../../utils/room';
 import { useStateEventCallback } from '../../hooks/useStateEventCallback';
@@ -184,8 +185,9 @@ export const RoomCard = as<'div', RoomCardProps>(
       )
     );
 
+    const joinRoom = useJoinRoom();
     const [joinState, join] = useAsyncCallback<Room, MatrixError, []>(
-      useCallback(() => mx.joinRoom(roomIdOrAlias, { viaServers }), [mx, roomIdOrAlias, viaServers])
+      useCallback(() => joinRoom(roomIdOrAlias, viaServers), [joinRoom, roomIdOrAlias, viaServers])
     );
     const joining =
       joinState.status === AsyncStatus.Loading || joinState.status === AsyncStatus.Success;

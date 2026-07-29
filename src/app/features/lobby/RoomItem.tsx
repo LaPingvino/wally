@@ -20,6 +20,7 @@ import { IHierarchyRoom } from 'matrix-js-sdk/lib/@types/spaces';
 import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { SequenceCard } from '../../components/sequence-card';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { useJoinRoom } from '../../hooks/useJoinRoom';
 import { HierarchyItem } from '../../hooks/useSpaceHierarchy';
 import { millify } from '../../plugins/millify';
 import { LocalRoomSummaryLoader } from '../../components/RoomSummaryLoader';
@@ -42,10 +43,10 @@ type RoomJoinButtonProps = {
   via?: string[];
 };
 function RoomJoinButton({ roomId, via }: RoomJoinButtonProps) {
-  const mx = useMatrixClient();
+  const joinRoom = useJoinRoom();
 
   const [joinState, join] = useAsyncCallback<Room, MatrixError, []>(
-    useCallback(() => mx.joinRoom(roomId, { viaServers: via }), [mx, roomId, via])
+    useCallback(() => joinRoom(roomId, via), [joinRoom, roomId, via])
   );
 
   const canJoin = joinState.status === AsyncStatus.Idle || joinState.status === AsyncStatus.Error;

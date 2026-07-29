@@ -23,6 +23,7 @@ import {
   removeRoomIdFromMDirect,
 } from '../utils/matrix';
 import { useRoomNavigate } from './useRoomNavigate';
+import { useJoinRoom } from './useJoinRoom';
 import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
@@ -173,6 +174,7 @@ export type CommandRecord = Record<Command, CommandContent>;
 
 export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
   const { navigateRoom } = useRoomNavigate();
+  const joinRoom = useJoinRoom();
 
   const commands: CommandRecord = useMemo(
     () => ({
@@ -234,9 +236,12 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
           const roomIdOrAliases = rawIds.filter(
             (idOrAlias) => isRoomId(idOrAlias) || isRoomAlias(idOrAlias)
           );
-          roomIdOrAliases.forEach(async (idOrAlias) => {
-            await mx.joinRoom(idOrAlias);
-          });
+          // Sequential and awaited: the previous fire-and-forget forEach meant a
+          // failing join was an unhandled rejection nobody saw.
+          for (let i = 0; i < roomIdOrAliases.length; i += 1) {
+            // eslint-disable-next-line no-await-in-loop
+            await joinRoom(roomIdOrAliases[i]);
+          }
         },
       },
       [Command.Leave]: {
@@ -579,7 +584,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         },
       },
     }),
-    [mx, room, navigateRoom]
+    [mx, room, navigateRoom, joinRoom]
   );
 
   return commands;

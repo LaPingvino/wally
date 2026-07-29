@@ -15,20 +15,49 @@ import type { MatrixClient } from 'matrix-js-sdk';
 // classic pagination path is left entirely untouched. Mirrors WukkieMail's
 // MatrixSource.subscribeRoom.
 
-type SlidingSyncLike = { modifyRoomSubscriptions: (s: Set<string>) => void };
+type SlidingSyncLike = {
+  modifyRoomSubscriptions: (s: Set<string>) => void;
+  resend?: () => void;
+};
+
+const getSlidingSync = (mx: MatrixClient): SlidingSyncLike | undefined =>
+  (mx as unknown as { getSlidingSync?: () => SlidingSyncLike | undefined }).getSlidingSync?.();
 
 const subscribed = new Set<string>();
 
-export function subscribeRoom(mx: MatrixClient, roomId: string): void {
-  const ss = (
-    mx as unknown as { getSlidingSync?: () => SlidingSyncLike | undefined }
-  ).getSlidingSync?.();
-  if (!ss || subscribed.has(roomId)) return;
+// Returns true when this call actually changed the subscription set —
+// modifyRoomSubscriptions resends the sliding-sync request itself, so a caller
+// that also wants a bumpSync can skip it and avoid aborting the request it just
+// caused.
+export function subscribeRoom(mx: MatrixClient, roomId: string): boolean {
+  const ss = getSlidingSync(mx);
+  if (!ss || subscribed.has(roomId)) return false;
   subscribed.add(roomId);
   try {
     ss.modifyRoomSubscriptions(new Set(subscribed));
+    return true;
   } catch {
     // resend can throw if the sync isn't running yet; the subscription is
     // already recorded and will be sent on the next request.
+    return false;
+  }
+}
+
+// "Catch up now" — reissue the CURRENT sliding-sync request so the server
+// recomputes and streams what changed, instead of leaving us waiting out the
+// 30s wake-driven long poll.
+//
+// Only ever call this off a REAL local signal (we just joined a room, the user
+// pressed refresh). Never on a timer and never blind: resend() aborts the
+// in-flight request, so a periodic poke starves the very load it is meant to
+// hurry along. Mirrors WukkieMail's MatrixSource.bumpSync.
+//
+// No-op under classic /sync — and deliberately NOT a /sync call, because every
+// /sync that advances `since` deletes this device's to-device queue.
+export function bumpSync(mx: MatrixClient): void {
+  try {
+    getSlidingSync(mx)?.resend?.();
+  } catch {
+    // not running yet / unsupported — the next poll picks the change up anyway
   }
 }

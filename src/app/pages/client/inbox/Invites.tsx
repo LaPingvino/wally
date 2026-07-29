@@ -27,6 +27,7 @@ import {
   PageHeroSection,
 } from '../../../components/page';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useJoinRoom } from '../../../hooks/useJoinRoom';
 import { allInvitesAtom } from '../../../state/room-list/inviteList';
 import { SequenceCard } from '../../../components/sequence-card';
 import {
@@ -60,7 +61,6 @@ import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { StateEvent } from '../../../../types/matrix/room';
 import { testBadWords } from '../../../plugins/bad-words';
-import { getViaServers } from '../../../plugins/via-servers';
 import { allRoomsAtom } from '../../../state/room-list/roomList';
 import { useIgnoredUsers } from '../../../hooks/useIgnoredUsers';
 import { useReportRoomSupported } from '../../../hooks/useReportRoomSupported';
@@ -69,33 +69,10 @@ import { settingsAtom } from '../../../state/settings';
 
 const COMPACT_CARD_WIDTH = 548;
 
-/**
- * Accept an invite.
- *
- * Two things a bare `mx.joinRoom(roomId)` gets wrong, both of which show up as
- * "accepting invites works against one server but not another":
- *
- * 1. Joining by ROOM ID is not self-describing — the server must be told where the
- *    room lives. Some servers resolve it from the invite they already hold, others
- *    return M_NOT_FOUND. So always send via servers (getViaServers now always
- *    yields at least the room's origin server).
- * 2. A join issued the instant the invite lands can beat the inviting server's own
- *    membership settling, which comes back as "not invited". One retry after a beat
- *    turns that race into a join; a second failure is real and propagates.
- */
-const joinInvite = async (mx: MatrixClient, room: Room, roomId: string): Promise<void> => {
-  const viaServers = getViaServers(room);
-  const attempt = (): Promise<unknown> =>
-    mx.joinRoom(roomId, viaServers.length > 0 ? { viaServers } : undefined);
-  try {
-    await attempt();
-  } catch {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1500);
-    });
-    await attempt();
-  }
-};
+// Accepting an invite goes through useJoinRoom like every other join: via
+// servers + the retry for the invite-settling race (both of which used to live
+// here), plus the sliding-sync poke and the optimistic room-list entry that
+// make the room appear the moment the server says we're in.
 
 type InviteData = {
   room: Room;
@@ -193,18 +170,19 @@ function InviteCard({
   const closeTopic = () => setViewTopic(false);
   const openTopic = () => setViewTopic(true);
 
+  const joinRoom = useJoinRoom();
   const [joinState, join] = useAsyncCallback<void, MatrixError, []>(
     useCallback(async () => {
       const dmUserId = isDirectInvite(invite.room, userId)
         ? guessDmRoomUserId(invite.room, userId)
         : undefined;
 
-      await joinInvite(mx, invite.room, invite.roomId);
+      await joinRoom(invite.roomId);
       if (dmUserId) {
         await addRoomIdToMDirect(mx, invite.roomId, dmUserId);
       }
       onNavigate(invite.roomId, invite.isSpace);
-    }, [mx, invite, userId, onNavigate])
+    }, [mx, joinRoom, invite, userId, onNavigate])
   );
   const [leaveState, leave] = useAsyncCallback<Record<string, never>, MatrixError, []>(
     useCallback(() => mx.leave(invite.roomId), [mx, invite])
@@ -446,16 +424,17 @@ function KnownInvites({
   const mx = useMatrixClient();
   const userId = mx.getSafeUserId();
 
+  const joinRoom = useJoinRoom();
   const [acceptAllStatus, acceptAll] = useAsyncCallback(
     useCallback(async () => {
       await rateLimitedActions(invites, async (invite) => {
-        await joinInvite(mx, invite.room, invite.roomId);
+        await joinRoom(invite.roomId);
         if (invite.isDirect) {
           const dmUserId = guessDmRoomUserId(invite.room, userId);
           if (dmUserId) await addRoomIdToMDirect(mx, invite.roomId, dmUserId);
         }
       });
-    }, [mx, invites, userId])
+    }, [mx, joinRoom, invites, userId])
   );
 
   const accepting = acceptAllStatus.status === AsyncStatus.Loading;
