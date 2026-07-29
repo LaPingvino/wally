@@ -24,22 +24,18 @@ Thank you for your understanding.
 
 ## Fixes not yet upstream
 
-This fork carries bug fixes that have not landed upstream. Each was verified against the
-upstream `dev` branch on 2026-07-29 and was still unfixed there at the time of writing:
+Behaviour this fork gets right that the upstream `dev` branch did not, checked against its
+source and issue tracker on 2026-07-29:
 
-* **Cross-signing account data was read under the wrong keys.** `m.cross_signing.self` and
-  `m.cross_signing.user`, where the spec says `m.cross_signing.self_signing` and
-  `m.cross_signing.user_signing` — so every lookup silently missed.
-* **Device verification could cancel itself.** `verifier.verify()` was driven from both ends,
-  including the initiating one, where only the accepting side should drive it. The symptom was
-  an emoji comparison that connected and then cancelled on its own.
-* **Bridged 1:1 chats were filed under the bridge bot.** DM identity fell back to an
-  oldest-joined-member heuristic, and on a bridged room the bot almost always joins first — so
-  the chat took the bot's name and avatar instead of the person's.
-* **Shared locations rendered as raw `geo:` URIs.** An `m.location` message displayed
-  `geo:52.52,13.40;u=35` as its text rather than a readable label.
-* **Desktop notifications ignored per-room push rules.** A muted room still raised a system
-  notification for every message; notifications are now gated on the event's push actions.
+* **Shared locations render as a readable label, not a raw `geo:` URI.** An `m.location`
+  message upstream displays its coordinate URI (`geo:52.52,13.40;u=35`) as the message text.
+* **Bridged 1:1 chats are filed under the person, not the bridge bot.** Direct-message identity
+  otherwise falls back to an oldest-joined-member heuristic, and in a bridged room the bot
+  almost always joins first — so the chat takes the bot's name and avatar.
+
+Deliberately *not* listed here: differences that only exist because this fork made a different
+architectural choice (sliding sync, its own call stack, client-side unread counting) and then had
+to handle the consequences. Those are our problems to solve, not anyone else's bugs.
 
 ## Getting started
 The web app is available at [app.cinny.in](https://app.cinny.in/) and gets updated on each new release. The `dev` branch is continuously deployed at [dev.cinny.in](https://dev.cinny.in) but keep in mind that it could have things broken.
