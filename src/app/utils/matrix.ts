@@ -287,48 +287,72 @@ const commitMDirect = async (
   mx.emit(ClientEvent.AccountData, ev, prev ?? undefined);
 };
 
+// Serialise every m.direct read-modify-write.
+//
+// The sequence is read-from-server → merge → write-back, so two taggings that
+// OVERLAP both read the same base and the second write silently drops the first:
+// the room just stops being a DM. Callers happen to be sequential today
+// (rateLimitedActions is a for-loop), which means the guarantee currently belongs
+// to the callers — one `Promise.all` would take it away with nothing to notice.
+// A one-at-a-time queue puts the guarantee back on the operation itself. Costs an
+// await, removes a whole class; see mDirectConcurrency.test.ts.
+let mDirectQueue: Promise<unknown> = Promise.resolve();
+const withMDirectLock = <T>(task: () => Promise<T>): Promise<T> => {
+  const run = mDirectQueue.then(task, task);
+  // The chain must survive a failed task, or one rejection wedges every later write.
+  mDirectQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+};
+
 export const addRoomIdToMDirect = async (
   mx: MatrixClient,
   roomId: string,
   userId: string
-): Promise<void> => {
-  const userIdToRoomIds = await readMDirect(mx);
+): Promise<void> =>
+  withMDirectLock(async () => {
+    const userIdToRoomIds = await readMDirect(mx);
 
-  // remove it from the lists of any others users
-  // (it can only be a DM room for one person)
-  Object.keys(userIdToRoomIds).forEach((targetUserId) => {
-    const roomIds = userIdToRoomIds[targetUserId];
+    // remove it from the lists of any others users
+    // (it can only be a DM room for one person)
+    Object.keys(userIdToRoomIds).forEach((targetUserId) => {
+      const roomIds = userIdToRoomIds[targetUserId];
 
-    if (targetUserId !== userId) {
+      if (targetUserId !== userId) {
+        const indexOfRoomId = roomIds.indexOf(roomId);
+        if (indexOfRoomId > -1) {
+          roomIds.splice(indexOfRoomId, 1);
+        }
+      }
+    });
+
+    const roomIds = userIdToRoomIds[userId] || [];
+    if (roomIds.indexOf(roomId) === -1) {
+      roomIds.push(roomId);
+    }
+    userIdToRoomIds[userId] = roomIds;
+
+    await commitMDirect(mx, userIdToRoomIds);
+  });
+
+export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> =>
+  // Same queue as the add: an add and a remove that overlap clobber each other
+  // exactly as two adds would.
+  withMDirectLock(async () => {
+    const userIdToRoomIds = await readMDirect(mx);
+
+    Object.keys(userIdToRoomIds).forEach((targetUserId) => {
+      const roomIds = userIdToRoomIds[targetUserId];
       const indexOfRoomId = roomIds.indexOf(roomId);
       if (indexOfRoomId > -1) {
         roomIds.splice(indexOfRoomId, 1);
       }
-    }
+    });
+
+    await commitMDirect(mx, userIdToRoomIds);
   });
-
-  const roomIds = userIdToRoomIds[userId] || [];
-  if (roomIds.indexOf(roomId) === -1) {
-    roomIds.push(roomId);
-  }
-  userIdToRoomIds[userId] = roomIds;
-
-  await commitMDirect(mx, userIdToRoomIds);
-};
-
-export const removeRoomIdFromMDirect = async (mx: MatrixClient, roomId: string): Promise<void> => {
-  const userIdToRoomIds = await readMDirect(mx);
-
-  Object.keys(userIdToRoomIds).forEach((targetUserId) => {
-    const roomIds = userIdToRoomIds[targetUserId];
-    const indexOfRoomId = roomIds.indexOf(roomId);
-    if (indexOfRoomId > -1) {
-      roomIds.splice(indexOfRoomId, 1);
-    }
-  });
-
-  await commitMDirect(mx, userIdToRoomIds);
-};
 
 // Bridge-aware DM detection. Kept local rather than importing from utils/bridges
 // because bridges.ts imports from THIS module (a cycle). Mirrors its heuristics.
