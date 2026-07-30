@@ -41,4 +41,4 @@ set; fetch the per-family branch on GitHub:
 - `per-msg-profiles` — `git fetch github per-msg-profiles`
 - `settings-sync` — `git fetch github settings-sync`
 
-_Generated 2026-07-29T18:13:48Z_
+_Generated 2026-07-30T16:37:26Z_
