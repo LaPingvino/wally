@@ -24,6 +24,7 @@ import {
 } from '../utils/matrix';
 import { useRoomNavigate } from './useRoomNavigate';
 import { useJoinRoom } from './useJoinRoom';
+import { useLeaveRoom } from './useLeaveRoom';
 import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
@@ -175,6 +176,7 @@ export type CommandRecord = Record<Command, CommandContent>;
 export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
   const { navigateRoom } = useRoomNavigate();
   const joinRoom = useJoinRoom();
+  const leaveRoom = useLeaveRoom();
 
   const commands: CommandRecord = useMemo(
     () => ({
@@ -249,12 +251,17 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         description: 'Leave current room.',
         exe: async (payload) => {
           if (payload.trim() === '') {
-            mx.leave(room.roomId);
+            await leaveRoom(room.roomId);
             return;
           }
           const rawIds = splitWithSpace(payload);
           const roomIds = rawIds.filter((id) => isRoomId(id));
-          roomIds.map((id) => mx.leave(id));
+          // Sequential and awaited, as with /join: a fire-and-forget map made a
+          // failing leave an unhandled rejection, and left the room in the list.
+          for (let i = 0; i < roomIds.length; i += 1) {
+            // eslint-disable-next-line no-await-in-loop
+            await leaveRoom(roomIds[i]);
+          }
         },
       },
       [Command.Invite]: {
@@ -584,7 +591,7 @@ export const useCommands = (mx: MatrixClient, room: Room): CommandRecord => {
         },
       },
     }),
-    [mx, room, navigateRoom, joinRoom]
+    [mx, room, navigateRoom, joinRoom, leaveRoom]
   );
 
   return commands;

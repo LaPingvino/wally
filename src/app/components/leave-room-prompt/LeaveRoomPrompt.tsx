@@ -12,8 +12,8 @@ import {
   Spinner,
 } from 'folds';
 import { MatrixError } from 'matrix-js-sdk';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
+import { useLeaveRoom } from '../../hooks/useLeaveRoom';
 import { NativeDialog } from '../NativeDialog';
 import * as css from '../NativeDialog.css';
 
@@ -23,12 +23,14 @@ type LeaveRoomPromptProps = {
   onCancel: () => void;
 };
 export function LeaveRoomPrompt({ roomId, onDone, onCancel }: LeaveRoomPromptProps) {
-  const mx = useMatrixClient();
+  const leave = useLeaveRoom();
 
+  // Awaited: unawaited, this reported Success the instant the request was sent,
+  // so the dialog closed on failure too and the error branch below was dead.
   const [leaveState, leaveRoom] = useAsyncCallback<undefined, MatrixError, []>(
     useCallback(async () => {
-      mx.leave(roomId);
-    }, [mx, roomId])
+      await leave(roomId);
+    }, [leave, roomId])
   );
 
   const handleLeave = () => {
