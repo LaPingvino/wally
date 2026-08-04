@@ -75,3 +75,4 @@ d78b2dca  ux-fixes: optimistically show composer + call button while power_level
 d1fc6167  ux-fixes: render bundled URL previews instead of refetching (no load-then-hide)
 07eb06dd  ux-fixes: notifications survive Android, ogg audio plays, account actions match MSC4191
 385a2f15  ux-fixes: cut the README claims that don't survive checking
+c92742c7  ux-fixes: document the queued (non-aborting) sliding-sync resend
