@@ -26,9 +26,15 @@ const getSlidingSync = (mx: MatrixClient): SlidingSyncLike | undefined =>
 const subscribed = new Set<string>();
 
 // Returns true when this call actually changed the subscription set —
-// modifyRoomSubscriptions resends the sliding-sync request itself, so a caller
-// that also wants a bumpSync can skip it and avoid aborting the request it just
-// caused.
+// modifyRoomSubscriptions queues the resend itself, so a caller that also wants
+// a bumpSync can skip it (it would be a second queued resend for the same
+// change).
+//
+// The subscription goes out on the request AFTER the one in flight: the SDK's
+// resend no longer aborts, because Continuwuity marks rooms as delivered when it
+// BUILDS a response, so an aborted batch is lost for good — that was the
+// "chat opens late / half-empty" bug. The opened room still fills immediately via
+// RoomView's backgroundBackfill; the subscription just deepens it a beat later.
 export function subscribeRoom(mx: MatrixClient, roomId: string): boolean {
   const ss = getSlidingSync(mx);
   if (!ss || subscribed.has(roomId)) return false;
@@ -48,9 +54,11 @@ export function subscribeRoom(mx: MatrixClient, roomId: string): boolean {
 // 30s wake-driven long poll.
 //
 // Only ever call this off a REAL local signal (we just joined a room, the user
-// pressed refresh). Never on a timer and never blind: resend() aborts the
-// in-flight request, so a periodic poke starves the very load it is meant to
-// hurry along. Mirrors WukkieMail's MatrixSource.bumpSync.
+// pressed refresh). Never on a timer and never blind: it is a queued resend, so
+// a periodic poke is at best noise and at worst an extra round-trip per tick.
+// (It no longer ABORTS the in-flight request — that was lossy against
+// Continuwuity; see SlidingSync.resend in the fork.) Mirrors WukkieMail's
+// MatrixSource.bumpSync.
 //
 // No-op under classic /sync — and deliberately NOT a /sync call, because every
 // /sync that advances `since` deletes this device's to-device queue.
