@@ -9,12 +9,18 @@ import fs from 'fs';
 import path from 'path';
 import buildConfig from './build.config';
 
+// vite-plugin-static-copy >= 4 ALWAYS preserves the source's directory under `dest`
+// (dest + dirname(src)). Flat copies must say so with `rename: { stripBase: true }`;
+// directory copies that should mirror their source path just use dest ''.
+// Before this was adapted (f7baacc7d bumped the plugin), everything landed one level
+// too deep: /public/manifest.json, /public/public/locales, and the pdf worker under
+// /node_modules/pdfjs-dist/build/ — so the manifest, translations and PDF worker 404'd.
 const copyFiles = {
   targets: [
     {
       src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
       dest: '',
-      rename: 'pdf.worker.min.js',
+      rename: { stripBase: true, name: 'pdf.worker.min.js' },
     },
     {
       src: 'netlify.toml',
@@ -27,14 +33,15 @@ const copyFiles = {
     {
       src: 'public/manifest.json',
       dest: '',
+      rename: { stripBase: true },
     },
     {
       src: 'public/res/android',
-      dest: 'public/',
+      dest: '',
     },
     {
       src: 'public/locales',
-      dest: 'public/',
+      dest: '',
     },
   ],
 };
