@@ -10,7 +10,7 @@ _pkgname=cinny-web
 # can then be removed — wally-web-git provides cinny-web-git). _pkgname stays
 # cinny-web only as the upstream source-clone subdir name (no install-path role).
 pkgname="wally-web-git"
-pkgver=r2047.1de4acf1
+pkgver=r2049.87ac04a9
 pkgrel=1
 pkgdesc="Yet another matrix client — web version (with Element Call, accessibility, issue tracker, and other patches)"
 arch=('any')

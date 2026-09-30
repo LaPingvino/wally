@@ -1145,6 +1145,42 @@ index 9edb96784..b6da4f932 100644
  
  export const MessageEmptyContent = as<'div', { children?: never }>(({ ...props }, ref) => (
    <Box as="span" alignItems="Center" gap="100" style={criticalStyle} {...props} ref={ref}>
+diff --git a/src/app/components/message/content/ThumbnailContent.tsx b/src/app/components/message/content/ThumbnailContent.tsx
+index aa9171aa5..516c12e5f 100644
+--- a/src/app/components/message/content/ThumbnailContent.tsx
++++ b/src/app/components/message/content/ThumbnailContent.tsx
+@@ -19,7 +19,10 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
+       const thumbInfo = info.thumbnail_info;
+       const thumbMxcUrl = info.thumbnail_file?.url ?? info.thumbnail_url;
+       const encInfo = info.thumbnail_file;
+-      if (typeof thumbMxcUrl !== 'string' || typeof thumbInfo?.mimetype !== 'string') {
++      // Only the URL is required: thumbnail_info (and its mimetype) is optional per spec and
++      // bridged media (WhatsApp/Signal) often omits it. The mimetype only matters for
++      // decrypting, which already falls back to FALLBACK_MIMETYPE.
++      if (typeof thumbMxcUrl !== 'string') {
+         throw new Error('Failed to load thumbnail');
+       }
+ 
+@@ -27,7 +30,7 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
+       if (!mediaUrl) throw new Error('Invalid media URL');
+       if (encInfo) {
+         const fileContent = await downloadEncryptedMedia(mediaUrl, (encBuf) =>
+-          decryptFile(encBuf, thumbInfo.mimetype ?? FALLBACK_MIMETYPE, encInfo)
++          decryptFile(encBuf, thumbInfo?.mimetype ?? FALLBACK_MIMETYPE, encInfo)
+         );
+         return URL.createObjectURL(fileContent);
+       }
+@@ -37,7 +40,9 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
+   );
+ 
+   useEffect(() => {
+-    loadThumbSrc();
++    // The hook records failures in thumbSrcState (we then render nothing) AND rethrows;
++    // swallow the rethrow so a missing thumbnail isn't an "Uncaught (in promise)" per message.
++    loadThumbSrc().catch(() => undefined);
+   }, [loadThumbSrc]);
+ 
+   return thumbSrcState.status === AsyncStatus.Success ? renderImage(thumbSrcState.data) : null;
 diff --git a/src/app/components/room-avatar/RoomAvatar.tsx b/src/app/components/room-avatar/RoomAvatar.tsx
 index 85969b563..cf607f414 100644
 --- a/src/app/components/room-avatar/RoomAvatar.tsx

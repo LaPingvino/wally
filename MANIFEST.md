@@ -26,7 +26,7 @@ you can apply those manually from the per-family branch.
 
 - `accessibility.patch` — partial (32/60 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account; see `accessibility.skipped`
 - `idb-retry.patch` — partial (5/19 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility; see `idb-retry.skipped`
-- `ux-fixes.patch` — partial (62/140 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
+- `ux-fixes.patch` — partial (63/141 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry; see `ux-fixes.skipped`
 - `navigate-unread.patch` — partial (1/10 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes; see `navigate-unread.skipped`
 - `bridged-chat.patch` — partial (3/4 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread; see `bridged-chat.skipped`
 - `invite-resilience.patch` — partial (1/6 commits); requires: emoji-font, pronouns, threads, issue-widget, themes, markdown-parser, issue-tracker, multi-account, accessibility, idb-retry, ux-fixes, navigate-unread, bridged-chat; see `invite-resilience.skipped`
@@ -41,4 +41,4 @@ set; fetch the per-family branch on GitHub:
 - `per-msg-profiles` — `git fetch github per-msg-profiles`
 - `settings-sync` — `git fetch github settings-sync`
 
-_Generated 2026-09-29T22:39:14Z_
+_Generated 2026-09-30T12:06:39Z_
