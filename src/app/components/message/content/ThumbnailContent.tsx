@@ -19,7 +19,10 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
       const thumbInfo = info.thumbnail_info;
       const thumbMxcUrl = info.thumbnail_file?.url ?? info.thumbnail_url;
       const encInfo = info.thumbnail_file;
-      if (typeof thumbMxcUrl !== 'string' || typeof thumbInfo?.mimetype !== 'string') {
+      // Only the URL is required: thumbnail_info (and its mimetype) is optional per spec and
+      // bridged media (WhatsApp/Signal) often omits it. The mimetype only matters for
+      // decrypting, which already falls back to FALLBACK_MIMETYPE.
+      if (typeof thumbMxcUrl !== 'string') {
         throw new Error('Failed to load thumbnail');
       }
 
@@ -27,7 +30,7 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
       if (!mediaUrl) throw new Error('Invalid media URL');
       if (encInfo) {
         const fileContent = await downloadEncryptedMedia(mediaUrl, (encBuf) =>
-          decryptFile(encBuf, thumbInfo.mimetype ?? FALLBACK_MIMETYPE, encInfo)
+          decryptFile(encBuf, thumbInfo?.mimetype ?? FALLBACK_MIMETYPE, encInfo)
         );
         return URL.createObjectURL(fileContent);
       }
@@ -37,7 +40,9 @@ export function ThumbnailContent({ info, renderImage }: ThumbnailContentProps) {
   );
 
   useEffect(() => {
-    loadThumbSrc();
+    // The hook records failures in thumbSrcState (we then render nothing) AND rethrows;
+    // swallow the rethrow so a missing thumbnail isn't an "Uncaught (in promise)" per message.
+    loadThumbSrc().catch(() => undefined);
   }, [loadThumbSrc]);
 
   return thumbSrcState.status === AsyncStatus.Success ? renderImage(thumbSrcState.data) : null;
