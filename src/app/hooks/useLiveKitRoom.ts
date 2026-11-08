@@ -182,6 +182,9 @@ export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAud
     if (!connect || !url || !token) return;
 
     let cancelled = false;
+    // A new attempt: the last attempt's failure no longer applies (it used to stay on screen for
+    // the rest of the session, even under a call that connected fine).
+    setError(null);
 
     (async () => {
       try {

@@ -98,6 +98,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     setLkConnected,
     lkUrl,
     lkToken,
+    callSession,
     hangUp,
     isAudioEnabled,
     isVideoEnabled,
@@ -105,18 +106,25 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   const mx = useMatrixClient();
   const autoDiscoveryInfo = useAutoDiscoveryInfo();
 
-  // Track whether we've fetched token for this room to avoid re-fetching
+  // The call session (room + CallProvider's session counter) whose token we hold, so a re-render
+  // doesn't re-fetch. Set only once a token ARRIVED: an effect re-run that cancels an in-flight
+  // fetch must be free to fetch again, or the call waits on "Connecting..." forever.
   const tokenFetchedForRef = useRef<string | null>(null);
+  const [tokenError, setTokenError] = useState<string | null>(null);
 
   // ── Fetch SFU token when call room becomes active ──
   // Uses "oldest_membership" algorithm: find the oldest active call.member event
   // and use its foci_preferred livekit_service_url. Falls back to own .well-known.
   useEffect(() => {
-    if (!activeCallRoomId || !mx?.getUserId()) return;
+    if (!activeCallRoomId) {
+      setTokenError(null);
+      return undefined;
+    }
+    if (!mx?.getUserId()) return undefined;
     if (pendingJoin && !joinConfirmedRef.current) return;
-    if (tokenFetchedForRef.current === activeCallRoomId) return;
-
-    tokenFetchedForRef.current = activeCallRoomId;
+    const sessionKey = `${activeCallRoomId}#${callSession}`;
+    if (tokenFetchedForRef.current === sessionKey) return;
+    setTokenError(null);
 
     // Own lk-jwt-service from .well-known (fallback)
     const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
@@ -153,7 +161,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
 
     if (!serviceUrl) {
       callDebug('error', 'No livekit_service_url found', { rtcFoci });
-      return;
+      setTokenError("Calls aren't set up on this server (no LiveKit service in .well-known).");
+      return undefined;
     }
 
     const roomId = activeCallRoomId;
@@ -164,24 +173,20 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       .then((result) => {
         if (!cancelled) {
           callDebug('sfu', 'Got SFU credentials', { url: result.url });
+          tokenFetchedForRef.current = sessionKey;
           setLkCredentials(result.url, result.jwt);
         }
       })
       .catch((err) => {
         if (!cancelled) {
           callDebug('error', 'SFU token fetch failed', err);
+          const msg = err instanceof Error ? err.message : String(err);
+          setTokenError(`Couldn't get access to the call: ${msg}. Hang up and try again.`);
         }
       });
 
     return () => { cancelled = true; };
-  }, [activeCallRoomId, pendingJoin, mx, autoDiscoveryInfo, setLkCredentials, joinConfirmedRef]);
-
-  // Reset token fetch ref when call ends
-  useEffect(() => {
-    if (!activeCallRoomId) {
-      tokenFetchedForRef.current = null;
-    }
-  }, [activeCallRoomId]);
+  }, [activeCallRoomId, callSession, pendingJoin, mx, autoDiscoveryInfo, setLkCredentials, joinConfirmedRef]);
 
   // ── LiveKit room connection ──
   const shouldConnect = !!(activeCallRoomId && lkUrl && lkToken && (!pendingJoin || joinConfirmedRef.current));
@@ -360,7 +365,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     toggleMicrophone: lkRoom.toggleMicrophone,
     toggleCamera: lkRoom.toggleCamera,
     toggleScreenShare: lkRoom.toggleScreenShare,
-    error: lkRoom.error,
+    error: tokenError ?? lkRoom.error,
   };
 
   return (

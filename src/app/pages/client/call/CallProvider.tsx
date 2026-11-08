@@ -26,6 +26,12 @@ interface CallContextState {
   lkUrl: string;
   lkToken: string;
   lkConnected: boolean;
+  /**
+   * Bumped on every setActiveCallRoomId / hangUp. The SFU token is fetched once per session, so
+   * hangUp + rejoin of the same room in one React batch, a room switch, and Return-to-main from a
+   * breakout each fetch a fresh token instead of reusing (or waiting forever on) the old one.
+   */
+  callSession: number;
   setLkCredentials: (url: string, token: string) => void;
   setLkConnected: (connected: boolean) => void;
 
@@ -107,6 +113,9 @@ export function CallProvider({ children }: CallProviderProps) {
   const [lkUrl, setLkUrl] = useState<string>('');
   const [lkToken, setLkToken] = useState<string>('');
   const [lkConnected, setLkConnectedState] = useState<boolean>(false);
+  const [callSession, setCallSession] = useState(0);
+  const callSessionRef = useRef(callSession);
+  callSessionRef.current = callSession;
 
   const [isAudioEnabled, setIsAudioEnabledState] = useState<boolean>(restored.current?.audio ?? DEFAULT_AUDIO_ENABLED);
   const [isVideoEnabled, setIsVideoEnabledState] = useState<boolean>(restored.current?.video ?? DEFAULT_VIDEO_ENABLED);
@@ -137,6 +146,12 @@ export function CallProvider({ children }: CallProviderProps) {
 
   const setActiveCallRoomId = useCallback((roomId: string | null, isVoiceRoom = false) => {
     setActiveCallRoomIdState(roomId);
+    // A new call session: drop the previous call's (or breakout's) LiveKit credentials so we never
+    // sit in the old room's media while the UI shows this one.
+    setCallSession((n) => n + 1);
+    setLkUrl('');
+    setLkToken('');
+    setLkConnectedState(false);
     callDebug('state', 'setActiveCallRoomId', { roomId, isVoiceRoom, callAutoJoin, pendingJoin: roomId ? !callAutoJoin : false });
     callNotifySentRef.current = false;
     joinConfirmedRef.current = false;
@@ -173,6 +188,7 @@ export function CallProvider({ children }: CallProviderProps) {
   const hangUp = useCallback(() => {
     callDebug('state', 'hangUp');
     setActiveCallRoomIdState(null);
+    setCallSession((n) => n + 1);
     setLkUrl('');
     setLkToken('');
     setLkConnectedState(false);
@@ -199,6 +215,7 @@ export function CallProvider({ children }: CallProviderProps) {
 
     const currentRoomId = activeCallRoomIdRef.current;
     if (!currentRoomId || callNotifySentRef.current) return;
+    const session = callSessionRef.current;
 
     callNotifySentRef.current = true;
     const room = mx.getRoom(currentRoomId);
@@ -215,6 +232,11 @@ export function CallProvider({ children }: CallProviderProps) {
           await forceable.forceLoadMembers?.();
         } catch {
           /* fall back to whatever roster we have */
+        }
+        // Hung up (or moved to another call) while the roster loaded: don't ring for a call we left.
+        if (callSessionRef.current !== session || activeCallRoomIdRef.current !== currentRoomId) {
+          callDebug('notify', 'Call ended before m.call.notify went out; not ringing', { roomId: currentRoomId });
+          return;
         }
         const isDm = room.currentState.getJoinedMemberCount() <= 2;
         const otherMembers = room.getJoinedMembers()
@@ -269,6 +291,7 @@ export function CallProvider({ children }: CallProviderProps) {
       lkUrl,
       lkToken,
       lkConnected,
+      callSession,
       setLkCredentials,
       setLkConnected,
       hangUp,
@@ -294,6 +317,7 @@ export function CallProvider({ children }: CallProviderProps) {
       lkUrl,
       lkToken,
       lkConnected,
+      callSession,
       setLkCredentials,
       setLkConnected,
       hangUp,

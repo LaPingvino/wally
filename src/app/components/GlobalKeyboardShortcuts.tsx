@@ -245,9 +245,11 @@ const handleUnreadNavKeyDown = useCallback(
       if (!isKeyHotkey('alt+j', evt)) return;
       if (!currentRoomId) return;
       evt.preventDefault();
+      // Already in this room's call: a new session would drop and re-fetch the token (reconnect).
+      if (activeCallRoomId === currentRoomId) return;
       setActiveCallRoomId(currentRoomId, true);
     },
-    [currentRoomId, setActiveCallRoomId]
+    [currentRoomId, activeCallRoomId, setActiveCallRoomId]
   );
 
   const handlePeopleDrawerKeyDown = useCallback(
