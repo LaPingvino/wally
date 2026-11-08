@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo } from 'react';
 import { useAtomValue, useAtom, atom } from 'jotai';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MatrixClient } from 'matrix-js-sdk';
 import { roomToUnreadAtom } from '../state/room/roomToUnread';
 import { mDirectAtom } from '../state/mDirectList';
 import { roomToParentsAtom } from '../state/room/roomToParents';
@@ -10,11 +9,12 @@ import {
   useChildRoomScopeFactory,
   useDirects,
   useOrphanRooms,
+  useOrphanSpaces,
   useSpaceChildren,
 } from '../state/hooks/roomList';
 import { useMatrixClient } from './useMatrixClient';
+import { useSidebarItems } from './useSidebarItems';
 import { getCanonicalAliasOrRoomId } from '../utils/matrix';
-import { getAccountData } from '../utils/room';
 import {
   getDirectPath,
   getDirectRoomPath,
@@ -23,7 +23,6 @@ import {
   getSpacePath,
   getSpaceRoomPath,
 } from '../pages/pathUtils';
-import { AccountDataEvent } from '../../types/matrix/accountData';
 import {
   factoryRoomIdByActivity,
   factoryRoomIdByAtoZ,
@@ -69,19 +68,12 @@ export const currentViewRoomsAtom = atom<{ bucket: string; rooms: string[] } | n
  */
 export const pendingBucketJumpAtom = atom<{ bucket: string; edge: 'first' | 'last' } | null>(null);
 
-type SidebarItem = string | { id: string; content: string[] };
-
-/** Flat ordered list of space IDs from the user's sidebar config. */
-function getSidebarSpaceIds(mx: MatrixClient): string[] {
-  const content = getAccountData(mx, AccountDataEvent.CinnySpaces)?.getContent<{
-    sidebar?: SidebarItem[];
-  }>();
-  const sidebar = content?.sidebar ?? [];
+/** Flat ordered space IDs as the sidebar shows them (folders opened in place). */
+function flattenSidebar(items: ReturnType<typeof useSidebarItems>[0]): string[] {
   const ids: string[] = [];
-  sidebar.forEach((item) => {
+  items.forEach((item) => {
     if (typeof item === 'string') ids.push(item);
-    else if (typeof item === 'object' && Array.isArray(item.content))
-      item.content.forEach((id) => ids.push(id));
+    else item.content.forEach((id) => ids.push(id));
   });
   return ids;
 }
@@ -145,7 +137,12 @@ export function useNavigateUnread() {
   // its sidebar-ancestor as the effective bucket so prev/next still
   // walks the bucket order coherently. The in-view stepping still uses
   // whatever roomsOnly the subspace page published.
-  const sidebarSpaceIds = useMemo(() => getSidebarSpaceIds(mx), [mx]);
+  // The sidebar's own items (account data + newly joined spaces), live: this read the account
+  // data once per client, so after reordering or joining a space prev/next walked the old order
+  // (audit 2026-11-08).
+  const orphanSpaces = useOrphanSpaces(mx, allRoomsAtom, roomToParents);
+  const [sidebarItems] = useSidebarItems(orphanSpaces);
+  const sidebarSpaceIds = useMemo(() => flattenSidebar(sidebarItems), [sidebarItems]);
   const sidebarSet = useMemo(() => new Set(sidebarSpaceIds), [sidebarSpaceIds]);
   const effectiveSpaceBucket: string | undefined = useMemo(() => {
     if (!selectedSpaceId) return undefined;
