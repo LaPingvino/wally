@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { atom, useAtomValue } from 'jotai';
 import {
   ClientEvent,
+  Direction,
   type MatrixClient,
   NotificationCountType,
   Room,
@@ -47,9 +48,15 @@ function targetFor(room: Room, ctx: SchedulerContext): number {
   return TARGET_BACKGROUND;
 }
 
-function scoreRoom(room: Room, ctx: SchedulerContext, target: number): number {
-  const eventCount = room.getLiveTimeline().getEvents().length;
+export function scoreRoom(room: Room, ctx: SchedulerContext, target: number): number {
+  const timeline = room.getLiveTimeline();
+  const eventCount = timeline.getEvents().length;
   if (eventCount >= target) return -1;
+  // Nothing further back (the room is shorter than the target, or we reached its start): the
+  // SDK's backgroundBackfill returns at once on a missing backwards token, so a room like this
+  // kept winning a slot every tick — open, unread or recent short rooms filled all
+  // MAX_CONCURRENT slots and the rest never backfilled (audit 2026-11-08). Same test as the SDK.
+  if (!timeline.getPaginationToken(Direction.Backward)) return -1;
 
   let score = 0;
   // The open room gets top priority so it reaches the cushion FIRST — this is
