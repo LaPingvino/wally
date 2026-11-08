@@ -25,6 +25,7 @@ import { NativeDialog } from '../../components/NativeDialog';
 import * as dialogCss from '../../components/NativeDialog.css';
 import { getMemberDisplayName } from '../../utils/room';
 import { UserAvatar } from '../../components/user-avatar';
+import { confirmIssueMerge, mergeIssueEdit } from './mergeIssueEdit';
 import { StateEvent } from '../../../types/matrix/room';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1569,12 +1570,21 @@ export function IssueBoard({ room }: IssueBoardProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canWriteIssues, openEdit]);
 
-  const handleSaveIssue = useCallback(async (content: IssueContent) => {
+  const handleSaveIssue = useCallback(async (formContent: IssueContent) => {
     const entry = editing !== 'new' && editing !== null ? editing : null;
     const stateKey = entry ? entry.event.getStateKey()! : generateId();
+    // Merge with what the room has NOW, not what it had when the form opened (see mergeIssueEdit).
+    const theirs = entry
+      ? (room.getLiveTimeline().getState(EventTimeline.FORWARDS)
+          ?.getStateEvents('eu.kiefte.issue', stateKey)
+          ?.getContent() as IssueContent | undefined)
+      : undefined;
+    const { merged, conflicts } = mergeIssueEdit(entry?.content ?? {}, formContent, theirs);
+    const content = merged as IssueContent;
+    confirmIssueMerge(schema, conflicts, theirs, content);
     await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, content, stateKey);
     try {
-      const oldContent = entry ? entry.content : undefined;
+      const oldContent = theirs ?? (entry ? entry.content : undefined);
       const body = schema ? formatIssueDiff(schema, oldContent, content) : 'Issue updated';
       await mx.sendEvent(room.roomId, 'm.room.message' as any, { msgtype: 'm.notice', body, 'eu.kiefte.issue_id': stateKey });
     } catch { /* non-critical */ }
@@ -1585,7 +1595,10 @@ export function IssueBoard({ room }: IssueBoardProps) {
   const handleDeleteIssue = useCallback(async () => {
     if (editing === null || editing === 'new') return;
     const stateKey = editing.event.getStateKey()!;
-    const current = editing.content;
+    // Keep what the room has now (not the form's snapshot) under the deletion mark.
+    const current = (room.getLiveTimeline().getState(EventTimeline.FORWARDS)
+      ?.getStateEvents('eu.kiefte.issue', stateKey)
+      ?.getContent() as IssueContent | undefined) ?? editing.content;
     await mx.sendStateEvent(room.roomId, 'eu.kiefte.issue' as any, { ...current, _deleted: true }, stateKey);
     try {
       const titleField = schema?.fields.find((f) => f.key === 'title') ?? schema?.fields[0];

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { IRoomEvent, WidgetApi, WidgetApiToWidgetAction } from 'matrix-widget-api';
+import { confirmIssueMerge, mergeIssueEdit } from '../features/issues/mergeIssueEdit';
 
 // ── Types (must match eu.kiefte schema format used in IssueBoard.tsx) ──────────
 
@@ -963,6 +964,9 @@ export function IssueBoardWidget({ widgetApi }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [editing, setEditing] = useState<WidgetIssue | 'new' | null>(null);
+  // Live issues for save-time merging (doSave must see edits that arrived after the form opened).
+  const issuesRef = useRef(issues);
+  issuesRef.current = issues;
   const [editingSchema, setEditingSchema] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set());
   const hideColumn = (label: string) => setHiddenColumns(prev => new Set([...prev, label]));
@@ -1136,7 +1140,20 @@ export function IssueBoardWidget({ widgetApi }: Props) {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
 
-  const doSave = useCallback(async (stateKey: string, content: IssueContent) => {
+  const doSave = useCallback(async (stateKey: string, formContent: IssueContent, base?: WidgetIssue) => {
+    // Merge with the room's current version (audit 2026-11-08: the form's snapshot overwrote
+    // others' changes), and send BEFORE updating the board: the optimistic update and close came
+    // first, so a refused or failed save looked saved.
+    let content = formContent;
+    if (base) {
+      const live = issuesRef.current.find(i => i.stateKey === stateKey);
+      // Deleted issues are dropped from the list: gone here means deleted meanwhile.
+      const theirs = live ? live.content : { _deleted: true };
+      const { merged, conflicts } = mergeIssueEdit(base.content, formContent, theirs);
+      confirmIssueMerge(schema, conflicts, theirs, merged);
+      content = merged as IssueContent;
+    }
+    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, content);
     setIssues(prev => {
       const existing = prev.find(i => i.stateKey === stateKey);
       const rest = prev.filter(i => i.stateKey !== stateKey);
@@ -1147,13 +1164,12 @@ export function IssueBoardWidget({ widgetApi }: Props) {
       ];
     });
     setEditing(null);
-    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, content);
-  }, [widgetApi, userId]);
+  }, [widgetApi, userId, schema]);
 
   const doDelete = useCallback(async (stateKey: string) => {
+    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, { _deleted: true });
     setIssues(prev => prev.filter(i => i.stateKey !== stateKey));
     setEditing(null);
-    await widgetApi.sendStateEvent('eu.kiefte.issue', stateKey, { _deleted: true });
   }, [widgetApi]);
 
   const doSaveSchema = useCallback(async (newSchema: IssueSchema) => {
@@ -1328,7 +1344,7 @@ export function IssueBoardWidget({ widgetApi }: Props) {
           currentUserId={userId}
           onSave={async (content) => {
             const key = editingKey ?? newIssueKey();
-            await doSave(key, content);
+            await doSave(key, content, editing !== 'new' && editing !== null ? editing : undefined);
           }}
           onDelete={editingKey ? () => doDelete(editingKey) : undefined}
           onCancel={() => setEditing(null)}
