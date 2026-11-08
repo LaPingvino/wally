@@ -189,6 +189,13 @@ export function useLiveKitRoom({ url, token, connect, onDisconnected, initialAud
     (async () => {
       try {
         callDebug('sfu', 'Connecting to LiveKit', { url });
+        // Encrypt what we publish (audit 2026-11-08). The Room had a key provider but E2EE was
+        // never switched on, so in encrypted rooms our media went out in the clear while Element
+        // Call encrypts. Guests (no Matrix device, no keys) are refused in encrypted rooms since.
+        if (e2eeKeyProviderRef.current) {
+          await room.setE2EEEnabled(true);
+          callDebug('e2ee', 'E2EE enabled for our published tracks');
+        }
         await room.connect(url, token);
         if (cancelled) {
           room.disconnect();

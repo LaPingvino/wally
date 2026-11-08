@@ -5,6 +5,7 @@ import React, {
   useRef,
   useCallback,
   useState,
+  useMemo,
 } from 'react';
 import { MatrixClient } from 'matrix-js-sdk';
 import { UnsupportedDelayedEventsEndpointError } from 'matrix-js-sdk/lib/errors';
@@ -14,7 +15,8 @@ import { useCallState } from './CallProvider';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useAutoDiscoveryInfo } from '../../../hooks/useAutoDiscoveryInfo';
 import { callDebug } from '../../../features/call/callDebug';
-import { fetchSfuToken } from '../../../hooks/useSfuToken';
+import { homeSfuByIdentity, mergeParticipants, useRemoteSfus } from '../../../features/call/useRemoteSfus';
+import { discoverOwnLivekitServiceUrl, fetchSfuToken } from '../../../hooks/useSfuToken';
 import { useLiveKitRoom } from '../../../hooks/useLiveKitRoom';
 import { MatrixKeyProvider } from '../../../features/call/MatrixKeyProvider';
 
@@ -71,6 +73,8 @@ function patchDelayedEvents(mx: MatrixClient): void {
 // Context to pass LK room state to CallView
 export interface LiveKitRoomContextValue {
   room: import('livekit-client').Room | null;
+  /** Subscribe-only connections to other members' SFUs (multi-SFU). */
+  extraRooms: import('livekit-client').Room[];
   localParticipant: import('livekit-client').LocalParticipant | null;
   remoteParticipants: import('livekit-client').RemoteParticipant[];
   connectionState: ConnectionState;
@@ -111,6 +115,8 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   // fetch must be free to fetch again, or the call waits on "Connecting..." forever.
   const tokenFetchedForRef = useRef<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
+  // Our own SFU's lk-jwt-service (the one we publish on), once discovered.
+  const [ownServiceUrl, setOwnServiceUrl] = useState<string | undefined>(undefined);
 
   // ── Fetch SFU token when call room becomes active ──
   // Uses "oldest_membership" algorithm: find the oldest active call.member event
@@ -126,50 +132,26 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     if (tokenFetchedForRef.current === sessionKey) return;
     setTokenError(null);
 
-    // Own lk-jwt-service from .well-known (fallback)
+    // Multi-SFU (Element Call's default since v0.21; it dropped "oldest membership" in v0.25):
+    // we PUBLISH on our own homeserver's SFU and listen on each other member's (useRemoteSfus).
+    // Publishing on the oldest member's SFU instead failed across servers: their lk-jwt-service
+    // only gives other servers' users a subscribe-only token, and EC looks for our tracks on the
+    // SFU our membership advertises.
     const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
-    const ownLkFocus = rtcFoci?.find((f) => f.type === 'livekit' && f.livekit_service_url);
-    const ownServiceUrl = ownLkFocus?.livekit_service_url ?? '';
-
-    // Resolve active focus via oldest_membership algorithm
-    let serviceUrl = ownServiceUrl;
-    const room = mx.getRoom(activeCallRoomId);
-    if (room) {
-      try {
-        const memberships = MatrixRTCSession.callMembershipsForRoom(room);
-        // Find oldest non-expired membership that has a livekit focus
-        let oldestTs = Infinity;
-        for (const m of memberships) {
-          const createdTs = (m as any).createdTs?.() ?? (m as any).created_ts ?? Date.now();
-          if (createdTs < oldestTs) {
-            // Check if this membership has a livekit preferred focus
-            const foci = (m as any).getPreferredFoci?.() ?? [];
-            const lkFocus = foci.find((f: any) => f.type === 'livekit' && f.livekit_service_url);
-            if (lkFocus?.livekit_service_url) {
-              oldestTs = createdTs;
-              serviceUrl = lkFocus.livekit_service_url;
-            }
-          }
-        }
-        if (serviceUrl !== ownServiceUrl) {
-          callDebug('sfu', 'Using oldest member focus (federated)', { serviceUrl, ownServiceUrl });
-        }
-      } catch (e) {
-        callDebug('error', 'Failed to resolve active focus', e);
-      }
-    }
-
-    if (!serviceUrl) {
-      callDebug('error', 'No livekit_service_url found', { rtcFoci });
-      setTokenError("Calls aren't set up on this server (no LiveKit service in .well-known).");
-      return undefined;
-    }
-
     const roomId = activeCallRoomId;
-    callDebug('sfu', 'Fetching SFU token', { serviceUrl, roomId });
-
     let cancelled = false;
-    fetchSfuToken(mx, serviceUrl, roomId, mx.getDeviceId() ?? 'UNKNOWN')
+    discoverOwnLivekitServiceUrl(mx, rtcFoci)
+      .then((serviceUrl) => {
+        if (cancelled) throw new Error('cancelled');
+        if (!serviceUrl) {
+          callDebug('error', 'No livekit_service_url found', { rtcFoci });
+          setTokenError("Calls aren't set up on this server (no LiveKit service advertised).");
+          throw new Error('cancelled');
+        }
+        callDebug('sfu', 'Fetching SFU token (own SFU)', { serviceUrl, roomId });
+        setOwnServiceUrl(serviceUrl);
+        return fetchSfuToken(mx, serviceUrl, roomId, mx.getDeviceId() ?? 'UNKNOWN');
+      })
       .then((result) => {
         if (!cancelled) {
           callDebug('sfu', 'Got SFU credentials', { url: result.url });
@@ -178,6 +160,7 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
         }
       })
       .catch((err) => {
+        if (err instanceof Error && err.message === 'cancelled') return;
         if (!cancelled) {
           callDebug('error', 'SFU token fetch failed', err);
           const msg = err instanceof Error ? err.message : String(err);
@@ -205,13 +188,15 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
   // ── E2EE key provider (persists across reconnects) ──
   const [keyProvider] = useState(() => new MatrixKeyProvider());
 
+  const callE2EE = activeCallRoomId ? !!mx.getRoom(activeCallRoomId)?.hasEncryptionStateEvent() : false;
+
   const lkRoom = useLiveKitRoom({
     url: lkUrl,
     token: lkToken,
     connect: shouldConnect,
     initialAudio: isAudioEnabled,
     initialVideo: isVideoEnabled,
-    e2eeKeyProvider: activeCallRoomId ? (mx.getRoom(activeCallRoomId)?.hasEncryptionStateEvent() ? keyProvider : undefined) : undefined,
+    e2eeKeyProvider: callE2EE ? keyProvider : undefined,
     onDisconnected: useCallback(() => {
       if (intentionalDisconnectRef.current) {
         callDebug('sfu', 'LiveKit disconnected (intentional, skipping hangUp)');
@@ -293,41 +278,47 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
       callDebug('e2ee', 'Room NOT encrypted — skipping key management');
     }
 
-    // Find preferred foci from .well-known
-    const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string; livekit_alias?: string }> | undefined;
-    const lkFocus = rtcFoci?.find((f) => f.type === 'livekit');
-    const fociPreferred = lkFocus ? [{
-      type: 'livekit' as const,
-      livekit_service_url: lkFocus.livekit_service_url ?? '',
-      livekit_alias: activeCallRoomId,
-    }] : [];
+    // Advertise OUR SFU (the one we publish on) with multi_sfu selection: each member publishes
+    // on its own SFU, and Element Call (and our useRemoteSfus) listens there.
+    const rtcFoci = autoDiscoveryInfo['org.matrix.msc4143.rtc_foci'] as Array<{ type: string; livekit_service_url?: string }> | undefined;
+    const callRoomId = activeCallRoomId;
+    let joinCancelled = false;
+    let joined = false;
+    (async () => {
+      const ownServiceUrl = await discoverOwnLivekitServiceUrl(mx, rtcFoci);
+      if (joinCancelled) return;
+      const fociPreferred = ownServiceUrl
+        ? [{ type: 'livekit' as const, livekit_service_url: ownServiceUrl, livekit_alias: callRoomId }]
+        : [];
+      callDebug('sfu', 'Joining MatrixRTCSession (before LiveKit connect)', {
+        roomId: callRoomId, isEncrypted, lkState, ownServiceUrl,
+        useToDevice: true, manageMediaKeys: isEncrypted,
+      });
+      rtcJoinedAtRef.current = Date.now();
+      rtcSession.joinRoomSession(fociPreferred, {
+        type: 'livekit',
+        focus_selection: 'multi_sfu',
+      } as never, {
+        manageMediaKeys: isEncrypted,
+        useExperimentalToDeviceTransport: true,
+      });
+      joined = true;
 
-    callDebug('sfu', 'Joining MatrixRTCSession (before LiveKit connect)', {
-      roomId: activeCallRoomId, isEncrypted, lkState,
-      useToDevice: true, manageMediaKeys: isEncrypted,
-    });
-    rtcJoinedAtRef.current = Date.now();
-    rtcSession.joinRoomSession(fociPreferred, {
-      type: 'livekit',
-      focus_selection: 'oldest_membership',
-    }, {
-      manageMediaKeys: isEncrypted,
-      useExperimentalToDeviceTransport: true,
-    });
-
-    // Re-emit our keys so late joiners get them
-    if (isEncrypted) {
-      callDebug('e2ee', 'Re-emitting our encryption keys (initial)');
-      rtcSession.reemitEncryptionKeys();
-    }
+      // Re-emit our keys so late joiners get them
+      if (isEncrypted) {
+        callDebug('e2ee', 'Re-emitting our encryption keys (initial)');
+        rtcSession.reemitEncryptionKeys();
+      }
+    })();
 
     return () => {
       callDebug('sfu', 'Leaving MatrixRTCSession', {
         keysReceived: keysReceivedRef.current,
         sessionDurationMs: Date.now() - rtcJoinedAtRef.current,
       });
+      joinCancelled = true;
       rtcSession.off(MatrixRTCSessionEvent.EncryptionKeyChanged, onEncryptionKey);
-      rtcSession.leaveRoomSession();
+      if (joined) rtcSession.leaveRoomSession();
       rtcSessionRef.current = null;
       rtcJoinedAtRef.current = 0;
     };
@@ -354,10 +345,33 @@ export function PersistentCallContainer({ children }: PersistentCallContainerPro
     }
   }, [lkRoom.connectionState, activeCallRoomId, mx]);
 
+  // ── Other members' SFUs (multi-SFU): subscribe-only connections ──
+  const remoteSfus = useRemoteSfus({
+    mx,
+    roomId: activeCallRoomId,
+    enabled: shouldConnect,
+    ownServiceUrl,
+    keyProvider: callE2EE ? keyProvider : undefined,
+  });
+  // Recomputed every render: useRemoteSfus re-renders us on each participant/track change.
+  const remoteParticipants = mergeParticipants(
+        [
+          { serviceUrl: ownServiceUrl, participants: lkRoom.remoteParticipants },
+          ...remoteSfus.connections.map((c) => ({
+            serviceUrl: c.serviceUrl,
+            participants: Array.from(c.room.remoteParticipants.values()),
+          })),
+        ],
+        homeSfuByIdentity(remoteSfus.memberships)
+  );
+
+  const extraRooms = useMemo(() => remoteSfus.connections.map((c) => c.room), [remoteSfus.connections]);
+
   const contextValue: LiveKitRoomContextValue = {
     room: lkRoom.room,
+    extraRooms,
     localParticipant: lkRoom.localParticipant,
-    remoteParticipants: lkRoom.remoteParticipants,
+    remoteParticipants,
     connectionState: lkRoom.connectionState,
     isMicEnabled: lkRoom.isMicEnabled,
     isCamEnabled: lkRoom.isCamEnabled,

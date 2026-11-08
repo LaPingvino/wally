@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { MatrixClient } from 'matrix-js-sdk';
+import { MatrixClient, Method } from 'matrix-js-sdk';
 import { callDebug } from '../features/call/callDebug';
 
 export interface SfuTokenResult {
@@ -62,4 +62,50 @@ export function useSfuTokenFetcher(mx: MatrixClient) {
     },
     [mx]
   );
+}
+
+type RtcTransport = { type?: string; livekit_service_url?: string };
+
+function livekitServiceUrlOf(transports: RtcTransport[] | undefined): string | undefined {
+  return transports?.find(
+    (t) => (t.type === 'livekit' || t.type === 'm.livekit') && typeof t.livekit_service_url === 'string'
+  )?.livekit_service_url;
+}
+
+const ownServiceUrlCache = new WeakMap<MatrixClient, Promise<string | undefined>>();
+
+/**
+ * Our own homeserver's LiveKit service (lk-jwt-service) URL — the SFU we PUBLISH on.
+ *
+ * Element Call reads it from GET /_matrix/client/unstable/org.matrix.msc4143/rtc/transports
+ * (MSC4143; EC stopped reading .well-known rtc_foci in v0.24), offered when /versions lists
+ * org.matrix.msc4143. The .well-known value is the fallback for servers without the endpoint.
+ */
+export function discoverOwnLivekitServiceUrl(
+  mx: MatrixClient,
+  wellKnownFoci: RtcTransport[] | undefined
+): Promise<string | undefined> {
+  const cached = ownServiceUrlCache.get(mx);
+  if (cached) return cached.then((url) => url ?? livekitServiceUrlOf(wellKnownFoci));
+  const lookup = (async () => {
+    try {
+      const versions = await mx.getVersions();
+      if (!versions.unstable_features?.['org.matrix.msc4143']) return undefined;
+      const res = await mx.http.authedRequest<{ rtc_transports?: RtcTransport[] }>(
+        Method.Get,
+        '/org.matrix.msc4143/rtc/transports',
+        undefined,
+        undefined,
+        { prefix: '/_matrix/client/unstable' }
+      );
+      const url = livekitServiceUrlOf(res.rtc_transports);
+      callDebug('sfu', 'RTC transports endpoint', { url, count: res.rtc_transports?.length });
+      return url;
+    } catch (e) {
+      callDebug('sfu', 'RTC transports endpoint unavailable, using .well-known', e);
+      return undefined;
+    }
+  })();
+  ownServiceUrlCache.set(mx, lookup);
+  return lookup.then((url) => url ?? livekitServiceUrlOf(wellKnownFoci));
 }

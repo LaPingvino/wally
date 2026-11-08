@@ -428,6 +428,7 @@ export function CallView({ room }: { room: Room }) {
               matrixRoom={room}
               layout={gridLayout}
               lkRoom={lkCtx.room}
+              extraRooms={lkCtx.extraRooms}
               showPip={showPip}
               pinnedParticipantSid={pinnedSid}
               onPinParticipant={(sid) => {

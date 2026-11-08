@@ -230,6 +230,8 @@ interface LiveKitVideoGridProps {
   matrixRoom?: Room;
   layout?: GridLayout;
   lkRoom?: LKRoom | null;
+  /** Subscribe-only connections to other members' SFUs (multi-SFU): their speakers count too. */
+  extraRooms?: LKRoom[];
   pinnedParticipantSid?: string | null;
   onPinParticipant?: (sid: string | null) => void;
   showPip?: boolean;
@@ -254,6 +256,7 @@ export function LiveKitVideoGrid({
   matrixRoom,
   layout = 'equal',
   lkRoom,
+  extraRooms,
   pinnedParticipantSid,
   onPinParticipant,
   showPip = false,
@@ -270,14 +273,17 @@ export function LiveKitVideoGrid({
   // Active speaker tracking
   const [activeSpeakerSid, setActiveSpeakerSid] = useState<string | null>(null);
   useEffect(() => {
-    if (!lkRoom) return;
+    const rooms = [lkRoom, ...(extraRooms ?? [])].filter((r): r is LKRoom => !!r);
+    if (rooms.length === 0) return undefined;
     const onActiveSpeakers = (speakers: Participant[]) => {
       const remote = speakers.find((s) => s !== localParticipant);
-      setActiveSpeakerSid(remote?.sid ?? speakers[0]?.sid ?? null);
+      // Each SFU reports only its own speakers; an empty report from one must not clear
+      // a speaker another SFU just reported.
+      if (remote || speakers.length > 0) setActiveSpeakerSid(remote?.sid ?? speakers[0]?.sid ?? null);
     };
-    lkRoom.on(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers);
-    return () => { lkRoom.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers); };
-  }, [lkRoom, localParticipant]);
+    rooms.forEach((r) => r.on(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers));
+    return () => rooms.forEach((r) => r.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakers));
+  }, [lkRoom, extraRooms, localParticipant]);
 
   // Observe two containers: the main grid area (equal-grid render) and the
   // spotlight sidebar (when visible). Both feed the packer.

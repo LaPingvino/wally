@@ -9,7 +9,9 @@ import { callDebug } from './callDebug';
 
 export class MatrixKeyProvider extends BaseKeyProvider {
   constructor() {
-    super({ sharedKey: false, ratchetWindowSize: 0, failureTolerance: -1, keyringSize: 256 });
+    // Element Call's MatrixKeyProvider settings (v0.28: ratchetWindowSize 10, keyringSize 256 —
+    // key indices run to 255 — and LiveKit's defaults otherwise), so both decrypt each other alike.
+    super({ sharedKey: false, ratchetWindowSize: 10, keyringSize: 256 });
   }
 
   /**
