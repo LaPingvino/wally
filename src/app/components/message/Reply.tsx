@@ -111,9 +111,17 @@ export const Reply = as<'div', ReplyProps>(
     const { body } = content;
     const sender = replyEvent?.getSender();
     const perMsgProfile = getPerMsgProfile(content as Record<string, unknown>);
-    const senderDisplayName = perMsgProfile?.displayname
-      ?? (sender ? getMemberDisplayName(room, sender) : undefined)
-      ?? (sender ? getMxIdLocalPart(sender) : undefined);
+    const memberName =
+      (sender ? getMemberDisplayName(room, sender) : undefined) ??
+      (sender ? getMxIdLocalPart(sender) : undefined);
+    const personaName = perMsgProfile?.displayname || undefined;
+    const senderDisplayName = personaName ?? memberName;
+    // A persona name is whatever the sender typed: say who really sent it, as the timeline does
+    // ("via @sender"). The preview showed the bare persona name, so anyone could quote-reply as
+    // "Joop" (audit 2026-11-08).
+    // The Matrix ID, not the display name: that is user-chosen too.
+    const viaName = personaName && sender ? sender : undefined;
+    const ariaName = viaName ? `${senderDisplayName}, via ${viaName}` : senderDisplayName;
     const powerTag = sender ? getMemberPowerTag?.(sender) : undefined;
     const tagColor = powerTag?.color ? accessibleTagColors?.get(powerTag.color) : undefined;
 
@@ -137,15 +145,16 @@ export const Reply = as<'div', ReplyProps>(
         <ReplyLayout
           as="button"
           aria-label={
-            senderDisplayName
-              ? `Go to original message by ${senderDisplayName}`
-              : 'Go to original message'
+            ariaName ? `Go to original message by ${ariaName}` : 'Go to original message'
           }
           userColor={usernameColor}
           username={
             senderDisplayName && (
               <Text size="T300" truncate>
                 <b>{senderDisplayName}</b>
+                {viaName && (
+                  <span style={{ opacity: 0.6, fontWeight: 'normal' }}> via {viaName}</span>
+                )}
               </Text>
             )
           }
