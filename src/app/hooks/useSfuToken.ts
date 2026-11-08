@@ -66,10 +66,16 @@ export function useSfuTokenFetcher(mx: MatrixClient) {
 
 type RtcTransport = { type?: string; livekit_service_url?: string };
 
+/** One spelling per service, so "https://jwt.x/" and "https://jwt.x" compare equal. */
+export function normalizeServiceUrl(url: string): string {
+  return url.trim().replace(/\/+$/, '');
+}
+
 function livekitServiceUrlOf(transports: RtcTransport[] | undefined): string | undefined {
-  return transports?.find(
+  const url = transports?.find(
     (t) => (t.type === 'livekit' || t.type === 'm.livekit') && typeof t.livekit_service_url === 'string'
   )?.livekit_service_url;
+  return url ? normalizeServiceUrl(url) : undefined;
 }
 
 const ownServiceUrlCache = new WeakMap<MatrixClient, Promise<string | undefined>>();

@@ -29,6 +29,10 @@ describe('remoteServiceUrls', () => {
     ];
     expect(remoteServiceUrls(ms, OWN, me)).toEqual([POLI]);
   });
+
+  it("doesn't take our own SFU for a remote one over a trailing slash", () => {
+    expect(remoteServiceUrls([member('@a:x', 'A', `${OWN}/`)], OWN, me)).toEqual([]);
+  });
 });
 
 describe('mergeParticipants', () => {

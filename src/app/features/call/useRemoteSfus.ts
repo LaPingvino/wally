@@ -12,14 +12,15 @@ import type { BaseKeyProvider } from 'livekit-client';
 import type { MatrixClient } from 'matrix-js-sdk';
 import { MatrixRTCSessionEvent } from 'matrix-js-sdk/lib/matrixrtc/MatrixRTCSession';
 import type { CallMembership } from 'matrix-js-sdk/lib/matrixrtc/CallMembership';
-import { fetchSfuToken } from '../../hooks/useSfuToken';
+import { fetchSfuToken, normalizeServiceUrl } from '../../hooks/useSfuToken';
 import { callDebug } from './callDebug';
 
 /** The SFU a member publishes on: its first livekit focus with a service URL. */
 export function memberServiceUrl(m: CallMembership): string | undefined {
   const foci = (m.getPreferredFoci?.() ?? []) as Array<{ type?: string; livekit_service_url?: string }>;
-  return foci.find((f) => (f.type === 'livekit' || f.type === 'm.livekit') && f.livekit_service_url)
+  const url = foci.find((f) => (f.type === 'livekit' || f.type === 'm.livekit') && f.livekit_service_url)
     ?.livekit_service_url;
+  return url ? normalizeServiceUrl(url) : undefined;
 }
 
 /** LiveKit identity → the SFU that member publishes on ("user:device", the legacy identity). */
