@@ -1019,7 +1019,7 @@ index abbf354de..03ec18d5d 100644
          as="a"
          size="400"
 diff --git a/src/app/components/message/Reply.tsx b/src/app/components/message/Reply.tsx
-index 91ef8aa9d..5d474f54e 100644
+index 91ef8aa9d..08ea4115f 100644
 --- a/src/app/components/message/Reply.tsx
 +++ b/src/app/components/message/Reply.tsx
 @@ -12,6 +12,29 @@ import { scaleSystemEmoji } from '../../plugins/react-custom-html-parser';
@@ -1052,7 +1052,7 @@ index 91ef8aa9d..5d474f54e 100644
  
  type ReplyLayoutProps = {
    userColor?: string;
-@@ -84,8 +107,13 @@ export const Reply = as<'div', ReplyProps>(
+@@ -84,8 +107,21 @@ export const Reply = as<'div', ReplyProps>(
      );
      const replyEvent = useRoomEvent(room, replyEventId, getFromLocalTimeline);
  
@@ -1061,13 +1061,21 @@ index 91ef8aa9d..5d474f54e 100644
 +    const { body } = content;
      const sender = replyEvent?.getSender();
 +    const perMsgProfile = getPerMsgProfile(content as Record<string, unknown>);
-+    const senderDisplayName = perMsgProfile?.displayname
-+      ?? (sender ? getMemberDisplayName(room, sender) : undefined)
-+      ?? (sender ? getMxIdLocalPart(sender) : undefined);
++    const memberName =
++      (sender ? getMemberDisplayName(room, sender) : undefined) ??
++      (sender ? getMxIdLocalPart(sender) : undefined);
++    const personaName = perMsgProfile?.displayname || undefined;
++    const senderDisplayName = personaName ?? memberName;
++    // A persona name is whatever the sender typed: say who really sent it, as the timeline does
++    // ("via @sender"). The preview showed the bare persona name, so anyone could quote-reply as
++    // "Joop" (audit 2026-11-08).
++    // The Matrix ID, not the display name: that is user-chosen too.
++    const viaName = personaName && sender ? sender : undefined;
++    const ariaName = viaName ? `${senderDisplayName}, via ${viaName}` : senderDisplayName;
      const powerTag = sender ? getMemberPowerTag?.(sender) : undefined;
      const tagColor = powerTag?.color ? accessibleTagColors?.get(powerTag.color) : undefined;
  
-@@ -98,7 +126,8 @@ export const Reply = as<'div', ReplyProps>(
+@@ -98,7 +134,8 @@ export const Reply = as<'div', ReplyProps>(
      );
  
      const badEncryption = replyEvent?.getContent().msgtype === 'm.bad.encrypted';
@@ -1077,15 +1085,14 @@ index 91ef8aa9d..5d474f54e 100644
  
      return (
        <Box direction="Row" gap="200" alignItems="Center" {...props} ref={ref}>
-@@ -108,15 +137,15 @@ export const Reply = as<'div', ReplyProps>(
+@@ -108,15 +145,16 @@ export const Reply = as<'div', ReplyProps>(
          <ReplyLayout
            as="button"
            aria-label={
 -            sender
 -              ? `Go to original message by ${getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender}`
-+            senderDisplayName
-+              ? `Go to original message by ${senderDisplayName}`
-               : 'Go to original message'
+-              : 'Go to original message'
++            ariaName ? `Go to original message by ${ariaName}` : 'Go to original message'
            }
            userColor={usernameColor}
            username={
@@ -1094,6 +1101,9 @@ index 91ef8aa9d..5d474f54e 100644
                <Text size="T300" truncate>
 -                <b>{getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender)}</b>
 +                <b>{senderDisplayName}</b>
++                {viaName && (
++                  <span style={{ opacity: 0.6, fontWeight: 'normal' }}> via {viaName}</span>
++                )}
                </Text>
              )
            }
