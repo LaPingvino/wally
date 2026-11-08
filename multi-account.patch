@@ -853,7 +853,7 @@ index 93f0526e3..068dcc699 100644
    );
  }
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index a2e1b6820..168bda38b 100644
+index d37eda8f8..4c5801c4b 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
 @@ -1,4 +1,4 @@

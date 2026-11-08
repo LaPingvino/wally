@@ -11,7 +11,15 @@ bc9323f2  accessibility: handle group DMs in getDmName — compute from joined m
 563be418  accessibility: debounce member event handlers via rAF to prevent UI freeze for large groups marked as DM
 f3beb0eb  accessibility: fix TypeScript errors from our patches
 4d219468  accessibility: wire up room list keyboard navigation in Home, Direct, and Space
+0090ab5f  accessibility: sidebar arrow key navigation between buttons
+00404138  accessibility: restore missing accessibility from original patch-06
 31f52926  accessibility: message keyboard shortcuts — r to reply, e to edit, t to open thread
+c96822c5  accessibility: fix F6 skipping room list — focus first room item inside listbox, not the container
+02def2b1  accessibility: fix F6 missing room list + members panel
+2f4ca6d9  accessibility: F6 cycle order — sort left-to-right first, then top-to-bottom
+642fee9f  accessibility: fix F6 room list (use data-nav-item selector) + members panel arrow keys
+4e37f72d  accessibility: move members arrow key handler to the F6-focused Box, not inner Scroll
+eb471f24  accessibility: members panel arrow nav — use native DOM keydown listener
 bb90a68a  accessibility: rebind keyboard shortcuts to avoid browser conflicts
 08358a6a  accessibility: room list single tab stop — roving tabindex with aria-activedescendant
 f115ade7  accessibility: migrate remaining 20 dialogs to native <dialog> — full coverage

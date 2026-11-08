@@ -1464,7 +1464,7 @@ index 000000000..98afe4b02
 +  return true;
 +};
 diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index 4da9a96f7..4376cc90c 100644
+index 94eee2a8f..27c0e7527 100644
 --- a/src/app/features/room/RoomInput.tsx
 +++ b/src/app/features/room/RoomInput.tsx
 @@ -229,6 +229,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
@@ -1494,7 +1494,7 @@ index 4da9a96f7..4376cc90c 100644
            onKeyUp={handleKeyUp}
            onPaste={handlePaste}
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index 65fd0e2dc..23c7eac02 100644
+index 71eb5a6af..7b849386b 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -19,6 +19,7 @@ import {
@@ -3721,7 +3721,7 @@ index e9fc38020..43ca49739 100644
      setComments(prev => [...prev, tempEvent]);
      await (widgetApi as any).sendRoomEvent('m.room.message', content);
 diff --git a/src/client/initMatrix.ts b/src/client/initMatrix.ts
-index a7087c2e1..f35019cd6 100644
+index 2b627ff72..a8355af1e 100644
 --- a/src/client/initMatrix.ts
 +++ b/src/client/initMatrix.ts
 @@ -1,6 +1,8 @@
@@ -3749,9 +3749,9 @@ index a7087c2e1..f35019cd6 100644
  
    const mx = createClient({
      baseUrl: session.baseUrl,
-@@ -67,6 +69,15 @@ export const startClient = async (mx: MatrixClient) => {
-   await mx.startClient({
-     fullLazyLoading: true,
+@@ -63,6 +65,15 @@ export const startClient = async (mx: MatrixClient) => {
+     lazyLoadMembers: true,
+     initialSyncLimit: 1,
    });
 +
 +  // Sliding sync doesn't redeliver global account-data on a restored pos, so

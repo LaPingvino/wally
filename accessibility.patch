@@ -219,42 +219,6 @@ index 000000000..b869bc5a7
 +    }
 +  });
 +});
-diff --git a/src/app/components/GlobalKeyboardShortcuts.tsx b/src/app/components/GlobalKeyboardShortcuts.tsx
-index 55f68b47f..34df387d3 100644
---- a/src/app/components/GlobalKeyboardShortcuts.tsx
-+++ b/src/app/components/GlobalKeyboardShortcuts.tsx
-@@ -134,7 +134,12 @@ function findSidebarFocus(): HTMLElement | null {
- // Panels with role="region" + aria-label are auto-discovered by getRegionSections() below.
- const SECTION_FINDERS: Array<() => HTMLElement | null> = [
-   findSidebarFocus,
--  () => document.querySelector('#cinny-room-listbox'),
-+  () => {
-+    const listbox = document.querySelector<HTMLElement>('#cinny-room-listbox');
-+    if (!listbox) return null;
-+    // Focus the first nav item inside the listbox.
-+    return listbox.querySelector<HTMLElement>('[data-nav-item]') ?? listbox;
-+  },
-   // First enabled button in the room header toolbar (skips disabled buttons)
-   () => document.querySelector<HTMLElement>('#cinny-room-header-toolbar button:not([disabled])'),
-   () => document.querySelector('#cinny-timeline'),
-@@ -156,7 +161,7 @@ function getRegionSections(): HTMLElement[] {
-     .sort((a, b) => {
-       const rA = a.getBoundingClientRect();
-       const rB = b.getBoundingClientRect();
--      return rA.top !== rB.top ? rA.top - rB.top : rA.left - rB.left;
-+      return rA.left !== rB.left ? rA.left - rB.left : rA.top - rB.top;
-     });
- }
- 
-@@ -287,7 +292,7 @@ export function GlobalKeyboardShortcuts() {
-     const sections = [...fixed, ...regions].sort((a, b) => {
-       const rA = a.getBoundingClientRect();
-       const rB = b.getBoundingClientRect();
--      return rA.top !== rB.top ? rA.top - rB.top : rA.left - rB.left;
-+      return rA.left !== rB.left ? rA.left - rB.left : rA.top - rB.top;
-     });
-     if (sections.length === 0) return;
-     evt.preventDefault();
 diff --git a/src/app/components/NativeDialog.css.ts b/src/app/components/NativeDialog.css.ts
 new file mode 100644
 index 000000000..bffc7a10c
@@ -1019,110 +983,24 @@ index 7de59acd9..bfd6dd96c 100644
          ref={ref}
        >
 diff --git a/src/app/features/room/MembersDrawer.tsx b/src/app/features/room/MembersDrawer.tsx
-index d9205076b..22ea00a63 100644
+index d9205076b..ff165d0e1 100644
 --- a/src/app/features/room/MembersDrawer.tsx
 +++ b/src/app/features/room/MembersDrawer.tsx
-@@ -2,6 +2,7 @@ import React, {
-   ChangeEventHandler,
-   MouseEventHandler,
-   useCallback,
-+  useEffect,
-   useMemo,
-   useRef,
-   useState,
-@@ -244,11 +245,41 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
-     openUserRoomProfile(room.roomId, space?.roomId, userId, btn.getBoundingClientRect(), 'Left');
-   };
+@@ -246,9 +246,12 @@ export function MembersDrawer({ room, members }: MembersDrawerProps) {
  
-+  // Arrow key navigation between member items.
-+  // Uses a native DOM listener because the F6-focused Box needs to handle
-+  // keys even when no child has focus yet (first arrow press after F6).
-+  useEffect(() => {
-+    const panel = document.getElementById('cinny-members-panel');
-+    if (!panel) return;
-+    const handler = (evt: KeyboardEvent) => {
-+      if (evt.key !== 'ArrowDown' && evt.key !== 'ArrowUp') return;
-+      if (evt.ctrlKey || evt.altKey || evt.metaKey) return;
-+      const items = Array.from(panel.querySelectorAll<HTMLElement>('[data-user-id]'));
-+      if (items.length === 0) return;
-+      const active = document.activeElement as HTMLElement;
-+      const idx = items.indexOf(active);
-+      // Only handle if focus is on/inside the panel
-+      if (idx < 0 && !panel.contains(active)) return;
-+      evt.preventDefault();
-+      const next = evt.key === 'ArrowDown'
-+        ? Math.min((idx < 0 ? 0 : idx + 1), items.length - 1)
-+        : Math.max((idx < 0 ? items.length - 1 : idx - 1), 0);
-+      items[next]?.focus({ preventScroll: true });
-+      items[next]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-+    };
-+    panel.addEventListener('keydown', handler);
-+    return () => panel.removeEventListener('keydown', handler);
-+  }, []);
-+
    return (
      <Box
 +      id="cinny-members-panel"
        className={classNames(css.MembersDrawer, ContainerColor({ variant: 'Background' }))}
        shrink="No"
        direction="Column"
-+      role="region"
++      role="complementary"
 +      aria-label="Members panel"
-+      tabIndex={-1}
      >
        <MemberDrawerHeader room={room} />
        <Box className={css.MemberDrawerContentBase} grow="Yes">
-diff --git a/src/app/features/room/RoomInput.tsx b/src/app/features/room/RoomInput.tsx
-index 94eee2a8f..4da9a96f7 100644
---- a/src/app/features/room/RoomInput.tsx
-+++ b/src/app/features/room/RoomInput.tsx
-@@ -567,6 +567,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-                 >
-                   <IconButton
-                     onClick={() => setReplyDraft(undefined)}
-+                    aria-label="Cancel reply"
-                     variant="SurfaceVariant"
-                     size="300"
-                     radii="300"
-@@ -599,9 +600,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-           before={
-             <IconButton
-               onClick={() => pickFile('*')}
-+              aria-label="Attach file"
-               variant="SurfaceVariant"
-               size="300"
-               radii="300"
-+              tabIndex={-1}
-             >
-               <Icon src={Icons.PlusCircle} />
-             </IconButton>
-@@ -613,6 +616,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-                 size="300"
-                 radii="300"
-                 onClick={() => setToolbar(!toolbar)}
-+                aria-label={toolbar ? 'Hide formatting toolbar' : 'Show formatting toolbar'}
-+                aria-pressed={toolbar}
-               >
-                 <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
-               </IconButton>
-@@ -651,6 +656,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-                   >
-                     {!hideStickerBtn && (
-                       <IconButton
-+                        aria-label="Open sticker picker"
-                         aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
-                         onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
-                         variant="SurfaceVariant"
-@@ -665,6 +671,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-                     )}
-                     <IconButton
-                       ref={emojiBtnRef}
-+                      aria-label="Open emoji picker"
-                       aria-pressed={
-                         hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
-                       }
 diff --git a/src/app/features/room/RoomTimeline.tsx b/src/app/features/room/RoomTimeline.tsx
-index f9fd18b60..65fd0e2dc 100644
+index f9fd18b60..71eb5a6af 100644
 --- a/src/app/features/room/RoomTimeline.tsx
 +++ b/src/app/features/room/RoomTimeline.tsx
 @@ -1942,7 +1942,7 @@ export function RoomTimeline({ room, eventId, roomInputRef, editor, threadId }:
@@ -1130,7 +1008,7 @@ index f9fd18b60..65fd0e2dc 100644
          </TimelineFloat>
        )}
 -      <Scroll ref={scrollRef} visibility="Hover">
-+      <Scroll ref={scrollRef} visibility="Hover" id="cinny-timeline" tabIndex={0} role="log" aria-label="Message timeline" aria-live="polite">
++      <Scroll ref={scrollRef} visibility="Hover" id="cinny-timeline" tabIndex={-1} role="log" aria-label="Message timeline">
          <Box
            direction="Column"
            justifyContent="End"
@@ -2014,60 +1892,15 @@ index 725935048..a0129caac 100644
    }, [
      mx,
 diff --git a/src/app/pages/client/SidebarNav.tsx b/src/app/pages/client/SidebarNav.tsx
-index 168bda38b..2c685167f 100644
+index a2e1b6820..d37eda8f8 100644
 --- a/src/app/pages/client/SidebarNav.tsx
 +++ b/src/app/pages/client/SidebarNav.tsx
-@@ -1,4 +1,4 @@
--import React, { useEffect, useRef } from 'react';
-+import React, { KeyboardEventHandler, useCallback, useEffect, useRef } from 'react';
- import { Scroll } from 'folds';
- 
- import {
-@@ -21,9 +21,46 @@ import { CreateTab } from './sidebar/CreateTab';
- 
- export function SidebarNav() {
+@@ -23,7 +23,7 @@ export function SidebarNav() {
    const scrollRef = useRef<HTMLDivElement>(null);
-+  const navRef = useRef<HTMLElement>(null);
-+
-+  // Roving tabindex: only one sidebar button is tabbable at a time (tabIndex=0).
-+  // All others get tabIndex=-1 so the sidebar is a single Tab stop. Arrow keys
-+  // move focus within it. This matches the WAI-ARIA toolbar pattern.
-+  useEffect(() => {
-+    const nav = navRef.current;
-+    if (!nav) return;
-+    const id = setTimeout(() => {
-+      const allBtns = Array.from(
-+        nav.querySelectorAll<HTMLElement>('button:not([disabled])')
-+      );
-+      allBtns.forEach((b, i) => b.setAttribute('tabindex', i === 0 ? '0' : '-1'));
-+    }, 0);
-+    return () => clearTimeout(id);
-+  }, []);
-+
-+  const handleNavKeyDown: KeyboardEventHandler = useCallback((evt) => {
-+    if (evt.key !== 'ArrowUp' && evt.key !== 'ArrowDown') return;
-+    const nav = navRef.current;
-+    if (!nav) return;
-+    const buttons = Array.from(
-+      nav.querySelectorAll<HTMLElement>('button:not([disabled])')
-+    );
-+    const current = buttons.indexOf(evt.target as HTMLElement);
-+    if (current < 0) return;
-+
-+    evt.preventDefault();
-+    const next = evt.key === 'ArrowDown'
-+      ? (current + 1) % buttons.length
-+      : (current - 1 + buttons.length) % buttons.length;
-+
-+    // Move roving tabindex
-+    buttons[current]?.setAttribute('tabindex', '-1');
-+    buttons[next]?.setAttribute('tabindex', '0');
-+    buttons[next]?.focus();
-+  }, []);
  
    return (
 -    <Sidebar>
-+    <Sidebar as="nav" aria-label="Main navigation" ref={navRef} onKeyDown={handleNavKeyDown}>
++    <Sidebar as="nav" aria-label="Main navigation">
        <SidebarContent
          scrollable={
            <Scroll ref={scrollRef} variant="Background" size="0">
@@ -2084,45 +1917,6 @@ index dae831668..e89105952 100644
                    {exploreState.status === AsyncStatus.Error && (
                      <Text style={{ color: color.Critical.Main }} size="T300">
                        Failed to load public rooms. Please try again.
-diff --git a/src/app/pages/client/sidebar/DirectTab.tsx b/src/app/pages/client/sidebar/DirectTab.tsx
-index dcd44e2f7..2e450abf3 100644
---- a/src/app/pages/client/sidebar/DirectTab.tsx
-+++ b/src/app/pages/client/sidebar/DirectTab.tsx
-@@ -93,7 +93,7 @@ export function DirectTab() {
-   };
-   return (
-     <SidebarItem active={directSelected}>
--      <SidebarItemTooltip tooltip="Direct Messages">
-+      <SidebarItemTooltip tooltip="Direct Messages (Alt+D)">
-         {(triggerRef) => (
-           <SidebarAvatar
-             as="button"
-diff --git a/src/app/pages/client/sidebar/HomeTab.tsx b/src/app/pages/client/sidebar/HomeTab.tsx
-index 778b729e2..17cd71d5a 100644
---- a/src/app/pages/client/sidebar/HomeTab.tsx
-+++ b/src/app/pages/client/sidebar/HomeTab.tsx
-@@ -95,7 +95,7 @@ export function HomeTab() {
- 
-   return (
-     <SidebarItem active={homeSelected}>
--      <SidebarItemTooltip tooltip="Home">
-+      <SidebarItemTooltip tooltip="Home (Alt+H)">
-         {(triggerRef) => (
-           <SidebarAvatar
-             as="button"
-diff --git a/src/app/pages/client/sidebar/SearchTab.tsx b/src/app/pages/client/sidebar/SearchTab.tsx
-index 7ceb5c499..5b8a466f6 100644
---- a/src/app/pages/client/sidebar/SearchTab.tsx
-+++ b/src/app/pages/client/sidebar/SearchTab.tsx
-@@ -11,7 +11,7 @@ export function SearchTab() {
- 
-   return (
-     <SidebarItem active={opened}>
--      <SidebarItemTooltip tooltip="Search">
-+      <SidebarItemTooltip tooltip="Search (Ctrl+K)">
-         {(triggerRef) => (
-           <SidebarAvatar as="button" ref={triggerRef} outlined onClick={open}>
-             <Icon src={Icons.Search} filled={opened} />
 diff --git a/src/app/pages/client/sidebar/SpaceTabs.tsx b/src/app/pages/client/sidebar/SpaceTabs.tsx
 index 6fc528a10..750f4ad14 100644
 --- a/src/app/pages/client/sidebar/SpaceTabs.tsx
