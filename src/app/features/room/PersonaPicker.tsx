@@ -119,20 +119,43 @@ function PersonaForm({
   const [prefixes, setPrefixes] = useState<string[]>(initial?.prefixes ?? []);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Only the newest avatar choice may land (audit 2026-11-08): two uploads in flight finished in
+  // any order, so an older, slower one could win, and the first to finish cleared `uploading`
+  // while the other still ran.
+  const uploadSeq = useRef(0);
 
-  const uploadAndSetMxc = async (blob: Blob, filename: string, sourceHttpUrl?: string) => {
+  /** Upload; resolves to the mxc URI if this is still the newest choice, else null. */
+  const upload = async (blob: Blob, filename: string): Promise<string | null> => {
+    uploadSeq.current += 1;
+    const seq = uploadSeq.current;
     setUploading(true);
     try {
       const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
-      if (result.content_uri) {
-        setAvatar(result.content_uri);
-        // File uploads don't have an original https URL to cache
-        if (!sourceHttpUrl) setAvatarHttp('');
-      }
+      return seq === uploadSeq.current ? result.content_uri ?? null : null;
     } catch {
-      // leave avatar unchanged on error
+      return null;
     } finally {
-      setUploading(false);
+      if (seq === uploadSeq.current) setUploading(false);
+    }
+  };
+
+  const uploadAndSetMxc = async (blob: Blob, filename: string) => {
+    const mxc = await upload(blob, filename);
+    if (mxc) {
+      setAvatar(mxc);
+      setAvatarHttp(''); // file uploads have no original https URL to cache
+    }
+  };
+
+  /** Fetch an http(s) avatar URL and upload it; the mxc URI, or null (failed or superseded). */
+  const convertHttp = async (url: string): Promise<string | null> => {
+    try {
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const filename = url.split('/').pop()?.split('?')[0] ?? 'avatar';
+      return await upload(blob, filename);
+    } catch {
+      return null;
     }
   };
 
@@ -147,30 +170,31 @@ function PersonaForm({
   const handleAvatarBlur = async () => {
     const url = avatar.trim();
     if (!url.startsWith('https://') && !url.startsWith('http://')) return;
-    setUploading(true);
-    try {
-      const resp = await fetch(url);
-      const blob = await resp.blob();
-      const filename = url.split('/').pop()?.split('?')[0] ?? 'avatar';
-      const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
-      if (result.content_uri) {
-        setAvatar(result.content_uri);
-        setAvatarHttp(url); // cache original https for round-trip export
-      }
-    } catch {
-      // leave as-is if fetch/upload fails
-    } finally {
-      setUploading(false);
+    const mxc = await convertHttp(url);
+    if (mxc) {
+      setAvatar(mxc);
+      setAvatarHttp(url); // cache original https for round-trip export
     }
   };
 
-  const save = () => {
+  const save = async () => {
     const displayname = name.trim();
-    if (!displayname) return;
+    // Enter reached save() during an upload too (only the button was disabled).
+    if (!displayname || uploading) return;
+    // Enter in the URL field saves without a blur: convert a pasted http(s) link here first.
+    let avatarUrl = avatar.trim();
+    let httpUrl = avatarHttp;
+    if (avatarUrl.startsWith('https://') || avatarUrl.startsWith('http://')) {
+      const mxc = await convertHttp(avatarUrl);
+      if (mxc) {
+        httpUrl = avatarUrl;
+        avatarUrl = mxc;
+      } // else keep the link; the list converts leftover http avatars when it next opens
+    }
     onSave({
       displayname,
-      avatar_url: avatar.trim() || undefined,
-      ...(avatarHttp ? { avatar_http: avatarHttp } : {}),
+      avatar_url: avatarUrl || undefined,
+      ...(httpUrl ? { avatar_http: httpUrl } : {}),
       pronouns: pronouns.trim() || undefined,
       prefixes: prefixes.length > 0 ? prefixes : undefined,
     });
@@ -287,21 +311,34 @@ export function PersonaPicker() {
 
     let cancelled = false;
     (async () => {
-      const updated = [...savedPersonas];
-      for (const { p, i } of httpsIndexes) {
+      // eslint-disable-next-line no-restricted-syntax
+      for (const { p } of httpsIndexes) {
         if (cancelled) break;
+        const httpUrl = p.avatar_url!;
         try {
-          const resp = await fetch(p.avatar_url!);
+          // eslint-disable-next-line no-await-in-loop
+          const resp = await fetch(httpUrl);
+          // eslint-disable-next-line no-await-in-loop
           const blob = await resp.blob();
-          const filename = p.avatar_url!.split('/').pop()?.split('?')[0] ?? 'avatar';
+          const filename = httpUrl.split('/').pop()?.split('?')[0] ?? 'avatar';
+          // eslint-disable-next-line no-await-in-loop
           const result = await mx.uploadContent(blob, { name: filename, type: blob.type });
-          if (!cancelled && result.content_uri)
-            updated[i] = { ...p, avatar_url: result.content_uri, avatar_http: p.avatar_url };
+          // Patch the list as it is NOW, by the URL we converted (audit 2026-11-08: writing back
+          // the mount-time copy undid personas added, edited or deleted during the uploads).
+          if (!cancelled && result.content_uri) {
+            const mxc = result.content_uri;
+            setSavedPersonas((prev) =>
+              prev.map((q) =>
+                q.displayname === p.displayname && q.avatar_url === httpUrl
+                  ? { ...q, avatar_url: mxc, avatar_http: httpUrl }
+                  : q
+              )
+            );
+          }
         } catch {
           // leave as-is on error
         }
       }
-      if (!cancelled) setSavedPersonas(updated);
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -389,14 +426,17 @@ export function PersonaPicker() {
             }
           })
         );
-        // Merge: update existing personas by displayname, add new ones
-        const merged = [...savedPersonas];
-        uploaded.forEach((p) => {
-          const idx = merged.findIndex((s) => s.displayname === p.displayname);
-          if (idx >= 0) merged[idx] = p;
-          else merged.push(p);
+        // Merge into the list as it is after the uploads (not as it was when the file was read):
+        // update existing personas by displayname, add new ones.
+        setSavedPersonas((prev) => {
+          const merged = [...prev];
+          uploaded.forEach((p) => {
+            const idx = merged.findIndex((s) => s.displayname === p.displayname);
+            if (idx >= 0) merged[idx] = p;
+            else merged.push(p);
+          });
+          return merged;
         });
-        setSavedPersonas(merged);
       } catch {
         // invalid JSON — silently ignore
       }

@@ -90,9 +90,12 @@ const baseSaved = atom<Persona[]>(load<Persona[]>(STORAGE_SAVED, []));
 /** All saved personas for quick selection. Persisted to localStorage. */
 export const savedPersonasAtom = atom(
   (get) => get(baseSaved),
-  (_get, set, next: Persona[]) => {
-    set(baseSaved, next);
-    localStorage.setItem(STORAGE_SAVED, JSON.stringify(next));
+  // A function update applies to the list as it is THEN — async work (avatar uploads) must use
+  // it, or it writes back the list it started with and undoes edits made meanwhile.
+  (get, set, next: Persona[] | ((prev: Persona[]) => Persona[])) => {
+    const value = typeof next === 'function' ? next(get(baseSaved)) : next;
+    set(baseSaved, value);
+    localStorage.setItem(STORAGE_SAVED, JSON.stringify(value));
   }
 );
 
