@@ -59,11 +59,53 @@ function getBreakoutsFromState(room: Room): Breakout[] {
   return result;
 }
 
+const approvedHosts = new Set<string>();
+
+/**
+ * The conference endpoint comes from room state (eu.kiefte.wally.conference), which any member
+ * with the state power level can write, and every breakout call hands it the user's OpenID token
+ * — enough to act as them toward other OpenID services for its lifetime. So it must be https, and
+ * a host outside the user's own server's domain is asked about once per session (audit 2026-11-08).
+ */
+export function breakoutEndpointProblem(endpoint: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return 'The conference address in this room is not a valid URL.';
+  }
+  if (url.protocol !== 'https:') return 'The conference address in this room is not https.';
+  return null;
+}
+
+export function isOwnServerHost(host: string, ownServerName: string | null): boolean {
+  if (!ownServerName) return false;
+  const own = ownServerName.split(':')[0].toLowerCase();
+  const h = host.toLowerCase();
+  return h === own || h.endsWith(`.${own}`);
+}
+
+/** Throws if the endpoint may not receive the user's identity. */
+function checkEndpoint(endpoint: string, mx: MatrixClient): void {
+  const problem = breakoutEndpointProblem(endpoint);
+  if (problem) throw new Error(problem);
+  const { host } = new URL(endpoint);
+  if (isOwnServerHost(host, mx.getDomain()) || approvedHosts.has(host)) return;
+  // eslint-disable-next-line no-alert
+  const ok = window.confirm(
+    `This room's breakout rooms run on ${host}, which is not your server. Breakouts send it proof of ` +
+      `your Matrix identity (${mx.getUserId()}). Continue?`
+  );
+  if (!ok) throw new Error(`Not sending your identity to ${host}.`);
+  approvedHosts.add(host);
+}
+
 async function joinBreakoutRoom(
   endpoint: string,
   breakoutId: string,
   mx: MatrixClient,
 ): Promise<{ jwt: string; livekit_url: string; livekit_room: string }> {
+  checkEndpoint(endpoint, mx);
   const openIdToken = await mx.getOpenIdToken();
   const deviceId = mx.getDeviceId() ?? 'UNKNOWN';
   const url = `${endpoint.replace(/\/$/, '')}/breakout/join`;
@@ -113,11 +155,15 @@ export function BreakoutPanel({
       const breakoutId = Math.random().toString(36).substring(2, 10);
       // We need the bot to create it (for the LK alias + DB tracking)
       // Use the HTTP endpoint for creation
+      checkEndpoint(endpoint, mx);
       const url = `${endpoint.replace(/\/$/, '')}/breakout/create`;
+      // The server checks who we are (OpenID) and that we're in the room; user_id is for
+      // servers from before 2026-11-08 and ignored by newer ones.
+      const openIdToken = await mx.getOpenIdToken();
       const resp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room_id: room.roomId, topic, user_id: userId }),
+        body: JSON.stringify({ room_id: room.roomId, topic, user_id: userId, openid_token: openIdToken }),
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
@@ -130,17 +176,19 @@ export function BreakoutPanel({
       setError(err instanceof Error ? err.message : 'Failed to create breakout');
     }
     setCreating(false);
-  }, [endpoint, room.roomId, userId, creating]);
+  }, [mx, endpoint, room.roomId, userId, creating]);
 
   const handleEnd = useCallback(
     async (breakoutId: string) => {
       setError(null);
       try {
+        checkEndpoint(endpoint, mx);
         const url = `${endpoint.replace(/\/$/, '')}/breakout/end`;
+        const openIdToken = await mx.getOpenIdToken();
         const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ breakout_id: breakoutId, user_id: userId }),
+          body: JSON.stringify({ breakout_id: breakoutId, user_id: userId, openid_token: openIdToken }),
         });
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
@@ -151,7 +199,7 @@ export function BreakoutPanel({
         setError(err instanceof Error ? err.message : 'Failed to end breakout');
       }
     },
-    [endpoint, userId]
+    [mx, endpoint, userId]
   );
 
   const handleJoinBreakout = useCallback(
