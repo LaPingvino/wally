@@ -90,7 +90,17 @@ function checkEndpoint(endpoint: string, mx: MatrixClient): void {
   const problem = breakoutEndpointProblem(endpoint);
   if (problem) throw new Error(problem);
   const { host } = new URL(endpoint);
-  if (isOwnServerHost(host, mx.getDomain()) || approvedHosts.has(host)) return;
+  // Home: the user's server name (and its subdomains), the homeserver's own host, and the host
+  // this Wally is served from (chat.kiefte.eu / cinny.kiefte.eu both carry the bot's /guest API).
+  let hsHost = '';
+  try {
+    hsHost = new URL(mx.getHomeserverUrl()).host;
+  } catch {
+    /* no homeserver URL */
+  }
+  const home =
+    isOwnServerHost(host, mx.getDomain()) || host === hsHost || host === window.location.host;
+  if (home || approvedHosts.has(host)) return;
   // eslint-disable-next-line no-alert
   const ok = window.confirm(
     `This room's breakout rooms run on ${host}, which is not your server. Breakouts send it proof of ` +
