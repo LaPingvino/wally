@@ -47,6 +47,19 @@ const NEXT_UNREAD_SHORTCUT: DisplayShortcut = {
 };
 
 
+/**
+ * The digit 1–9 of a key press by PHYSICAL key (audit 2026-11-08): evt.key is what the layout
+ * types, so Alt+Shift+1 on a US layout is "!" (account switching never fired), Alt+1 on AZERTY is
+ * "&" and on macOS Option+1 is "¡". evt.code (Digit1 / Numpad1) is the same on every layout;
+ * evt.key is the fallback for synthetic events without a code.
+ */
+export function shortcutDigit(evt: Pick<KeyboardEvent, 'code' | 'key'>): number | null {
+  const m = /^(?:Digit|Numpad)([1-9])$/.exec(evt.code ?? '');
+  if (m) return Number(m[1]);
+  const n = Number(evt.key);
+  return Number.isInteger(n) && n >= 1 && n <= 9 ? n : null;
+}
+
 const START_CALL_SHORTCUT: DisplayShortcut = {
   key: 'alt+j',
   description: 'Start or join call in current room',
@@ -203,17 +216,15 @@ export function GlobalKeyboardShortcuts() {
 
   const handleSpaceKeyDown = useCallback(
     (evt: KeyboardEvent) => {
-      for (let n = 1; n <= 9; n++) {
-        if (isKeyHotkey(`alt+${n}`, evt)) {
-          const spaceId = spaceIds[n - 1];
-          if (spaceId) {
-            evt.preventDefault();
-            navigate(getSpaceLobbyPath(getCanonicalAliasOrRoomId(mx, spaceId)));
-            announce(`${mx.getRoom(spaceId)?.name ?? 'Space'} space`);
-            setTimeout(() => document.getElementById('wally-room-listbox')?.focus(), 80);
-          }
-          return;
-        }
+      if (!evt.altKey || evt.shiftKey || evt.ctrlKey || evt.metaKey) return;
+      const n = shortcutDigit(evt);
+      if (n === null) return;
+      const spaceId = spaceIds[n - 1];
+      if (spaceId) {
+        evt.preventDefault();
+        navigate(getSpaceLobbyPath(getCanonicalAliasOrRoomId(mx, spaceId)));
+        announce(`${mx.getRoom(spaceId)?.name ?? 'Space'} space`);
+        setTimeout(() => document.getElementById('wally-room-listbox')?.focus(), 80);
       }
     },
     [mx, navigate, spaceIds]
@@ -310,8 +321,8 @@ const handleUnreadNavKeyDown = useCallback(
       ];
       if (slots.length <= 1) return;
       if (!evt.altKey || !evt.shiftKey || evt.ctrlKey || evt.metaKey) return;
-      const n = parseInt(evt.key, 10);
-      if (isNaN(n) || n < 1 || n > 9) return;
+      const n = shortcutDigit(evt);
+      if (n === null) return;
       const target = slots[n - 1];
       if (target === undefined) return;
       evt.preventDefault();
