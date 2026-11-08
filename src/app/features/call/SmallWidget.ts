@@ -18,12 +18,14 @@ import {
 } from 'matrix-js-sdk';
 import {
   ClientWidgetApi,
+  EventDirection,
   IRoomEvent,
   IStickyActionRequest,
   IWidget,
   IWidgetData,
   MatrixCapabilities,
   WidgetApiFromWidgetAction,
+  WidgetEventCapability,
   WidgetKind,
 } from 'matrix-widget-api';
 import { CinnyWidget } from './CinnyWidget';
@@ -117,6 +119,16 @@ export class SmallWidget extends EventEmitter {
       const room = this.client.getRoom(this.roomId);
       const events: Partial<IEvent>[] = [];
       const { type } = ev.detail.data;
+      // Answer only state the widget may read (audit 2026-11-08: this answered any type);
+      // anything else goes to widget-api's own capability-checked handler.
+      // A request without state_key is a timeline read, which this state answer doesn't serve.
+      const canRead =
+        typeof type === 'string' &&
+        ev.detail.data.state_key !== undefined &&
+        this.messaging?.hasCapability(
+          WidgetEventCapability.forStateEvent(EventDirection.Receive, type).raw
+        );
+      if (!canRead) return undefined;
 
       ev.preventDefault();
       if (room === null) {

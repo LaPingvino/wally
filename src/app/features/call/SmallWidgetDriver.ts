@@ -44,9 +44,40 @@ import {
   type TimelineEvents,
   MatrixClient,
 } from 'matrix-js-sdk';
+import { callDebug } from './callDebug';
+
+/**
+ * The issue tracker widget Wally serves itself (IssueBoard adds it as
+ * `${origin}/widget.html?...`). Only that page gets the issue-state capabilities and skips the
+ * OpenID question; any other widget a room member adds is a stranger.
+ */
+export function isOwnIssueWidget(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url, window.location.origin);
+    return u.origin === window.location.origin && u.pathname === '/widget.html';
+  } catch {
+    return false;
+  }
+}
+
+/** What src/widget.tsx asks for: issue state, power levels, comments and reactions in its room. */
+export const ISSUE_WIDGET_CAPABILITIES: Capability[] = [
+  WidgetEventCapability.forStateEvent(EventDirection.Receive, 'eu.kiefte.issue').raw,
+  WidgetEventCapability.forStateEvent(EventDirection.Receive, 'eu.kiefte.issues.schema').raw,
+  WidgetEventCapability.forStateEvent(EventDirection.Send, 'eu.kiefte.issue').raw,
+  WidgetEventCapability.forStateEvent(EventDirection.Send, 'eu.kiefte.issues.schema').raw,
+  WidgetEventCapability.forStateEvent(EventDirection.Receive, EventType.RoomPowerLevels).raw,
+  WidgetEventCapability.forRoomEvent(EventDirection.Receive, 'eu.kiefte.issue').raw,
+  // m.room.message and m.reaction send/receive are in the base (call) set already.
+];
 
 export class SmallWidgetDriver extends WidgetDriver {
   private allowedCapabilities: Set<Capability>;
+
+  private readonly trusted: boolean;
+
+  private readonly widgetName: string;
 
   private readonly mxClient: MatrixClient; // Store the client instance
 
@@ -60,9 +91,12 @@ export class SmallWidgetDriver extends WidgetDriver {
   ) {
     super();
     this.mxClient = mx; // Store the passed instance
+    this.trusted = isOwnIssueWidget(forWidget?.templateUrl);
+    this.widgetName = forWidget?.name || forWidget?.templateUrl || 'A widget';
 
     this.allowedCapabilities = new Set([
       ...allowedCapabilities,
+      ...(this.trusted ? ISSUE_WIDGET_CAPABILITIES : []),
       MatrixCapabilities.Screenshots,
       // Add other base capabilities as needed, e.g., ElementWidgetCapabilities.RequiresClient
     ]);
@@ -183,7 +217,13 @@ export class SmallWidgetDriver extends WidgetDriver {
   }
 
   public async validateCapabilities(requested: Set<Capability>): Promise<Set<Capability>> {
-    const granted = new Set(requested);
+    // Only what the widget asks for AND we allow (audit 2026-11-08): granting every request let
+    // any widget a room member adds read the decrypted timeline of every room
+    // (org.matrix.msc2762.timeline:*) and send as the user anywhere. The allowed set is the
+    // widget's own room plus the call events (and the issue state for Wally's own tracker).
+    const granted = new Set([...requested].filter((c) => this.allowedCapabilities.has(c)));
+    const refused = [...requested].filter((c) => !granted.has(c));
+    if (refused.length) callDebug('widget', 'capabilities refused', { widget: this.widgetName, refused });
     // Only grant delayed-event capabilities when the server actually supports them.
     // If the server doesn't support MSC4157/MSC4140, EC falls back to regular state events
     // for membership at capability-grant time (the correct fallback level). Granting these
@@ -447,6 +487,16 @@ export class SmallWidgetDriver extends WidgetDriver {
   }
 
   public async askOpenID(observer: SimpleObservable<IOpenIDUpdate>): Promise<void> {
+    // An OpenID token proves the user's identity to the widget's own server: ask, every time,
+    // unless it is Wally's own page.
+    if (!this.trusted) {
+      const who = this.mxClient.getUserId() ?? 'you';
+      // eslint-disable-next-line no-alert
+      const ok = window.confirm(
+        `${this.widgetName} wants to confirm your identity (${who}) to its own server. Allow?`
+      );
+      if (!ok) return observer.update({ state: OpenIDRequestState.Blocked });
+    }
     try {
       const token = await this.mxClient.getOpenIdToken();
       return observer.update({

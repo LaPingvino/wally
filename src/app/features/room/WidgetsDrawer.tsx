@@ -53,6 +53,21 @@ function substituteTemplateVars(
     .replace(/\$org\.matrix\.msc2873\.client_origin/g, encodeURIComponent(window.location.origin));
 }
 
+/**
+ * The URL a widget may open at, or null. Widget URLs come from room state any member with the
+ * power level can write, and the iframe is allow-same-origin: a javascript: (or data:, blob:)
+ * URL would run with Wally's own origin. Only https, or Wally's own pages, open (audit 2026-11-08).
+ */
+export function safeWidgetUrl(raw: string): URL | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === 'https:' || url.origin === window.location.origin) return url;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 type WidgetViewProps = {
   room: Room;
   widget: RoomWidget;
@@ -73,7 +88,8 @@ function WidgetView({ room, widget }: WidgetViewProps) {
       smallWidgetRef.current = null;
     }
 
-    const resolvedUrl = new URL(substituteTemplateVars(widget.url, mx, room.roomId, widget.id));
+    const resolvedUrl = safeWidgetUrl(substituteTemplateVars(widget.url, mx, room.roomId, widget.id));
+    if (!resolvedUrl) return undefined;
     // The Matrix Widget API requires widgetId and parentUrl as URL params so the widget's
     // WidgetApi can identify itself and know where to send postMessages.
     resolvedUrl.searchParams.set('widgetId', widget.id);
@@ -108,6 +124,14 @@ function WidgetView({ room, widget }: WidgetViewProps) {
     // never resends ContentLoaded, so the new ClientWidgetApi never completes its handshake.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mx, room.roomId, widget.id, widget.url]);
+
+  if (!safeWidgetUrl(substituteTemplateVars(widget.url, mx, room.roomId, widget.id))) {
+    return (
+      <div style={{ padding: config.space.S400, color: 'var(--tc-surface-normal)' }}>
+        This widget can&apos;t be opened: only https addresses (or Wally&apos;s own pages) are allowed ({widget.url}).
+      </div>
+    );
+  }
 
   return (
     <iframe
@@ -152,6 +176,7 @@ export function WidgetsDrawer({ room, onClose, width = 420, isFullWidth, onToggl
   const [isAdding, setIsAdding] = useState(false);
   const [addUrl, setAddUrl] = useState('');
   const [addName, setAddName] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Toolbar config integration
@@ -191,6 +216,11 @@ export function WidgetsDrawer({ room, onClose, width = 420, isFullWidth, onToggl
   const handleAdd = useCallback(async () => {
     const url = addUrl.trim();
     if (!url) return;
+    if (!safeWidgetUrl(url)) {
+      setAddError('Only https addresses can be added as widgets.');
+      return;
+    }
+    setAddError(null);
     let name = addName.trim();
     if (!name) {
       try { name = new URL(url).hostname; } catch { name = 'Widget'; }
@@ -376,6 +406,11 @@ export function WidgetsDrawer({ room, onClose, width = 420, isFullWidth, onToggl
             style={inputStyle}
             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
           />
+          {addError && (
+            <Text size="T300" role="alert" style={{ color: color.Critical.Main }}>
+              {addError}
+            </Text>
+          )}
           <Box gap="200">
             <Button
               size="300"
